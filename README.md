@@ -3,7 +3,5 @@
 致力于打造咕咕嘎嘎也能学会的导航代码仓库！
 
 <p align="center">
-	<img src="docs/img/Transistor算法组.jpg" alt="Transistor算法组" />
+	<img src="docs/img/Transistor算法组.jpg" alt="Transistor算法组" width="700" />
 </p>
-
-
