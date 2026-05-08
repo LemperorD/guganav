@@ -22,8 +22,16 @@ namespace usbjs_driver
 
 class UsbJoystick
 {
-public: // constructor and destructor
+public: // 构造和析构
+  /**
+   * @brief 构造函数
+   * @param file_name 设备文件地址
+   */
   explicit UsbJoystick(const char *file_name);
+
+  /**
+   * @brief 析构函数
+   */
   ~UsbJoystick();
 
 public: // 公共接口
