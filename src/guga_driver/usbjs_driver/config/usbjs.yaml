@@ -1,1 +1,3 @@
-
+/**
+  ros_parameters:
+    file_name: "/dev/input/js0" # 标准输入手柄设备的文件地址
