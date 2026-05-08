@@ -1,1 +1,4 @@
-
+/**:
+  ros_parameters: 
+    file_name: "/dev/input/js0" # 标准输入手柄设备的文件地址
+    output_vel_topic: "cmd_vel" # 发布的ROS话题名称
