@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>simple_decision</name>
+  <version>0.0.1</version>
+  <description>Rule-based decision node (BT-equivalent) for RMUL: mode select + supply + attack + nav2 goal_pose.</description>
+  <maintainer email="ld2382619813@163.com">ld</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>guga_interfaces</depend>
+
+  <!-- auto_aim_interfaces 是可选依赖：如果你们工程里有就会启用敌人检测/attack_pose -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
