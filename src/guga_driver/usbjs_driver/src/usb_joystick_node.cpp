@@ -14,6 +14,7 @@ UsbJoystickNode::UsbJoystickNode(const rclcpp::NodeOptions & options)
     output_vel_topic_, rclcpp::QoS(10)); // 创建发布器
 
   ctrl_thread_ = std::thread(&UsbJoystickNode::ctrl_thread, this); // 启动控制线程
+  // test_thread_ = std::thread(&UsbJoystickNode::test_thread, this); // 启动测试线程
 }
 
 UsbJoystickNode::~UsbJoystickNode()
@@ -27,9 +28,9 @@ void UsbJoystickNode::onConfigure()
 {
   this->declare_parameter<std::string>("file_name", "/dev/input/js0");
   this->get_parameter("file_name", file_name_);
-  
   this->declare_parameter<std::string>("output_vel_topic", "/cmd_vel");
   this->get_parameter("output_vel_topic", output_vel_topic_);
+
 }
 
 void UsbJoystickNode::ctrl_thread()
@@ -40,40 +41,47 @@ void UsbJoystickNode::ctrl_thread()
       continue;
     }
     
-    // Read button2 state for mode toggle
     bool button2_pressed = usb_joystick_main_->get_button_state(2);
-    
-    // Toggle remote_mode on button2 state change (rising edge)
     if (button2_pressed && !last_button2_state_) {
       remote_mode_ = !remote_mode_;
       std::cout << "[UsbJoystick] Remote mode: " << (remote_mode_ ? "ON" : "OFF") << std::endl;
     }
     last_button2_state_ = button2_pressed;
     
-    // If in remote mode, read axis values and send joystick command
+    // 控制模式，将杆量映射为速度指令并发布
     if (remote_mode_) {
       int16_t axis1 = usb_joystick_main_->get_axis_state(1);  // Yaw
       int16_t axis2 = usb_joystick_main_->get_axis_state(2);  // Pitch
-      
-      // Create and publish joystick command
       auto cmd = geometry_msgs::msg::Twist();
       cmd.linear.x = static_cast<float>(axis1) / 32768.0f;
       cmd.angular.z = static_cast<float>(axis2) / 32768.0f;
-      
       output_vel_pub_->publish(cmd);
-
-      // Map axis int16 -> normalized position in [-1,1]
-      gimbal_cmd.position.yaw = -static_cast<float>(axis1) / 32768.0f;
-      gimbal_cmd.position.pitch = static_cast<float>(axis2) / 32768.0f;
-
-      gimbal_cmd_pub_->publish(gimbal_cmd);
-
-      // Debug output
-      std::cout << "[RcGimbal] Yaw pos: " << gimbal_cmd.position.yaw 
-            << ", Pitch pos: " << gimbal_cmd.position.pitch << std::endl;
     }
     
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+}
+
+void UsbJoystickNode::test_thread()
+{
+  while (rclcpp::ok()) {
+    if (!usb_joystick_main_) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      continue;
+    }
+
+    // 打印部分轴状态和按钮状态
+    int16_t axis0 = usb_joystick_main_->get_axis_state(0);
+    int16_t axis1 = usb_joystick_main_->get_axis_state(1);
+    uint8_t button0 = usb_joystick_main_->get_button_state(0);
+    uint8_t button1 = usb_joystick_main_->get_button_state(1);
+
+    std::cout << "[Test Thread] Axis 0: " << axis0 
+              << ", Axis 1: " << axis1 
+              << ", Button 0: " << (int)button0 
+              << ", Button 1: " << (int)button1 << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
   }
 }
 
