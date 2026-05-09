@@ -45,7 +45,7 @@ done
 # ===============================
 # 用户选择仓库
 # ===============================
-read -rp "请输入要 push 的仓库序号（多个用空格分隔）： " -a choices
+read -rp "\n\e[1;32m请输入要 push 的仓库序号（多个用空格分隔）：\e[0m " -a choices
 
 # ===============================
 # 对选择的仓库执行 push
@@ -54,7 +54,7 @@ for index in "${choices[@]}"; do
     repo="${repos[$index]}"
     repo_name="${repo_names[$index]}"
     echo "-------------------------------"
-    echo "正在处理仓库: $repo_name (路径: $repo)"
+    echo -e "\e[1;32m正在处理仓库: $repo_name (路径: $repo)\e[0m"
     cd "$WORKSPACE_DIR/$repo" || continue
 
     # 设置代理
@@ -68,9 +68,9 @@ for index in "${choices[@]}"; do
 
     # 检查是否有未提交的修改
     if git diff --quiet && git diff --cached --quiet; then
-        echo "仓库 $repo_name 没有未提交的修改，执行 push..."
+        echo -e "\e[1;32m仓库 $repo_name 没有未提交的修改，执行 push...\e[0m"
     else
-        echo "仓库 $repo_name 有未提交的修改，请先在 VSCode 完成 commit!"
+        echo -e "\e[1;31m仓库 $repo_name 有未提交的修改，请先在 VSCode 完成 commit!\e[0m"
         continue
     fi
 
@@ -78,4 +78,4 @@ for index in "${choices[@]}"; do
     git push origin "$current_branch"
 done
 
-echo "所有选择的仓库已 push 完成!"
+echo -e "\e[1;32m所有选择的仓库已 push 完成!\e[0m"
