@@ -15,10 +15,14 @@ cd "$WORKSPACE_DIR" || { echo "无法进入工作目录 $WORKSPACE_DIR"; exit 1;
 # ===============================
 echo "正在扫描 Git 仓库..."
 repos=()
+repo_names=()
 
-# 包括主仓库
+# 检查主仓库
 if [ -d ".git" ]; then
     repos+=(".")
+    # 仓库名用 git rev-parse 获取根目录名
+    name=$(basename "$(git rev-parse --show-toplevel)")
+    repo_names+=("$name")
 fi
 
 # 扫描子模块
@@ -26,14 +30,16 @@ while IFS= read -r line; do
     path=$(echo "$line" | awk '{print $2}')
     if [ -d "$path/.git" ]; then
         repos+=("$path")
+        # 进入子模块获取仓库名
+        name=$(cd "$path" && basename "$(git rev-parse --show-toplevel)")
+        repo_names+=("$name")
     fi
 done < <(git submodule status)
 
 # 显示仓库表格
 echo "找到以下 Git 仓库："
 for i in "${!repos[@]}"; do
-    repo_name=$(basename "${repos[$i]}")
-    echo "$i) $repo_name -> ${repos[$i]}"
+    echo "$i) ${repo_names[$i]} -> ${repos[$i]}"
 done
 
 # ===============================
@@ -46,7 +52,7 @@ read -rp "请输入要 push 的仓库序号（多个用空格分隔）： " -a c
 # ===============================
 for index in "${choices[@]}"; do
     repo="${repos[$index]}"
-    repo_name=$(basename "$repo")
+    repo_name="${repo_names[$index]}"
     echo "-------------------------------"
     echo "正在处理仓库: $repo_name (路径: $repo)"
     cd "$WORKSPACE_DIR/$repo" || continue
