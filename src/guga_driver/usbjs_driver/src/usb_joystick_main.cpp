@@ -3,7 +3,7 @@
 namespace usbjs_driver
 {
 
-UsbJoystick::UsbJoystick(const char *file_name)
+UsbJoystickMain::UsbJoystickMain(const char *file_name)
   : file_name_(file_name)
 {
   js_open(file_name_.c_str());
@@ -24,16 +24,16 @@ UsbJoystick::UsbJoystick(const char *file_name)
           << "\033[0m" << std::endl;
 
   is_running_ = true;
-  timer_thread_ = std::thread(&UsbJoystick::timerThread, this);
+  timer_thread_ = std::thread(&UsbJoystickMain::timerThread, this);
   last_received_time_ = std::chrono::steady_clock::now();
   last_reconnect_time_ = std::chrono::steady_clock::now();
 
   std::cout << "\033[32m"
-            << "UsbJoystick constructor called with file name: " << file_name_.c_str() 
+            << "UsbJoystickMain constructor called with file name: " << file_name_.c_str() 
             << "\033[0m" << std::endl;
 }
 
-UsbJoystick::~UsbJoystick()
+UsbJoystickMain::~UsbJoystickMain()
 {
   is_running_ = false;
   if (timer_thread_.joinable()) timer_thread_.join();
@@ -55,7 +55,7 @@ UsbJoystick::~UsbJoystick()
             << "\033[0m" << std::endl;
 }
 
-int UsbJoystick::js_open(const char *file_name)
+int UsbJoystickMain::js_open(const char *file_name)
 {
   fd_ = open(file_name, O_RDONLY | O_NONBLOCK); // 以只读和非阻塞模式打开设备
   if (fd_ < 0) {
@@ -68,7 +68,7 @@ int UsbJoystick::js_open(const char *file_name)
   return fd_;
 }
 
-void UsbJoystick::timerThread()
+void UsbJoystickMain::timerThread()
 {
   while (is_running_) {
     timerCallback();
@@ -76,7 +76,7 @@ void UsbJoystick::timerThread()
   }
 }
 
-void UsbJoystick::timerCallback() {
+void UsbJoystickMain::timerCallback() {
   if (fd_ < 0) { // 设备未打开，尝试重新连接
     if (std::chrono::steady_clock::now() - last_reconnect_time_ > std::chrono::seconds(10)) {
       std::cerr << "Joystick not available, trying reconnect" << std::endl;
@@ -118,7 +118,7 @@ void UsbJoystick::timerCallback() {
   }
 }
 
-void UsbJoystick::tryReconnect() {
+void UsbJoystickMain::tryReconnect() {
   last_reconnect_time_ = std::chrono::steady_clock::now();
 
   // 关闭设备，重启
