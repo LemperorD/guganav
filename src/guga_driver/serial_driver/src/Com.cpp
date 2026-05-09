@@ -13,8 +13,7 @@
 
 using namespace std::chrono_literals;
 
-uint8_t SerialCommunicationClass::crc8_calc(const uint8_t* p, size_t len)
-{
+uint8_t SerialCommunicationClass::crc8_calc(const uint8_t* p, size_t len) {
   uint8_t crc = CRC8_INIT;
   while (len--) {
     crc = CRC8_TABLE[crc ^ *p++];
@@ -22,33 +21,26 @@ uint8_t SerialCommunicationClass::crc8_calc(const uint8_t* p, size_t len)
   return crc;
 }
 
-bool SerialCommunicationClass::isSupportedCommand(uint8_t cmd)
-{
+bool SerialCommunicationClass::isSupportedCommand(uint8_t cmd) {
   return (cmd == COMMAND_CODE_MOTION || cmd == COMMAND_CODE_REFEREE);
 }
 
-uint8_t* SerialCommunicationClass::receiveRefereeFrame()
-{
+uint8_t* SerialCommunicationClass::receiveRefereeFrame() {
   return referee_frame_buffer_.data();
 }
 
-bool SerialCommunicationClass::hasNewRefereeFrame() const
-{
+bool SerialCommunicationClass::hasNewRefereeFrame() const {
   return referee_frame_ready_.load();
 }
 
-void SerialCommunicationClass::clearRefereeFrameFlag()
-{
+void SerialCommunicationClass::clearRefereeFrameFlag() {
   referee_frame_ready_.store(false);
 }
 
 // ---------------- 构造/析构 ----------------
 SerialCommunicationClass::SerialCommunicationClass(
-  rclcpp::Node* node,
-  const std::string& serial_port,
-  int baud_rate)
-: node_(node)
-{
+    rclcpp::Node* node, const std::string& serial_port, int baud_rate)
+    : node_(node) {
   serial_port_ = serial_port;
   baud_rate_ = baud_rate;
 
@@ -62,9 +54,8 @@ SerialCommunicationClass::SerialCommunicationClass(
     if (!port.empty()) {
       openSerialPort(port, baud_rate_);
     } else {
-      std::cerr << termcolor::red
-                << "No serial port found."
-                << termcolor::reset << std::endl;
+      std::cerr << termcolor::red << "No serial port found." << termcolor::reset
+                << std::endl;
     }
   }
 
@@ -75,8 +66,7 @@ SerialCommunicationClass::SerialCommunicationClass(
   last_reconnect_time_ = std::chrono::steady_clock::now();
 }
 
-SerialCommunicationClass::~SerialCommunicationClass()
-{
+SerialCommunicationClass::~SerialCommunicationClass() {
   running_ = false;
   if (timer_thread_.joinable()) {
     timer_thread_.join();
@@ -86,8 +76,8 @@ SerialCommunicationClass::~SerialCommunicationClass()
   }
 }
 
-void SerialCommunicationClass::openSerialPort(const std::string& port_name, int baud_rate)
-{
+void SerialCommunicationClass::openSerialPort(const std::string& port_name,
+                                              int baud_rate) {
   fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
   if (fd_ == -1) {
     std::cerr << termcolor::red
@@ -100,20 +90,18 @@ void SerialCommunicationClass::openSerialPort(const std::string& port_name, int 
   }
 }
 
-std::string SerialCommunicationClass::findSerialPort()
-{
+std::string SerialCommunicationClass::findSerialPort() {
   DIR* dir = opendir("/dev");
   if (!dir) {
-    std::cerr << termcolor::red
-              << "Failed to open /dev directory"
+    std::cerr << termcolor::red << "Failed to open /dev directory"
               << termcolor::reset << std::endl;
     return "";
   }
 
   struct dirent* entry;
   while ((entry = readdir(dir)) != nullptr) {
-    if (strstr(entry->d_name, "ttyUSB") != nullptr ||
-        strstr(entry->d_name, "ttyACM") != nullptr) {
+    if (strstr(entry->d_name, "ttyUSB") != nullptr
+        || strstr(entry->d_name, "ttyACM") != nullptr) {
       closedir(dir);
       return std::string("/dev/") + entry->d_name;
     }
@@ -122,14 +110,12 @@ std::string SerialCommunicationClass::findSerialPort()
   return "";
 }
 
-void SerialCommunicationClass::configureSerialPort(int baud_rate)
-{
+void SerialCommunicationClass::configureSerialPort(int baud_rate) {
   struct termios tty;
   memset(&tty, 0, sizeof(tty));
 
   if (tcgetattr(fd_, &tty) != 0) {
-    std::cerr << termcolor::red
-              << "Failed to get serial attributes"
+    std::cerr << termcolor::red << "Failed to get serial attributes"
               << termcolor::reset << std::endl;
     close(fd_);
     fd_ = -1;
@@ -138,15 +124,26 @@ void SerialCommunicationClass::configureSerialPort(int baud_rate)
 
   speed_t speed;
   switch (baud_rate) {
-    case 9600: speed = B9600; break;
-    case 19200: speed = B19200; break;
-    case 38400: speed = B38400; break;
-    case 57600: speed = B57600; break;
-    case 115200: speed = B115200; break;
-    case 230400: speed = B230400; break;
+    case 9600:
+      speed = B9600;
+      break;
+    case 19200:
+      speed = B19200;
+      break;
+    case 38400:
+      speed = B38400;
+      break;
+    case 57600:
+      speed = B57600;
+      break;
+    case 115200:
+      speed = B115200;
+      break;
+    case 230400:
+      speed = B230400;
+      break;
     default:
-      std::cerr << termcolor::red
-                << "Unsupported baud rate: " << baud_rate
+      std::cerr << termcolor::red << "Unsupported baud rate: " << baud_rate
                 << termcolor::reset << std::endl;
       return;
   }
@@ -172,8 +169,7 @@ void SerialCommunicationClass::configureSerialPort(int baud_rate)
   tty.c_cc[VTIME] = 1;
 
   if (tcsetattr(fd_, TCSANOW, &tty) != 0) {
-    std::cerr << termcolor::red
-              << "Failed to set serial attributes"
+    std::cerr << termcolor::red << "Failed to set serial attributes"
               << termcolor::reset << std::endl;
     close(fd_);
     fd_ = -1;
@@ -185,11 +181,9 @@ void SerialCommunicationClass::configureSerialPort(int baud_rate)
 
 // 帧结构：42 52 | CMD | LEN(n) | PAYLOAD[n] | CRC8
 // 这里上位机主动发给下位机的仍然是旧运动控制帧，所以命令码继续用 0xCD
-void SerialCommunicationClass::sendDataFrame(const uint8_t* data, size_t len)
-{
+void SerialCommunicationClass::sendDataFrame(const uint8_t* data, size_t len) {
   if (fd_ < 0) {
-    std::cerr << termcolor::red
-              << "Serial port not available"
+    std::cerr << termcolor::red << "Serial port not available"
               << termcolor::reset << std::endl;
     return;
   }
@@ -207,24 +201,21 @@ void SerialCommunicationClass::sendDataFrame(const uint8_t* data, size_t len)
 
   const ssize_t written = write(fd_, frame.data(), frame_len);
   if (written != static_cast<ssize_t>(frame_len)) {
-    std::cerr << termcolor::red
-              << "TX failed " << written << "/" << frame_len
+    std::cerr << termcolor::red << "TX failed " << written << "/" << frame_len
               << termcolor::reset << std::endl;
   }
 }
 
-uint8_t* SerialCommunicationClass::receiveDataFrame()
-{
+uint8_t* SerialCommunicationClass::receiveDataFrame() {
   return frame_buffer_.data();
 }
 
 // ---------------- 接收：将有效帧交给 processFrame ----------------
-void SerialCommunicationClass::processBuffer()
-{
+void SerialCommunicationClass::processBuffer() {
   size_t frames_processed = 0;
 
-  while (buffer_index_ >= FRAME_MIN_SIZE &&
-         frames_processed < MAX_FRAMES_PER_LOOP) {
+  while (buffer_index_ >= FRAME_MIN_SIZE
+         && frames_processed < MAX_FRAMES_PER_LOOP) {
     size_t pos = 0;
     bool found = false;
 
@@ -252,15 +243,11 @@ void SerialCommunicationClass::processBuffer()
 
     const uint8_t cmd = buffer_[2];
     if (!isSupportedCommand(cmd)) {
-      std::cout << termcolor::yellow
-                << "Unknown CMD=0x" << std::hex
-                << static_cast<int>(cmd)
-                << " (expected 0x"
-                << static_cast<int>(COMMAND_CODE_MOTION)
-                << " or 0x"
-                << static_cast<int>(COMMAND_CODE_REFEREE)
-                << ")"
-                << std::dec << termcolor::reset << std::endl;
+      std::cout << termcolor::yellow << "Unknown CMD=0x" << std::hex
+                << static_cast<int>(cmd) << " (expected 0x"
+                << static_cast<int>(COMMAND_CODE_MOTION) << " or 0x"
+                << static_cast<int>(COMMAND_CODE_REFEREE) << ")" << std::dec
+                << termcolor::reset << std::endl;
       buffer_index_ = 0;
       return;
     }
@@ -269,10 +256,8 @@ void SerialCommunicationClass::processBuffer()
     const size_t frame_len = static_cast<size_t>(len) + FRAME_MIN_SIZE;
 
     if (frame_len > BUFFER_SIZE || frame_len > MAX_FRAME_LEN) {
-      std::cout << termcolor::red
-                << "Invalid frame length: " << frame_len
-                << ", drop buffer"
-                << termcolor::reset << std::endl;
+      std::cout << termcolor::red << "Invalid frame length: " << frame_len
+                << ", drop buffer" << termcolor::reset << std::endl;
       buffer_index_ = 0;
       return;
     }
@@ -283,10 +268,8 @@ void SerialCommunicationClass::processBuffer()
 
     const uint8_t calc = crc8_calc(buffer_.data(), 4 + len);
     if (calc != buffer_[frame_len - 1]) {
-      std::cout << termcolor::yellow
-                << "CRC8 failed: calc=0x" << std::hex
-                << static_cast<int>(calc)
-                << ", recv=0x"
+      std::cout << termcolor::yellow << "CRC8 failed: calc=0x" << std::hex
+                << static_cast<int>(calc) << ", recv=0x"
                 << static_cast<int>(buffer_[frame_len - 1])
                 << ", len=" << std::dec << static_cast<int>(len)
                 << termcolor::reset << std::endl;
@@ -298,10 +281,8 @@ void SerialCommunicationClass::processBuffer()
     ++frames_processed;
 
     if (frame_len < buffer_index_) {
-      std::memmove(
-        buffer_.data(),
-        buffer_.data() + frame_len,
-        buffer_index_ - frame_len);
+      std::memmove(buffer_.data(), buffer_.data() + frame_len,
+                   buffer_index_ - frame_len);
       buffer_index_ -= frame_len;
     } else {
       buffer_index_ = 0;
@@ -310,15 +291,15 @@ void SerialCommunicationClass::processBuffer()
 }
 
 // ---------------- 对有效帧做分发 ----------------
-void SerialCommunicationClass::processFrame(const uint8_t* data)
-{
+void SerialCommunicationClass::processFrame(const uint8_t* data) {
   const uint8_t cmd = data[2];
   const uint8_t len = data[3];
   const uint8_t* pl = &data[4];
 
   if (cmd == COMMAND_CODE_REFEREE) {
     if (len == referee_frame_buffer_.size()) {
-      std::memcpy(referee_frame_buffer_.data(), pl, referee_frame_buffer_.size());
+      std::memcpy(referee_frame_buffer_.data(), pl,
+                  referee_frame_buffer_.size());
       referee_frame_ready_.store(true);
     } else {
       std::cout << termcolor::yellow
@@ -341,29 +322,26 @@ void SerialCommunicationClass::processFrame(const uint8_t* data)
     return;
   }
 
-  std::cout << termcolor::yellow
-            << "Unknown CMD=0x" << std::hex
-            << static_cast<int>(cmd)
-            << " LEN=" << std::dec << static_cast<int>(len)
-            << " (ignored)"
-            << termcolor::reset << std::endl;
+  std::cout << termcolor::yellow << "Unknown CMD=0x" << std::hex
+            << static_cast<int>(cmd) << " LEN=" << std::dec
+            << static_cast<int>(len) << " (ignored)" << termcolor::reset
+            << std::endl;
 }
 
-void SerialCommunicationClass::timerCallback()
-{
+void SerialCommunicationClass::timerCallback() {
   if (fd_ < 0) {
-    if (std::chrono::steady_clock::now() - last_reconnect_time_ >
-        std::chrono::seconds(3)) {
+    if (std::chrono::steady_clock::now() - last_reconnect_time_
+        > std::chrono::seconds(3)) {
       std::cerr << "Serial port not available, trying reconnect" << std::endl;
       tryReconnect();
     }
     return;
   }
 
-  if (std::chrono::steady_clock::now() - last_received_time_ >
-      std::chrono::seconds(3)) {
-    if (std::chrono::steady_clock::now() - last_reconnect_time_ >
-        std::chrono::seconds(3)) {
+  if (std::chrono::steady_clock::now() - last_received_time_
+      > std::chrono::seconds(3)) {
+    if (std::chrono::steady_clock::now() - last_reconnect_time_
+        > std::chrono::seconds(3)) {
       std::cerr << "No data received, trying reconnect" << std::endl;
       tryReconnect();
     }
@@ -371,8 +349,7 @@ void SerialCommunicationClass::timerCallback()
   }
 
   if (buffer_index_ >= BUFFER_SIZE - 64) {
-    std::cout << termcolor::yellow
-              << "Buffer near full, clearing"
+    std::cout << termcolor::yellow << "Buffer near full, clearing"
               << termcolor::reset << std::endl;
     buffer_index_ = 0;
   }
@@ -383,9 +360,8 @@ void SerialCommunicationClass::timerCallback()
     last_received_time_ = std::chrono::steady_clock::now();
 
     if (buffer_index_ + static_cast<size_t>(n) > BUFFER_SIZE) {
-      std::cout << termcolor::red
-                << "Buffer overflow, drop"
-                << termcolor::reset << std::endl;
+      std::cout << termcolor::red << "Buffer overflow, drop" << termcolor::reset
+                << std::endl;
       buffer_index_ = 0;
       return;
     }
@@ -396,8 +372,7 @@ void SerialCommunicationClass::timerCallback()
   }
 }
 
-void SerialCommunicationClass::tryReconnect()
-{
+void SerialCommunicationClass::tryReconnect() {
   last_reconnect_time_ = std::chrono::steady_clock::now();
 
   if (fd_ >= 0) {
@@ -418,9 +393,8 @@ void SerialCommunicationClass::tryReconnect()
     if (!port.empty()) {
       openSerialPort(port, baud_rate_);
     } else {
-      std::cerr << termcolor::red
-                << "waiting..."
-                << termcolor::reset << std::endl;
+      std::cerr << termcolor::red << "waiting..." << termcolor::reset
+                << std::endl;
     }
   }
 
@@ -428,8 +402,7 @@ void SerialCommunicationClass::tryReconnect()
   last_received_time_ = std::chrono::steady_clock::now();
 }
 
-void SerialCommunicationClass::timerThread()
-{
+void SerialCommunicationClass::timerThread() {
   while (running_) {
     const auto start = std::chrono::steady_clock::now();
     timerCallback();
@@ -437,8 +410,7 @@ void SerialCommunicationClass::timerThread()
   }
 }
 
-void SerialCommunicationClass::writeFloatLE(uint8_t *dst, float value)
-{
+void SerialCommunicationClass::writeFloatLE(uint8_t* dst, float value) {
   uint32_t bits = 0;
   std::memcpy(&bits, &value, sizeof(float));
 
@@ -448,13 +420,11 @@ void SerialCommunicationClass::writeFloatLE(uint8_t *dst, float value)
   dst[3] = static_cast<uint8_t>((bits >> 24) & 0xFFu);
 }
 
-float SerialCommunicationClass::readFloatLE(const uint8_t *src)
-{
-  const uint32_t bits =
-    (static_cast<uint32_t>(src[0])) |
-    (static_cast<uint32_t>(src[1]) << 8) |
-    (static_cast<uint32_t>(src[2]) << 16) |
-    (static_cast<uint32_t>(src[3]) << 24);
+float SerialCommunicationClass::readFloatLE(const uint8_t* src) {
+  const uint32_t bits = (static_cast<uint32_t>(src[0]))
+                      | (static_cast<uint32_t>(src[1]) << 8)
+                      | (static_cast<uint32_t>(src[2]) << 16)
+                      | (static_cast<uint32_t>(src[3]) << 24);
 
   float value = 0.0f;
   std::memcpy(&value, &bits, sizeof(float));
