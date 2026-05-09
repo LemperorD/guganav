@@ -37,7 +37,7 @@ while IFS= read -r line; do
 done < <(git submodule status)
 
 # 显示仓库表格
-echo "找到以下 Git 仓库："
+echo -e "\e[1;32m找到以下 Git 仓库：\e[0m"
 for i in "${!repos[@]}"; do
     echo "$i) ${repo_names[$i]} -> ${repos[$i]}"
 done
