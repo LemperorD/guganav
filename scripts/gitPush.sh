@@ -72,11 +72,15 @@ for index in "${choices[@]}"; do
         echo -e "\e[1;32m仓库 $repo_name 没有未提交的修改，执行 push...\e[0m"
     else
         echo -e "\e[1;31m仓库 $repo_name 有未提交的修改，请先在 VSCode 完成 commit!\e[0m"
-        continue
+        read -rp "$(echo -e "\e[1;33m是否仍然强制 push 当前分支已提交内容？(y/n)：\e[0m")" confirm
+
+        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+            echo -e "\e[1;33m已跳过仓库 $repo_name\e[0m"
+            continue
+        fi
     fi
 
     # push 到远程同名分支
     git push origin "$current_branch"
+    echo -e "\e[1;32m所有选择的仓库已 push 完成!\e[0m"
 done
-
-echo -e "\e[1;32m所有选择的仓库已 push 完成!\e[0m"
