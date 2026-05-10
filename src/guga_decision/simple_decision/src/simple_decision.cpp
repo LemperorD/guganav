@@ -27,23 +27,24 @@ namespace simple_decision {
         "require_game_running", true);
     const double start_delay_sec = this->declare_parameter<double>(
         "start_delay_sec", 5.0);
-    const double default_spin_keep_xy_tol_ = this->declare_parameter<double>(
+    const double default_spin_keep_xy_tol = this->declare_parameter<double>(
         "default_spin_keep_xy_tol", 0.80);
     const double supply_x = this->declare_parameter<double>("supply_x", 0.0);
     const double supply_y = this->declare_parameter<double>("supply_y", 0.0);
     const double supply_yaw = this->declare_parameter<double>("supply_yaw",
                                                               0.0);
-    const double default_x_ = this->declare_parameter<double>("default_x", 2.0);
-    const double default_y_ = this->declare_parameter<double>("default_y", 0.5);
-    const double default_yaw_ = this->declare_parameter<double>("default_yaw",
-                                                                0.0);
-    const double default_arrive_xy_tol_ = this->declare_parameter<double>(
+    const double default_x = this->declare_parameter<double>("default_x", 2.0);
+    const double default_y = this->declare_parameter<double>("default_y", 0.5);
+    const double default_yaw = this->declare_parameter<double>("default_yaw",
+                                                               0.0);
+    const double default_arrive_xy_tol = this->declare_parameter<double>(
         "default_arrive_xy_tol", 0.30);
-    const int hp_enter_supply = this->declare_parameter<int>(
-        "hp_survival_enter", 120);
-    const int hp_exit_supply = this->declare_parameter<int>("hp_survival_exit",
-                                                            300);
-    const int ammo_min = this->declare_parameter<int>("ammo_min", 0);
+    const int hp_enter_supply = static_cast<int>(
+        this->declare_parameter<int>("hp_survival_enter", 120));
+    const int hp_exit_supply = static_cast<int>(
+        this->declare_parameter<int>("hp_survival_exit", 300));
+    const int ammo_min = static_cast<int>(
+        this->declare_parameter<int>("ammo_min", 0));
     const double combat_max_distance = this->declare_parameter<double>(
         "combat_max_distance", 8.0);
 
@@ -53,14 +54,14 @@ namespace simple_decision {
                                        combat_max_distance,
                                        require_game_running,
                                        start_delay_sec,
-                                       default_x_,
-                                       default_y_,
-                                       default_yaw_,
+                                       default_x,
+                                       default_y,
+                                       default_yaw,
                                        supply_x,
                                        supply_y,
                                        supply_yaw,
-                                       default_arrive_xy_tol_,
-                                       default_spin_keep_xy_tol_};
+                                       default_arrive_xy_tol,
+                                       default_spin_keep_xy_tol};
     environment_ = std::make_unique<EnvironmentContext>(context_config);
     controller_ = std::make_unique<Decision>(context_config);
 
@@ -156,7 +157,9 @@ namespace simple_decision {
 
   void DecisionSimple::tick() {
     // snapshot
-    double x{}, y{}, yaw{};
+    double x{};
+    double y{};
+    double yaw{};
     const auto now = this->now();
 
     auto readiness = environment_->checkReadiness(now.nanoseconds());
@@ -247,8 +250,8 @@ namespace simple_decision {
       const double qy = tf.transform.rotation.y;
       const double qz = tf.transform.rotation.z;
       const double qw = tf.transform.rotation.w;
-      position.yaw = std::atan2(2.0 * (qw * qz + qx * qy),
-                                1.0 - 2.0 * (qy * qy + qz * qz));
+      position.yaw = std::atan2(2.0 * ((qw * qz) + (qx * qy)),
+                                1.0 - (2.0 * ((qy * qy) + (qz * qz))));
       return true;
     } catch (const tf2::TransformException& ex) {
       RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
@@ -259,8 +262,8 @@ namespace simple_decision {
     }
   }
 
-  bool DecisionSimple::trySetState(State s) {
-    environment_->setState(s);
+  bool DecisionSimple::trySetState(State state) {
+    environment_->setState(state);
     return environment_->isStateChanged();
   }
 
@@ -271,8 +274,9 @@ namespace simple_decision {
   }
 
   void DecisionSimple::publishGoalThrottled(const PoseStampedMsg& goal,
-                                            rclcpp::Time& last_pub, double hz) {
-    const double period = (hz <= 1e-6) ? 1e9 : (1.0 / hz);
+                                            rclcpp::Time& last_pub,
+                                            double frequency) {
+    const double period = (frequency <= 1e-6) ? 1e9 : (1.0 / frequency);
     const auto now = this->now();
 
     if (last_pub.nanoseconds() == 0 || (now - last_pub).seconds() >= period) {

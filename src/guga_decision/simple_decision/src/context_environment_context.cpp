@@ -3,7 +3,7 @@
 namespace simple_decision {
 
   EnvironmentContext::EnvironmentContext(const ContextConfig& context_config)
-      : config(context_config) {
+      : config_(context_config) {
   }
 
   void EnvironmentContext::onRobotStatus(const RobotStatus& robot_status) {
@@ -13,7 +13,7 @@ namespace simple_decision {
     has_robot_status_ = true;
   }
 
-  void EnvironmentContext::onGameStatus(const GameStatus game_status,
+  void EnvironmentContext::onGameStatus(GameStatus game_status,
                                         int64_t match_start_time_ns) {
     std::lock_guard<std::mutex> lock(mtx_);
 
@@ -24,7 +24,7 @@ namespace simple_decision {
     if (prev != 4 && last_game_status_ == 4) {
       match_started_ = true;
       match_start_time_ = match_start_time_ns;
-      is_game_started = true;
+      is_game_started_ = true;
     }
 
     // 从“比赛中(4)” -> “非比赛中”，复位，为下一局做准~备
@@ -33,21 +33,21 @@ namespace simple_decision {
       match_start_time_ = 0;
       // 清掉上一局遗留的默认点小陀螺锁存
       default_spin_latched_ = false;
-      is_game_started = false;
-      is_game_over = true;
+      is_game_started_ = false;
+      is_game_over_ = true;
     }
   }
 
-  bool EnvironmentContext::isGameStarted() {
-    return is_game_started;
+  bool EnvironmentContext::isGameStarted() const {
+    return is_game_started_;
   }
 
-  bool EnvironmentContext::isGameOver() {
-    return is_game_over;
+  bool EnvironmentContext::isGameOver() const {
+    return is_game_over_;
   }
 
   void EnvironmentContext::resetGameOver() {
-    is_game_over = false;
+    is_game_over_ = false;
   }
 
   void EnvironmentContext::onArmors(const Armors& armors) {
@@ -57,7 +57,7 @@ namespace simple_decision {
     has_armors_ = true;
   }
 
-  void EnvironmentContext::onTarget(const Target target) {
+  void EnvironmentContext::onTarget(const Target& target) {
     std::lock_guard<std::mutex> lock(mtx_);
 
     last_target_opt_ = target;
@@ -69,23 +69,22 @@ namespace simple_decision {
       const double x = target_opt->position.x;
       const double y = target_opt->position.y;
       const double z = target_opt->position.z;
-      const double dist = std::sqrt(x * x + y * y + z * z);
-      return dist <= config.combat_max_distance;
+      const double dist = std::sqrt((x * x) + (y * y) + (z * z));
+      return dist <= config_.combat_max_distance;
     }
 
-    for (const auto& a : armors.armors) {
-      const double x = a.pose.position.x;
-      const double y = a.pose.position.y;
-      const double z = a.pose.position.z;
-      const double dist = std::sqrt(x * x + y * y + z * z);
-      if (dist <= config.combat_max_distance) {
-        return true;
-      }
-    }
-    return false;
+    return std::any_of(armors.armors.begin(), armors.armors.end(),
+                       [&](const auto& armor) {
+                         const double dist = std::sqrt(
+                             (armor.pose.position.x * armor.pose.position.x)
+                             + (armor.pose.position.y * armor.pose.position.y)
+                             + (armor.pose.position.z * armor.pose.position.z));
+                         return dist <= config_.combat_max_distance;
+                       });
   }
 
   Snapshot EnvironmentContext::getSnapshot(Stamp now) {
+    constexpr int64_t ns_per_sec = 1'000'000'000LL;
     Snapshot snapshot;
     snapshot.has_rs = has_robot_status_;
     if (snapshot.has_rs) {
@@ -94,9 +93,9 @@ namespace simple_decision {
     snapshot.has_gs = has_game_status_;
     snapshot.match_started = match_started_;
     snapshot.match_start_time.sec = static_cast<int32_t>(match_start_time_
-                                                         / 1000000000LL);
+                                                         / ns_per_sec);
     snapshot.match_start_time.nanosec = static_cast<uint32_t>(match_start_time_
-                                                              % 1000000000LL);
+                                                              % ns_per_sec);
     snapshot.has_armors = has_armors_;
     snapshot.state = state_;
     if (snapshot.has_armors) {
@@ -111,55 +110,57 @@ namespace simple_decision {
       snapshot.last_enemy_seen_ = now;
     }
     const int64_t last_enemy_ns =
-        (static_cast<int64_t>(snapshot.last_enemy_seen_.sec) * 1000000000LL)
+        (static_cast<int64_t>(snapshot.last_enemy_seen_.sec) * ns_per_sec)
         + snapshot.last_enemy_seen_.nanosec;
     snapshot.enemy_recent = (last_enemy_ns != 0)
-                         && ((now.nanosec - last_enemy_ns) * 1e-9
+                         && (static_cast<double>(now.nanosec - last_enemy_ns)
+                                 * 1e-9
                              <= attack_hold_sec_);
 
     if (snapshot.rs.is_hp_deduced) {
       snapshot.last_attacked_ = now;
     }
     const int64_t last_attacked_ns =
-        (static_cast<int64_t>(snapshot.last_attacked_.sec) * 1000000000LL)
+        (static_cast<int64_t>(snapshot.last_attacked_.sec) * ns_per_sec)
         + snapshot.last_attacked_.nanosec;
-    snapshot.attacked_recent = (last_attacked_ns != 0)
-                            && ((now.nanosec - last_attacked_ns) * 1e-9
-                                <= attacked_hold_sec_);
+    snapshot.attacked_recent =
+        (last_attacked_ns != 0)
+        && (static_cast<double>(now.nanosec - last_attacked_ns) * 1e-9
+            <= attacked_hold_sec_);
 
     snapshot.default_spin_latched = default_spin_latched_;
-    snapshot.at_center = isNearRobotPose(config.default_x, config.default_y,
-                                         config.default_arrive_xy_tol);
+    snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,
+                                         config_.default_arrive_xy_tol);
     snapshot.in_center_keep_spin = isNearRobotPose(
-        config.default_x, config.default_y, config.default_spin_keep_xy_tol);
+        config_.default_x, config_.default_y, config_.default_spin_keep_xy_tol);
 
     return snapshot;
   }
 
-  bool EnvironmentContext::isStatusBad(const RobotStatus& rs) const {
-    const int hp = static_cast<int>(rs.current_hp);
-    const int ammo = static_cast<int>(rs.projectile_allowance_17mm);
-    return (hp < config.hp_enter_supply) || (ammo <= config.ammo_min);
+  bool EnvironmentContext::isStatusBad(const RobotStatus& robotstatus) const {
+    const int hp = static_cast<int>(robotstatus.current_hp);
+    const int ammo = static_cast<int>(robotstatus.projectile_allowance_17mm);
+    return (hp < config_.hp_enter_supply) || (ammo <= config_.ammo_min);
   }
 
-  void EnvironmentContext::setState(State s) {
-    if (state_ == s) {
-      is_state_changed = false;
+  void EnvironmentContext::setState(State state) {
+    if (state_ == state) {
+      is_state_changed_ = false;
       return;
     }
-    is_state_changed = true;
-    state_ = s;
+    is_state_changed_ = true;
+    state_ = state;
   }
 
-  bool EnvironmentContext::isStateChanged() {
-    return is_state_changed;
+  bool EnvironmentContext::isStateChanged() const {
+    return is_state_changed_;
   }
 
-  Readiness EnvironmentContext::checkReadiness(nanoseconds now) {
+  Readiness EnvironmentContext::checkReadiness(nanoseconds now) const {
     if (!has_robot_status_) {
       return {Readiness::Status::NO_RS};
     }
-    if (config.require_game_running) {
+    if (config_.require_game_running) {
       if (!has_game_status_) {
         return {Readiness::Status::NO_GS};
       }
@@ -167,8 +168,9 @@ namespace simple_decision {
         return {Readiness::Status::NOT_STARTED};
       }
 
-      const double current_elapsed = (now - match_start_time_) * 1e-9;
-      if (current_elapsed < config.start_delay_sec) {
+      const double current_elapsed =
+          static_cast<double>(now - match_start_time_) * 1e-9;
+      if (current_elapsed < config_.start_delay_sec) {
         return {Readiness::Status::IN_DELAY, current_elapsed};
       }
     }

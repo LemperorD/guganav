@@ -42,7 +42,7 @@ namespace simple_decision {
     void tick();
 
     // helpers
-    Stamp makeStamped(rclcpp::Time time);
+    static Stamp makeStamped(rclcpp::Time time);
     void executeAction(DecisionAction action);
     void publishGoal(const DecisionAction& action);
     PoseStampedMsg makePoseXYZYaw(const std::string& frame,
@@ -106,7 +106,7 @@ namespace simple_decision {
     rclcpp::Time last_attack_pub_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_enemy_seen_{0, 0, RCL_ROS_TIME};
 
-    geometry_msgs::msg::PoseStamped last_attack_goal_{};
+    geometry_msgs::msg::PoseStamped last_attack_goal_;
 
     std::unique_ptr<EnvironmentContext> environment_;
     std::unique_ptr<Decision> controller_;

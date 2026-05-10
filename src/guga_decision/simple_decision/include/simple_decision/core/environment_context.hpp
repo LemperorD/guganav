@@ -3,6 +3,8 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <algorithm>
+#include <cstdint>
 
 #include "guga_interfaces/msg/armors.hpp"
 #include "guga_interfaces/msg/target.hpp"
@@ -22,8 +24,14 @@
 namespace simple_decision {
 
   struct Readiness {
-    enum class Status { READY, NO_RS, NO_GS, NOT_STARTED, IN_DELAY };
-    Status status;
+    enum class Status : std::uint8_t {
+      READY,
+      NO_RS,
+      NO_GS,
+      NOT_STARTED,
+      IN_DELAY
+    };
+    Status status = Status::NOT_STARTED;
     double elapsed = 0.0;  // 仅供 Log 使用
   };
 
@@ -36,44 +44,44 @@ namespace simple_decision {
     explicit EnvironmentContext(const ContextConfig& context_config);
 
     void onRobotStatus(const RobotStatus& robot_status);
-    void onArmors(const Armors& msg);
-    void onTarget(Target msg);
-    void onGameStatus(GameStatus msg, int64_t match_start_time_ns);
+    void onArmors(const Armors& armors);
+    void onTarget(const Target& target);
+    void onGameStatus(GameStatus game_status, int64_t match_start_time_ns);
 
-    bool isGameStarted();
-    bool isGameOver();
+    bool isGameStarted() const;
+    bool isGameOver() const;
     void resetGameOver();
 
     bool getRobotPoseMap(double& x, double& y, double& yaw);
 
     Snapshot getSnapshot(Stamp now);
 
-    bool isStatusBad(const RobotStatus& rs) const;
-    bool isStatusRecovered(const RobotStatus& rs) const;
+    bool isStatusBad(const RobotStatus& robotstatus) const;
+    bool isStatusRecovered(const RobotStatus& robotstatus) const;
 
     bool detectEnemy(const Armors& armors,
                      const std::optional<Target>& target_opt) const;
 
-    void setState(State s);
-    bool isStateChanged();
+    void setState(State state);
+    bool isStateChanged() const;
 
     void setChassisMode(ChassisMode mode);
-    Readiness checkReadiness(int64_t now);
-    void updatePose(const double x, const double y, const double z);
+    Readiness checkReadiness(int64_t now) const;
+    void updatePose(double x, double y, double z);
     bool isNearRobotPose(double target_x, double target_y,
                          double tolerance) const;
 
   private:
-    const ContextConfig config;
+    const ContextConfig config_;
     mutable std::mutex mtx_;
     bool has_robot_status_{false};
     bool match_started_{false};
     bool has_pose_{false};
     bool has_game_status_{false};
     bool default_spin_latched_{false};
-    bool is_game_started{false};
-    bool is_game_over{false};
-    bool is_state_changed{false};
+    bool is_game_started_{false};
+    bool is_game_over_{false};
+    bool is_state_changed_{false};
     bool has_armors_{false};
 
     double attack_hold_sec_{1.5};

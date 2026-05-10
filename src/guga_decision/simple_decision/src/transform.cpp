@@ -30,79 +30,79 @@ namespace simple_decision {
 
   RobotStatus ConvertRobotStatus(
       guga_interfaces::msg::RobotStatus::SharedPtr msg) {
-    RobotStatus theRobotStatus;
+    RobotStatus robotstatus;
     if (!msg) {
       throw std::invalid_argument(
           "ConvertRobotStatus received nullptr RobotStatus message");
     }
 
-    theRobotStatus.robot_id = msg->robot_id;
-    theRobotStatus.robot_level = msg->robot_level;
-    theRobotStatus.current_hp = msg->current_hp;
-    theRobotStatus.maximum_hp = msg->maximum_hp;
-    theRobotStatus.shooter_barrel_cooling_value =
+    robotstatus.robot_id = msg->robot_id;
+    robotstatus.robot_level = msg->robot_level;
+    robotstatus.current_hp = msg->current_hp;
+    robotstatus.maximum_hp = msg->maximum_hp;
+    robotstatus.shooter_barrel_cooling_value =
         msg->shooter_barrel_cooling_value;
-    theRobotStatus.shooter_barrel_heat_limit = msg->shooter_barrel_heat_limit;
-    theRobotStatus.shooter_17mm_1_barrel_heat = msg->shooter_17mm_1_barrel_heat;
-    theRobotStatus.robot_pos = ConvertPose(msg->robot_pos);
-    theRobotStatus.armor_id = msg->armor_id;
-    theRobotStatus.hp_deduction_reason = msg->hp_deduction_reason;
-    theRobotStatus.projectile_allowance_17mm = msg->projectile_allowance_17mm;
-    theRobotStatus.remaining_gold_coin = msg->remaining_gold_coin;
-    theRobotStatus.is_hp_deduced = msg->is_hp_deduced;
+    robotstatus.shooter_barrel_heat_limit = msg->shooter_barrel_heat_limit;
+    robotstatus.shooter_17mm_1_barrel_heat = msg->shooter_17mm_1_barrel_heat;
+    robotstatus.robot_pos = ConvertPose(msg->robot_pos);
+    robotstatus.armor_id = msg->armor_id;
+    robotstatus.hp_deduction_reason = msg->hp_deduction_reason;
+    robotstatus.projectile_allowance_17mm = msg->projectile_allowance_17mm;
+    robotstatus.remaining_gold_coin = msg->remaining_gold_coin;
+    robotstatus.is_hp_deduced = msg->is_hp_deduced;
 
-    return theRobotStatus;
+    return robotstatus;
   }
 
   GameStatus ConvertGameStatus(
       const guga_interfaces::msg::GameStatus::SharedPtr msg) {
-    GameStatus theGameStatus;
+    GameStatus gamestatus;
 
-    theGameStatus.game_progress = msg->game_progress;
+    gamestatus.game_progress = msg->game_progress;
 
-    return theGameStatus;
+    return gamestatus;
   }
 
   Armors ConvertArmors(
       const guga_interfaces::msg::Armors::SharedPtr& ros_armorsmsg) {
-    Armors theArmors;
+    Armors armors;
 
     if (!ros_armorsmsg) {
       throw std::invalid_argument(
           "ConvertRobotStatus received nullptr Armors message");
     }
-    theArmors.header.stamp.nanosec = ros_armorsmsg->header.stamp.nanosec;
-    theArmors.header.stamp.sec = ros_armorsmsg->header.stamp.sec;
-    theArmors.header.frame_id = ros_armorsmsg->header.frame_id;
+    armors.header.stamp.nanosec = ros_armorsmsg->header.stamp.nanosec;
+    armors.header.stamp.sec = ros_armorsmsg->header.stamp.sec;
+    armors.header.frame_id = ros_armorsmsg->header.frame_id;
 
     // 调整目标容器大小
-    theArmors.armors.resize(ros_armorsmsg->armors.size());
+    armors.armors.resize(ros_armorsmsg->armors.size());
 
     // 使用 transform 进行批量转换映射
     std::transform(ros_armorsmsg->armors.begin(), ros_armorsmsg->armors.end(),
-                   theArmors.armors.begin(), [](const auto& ros_armor) {
+                   armors.armors.begin(), [](const auto& ros_armor) {
                      return ConvertArmor(ros_armor);  // 调用单体转换逻辑
                    });
 
-    return theArmors;
+    return armors;
   }
 
   Armor ConvertArmor(const guga_interfaces::msg::Armor& ros_armormsg) {
-    Armor theArmor;
-    theArmor.pose = ConvertPose(ros_armormsg.pose);
-    return theArmor;
+    Armor armor;
+    armor.pose = ConvertPose(ros_armormsg.pose);
+    return armor;
   }
 
   Target ConvertTarget(
       const guga_interfaces::msg::Target::SharedPtr ros_targetmsg) {
-    Target theTarget;
-    theTarget.header.stamp.nanosec = ros_targetmsg->header.stamp.nanosec;
-    theTarget.header.stamp.sec = ros_targetmsg->header.stamp.sec;
-    theTarget.header.frame_id = ros_targetmsg->header.frame_id;
+    Target target;
+    target.header.stamp.nanosec = ros_targetmsg->header.stamp.nanosec;
+    target.header.stamp.sec = ros_targetmsg->header.stamp.sec;
+    target.header.frame_id = ros_targetmsg->header.frame_id;
 
-    theTarget.position = ConvertPoint(ros_targetmsg->position);
-    theTarget.yaw = ros_targetmsg->yaw;
-    theTarget.tracking = ros_targetmsg->tracking;
-    return theTarget;
+    target.position = ConvertPoint(ros_targetmsg->position);
+    target.yaw = ros_targetmsg->yaw;
+    target.tracking = ros_targetmsg->tracking;
+    return target;
   }
 }  // namespace simple_decision

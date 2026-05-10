@@ -91,24 +91,24 @@ namespace simple_decision {
     uint16_t remaining_gold_coin = 0;
     bool is_hp_deduced = false;
 
-    static constexpr uint8_t ARMOR_HIT = 0u;
-    static constexpr uint8_t SYSTEM_OFFLINE = 1u;
-    static constexpr uint8_t OVER_SHOOT_SPEED = 2u;
-    static constexpr uint8_t OVER_HEAT = 3u;
-    static constexpr uint8_t OVER_POWER = 4u;
-    static constexpr uint8_t ARMOR_COLLISION = 5u;
+    static constexpr uint8_t ARMOR_HIT = 0U;
+    static constexpr uint8_t SYSTEM_OFFLINE = 1U;
+    static constexpr uint8_t OVER_SHOOT_SPEED = 2U;
+    static constexpr uint8_t OVER_HEAT = 3U;
+    static constexpr uint8_t OVER_POWER = 4U;
+    static constexpr uint8_t ARMOR_COLLISION = 5U;
   };
 
   struct GameStatus {
     uint8_t game_progress = 0;
     int32_t stage_remain_time = 0;
 
-    static constexpr uint8_t NOT_START = 0u;
-    static constexpr uint8_t PREPARATION = 1u;
-    static constexpr uint8_t SELF_CHECKING = 2u;
-    static constexpr uint8_t COUNT_DOWN = 3u;
-    static constexpr uint8_t RUNNING = 4u;
-    static constexpr uint8_t GAME_OVER = 5u;
+    static constexpr uint8_t NOT_START = 0U;
+    static constexpr uint8_t PREPARATION = 1U;
+    static constexpr uint8_t SELF_CHECKING = 2U;
+    static constexpr uint8_t COUNT_DOWN = 3U;
+    static constexpr uint8_t RUNNING = 4U;
+    static constexpr uint8_t GAME_OVER = 5U;
   };
 
   struct Stamp {
@@ -152,7 +152,7 @@ namespace simple_decision {
     bool enemy{false};
     double last_attack_yaw{0.0};
     RobotStatus rs;
-    Stamp match_start_time;
+    Stamp match_start_time{0, 0};
     Armors armors;
     std::optional<Target> target_opt;
     State state{State::DEFAULT};
