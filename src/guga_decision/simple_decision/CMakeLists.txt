@@ -15,8 +15,6 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(guga_interfaces REQUIRED)
-find_package(auto_aim_interfaces REQUIRED)
-find_package(guga_interfaces REQUIRED)
 
 include_directories(include)
 
@@ -76,7 +74,6 @@ if(BUILD_TESTING)
         tf2
         tf2_ros
         guga_interfaces
-        auto_aim_interfaces
       )
     endif()
   endmacro()
