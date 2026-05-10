@@ -14,18 +14,16 @@
 │   └── usbjs.yaml             # 参数
 ├── include
 │   └── usbjs_driver
-│       ├── rc_gimbal_main.hpp # main类hpp
-│       └── rc_gimbal_node.hpp # node类hpp
+│       ├── usb_joystick_main.hpp # main类hpp
+│       └── usb_joystick_node.hpp # node类hpp
 ├── launch
 │   └── usbjs_driver.launch.py # launch脚本
 ├── package.xml
 ├── README.md
 └── src
-    ├── rc_gimbal_main.cpp     # main类cpp
-    └── rc_gimbal_node.cpp     # node类cpp
+    ├── usb_joystick_main.cpp     # main类cpp
+    └── usb_joystick_node.cpp     # node类cpp
 ```
-
-> 因为是从其他项目copy过来的，目前代码内命名空间不规范，亟待修改
 
 ## 2. 设计模式简述
 

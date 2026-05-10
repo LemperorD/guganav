@@ -20,26 +20,26 @@
 namespace usbjs_driver
 {
 
-class UsbJoystick
+class UsbJoystickMain
 {
 public: // 构造和析构
   /**
    * @brief 构造函数
    * @param file_name 设备文件地址
    */
-  explicit UsbJoystick(const char *file_name);
+  explicit UsbJoystickMain(const char *file_name);
 
   /**
    * @brief 析构函数
    */
-  ~UsbJoystick();
+  ~UsbJoystickMain();
 
 public: // 公共接口
   /**
    * @brief 获取设备文件描述符
    * @return 文件描述符
    */
-  int get_fd() const { return js_fd_; }
+  int get_fd() const { return fd_; }
 
   /**
    * @brief 获取轴状态
