@@ -1,6 +1,6 @@
-#pragma once
+#ifndef SERIAL_DRIVER_MAIN_HPP
+#define SERIAL_DRIVER_MAIN_HPP
 
-#include <rclcpp/rclcpp.hpp>
 #include <array>
 #include <functional>
 #include <string>
@@ -8,7 +8,7 @@
 #include <atomic>
 #include <chrono>
 
-using Array25 = std::array<uint8_t, 25>;
+namespace serial_driver {
 
 // ================= BR 串口协议常量 =================
 // SOF = 'B' 'R'  (0x42 0x52)(Beihang Robotics)
@@ -46,59 +46,42 @@ static const uint8_t CRC8_TABLE[256] = {
   0x74,0x2a,0xc8,0x96,0x15,0x4b,0xa9,0xf7,0xb6,0xe8,0x0a,0x54,0xd7,0x89,0x6b,0x35
 };
 
-class SerialCommunicationClass {
-public:
-  explicit SerialCommunicationClass(rclcpp::Node* node, const std::string& serial_port = "", int baud_rate = 115200);
-  ~SerialCommunicationClass();
+class SerialDriverMain {
+public: // 构造和析构
+  /**
+   * @brief 构造函数
+   * @param serial_port 串口名称
+   * @param baud_rate 波特率
+   */
+  explicit SerialDriverMain(const std::string& serial_port = "", int baud_rate = 115200);
 
-  void writeFloatLE(uint8_t *dst, float value);
-  float readFloatLE(const uint8_t *src);
+  /**
+   * @brief 析构函数
+   */
+  ~SerialDriverMain();
 
-  void sendDataFrame(const uint8_t* data, size_t len);
+public: // 外部调用
 
-public: // 在模板类中外部调用数据帧接收函数，需要根据不同数据帧类型进行适配，返回指向当前有效帧数据的指针
-  uint8_t* receiveDataFrame();
-  uint8_t* receiveRefereeFrame();
-  bool hasNewRefereeFrame() const;
-  void clearRefereeFrameFlag();
-
-public: // 数据帧全局变量
-  std::array<uint8_t, 26> frame_buffer_{};
-  std::array<uint8_t, 13> referee_frame_buffer_{};
-  std::atomic_bool referee_frame_ready_{false};
-
-private:
+private: // 方法
   // 轮询线程（~1ms）
   void timerThread();
   void timerCallback();
-
-  // 解析
-  void processBuffer();
-  void processFrame(const uint8_t* data);
-
-  // ---- CRC8（电控同款：RM常用表驱动，poly=0x31, init=0xFF） ----
-  static uint8_t crc8_calc(const uint8_t* p, size_t len);
-  static bool isSupportedCommand(uint8_t cmd);
-
-  void openSerialPort(const std::string& port_name, int baud_rate);
-  std::string findSerialPort();
-  void configureSerialPort(int baud_rate);
-
   void tryReconnect();
 
-private:
-  rclcpp::Node* node_{nullptr};
+private: // 成员变量
   int fd_ = -1;
   bool running_ = false;
-
   std::string serial_port_ = "/dev/ttyACM0";
   int baud_rate_ = 115200;
-
-  std::thread timer_thread_;
 
   std::array<uint8_t, BUFFER_SIZE> buffer_{};
   size_t buffer_index_ = 0;
 
+  std::thread timer_thread_;
   std::chrono::steady_clock::time_point last_received_time_;
   std::chrono::steady_clock::time_point last_reconnect_time_;
 };
+
+} // namespace serial_driver
+
+#endif // SERIAL_DRIVER_MAIN_HPP

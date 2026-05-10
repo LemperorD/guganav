@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SERIAL_DRIVER_NODE_HPP
+#define SERIAL_DRIVER_NODE_HPP
 
 #include <cmath>
 #include <deque>
@@ -13,7 +14,6 @@
 #include <unistd.h>
 
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_components/register_node_macro.hpp>
 
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/u_int8.hpp>
@@ -34,69 +34,16 @@
 
 using json = nlohmann::json;
 
-namespace bridge
+namespace serial_driver
 {
 
-typedef enum{
-  chassisFollowed = 1,
-  littleTES,
-  goHome,
-} chassisMode;
-
-class BridgeNode : public rclcpp::Node
+class SerialDriverNode : public rclcpp::Node
 {
-public:
-  explicit BridgeNode(const rclcpp::NodeOptions & options);
-  ~BridgeNode() override;
+public: // 构造和析构
+  explicit SerialDriverNode(const rclcpp::NodeOptions & options);
+  ~SerialDriverNode() override;
 
 public: // 检测雷达是否连接
-  inline bool isLidarConnected()
-  {
-    std::ifstream f("/home/ld/nav2_ws/config/mid360_user_config.json");
-    if (!f.is_open()) {
-      std::cerr << "无法打开配置文件\n"; return false;
-    }
-
-    json config;
-    try{
-      f >> config;
-    } catch (...) {
-      std::cerr << "JSON 解析失败\n"; return false;
-    }
-
-    std::string lidar_ip = config["lidar_configs"][0]["ip"];  // 读取雷达IP
-    int point_port = config["MID360"]["lidar_net_info"]["point_data_port"]; // 读取端口（建议检测 point_data_port）
-    // std::cout << "Lidar IP: " << lidar_ip << std::endl;
-    // std::cout << "Point Port: " << point_port << std::endl;
-
-    // 创建 socket
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-      std::cerr << "socket 创建失败\n"; return false;
-    }
-
-    // 设置超时（0.5秒）
-    struct timeval timeout;
-    timeout.tv_sec = 0; timeout.tv_usec = 500000;
-
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(point_port);
-
-    if (inet_pton(AF_INET, lidar_ip.c_str(), &addr.sin_addr) <= 0) {
-      std::cerr << "IP地址无效\n";
-      close(sock); return false;
-    }
-
-    int ret = connect(sock, (sockaddr *)&addr, sizeof(addr));
-
-    close(sock);
-
-    return (ret == 0);
-  }
 
 private: // 编解码函数
   uint8_t* encodeTwist(const geometry_msgs::msg::Twist& msg);
@@ -158,4 +105,6 @@ private: // 裁判系统相关
   pb_rm_interfaces::msg::RfidStatus rfid2ros(uint32_t rfid);
 };
 
-}  // namespace bridge
+}  // namespace serial_driver
+
+#endif // SERIAL_DRIVER_NODE_HPP
