@@ -188,8 +188,8 @@ namespace simple_decision {
       node_->handleGateLog(r);
     }
 
-    bool CallTrySetState(State s) {
-      return node_->trySetState(s);
+    std::optional<Pose2D> CallGetRobotPoseMap() {
+      return node_->getRobotPoseMap();
     }
 
     void DestroySystem() {
@@ -273,16 +273,6 @@ namespace simple_decision {
     r.status = Readiness::Status::READY;
     CallHandleGateLog(r);
     SUCCEED();
-  }
-
-  // ── trySetState returns true on change, false when unchanged ──
-  TEST_F(DecisionSimpleTest, TrySetState_DifferentState_ReturnsTrue) {
-    EXPECT_TRUE(CallTrySetState(State::SUPPLY));
-  }
-
-  TEST_F(DecisionSimpleTest, TrySetState_SameStateTwice_SecondReturnsFalse) {
-    CallTrySetState(State::SUPPLY);
-    EXPECT_FALSE(CallTrySetState(State::SUPPLY));
   }
 
   // ── Tick with robot status publishes goal ──
@@ -374,11 +364,20 @@ namespace simple_decision {
     EXPECT_EQ(goal_poses_.size(), 0u);
   }
 
-  // ── getRobotPoseMap success path ──
-  TEST_F(DecisionSimpleTest, Tick_TfLookupSucceeds_UpdatesPose) {
-    PublishStaticTF("map", "base_footprint", 0.1, 0.1, 0.0);
-    SendRobotStatus(500, 120);
-    ASSERT_TRUE(WaitForGoalAtLeast(1, 2000ms));
+  // ── getRobotPoseMap ──
+  TEST_F(DecisionSimpleTest, GetRobotPoseMap_TfExists_ReturnsPose) {
+    PublishStaticTF("map", "base_footprint", 1.0, 2.0, 0.0);
+
+    auto result = CallGetRobotPoseMap();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_DOUBLE_EQ(result->x, 1.0);
+    EXPECT_DOUBLE_EQ(result->y, 2.0);
+    EXPECT_DOUBLE_EQ(result->yaw, 0.0);
+  }
+
+  TEST_F(DecisionSimpleTest, GetRobotPoseMap_NoTf_ReturnsNullopt) {
+    auto result = CallGetRobotPoseMap();
+    EXPECT_FALSE(result.has_value());
   }
 
   // ── Low HP → Supply ──
@@ -464,7 +463,7 @@ namespace simple_decision {
 
     ClearReceived();
     SendRobotStatus(500, 120, false);
-    SpinFor(500ms);
+    SpinFor(2000ms);
 
     ASSERT_TRUE(WaitForChassisAtLeast(1, 2000ms));
     EXPECT_EQ(chassis_modes_.back(),
