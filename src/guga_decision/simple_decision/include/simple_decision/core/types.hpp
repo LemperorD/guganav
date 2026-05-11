@@ -12,15 +12,15 @@ namespace simple_decision {
 
   /// Chassis movement mode
   enum class ChassisMode : uint8_t {
-    CHASSIS_FOLLOWED = 1,
-    LITTLE_TES = 2,
-    GO_HOME = 3,
+    CHASSIS_FOLLOWED,
+    LITTLE_TES,
+    GO_HOME,
   };
 
   enum class State : uint8_t {
-    DEFAULT = 1,
-    ATTACK = 2,
-    SUPPLY = 3,
+    DEFAULT,
+    ATTACK,
+    SUPPLY,
   };
 
   struct ContextConfig {
@@ -156,8 +156,6 @@ namespace simple_decision {
     Armors armors;
     std::optional<Target> target_opt;
     State state{State::DEFAULT};
-    Stamp last_enemy_seen_{0, 0};
-    Stamp last_attacked_{0, 0};
     Position last_attack_position{0.0, 0.0, 0.0};
   };
 
