@@ -1,5 +1,17 @@
 # simple_decision 测试
 
+- [单元测试](#单元测试)
+  - [test_transform.cpp](#test_transformcpp--消息转换)
+  - [test_environment_context.cpp](#test_environment_contextcpp--环境状态聚合)
+  - [test_decision.cpp](#test_decisioncpp--决策算法)
+- [集成测试](#集成测试)
+  - [test_simple_decision.cpp](#test_simple_decisioncpp)
+    - [Gate](#gate门控)
+    - [Decision](#decision决策)
+    - [Rate-limiting](#rate-limiting限速)
+    - [Helpers](#helpers)
+- [运行](#运行)
+
 ## 单元测试
 
 不启动 ROS2 节点，直接测试函数级逻辑。
