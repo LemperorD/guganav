@@ -23,8 +23,8 @@ namespace simple_decision {
 
   Pose3D ConvertPose(const geometry_msgs::msg::Pose& ros_pose) {
     Pose3D pose;
-    ConvertPoint(ros_pose.position);
-    ConvertQuaternion(ros_pose.orientation);
+    pose.position = ConvertPoint(ros_pose.position);
+    pose.orientation = ConvertQuaternion(ros_pose.orientation);
     return pose;
   }
 
