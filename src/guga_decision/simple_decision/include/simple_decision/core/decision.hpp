@@ -1,6 +1,5 @@
 #pragma once
 
-#include "simple_decision/core/environment_context.hpp"
 #include "simple_decision/core/types.hpp"
 
 namespace simple_decision {
@@ -11,8 +10,7 @@ namespace simple_decision {
     [[nodiscard]] bool isStatusRecovered(const RobotStatus& rs) const;
     [[nodiscard]] bool isStatusBad(const RobotStatus& rs) const;
     [[nodiscard]] static std::optional<Pose2D> findAttackPosition(
-        const Armors& armors,
-        const std::optional<Target>& target_opt);
+        const Armors& armors, const std::optional<Target>& target_opt);
 
   private:
     [[nodiscard]] DecisionAction supplyAction() const;
