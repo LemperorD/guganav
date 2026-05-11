@@ -28,6 +28,26 @@ namespace simple_decision {
     EXPECT_DOUBLE_EQ(q.w, 4.0);
   }
 
+  TEST(ConvertPoseTest, CopiesAllFieldsFromRosPose) {
+    geometry_msgs::msg::Pose ros;
+    ros.position.x = 1.0;
+    ros.position.y = 2.0;
+    ros.position.z = 3.0;
+    ros.orientation.x = 0.0;
+    ros.orientation.y = 0.0;
+    ros.orientation.z = 0.0;
+    ros.orientation.w = 1.0;
+
+    auto p = ConvertPose(ros);
+    EXPECT_DOUBLE_EQ(p.position.x, 1.0);
+    EXPECT_DOUBLE_EQ(p.position.y, 2.0);
+    EXPECT_DOUBLE_EQ(p.position.z, 3.0);
+    EXPECT_DOUBLE_EQ(p.orientation.x, 0.0);
+    EXPECT_DOUBLE_EQ(p.orientation.y, 0.0);
+    EXPECT_DOUBLE_EQ(p.orientation.z, 0.0);
+    EXPECT_DOUBLE_EQ(p.orientation.w, 1.0);
+  }
+
   TEST(ConvertPointTest, CopiesAllFieldsFromRosPoint) {
     geometry_msgs::msg::Point ros;
     ros.x = 1.0;
@@ -99,6 +119,10 @@ namespace simple_decision {
     EXPECT_EQ(a.header.stamp.nanosec, 500u);
     EXPECT_EQ(a.header.frame_id, "map");
     ASSERT_EQ(a.armors.size(), 1u);
+    EXPECT_DOUBLE_EQ(a.armors[0].pose.position.x, 1.0);
+    EXPECT_DOUBLE_EQ(a.armors[0].pose.position.y, 2.0);
+    EXPECT_DOUBLE_EQ(a.armors[0].pose.position.z, 3.0);
+    EXPECT_DOUBLE_EQ(a.armors[0].pose.orientation.w, 1.0);
   }
 
   TEST(ConvertArmorsTest, ThrowsOnNullptr) {
