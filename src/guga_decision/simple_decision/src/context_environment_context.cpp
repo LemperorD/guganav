@@ -69,7 +69,6 @@ namespace simple_decision {
     std::lock_guard<std::mutex> lock(mtx_);
 
     last_armors_ = armors;
-    has_armors_ = true;
   }
 
   void EnvironmentContext::onTarget(const Target& target) {
@@ -129,9 +128,10 @@ namespace simple_decision {
     }
 
     const int64_t now_ns = toFullNanos(now.sec, now.nanosec);
-    snapshot.enemy_recent = isRecent(last_enemy_seen_, now_ns, attack_hold_sec_);
-    snapshot.attacked_recent =
-        isRecent(last_attacked_, now_ns, attacked_hold_sec_);
+    snapshot.enemy_recent = isRecent(last_enemy_seen_, now_ns,
+                                     attack_hold_sec_);
+    snapshot.attacked_recent = isRecent(last_attacked_, now_ns,
+                                        attacked_hold_sec_);
 
     snapshot.default_spin_latched = default_spin_latched_;
     snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,

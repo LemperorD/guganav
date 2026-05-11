@@ -67,7 +67,7 @@ namespace simple_decision {
 
     void setChassisMode(ChassisMode mode);
     Readiness checkReadiness(int64_t now) const;
-    void updatePose(const double x, const double y, const double yaw);
+    void updatePose(double x, double y, double yaw);
     bool isNearRobotPose(double target_x, double target_y,
                          double tolerance) const;
 
@@ -81,8 +81,6 @@ namespace simple_decision {
     bool default_spin_latched_{false};
     bool is_game_started_{false};
     bool is_game_over_{false};
-    bool has_armors_{false};
-
     enum class GameEvent : uint8_t { NONE, STARTED, OVER };
 
     static GameEvent detectGameEvent(uint8_t prev, uint8_t current);
