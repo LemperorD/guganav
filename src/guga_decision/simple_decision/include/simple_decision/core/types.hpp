@@ -12,15 +12,15 @@ namespace simple_decision {
 
   /// Chassis movement mode
   enum class ChassisMode : uint8_t {
-    CHASSIS_FOLLOWED = 1,
-    LITTLE_TES = 2,
-    GO_HOME = 3,
+    CHASSIS_FOLLOWED,
+    LITTLE_TES,
+    GO_HOME,
   };
 
   enum class State : uint8_t {
-    DEFAULT = 1,
-    ATTACK = 2,
-    SUPPLY = 3,
+    DEFAULT,
+    ATTACK,
+    SUPPLY,
   };
 
   struct ContextConfig {
@@ -115,6 +115,16 @@ namespace simple_decision {
     int32_t sec;
     uint32_t nanosec;
   };
+
+  inline int64_t toFullNanos(int32_t sec, uint32_t nanosec) {
+    return (static_cast<int64_t>(sec) * 1'000'000'000LL) + nanosec;
+  }
+
+  inline Stamp toStamp(int64_t full_nanos) {
+    return {static_cast<int32_t>(full_nanos / 1'000'000'000LL),
+            static_cast<uint32_t>(full_nanos % 1'000'000'000LL)};
+  }
+
   struct Header {
     Stamp stamp;
     std::string frame_id;
@@ -156,8 +166,6 @@ namespace simple_decision {
     Armors armors;
     std::optional<Target> target_opt;
     State state{State::DEFAULT};
-    Stamp last_enemy_seen_{0, 0};
-    Stamp last_attacked_{0, 0};
     Position last_attack_position{0.0, 0.0, 0.0};
   };
 

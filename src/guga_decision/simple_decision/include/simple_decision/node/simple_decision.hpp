@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mutex>
 #include <optional>
 #include <string>
 
@@ -28,36 +27,29 @@ namespace simple_decision {
   using TargetMsg = guga_interfaces::msg::Target;
   using PoseStampedMsg = geometry_msgs::msg::PoseStamped;
   using UInt8Msg = std_msgs::msg::UInt8;
+
   class DecisionSimple : public rclcpp::Node {
   public:
     explicit DecisionSimple(const rclcpp::NodeOptions& options);
 
   private:
-    void onRobotStatus(RobotStatusMsg::SharedPtr msg);
+    ContextConfig declareParams();
+    void setupInfrastructure();
+
     void onGameStatus(GameStatusMsg::SharedPtr msg);
-    void onArmors(ArmorsMsg::SharedPtr msg);
-    void onTarget(TargetMsg::SharedPtr msg);
-
-    // tick
-    void tick();
-
-    // helpers
-    static Stamp makeStamped(rclcpp::Time time);
+    void processDecision();
+    [[nodiscard]] std::optional<Pose2D> getRobotPoseMap();
     void executeAction(DecisionAction action);
-    void publishGoal(const DecisionAction& action);
-    PoseStampedMsg makePoseXYZYaw(const std::string& frame,
-                                  const Pose2D& position) const;
-
-    // ====== chassis mode & arrival / attacked helpers ======
-
-    bool getRobotPoseMap(Pose2D& position);
-    bool trySetState(State thestate);
-    void publishChassisMode(ChassisMode mode);
+    void publishGoal(const PoseStampedMsg& goal, State state);
     void publishGoalThrottled(const PoseStampedMsg& goal,
                               rclcpp::Time& last_pub, double frequency);
+    void publishChassisMode(ChassisMode mode);
     void handleGateLog(Readiness& readiness);
 
-    // ===== Parameters =====
+    [[nodiscard]] PoseStampedMsg makePoseXYZYaw(const std::string& frame,
+                                                const Pose2D& position) const;
+    static Stamp makeStamped(rclcpp::Time time);
+
     std::string frame_id_{"map"};
     std::string base_frame_id_{"base_link"};
 
@@ -69,10 +61,6 @@ namespace simple_decision {
     std::string detector_armors_topic_{"detector/armors"};
     std::string tracker_target_topic_{"tracker/target"};
 
-    // supply/default coordinates are provided to ContextConfig; node keeps
-
-    // Health/combat config moved to ContextConfig (not stored as node members)
-
     double tick_hz_{20.0};
     double default_goal_hz_{2.0};
     double supply_goal_hz_{2.0};
@@ -81,7 +69,6 @@ namespace simple_decision {
 
     bool default_spin_latched_{false};
 
-    // ===== Publishers & Subscribers =====
     rclcpp::Publisher<PoseStampedMsg>::SharedPtr goal_pose_pub_;
     rclcpp::Publisher<UInt8Msg>::SharedPtr chassis_mode_pub_;
     rclcpp::Publisher<PoseStampedMsg>::SharedPtr debug_attack_pose_pub_;
@@ -96,17 +83,9 @@ namespace simple_decision {
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
-    // ===== Cache/State =====
-    mutable std::mutex mtx_;
-
-    ChassisMode current_chassis_mode_{ChassisMode::CHASSIS_FOLLOWED};
-
     rclcpp::Time last_default_pub_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_supply_pub_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_attack_pub_{0, 0, RCL_ROS_TIME};
-    rclcpp::Time last_enemy_seen_{0, 0, RCL_ROS_TIME};
-
-    geometry_msgs::msg::PoseStamped last_attack_goal_;
 
     std::unique_ptr<EnvironmentContext> environment_;
     std::unique_ptr<Decision> controller_;

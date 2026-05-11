@@ -185,25 +185,22 @@ namespace simple_decision {
     EXPECT_TRUE(dec_.isStatusBad(LowAmmoRobotStatus()));
   }
 
-  // ── buildAttackGoal ──
-  TEST_F(DecisionTest, BuildAttackGoal_TrackingTarget_UsesTargetPose) {
-    Snapshot snap;
+  // ── findAttackPosition ──
+  TEST_F(DecisionTest, FindAttackPosition_TrackingTarget_UsesTargetPose) {
     auto target = TrackingTarget();
     target.position.x = 1.0;
     target.position.y = 2.0;
     target.position.z = 3.0;
     target.yaw = 1.57;
 
-    bool ok = dec_.buildAttackGoal(snap, Armors{}, target);
-    EXPECT_TRUE(ok);
-    EXPECT_TRUE(snap.has_attack_goal);
-    EXPECT_DOUBLE_EQ(snap.last_attack_position.x, 1.0);
-    EXPECT_DOUBLE_EQ(snap.last_attack_position.y, 2.0);
-    EXPECT_DOUBLE_EQ(snap.last_attack_yaw, 1.57);
+    auto result = Decision::findAttackPosition(Armors{}, target);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_DOUBLE_EQ(result->x, 1.0);
+    EXPECT_DOUBLE_EQ(result->y, 2.0);
+    EXPECT_DOUBLE_EQ(result->yaw, 1.57);
   }
 
-  TEST_F(DecisionTest, BuildAttackGoal_NoTargetWithArmors_PicksClosest) {
-    Snapshot snap;
+  TEST_F(DecisionTest, FindAttackPosition_NoTargetWithArmors_PicksClosest) {
     Armors armors;
     Armor far;
     far.pose.position.x = 10.0;
@@ -215,23 +212,20 @@ namespace simple_decision {
     close.pose.position.z = 0.0;
     armors.armors = {far, close};
 
-    bool ok = dec_.buildAttackGoal(snap, armors, std::nullopt);
-    EXPECT_TRUE(ok);
-    EXPECT_TRUE(snap.has_attack_goal);
-    EXPECT_DOUBLE_EQ(snap.last_attack_position.x, 2.0);
-    EXPECT_DOUBLE_EQ(snap.last_attack_position.y, 1.0);
-    EXPECT_DOUBLE_EQ(snap.last_attack_yaw, 0.0);
+    auto result = Decision::findAttackPosition(armors, std::nullopt);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_DOUBLE_EQ(result->x, 2.0);
+    EXPECT_DOUBLE_EQ(result->y, 1.0);
+    EXPECT_DOUBLE_EQ(result->yaw, 0.0);
   }
 
-  TEST_F(DecisionTest, BuildAttackGoal_NoTargetNoArmors_ReturnsFalse) {
-    Snapshot snap;
-    bool ok = dec_.buildAttackGoal(snap, Armors{}, std::nullopt);
-    EXPECT_FALSE(ok);
-    EXPECT_FALSE(snap.has_attack_goal);
+  TEST_F(DecisionTest, FindAttackPosition_NoTargetNoArmors_ReturnsNullopt) {
+    auto result = Decision::findAttackPosition(Armors{}, std::nullopt);
+    EXPECT_FALSE(result.has_value());
   }
 
-  TEST_F(DecisionTest, BuildAttackGoal_NonTrackingTargetWithArmors_UsesArmor) {
-    Snapshot snap;
+  TEST_F(DecisionTest,
+         FindAttackPosition_NonTrackingTargetWithArmors_UsesArmor) {
     Armors armors;
     Armor a;
     a.pose.position.x = 3.0;
@@ -242,9 +236,9 @@ namespace simple_decision {
     auto target = NonTrackingTarget();
     target.tracking = false;
 
-    bool ok = dec_.buildAttackGoal(snap, armors, target);
-    EXPECT_TRUE(ok);
-    EXPECT_DOUBLE_EQ(snap.last_attack_position.x, 3.0);
+    auto result = Decision::findAttackPosition(armors, target);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_DOUBLE_EQ(result->x, 3.0);
   }
 
 }  // namespace simple_decision

@@ -62,8 +62,7 @@ namespace simple_decision {
     bool detectEnemy(const Armors& armors,
                      const std::optional<Target>& target_opt) const;
 
-    void setState(State state);
-    bool isStateChanged() const;
+    bool changeState(State state);
 
     void setChassisMode(ChassisMode mode);
     Readiness checkReadiness(int64_t now) const;
@@ -81,11 +80,13 @@ namespace simple_decision {
     bool default_spin_latched_{false};
     bool is_game_started_{false};
     bool is_game_over_{false};
-    bool is_state_changed_{false};
     bool has_armors_{false};
 
     double attack_hold_sec_{1.5};
     double attacked_hold_sec_{1.5};
+
+    Stamp last_enemy_seen_{0, 0};
+    Stamp last_attacked_{0, 0};
 
     RobotStatus last_robot_status_{};
     int64_t match_start_time_{};
