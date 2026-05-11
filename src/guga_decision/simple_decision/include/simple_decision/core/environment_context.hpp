@@ -1,11 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <mutex>
 #include <optional>
-#include <string>
-#include <algorithm>
-#include <cstdint>
-#include <cmath>
 
 #include "types.hpp"
 
@@ -54,6 +51,8 @@ namespace simple_decision {
     void updatePose(double x, double y, double yaw);
     bool isNearRobotPose(double target_x, double target_y,
                          double tolerance) const;
+
+    bool inRange(double x, double y, double z) const;
 
   private:
     const ContextConfig config_;

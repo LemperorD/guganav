@@ -1,5 +1,8 @@
 #include "simple_decision/core/environment_context.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 namespace simple_decision {
 
   EnvironmentContext::EnvironmentContext(const ContextConfig& context_config)
@@ -77,24 +80,22 @@ namespace simple_decision {
     last_target_opt_ = target;
   }
 
+  bool EnvironmentContext::inRange(double x, double y, double z) const {
+    return std::sqrt((x * x) + (y * y) + (z * z)) <= config_.combat_max_distance;
+  }
+
   bool EnvironmentContext::detectEnemy(
       const Armors& armors, const std::optional<Target>& target_opt) const {
     if (target_opt.has_value() && target_opt->tracking) {
-      const double x = target_opt->position.x;
-      const double y = target_opt->position.y;
-      const double z = target_opt->position.z;
-      const double dist = std::sqrt((x * x) + (y * y) + (z * z));
-      return dist <= config_.combat_max_distance;
+      return inRange(target_opt->position.x, target_opt->position.y,
+                     target_opt->position.z);
     }
 
-    return std::any_of(armors.armors.begin(), armors.armors.end(),
-                       [&](const auto& armor) {
-                         const double dist = std::sqrt(
-                             (armor.pose.position.x * armor.pose.position.x)
-                             + (armor.pose.position.y * armor.pose.position.y)
-                             + (armor.pose.position.z * armor.pose.position.z));
-                         return dist <= config_.combat_max_distance;
-                       });
+    return std::any_of(
+        armors.armors.begin(), armors.armors.end(), [&](const auto& armor) {
+          return inRange(armor.pose.position.x, armor.pose.position.y,
+                         armor.pose.position.z);
+        });
   }
 
   namespace {
