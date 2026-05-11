@@ -32,10 +32,7 @@ namespace simple_decision {
     explicit DecisionSimple(const rclcpp::NodeOptions& options);
 
   private:
-    void onRobotStatus(RobotStatusMsg::SharedPtr msg);
     void onGameStatus(GameStatusMsg::SharedPtr msg);
-    void onArmors(ArmorsMsg::SharedPtr msg);
-    void onTarget(TargetMsg::SharedPtr msg);
 
     ContextConfig declareParams();
     void setupInfrastructure();
