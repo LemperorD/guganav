@@ -85,6 +85,8 @@ namespace simple_decision {
 
   Snapshot EnvironmentContext::getSnapshot(Stamp now) {
     constexpr int64_t ns_per_sec = 1'000'000'000LL;
+    std::lock_guard<std::mutex> lock(mtx_);
+
     Snapshot snapshot;
     snapshot.has_rs = has_robot_status_;
     if (snapshot.has_rs) {
@@ -107,26 +109,28 @@ namespace simple_decision {
       snapshot.enemy = detectEnemy(snapshot.armors, snapshot.target_opt);
     }
     if (snapshot.enemy) {
-      snapshot.last_enemy_seen_ = now;
+      last_enemy_seen_ = now;
     }
-    const int64_t last_enemy_ns =
-        (static_cast<int64_t>(snapshot.last_enemy_seen_.sec) * ns_per_sec)
-        + snapshot.last_enemy_seen_.nanosec;
+
+    const int64_t now_ns = (static_cast<int64_t>(now.sec) * ns_per_sec)
+                         + now.nanosec;
+    const int64_t last_enemy_ns = (static_cast<int64_t>(last_enemy_seen_.sec)
+                                   * ns_per_sec)
+                                + last_enemy_seen_.nanosec;
     snapshot.enemy_recent = (last_enemy_ns != 0)
-                         && (static_cast<double>(now.nanosec - last_enemy_ns)
-                                 * 1e-9
+                         && (static_cast<double>(now_ns - last_enemy_ns) * 1e-9
                              <= attack_hold_sec_);
 
     if (snapshot.rs.is_hp_deduced) {
-      snapshot.last_attacked_ = now;
+      last_attacked_ = now;
     }
-    const int64_t last_attacked_ns =
-        (static_cast<int64_t>(snapshot.last_attacked_.sec) * ns_per_sec)
-        + snapshot.last_attacked_.nanosec;
-    snapshot.attacked_recent =
-        (last_attacked_ns != 0)
-        && (static_cast<double>(now.nanosec - last_attacked_ns) * 1e-9
-            <= attacked_hold_sec_);
+    const int64_t last_attacked_ns = (static_cast<int64_t>(last_attacked_.sec)
+                                      * ns_per_sec)
+                                   + last_attacked_.nanosec;
+    snapshot.attacked_recent = (last_attacked_ns != 0)
+                            && (static_cast<double>(now_ns - last_attacked_ns)
+                                    * 1e-9
+                                <= attacked_hold_sec_);
 
     snapshot.default_spin_latched = default_spin_latched_;
     snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,
@@ -143,20 +147,17 @@ namespace simple_decision {
     return (hp < config_.hp_enter_supply) || (ammo <= config_.ammo_min);
   }
 
-  void EnvironmentContext::setState(State state) {
+  bool EnvironmentContext::changeState(State state) {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (state_ == state) {
-      is_state_changed_ = false;
-      return;
+      return false;
     }
-    is_state_changed_ = true;
     state_ = state;
-  }
-
-  bool EnvironmentContext::isStateChanged() const {
-    return is_state_changed_;
+    return true;
   }
 
   Readiness EnvironmentContext::checkReadiness(nanoseconds now) const {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (!has_robot_status_) {
       return {Readiness::Status::NO_RS};
     }
