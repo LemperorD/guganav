@@ -25,8 +25,12 @@ namespace simple_decision {
 
   EnvironmentContext::GameEvent EnvironmentContext::detectGameEvent(
       uint8_t prev, uint8_t current) {
-    if (prev != 4 && current == 4) return GameEvent::STARTED;
-    if (prev == 4 && current != 4) return GameEvent::OVER;
+    if (prev != 4 && current == 4) {
+      return GameEvent::STARTED;
+    }
+    if (prev == 4 && current != 4) {
+      return GameEvent::OVER;
+    }
     return GameEvent::NONE;
   }
 
@@ -94,6 +98,12 @@ namespace simple_decision {
                        });
   }
 
+  static bool isRecent(Stamp last, int64_t now_ns, double hold_sec) {
+    const int64_t last_ns = toFullNanos(last.sec, last.nanosec);
+    return (last_ns != 0)
+        && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
+  }
+
   Snapshot EnvironmentContext::getSnapshot(Stamp now) {
     std::lock_guard<std::mutex> lock(mtx_);
 
@@ -118,23 +128,14 @@ namespace simple_decision {
     if (snapshot.enemy) {
       last_enemy_seen_ = now;
     }
-
-    const int64_t now_ns = toFullNanos(now.sec, now.nanosec);
-    const int64_t last_enemy_ns = toFullNanos(last_enemy_seen_.sec,
-                                              last_enemy_seen_.nanosec);
-    snapshot.enemy_recent = (last_enemy_ns != 0)
-                         && (static_cast<double>(now_ns - last_enemy_ns) * 1e-9
-                             <= attack_hold_sec_);
-
     if (snapshot.rs.is_hp_deduced) {
       last_attacked_ = now;
     }
-    const int64_t last_attacked_ns = toFullNanos(last_attacked_.sec,
-                                                 last_attacked_.nanosec);
-    snapshot.attacked_recent = (last_attacked_ns != 0)
-                            && (static_cast<double>(now_ns - last_attacked_ns)
-                                    * 1e-9
-                                <= attacked_hold_sec_);
+
+    const int64_t now_ns = toFullNanos(now.sec, now.nanosec);
+    snapshot.enemy_recent = isRecent(last_enemy_seen_, now_ns, attack_hold_sec_);
+    snapshot.attacked_recent =
+        isRecent(last_attacked_, now_ns, attacked_hold_sec_);
 
     snapshot.default_spin_latched = default_spin_latched_;
     snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,
