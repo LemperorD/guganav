@@ -115,6 +115,16 @@ namespace simple_decision {
     int32_t sec;
     uint32_t nanosec;
   };
+
+  inline int64_t toFullNanos(int32_t sec, uint32_t nanosec) {
+    return (static_cast<int64_t>(sec) * 1'000'000'000LL) + nanosec;
+  }
+
+  inline Stamp toStamp(int64_t full_nanos) {
+    return {static_cast<int32_t>(full_nanos / 1'000'000'000LL),
+            static_cast<uint32_t>(full_nanos % 1'000'000'000LL)};
+  }
+
   struct Header {
     Stamp stamp;
     std::string frame_id;

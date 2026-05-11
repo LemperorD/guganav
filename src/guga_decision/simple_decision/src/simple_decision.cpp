@@ -1,5 +1,18 @@
 #include "simple_decision/node/simple_decision.hpp"
 namespace simple_decision {
+  DecisionSimple::DecisionSimple(const rclcpp::NodeOptions& options)
+      : Node("simple_decision", options) {
+    const auto cfg = declareParams();
+    environment_ = std::make_unique<EnvironmentContext>(cfg);
+    controller_ = std::make_unique<Decision>(cfg);
+    setupInfrastructure();
+
+    RCLCPP_INFO(this->get_logger(),
+                "simple_decision(min+mode) started. ns=%s goal_pose=%s "
+                "robot_status=%s chassis_mode=%s",
+                this->get_namespace(), goal_pose_topic_.c_str(),
+                robot_status_topic_.c_str(), chassis_mode_topic_.c_str());
+  }
 
   ContextConfig DecisionSimple::declareParams() {
     frame_id_ = this->declare_parameter<std::string>("frame_id", "map");
@@ -26,7 +39,8 @@ namespace simple_decision {
     start_delay_sec_ = this->declare_parameter<double>("start_delay_sec", 5.0);
 
     return {
-        static_cast<int>(this->declare_parameter<int>("hp_survival_enter", 120)),
+        static_cast<int>(
+            this->declare_parameter<int>("hp_survival_enter", 120)),
         static_cast<int>(this->declare_parameter<int>("hp_survival_exit", 300)),
         static_cast<int>(this->declare_parameter<int>("ammo_min", 0)),
         this->declare_parameter<double>("combat_max_distance", 8.0),
@@ -79,25 +93,10 @@ namespace simple_decision {
     timer_ = this->create_wall_timer(period, [this] { processDecision(); });
   }
 
-  DecisionSimple::DecisionSimple(const rclcpp::NodeOptions& options)
-      : Node("simple_decision", options) {
-    const auto cfg = declareParams();
-    environment_ = std::make_unique<EnvironmentContext>(cfg);
-    controller_ = std::make_unique<Decision>(cfg);
-    setupInfrastructure();
-
-    RCLCPP_INFO(this->get_logger(),
-                "simple_decision(min+mode) started. ns=%s goal_pose=%s "
-                "robot_status=%s chassis_mode=%s",
-                this->get_namespace(), goal_pose_topic_.c_str(),
-                robot_status_topic_.c_str(), chassis_mode_topic_.c_str());
-  }
-
   void DecisionSimple::onGameStatus(const GameStatusMsg::SharedPtr msg) {
     const auto now = this->now();
     environment_->onGameStatus(ConvertGameStatus(msg),
-                               (static_cast<int64_t>(now.seconds()) * 1'000'000'000LL)
-                                   + now.nanoseconds());
+                               toFullNanos(now.seconds(), now.nanoseconds()));
 
     if (environment_->isGameStarted()) {
       RCLCPP_INFO(this->get_logger(),
@@ -132,7 +131,7 @@ namespace simple_decision {
 
   Stamp DecisionSimple::makeStamped(rclcpp::Time time) {
     Stamp stamp{static_cast<int32_t>(time.seconds()),
-                static_cast<uint32_t>(time.nanoseconds() % 1000000000UL)};
+                static_cast<uint32_t>(time.nanoseconds() % 100'000'000'000UL)};
     return stamp;
   }
 

@@ -84,7 +84,6 @@ namespace simple_decision {
   }
 
   Snapshot EnvironmentContext::getSnapshot(Stamp now) {
-    constexpr int64_t ns_per_sec = 1'000'000'000LL;
     std::lock_guard<std::mutex> lock(mtx_);
 
     Snapshot snapshot;
@@ -94,10 +93,7 @@ namespace simple_decision {
     }
     snapshot.has_gs = has_game_status_;
     snapshot.match_started = match_started_;
-    snapshot.match_start_time.sec = static_cast<int32_t>(match_start_time_
-                                                         / ns_per_sec);
-    snapshot.match_start_time.nanosec = static_cast<uint32_t>(match_start_time_
-                                                              % ns_per_sec);
+    snapshot.match_start_time = toStamp(match_start_time_);
     snapshot.has_armors = has_armors_;
     snapshot.state = state_;
     if (snapshot.has_armors) {
@@ -112,11 +108,9 @@ namespace simple_decision {
       last_enemy_seen_ = now;
     }
 
-    const int64_t now_ns = (static_cast<int64_t>(now.sec) * ns_per_sec)
-                         + now.nanosec;
-    const int64_t last_enemy_ns = (static_cast<int64_t>(last_enemy_seen_.sec)
-                                   * ns_per_sec)
-                                + last_enemy_seen_.nanosec;
+    const int64_t now_ns = toFullNanos(now.sec, now.nanosec);
+    const int64_t last_enemy_ns = toFullNanos(last_enemy_seen_.sec,
+                                              last_enemy_seen_.nanosec);
     snapshot.enemy_recent = (last_enemy_ns != 0)
                          && (static_cast<double>(now_ns - last_enemy_ns) * 1e-9
                              <= attack_hold_sec_);
@@ -124,9 +118,8 @@ namespace simple_decision {
     if (snapshot.rs.is_hp_deduced) {
       last_attacked_ = now;
     }
-    const int64_t last_attacked_ns = (static_cast<int64_t>(last_attacked_.sec)
-                                      * ns_per_sec)
-                                   + last_attacked_.nanosec;
+    const int64_t last_attacked_ns = toFullNanos(last_attacked_.sec,
+                                                last_attacked_.nanosec);
     snapshot.attacked_recent = (last_attacked_ns != 0)
                             && (static_cast<double>(now_ns - last_attacked_ns)
                                     * 1e-9
