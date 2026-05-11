@@ -33,26 +33,24 @@ namespace simple_decision {
     void onTarget(const Target& target);
     void onGameStatus(GameStatus game_status, int64_t match_start_time_ns);
 
-    bool isGameStarted() const;
-    bool isGameOver() const;
+    [[nodiscard]] bool isGameStarted() const;
+    [[nodiscard]] bool isGameOver() const;
     void resetGameOver();
 
-    Snapshot buildSnapshot(Stamp now);
+    [[nodiscard]] Snapshot buildSnapshot(Stamp now);
     void updateTracking(Stamp now, const Snapshot& snapshot);
 
-    bool isStatusBad(const RobotStatus& robotstatus) const;
+    [[nodiscard]] Readiness checkReadiness(int64_t now) const;
 
-    bool detectEnemy(const Armors& armors,
-                     const std::optional<Target>& target_opt) const;
+    [[nodiscard]] bool isStatusBad(const RobotStatus& robotstatus) const;
+    [[nodiscard]] bool detectEnemy(const Armors& armors,
+                                    const std::optional<Target>& target_opt) const;
+    [[nodiscard]] bool isNearRobotPose(double target_x, double target_y,
+                                        double tolerance) const;
+    [[nodiscard]] bool inRange(double x, double y, double z) const;
 
     bool changeState(State state);
-
-    Readiness checkReadiness(int64_t now) const;
     void updatePose(double x, double y, double yaw);
-    bool isNearRobotPose(double target_x, double target_y,
-                         double tolerance) const;
-
-    bool inRange(double x, double y, double z) const;
 
   private:
     const ContextConfig config_;
