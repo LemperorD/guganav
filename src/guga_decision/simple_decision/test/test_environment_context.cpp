@@ -124,18 +124,14 @@ namespace simple_decision {
     EXPECT_FALSE(ctx_.isStatusBad(HealthyRobotStatus()));
   }
 
-  // ── setState / isStateChanged ──
-  TEST_F(EnvironmentContextTest, SetState_DifferentState_SetsChanged) {
-    ctx_.setState(State::ATTACK);
-    EXPECT_TRUE(ctx_.isStateChanged());
+  // ── setState ──
+  TEST_F(EnvironmentContextTest, SetState_DifferentState_ReturnsTrue) {
+    EXPECT_TRUE(ctx_.changeState(State::ATTACK));
   }
 
-  TEST_F(EnvironmentContextTest, SetState_SameStateTwice_NoChangeOnSecond) {
-    ctx_.setState(State::ATTACK);
-    ASSERT_TRUE(ctx_.isStateChanged());
-
-    ctx_.setState(State::ATTACK);
-    EXPECT_FALSE(ctx_.isStateChanged());
+  TEST_F(EnvironmentContextTest, SetState_SameStateTwice_SecondReturnsFalse) {
+    ASSERT_TRUE(ctx_.changeState(State::ATTACK));
+    EXPECT_FALSE(ctx_.changeState(State::ATTACK));
   }
 
   // ── checkReadiness ──
