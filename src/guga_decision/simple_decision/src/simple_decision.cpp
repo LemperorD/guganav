@@ -62,6 +62,7 @@ namespace simple_decision {
                                        supply_yaw,
                                        default_arrive_xy_tol,
                                        default_spin_keep_xy_tol};
+
     environment_ = std::make_unique<EnvironmentContext>(context_config);
     controller_ = std::make_unique<Decision>(context_config);
 

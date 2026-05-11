@@ -10,8 +10,8 @@ namespace simple_decision {
     [[nodiscard]] DecisionAction computeAction(const Snapshot& snapshot) const;
     [[nodiscard]] bool isStatusRecovered(const RobotStatus& rs) const;
     [[nodiscard]] bool isStatusBad(const RobotStatus& rs) const;
-    [[nodiscard]] static bool buildAttackGoal(
-        Snapshot& snapshot, const Armors& armors,
+    [[nodiscard]] static std::optional<Pose2D> findAttackPosition(
+        const Armors& armors,
         const std::optional<Target>& target_opt);
 
   private:

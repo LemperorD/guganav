@@ -33,17 +33,15 @@ namespace simple_decision {
     return (hp < config_.hp_enter_supply) || (ammo <= config_.ammo_min);
   }
 
-  bool Decision::buildAttackGoal(Snapshot& snapshot, const Armors& armors,
-                                 const std::optional<Target>& target_opt) {
+  std::optional<Pose2D> Decision::findAttackPosition(
+      const Armors& armors, const std::optional<Target>& target_opt) {
     if (target_opt.has_value() && target_opt->tracking) {
-      snapshot.last_attack_position = target_opt->position;
-      snapshot.last_attack_yaw = target_opt->yaw;
-      snapshot.has_attack_goal = true;
-      return true;
+      return Pose2D{target_opt->position.x, target_opt->position.y,
+                    target_opt->yaw};
     }
 
     if (armors.armors.empty()) {
-      return false;
+      return std::nullopt;
     }
 
     const auto* best = &armors.armors.front();
@@ -59,10 +57,7 @@ namespace simple_decision {
       }
     }
 
-    snapshot.last_attack_position = best->pose.position;
-    snapshot.last_attack_yaw = 0.0;
-    snapshot.has_attack_goal = true;
-    return true;
+    return Pose2D{best->pose.position.x, best->pose.position.y, 0.0};
   }
 
   // ── private ──
@@ -88,11 +83,10 @@ namespace simple_decision {
     action.target_y = config_.default_y;
     action.target_yaw = config_.default_yaw;
 
-    buildAttackGoal(const_cast<Snapshot&>(s), s.armors, s.target_opt);
-    if (s.has_attack_goal) {
-      action.target_x = s.last_attack_position.x;
-      action.target_y = s.last_attack_position.y;
-      action.target_yaw = s.last_attack_yaw;
+    if (auto target = findAttackPosition(s.armors, s.target_opt)) {
+      action.target_x = target->x;
+      action.target_y = target->y;
+      action.target_yaw = target->yaw;
     }
     return action;
   }
