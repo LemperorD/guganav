@@ -39,19 +39,18 @@ namespace simple_decision {
     void onTarget(TargetMsg::SharedPtr msg);
 
     // tick
-    void tick();
+    void processDecision();
 
     // helpers
     static Stamp makeStamped(rclcpp::Time time);
     void executeAction(DecisionAction action);
-    void publishGoal(const DecisionAction& action);
+    void publishGoal(const PoseStampedMsg& goal, State state);
     PoseStampedMsg makePoseXYZYaw(const std::string& frame,
                                   const Pose2D& position) const;
 
     // ====== chassis mode & arrival / attacked helpers ======
 
-    bool getRobotPoseMap(Pose2D& position);
-    bool trySetState(State thestate);
+    [[nodiscard]] std::optional<Pose2D> getRobotPoseMap();
     void publishChassisMode(ChassisMode mode);
     void publishGoalThrottled(const PoseStampedMsg& goal,
                               rclcpp::Time& last_pub, double frequency);
