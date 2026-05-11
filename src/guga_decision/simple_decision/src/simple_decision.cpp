@@ -2,9 +2,9 @@
 namespace simple_decision {
   DecisionSimple::DecisionSimple(const rclcpp::NodeOptions& options)
       : Node("simple_decision", options) {
-    const auto cfg = declareParams();
-    environment_ = std::make_unique<EnvironmentContext>(cfg);
-    controller_ = std::make_unique<Decision>(cfg);
+    const auto config = declareParams();
+    environment_ = std::make_unique<EnvironmentContext>(config);
+    controller_ = std::make_unique<Decision>(config);
     setupInfrastructure();
 
     RCLCPP_INFO(this->get_logger(),
@@ -13,7 +13,6 @@ namespace simple_decision {
                 this->get_namespace(), goal_pose_topic_.c_str(),
                 robot_status_topic_.c_str(), chassis_mode_topic_.c_str());
   }
-
   ContextConfig DecisionSimple::declareParams() {
     frame_id_ = this->declare_parameter<std::string>("frame_id", "map");
     base_frame_id_ = this->declare_parameter<std::string>("base_frame_id",
@@ -38,25 +37,32 @@ namespace simple_decision {
     attack_goal_hz_ = this->declare_parameter<double>("attack_goal_hz", 10.0);
     start_delay_sec_ = this->declare_parameter<double>("start_delay_sec", 5.0);
 
-    return {
-        static_cast<int>(
-            this->declare_parameter<int>("hp_survival_enter", 120)),
-        static_cast<int>(this->declare_parameter<int>("hp_survival_exit", 300)),
-        static_cast<int>(this->declare_parameter<int>("ammo_min", 0)),
-        this->declare_parameter<double>("combat_max_distance", 8.0),
-        this->declare_parameter<bool>("require_game_running", true),
-        start_delay_sec_,
-        this->declare_parameter<double>("default_x", 2.0),
-        this->declare_parameter<double>("default_y", 0.5),
-        this->declare_parameter<double>("default_yaw", 0.0),
-        this->declare_parameter<double>("supply_x", 0.0),
-        this->declare_parameter<double>("supply_y", 0.0),
-        this->declare_parameter<double>("supply_yaw", 0.0),
-        this->declare_parameter<double>("default_arrive_xy_tol", 0.30),
-        this->declare_parameter<double>("default_spin_keep_xy_tol", 0.80),
-    };
-  }
+    const auto hp_enter = static_cast<int>(
+        this->declare_parameter<int>("hp_survival_enter", 120));
+    const auto hp_exit = static_cast<int>(
+        this->declare_parameter<int>("hp_survival_exit", 300));
+    const auto ammo_min = static_cast<int>(
+        this->declare_parameter<int>("ammo_min", 0));
+    const auto combat_max = this->declare_parameter<double>(
+        "combat_max_distance", 8.0);
+    const auto require_game = this->declare_parameter<bool>(
+        "require_game_running", true);
+    const auto default_x = this->declare_parameter<double>("default_x", 2.0);
+    const auto default_y = this->declare_parameter<double>("default_y", 0.5);
+    const auto default_yaw = this->declare_parameter<double>("default_yaw",
+                                                             0.0);
+    const auto supply_x = this->declare_parameter<double>("supply_x", 0.0);
+    const auto supply_y = this->declare_parameter<double>("supply_y", 0.0);
+    const auto supply_yaw = this->declare_parameter<double>("supply_yaw", 0.0);
+    const auto arrive_tol = this->declare_parameter<double>(
+        "default_arrive_xy_tol", 0.30);
+    const auto spin_tol = this->declare_parameter<double>(
+        "default_spin_keep_xy_tol", 0.80);
 
+    return {hp_enter,         hp_exit,    ammo_min,   combat_max,  require_game,
+            start_delay_sec_, default_x,  default_y,  default_yaw, supply_x,
+            supply_y,         supply_yaw, arrive_tol, spin_tol};
+  }
   void DecisionSimple::setupInfrastructure() {
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -131,7 +137,7 @@ namespace simple_decision {
 
   Stamp DecisionSimple::makeStamped(rclcpp::Time time) {
     Stamp stamp{static_cast<int32_t>(time.seconds()),
-                static_cast<uint32_t>(time.nanoseconds() % 100'000'000'000UL)};
+                static_cast<uint32_t>(time.nanoseconds() % 1'000'000'000UL)};
     return stamp;
   }
 

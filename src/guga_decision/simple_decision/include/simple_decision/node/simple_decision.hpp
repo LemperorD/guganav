@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mutex>
 #include <optional>
 #include <string>
 
@@ -46,8 +45,8 @@ namespace simple_decision {
     static Stamp makeStamped(rclcpp::Time time);
     void executeAction(DecisionAction action);
     void publishGoal(const PoseStampedMsg& goal, State state);
-    PoseStampedMsg makePoseXYZYaw(const std::string& frame,
-                                  const Pose2D& position) const;
+    [[nodiscard]] PoseStampedMsg makePoseXYZYaw(const std::string& frame,
+                                                const Pose2D& position) const;
 
     // ====== chassis mode & arrival / attacked helpers ======
 
@@ -97,16 +96,9 @@ namespace simple_decision {
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     // ===== Cache/State =====
-    mutable std::mutex mtx_;
-
-    ChassisMode current_chassis_mode_{ChassisMode::CHASSIS_FOLLOWED};
-
     rclcpp::Time last_default_pub_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_supply_pub_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_attack_pub_{0, 0, RCL_ROS_TIME};
-    rclcpp::Time last_enemy_seen_{0, 0, RCL_ROS_TIME};
-
-    geometry_msgs::msg::PoseStamped last_attack_goal_;
 
     std::unique_ptr<EnvironmentContext> environment_;
     std::unique_ptr<Decision> controller_;
