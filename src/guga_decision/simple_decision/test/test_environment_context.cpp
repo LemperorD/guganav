@@ -218,35 +218,40 @@ namespace simple_decision {
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_WithArmorInRange_DetectsEnemyAndSetsRecent) {
+         BuildSnapshot_WithArmorInRange_DetectsEnemy) {
     ctx_.onRobotStatus(HealthyRobotStatus());
     ctx_.onArmors(ArmorInRange());
 
     auto snap = ctx_.buildSnapshot(MakeStamp(0, 1000000000u));
     EXPECT_TRUE(snap.enemy);
-    EXPECT_TRUE(snap.enemy_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_WithTrackingTargetInRange_DetectsEnemy) {
+         UpdateTracking_AfterEnemy_NextSnapshotHasRecentTrue) {
     ctx_.onRobotStatus(HealthyRobotStatus());
-    ctx_.onTarget(TrackingTarget());
+    ctx_.onArmors(ArmorInRange());
 
-    auto snap = ctx_.buildSnapshot(MakeStamp(0, 500000000u));
-    EXPECT_TRUE(snap.enemy);
-    EXPECT_TRUE(snap.enemy_recent);
+    auto s1 = ctx_.buildSnapshot(MakeStamp(0, 500000000u));
+    ctx_.updateTracking(MakeStamp(0, 500000000u), s1);
+
+    auto s2 = ctx_.buildSnapshot(MakeStamp(0, 1000000000u));
+    EXPECT_TRUE(s2.enemy);
+    EXPECT_TRUE(s2.enemy_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_AttackedStatus_SetsAttackedRecent) {
+         UpdateTracking_AfterAttacked_NextSnapshotHasAttackedRecent) {
     ctx_.onRobotStatus(AttackedRobotStatus());
 
-    auto snap = ctx_.buildSnapshot(MakeStamp(0, 500000000u));
-    EXPECT_TRUE(snap.attacked_recent);
+    auto s1 = ctx_.buildSnapshot(MakeStamp(0, 500000000u));
+    ctx_.updateTracking(MakeStamp(0, 500000000u), s1);
+
+    auto s2 = ctx_.buildSnapshot(MakeStamp(0, 1000000000u));
+    EXPECT_TRUE(s2.attacked_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_HealthyStatus_AttackedRecentFalse) {
+         BuildSnapshot_HealthyStatus_AttackedRecentFalse) {
     ctx_.onRobotStatus(HealthyRobotStatus());
 
     auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
