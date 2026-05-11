@@ -149,9 +149,6 @@ namespace simple_decision {
   };
 
   struct Snapshot {
-    bool has_rs = false;
-    bool has_gs = false;
-    bool has_armors = false;
     bool has_attack_goal{false};
     bool match_started = false;
     bool enemy_recent = false;

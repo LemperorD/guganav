@@ -108,21 +108,14 @@ namespace simple_decision {
     std::lock_guard<std::mutex> lock(mtx_);
 
     Snapshot snapshot;
-    snapshot.has_rs = has_robot_status_;
-    if (snapshot.has_rs) {
-      snapshot.rs = last_robot_status_;
-    }
-    snapshot.has_gs = has_game_status_;
+    snapshot.rs = last_robot_status_;
     snapshot.match_started = match_started_;
     snapshot.match_start_time = toStamp(match_start_time_);
-    snapshot.has_armors = has_armors_;
     snapshot.state = state_;
-    if (snapshot.has_armors) {
-      snapshot.armors = last_armors_;
-    }
+    snapshot.armors = last_armors_;
     snapshot.target_opt = last_target_opt_;
 
-    if (snapshot.has_armors || snapshot.target_opt.has_value()) {
+    if (!snapshot.armors.armors.empty() || snapshot.target_opt.has_value()) {
       snapshot.enemy = detectEnemy(snapshot.armors, snapshot.target_opt);
     }
     if (snapshot.enemy) {

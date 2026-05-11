@@ -23,7 +23,7 @@ namespace simple_decision {
   TEST_F(EnvironmentContextTest, OnRobotStatus_StoresItAndSetsHasRs) {
     ctx_.onRobotStatus(HealthyRobotStatus());
     auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
-    EXPECT_TRUE(snap.has_rs);
+    EXPECT_EQ(snap.rs.current_hp, 500);
   }
 
   // ── onGameStatus ──
@@ -67,7 +67,6 @@ namespace simple_decision {
   TEST_F(EnvironmentContextTest, OnArmors_StoresArmorData) {
     ctx_.onArmors(ArmorInRange());
     auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
-    EXPECT_TRUE(snap.has_armors);
     EXPECT_EQ(snap.armors.armors.size(), 1u);
   }
 
@@ -212,7 +211,7 @@ namespace simple_decision {
   // ── getSnapshot ──
   TEST_F(EnvironmentContextTest, GetSnapshot_NoData_ReturnsDefaultsAndNoEnemy) {
     auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
-    EXPECT_FALSE(snap.has_rs);
+    EXPECT_EQ(snap.rs.current_hp, 0);
     EXPECT_FALSE(snap.enemy);
     EXPECT_FALSE(snap.enemy_recent);
     EXPECT_FALSE(snap.attacked_recent);
