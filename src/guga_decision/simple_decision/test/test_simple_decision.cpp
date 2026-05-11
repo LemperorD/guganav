@@ -19,6 +19,13 @@ namespace simple_decision {
   using namespace std::chrono_literals;
 
   class DecisionSimpleTest : public testing::Test {
+  public:
+    ~DecisionSimpleTest() override = default;
+    DecisionSimpleTest(const DecisionSimpleTest&) = delete;
+    DecisionSimpleTest& operator=(const DecisionSimpleTest&) = delete;
+    DecisionSimpleTest(DecisionSimpleTest&&) = delete;
+    DecisionSimpleTest& operator=(DecisionSimpleTest&&) = delete;
+
   protected:
     struct SystemConfig {
       bool require_game_running = false;
@@ -33,8 +40,6 @@ namespace simple_decision {
     DecisionSimpleTest() {
       CreateSystem(SystemConfig{});
     }
-
-    ~DecisionSimpleTest() override = default;
 
     void TearDown() override {
       ASSERT_NO_THROW(DestroySystem());
