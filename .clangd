@@ -22,6 +22,7 @@ Diagnostics:
     Remove:
       - misc-include-cleaner
       - bugprone-easily-swappable-parameters
+      - misc-use-internal-linkage
       - misc-non-private-member-variables-in-classes
       - cppcoreguidelines-non-private-member-variables-in-classes
       - misc-unused-parameters
