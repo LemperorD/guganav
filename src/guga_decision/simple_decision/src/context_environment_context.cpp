@@ -104,7 +104,16 @@ namespace simple_decision {
         && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
   }
 
-  Snapshot EnvironmentContext::getSnapshot(Stamp now) {
+  void EnvironmentContext::updateTracking(Stamp now, const Snapshot& snapshot) {
+    if (snapshot.enemy) {
+      last_enemy_seen_ = now;
+    }
+    if (snapshot.rs.is_hp_deduced) {
+      last_attacked_ = now;
+    }
+  }
+
+  Snapshot EnvironmentContext::buildSnapshot(Stamp now) {
     std::lock_guard<std::mutex> lock(mtx_);
 
     Snapshot snapshot;
@@ -117,12 +126,6 @@ namespace simple_decision {
 
     if (!snapshot.armors.armors.empty() || snapshot.target_opt.has_value()) {
       snapshot.enemy = detectEnemy(snapshot.armors, snapshot.target_opt);
-    }
-    if (snapshot.enemy) {
-      last_enemy_seen_ = now;
-    }
-    if (snapshot.rs.is_hp_deduced) {
-      last_attacked_ = now;
     }
 
     const int64_t now_ns = toFullNanos(now.sec, now.nanosec);

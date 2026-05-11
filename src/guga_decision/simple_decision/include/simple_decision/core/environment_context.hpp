@@ -54,7 +54,8 @@ namespace simple_decision {
 
     bool getRobotPoseMap(double& x, double& y, double& yaw);
 
-    Snapshot getSnapshot(Stamp now);
+    Snapshot buildSnapshot(Stamp now);
+    void updateTracking(Stamp now, const Snapshot& snapshot);
 
     bool isStatusBad(const RobotStatus& robotstatus) const;
     bool isStatusRecovered(const RobotStatus& robotstatus) const;
@@ -66,7 +67,7 @@ namespace simple_decision {
 
     void setChassisMode(ChassisMode mode);
     Readiness checkReadiness(int64_t now) const;
-    void updatePose(double x, double y, double z);
+    void updatePose(const double x, const double y, const double yaw);
     bool isNearRobotPose(double target_x, double target_y,
                          double tolerance) const;
 
