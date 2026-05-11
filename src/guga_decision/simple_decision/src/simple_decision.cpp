@@ -119,8 +119,10 @@ namespace simple_decision {
   }
 
   void DecisionSimple::onGameStatus(const GameStatusMsg::SharedPtr msg) {
+    const auto now = this->now();
     environment_->onGameStatus(ConvertGameStatus(msg),
-                               this->now().nanoseconds());
+                               (static_cast<int64_t>(now.seconds()) * 1'000'000'000LL)
+                                   + now.nanoseconds());
 
     if (environment_->isGameStarted()) {
       RCLCPP_INFO(this->get_logger(),
