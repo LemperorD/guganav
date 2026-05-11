@@ -22,6 +22,9 @@ Diagnostics:
     Remove:
       - misc-include-cleaner
       - bugprone-easily-swappable-parameters
+      - cppcoreguidelines-avoid-non-const-global-variables
+      - cert-err58-cpp
+      - readability-identifier-naming
       - cppcoreguidelines-owning-memory
       - misc-use-internal-linkage
       - misc-non-private-member-variables-in-classes
