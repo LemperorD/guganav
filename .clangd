@@ -14,6 +14,8 @@ Diagnostics:
   Suppress:
     - system-include
     - system-include-angle
+    - misc-non-private-member-variables-in-classes
+    - cppcoreguidelines-non-private-member-variables-in-classes
   ClangTidy:
     Add:
       - "*"
@@ -21,6 +23,7 @@ Diagnostics:
       - misc-include-cleaner
       - bugprone-easily-swappable-parameters
       - misc-non-private-member-variables-in-classes
+      - cppcoreguidelines-non-private-member-variables-in-classes
       - misc-unused-parameters
       - performance-unnecessary-value-param
       - readability-function-cognitive-complexity
