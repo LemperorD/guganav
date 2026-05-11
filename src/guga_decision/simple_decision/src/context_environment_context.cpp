@@ -16,25 +16,36 @@ namespace simple_decision {
   void EnvironmentContext::onGameStatus(GameStatus game_status,
                                         int64_t match_start_time_ns) {
     std::lock_guard<std::mutex> lock(mtx_);
-
     const uint8_t prev = last_game_status_;
     last_game_status_ = game_status.game_progress;
     has_game_status_ = true;
+    reactToGameEvent(detectGameEvent(prev, last_game_status_),
+                     match_start_time_ns);
+  }
 
-    if (prev != 4 && last_game_status_ == 4) {
-      match_started_ = true;
-      match_start_time_ = match_start_time_ns;
-      is_game_started_ = true;
-    }
+  EnvironmentContext::GameEvent EnvironmentContext::detectGameEvent(
+      uint8_t prev, uint8_t current) {
+    if (prev != 4 && current == 4) return GameEvent::STARTED;
+    if (prev == 4 && current != 4) return GameEvent::OVER;
+    return GameEvent::NONE;
+  }
 
-    // 从“比赛中(4)” -> “非比赛中”，复位，为下一局做准~备
-    if (prev == 4 && last_game_status_ != 4) {
-      match_started_ = false;
-      match_start_time_ = 0;
-      // 清掉上一局遗留的默认点小陀螺锁存
-      default_spin_latched_ = false;
-      is_game_started_ = false;
-      is_game_over_ = true;
+  void EnvironmentContext::reactToGameEvent(GameEvent event, int64_t now_ns) {
+    switch (event) {
+      case GameEvent::STARTED:
+        match_started_ = true;
+        match_start_time_ = now_ns;
+        is_game_started_ = true;
+        break;
+      case GameEvent::OVER:
+        match_started_ = false;
+        match_start_time_ = 0;
+        default_spin_latched_ = false;
+        is_game_started_ = false;
+        is_game_over_ = true;
+        break;
+      case GameEvent::NONE:
+        break;
     }
   }
 
@@ -119,7 +130,7 @@ namespace simple_decision {
       last_attacked_ = now;
     }
     const int64_t last_attacked_ns = toFullNanos(last_attacked_.sec,
-                                                last_attacked_.nanosec);
+                                                 last_attacked_.nanosec);
     snapshot.attacked_recent = (last_attacked_ns != 0)
                             && (static_cast<double>(now_ns - last_attacked_ns)
                                     * 1e-9

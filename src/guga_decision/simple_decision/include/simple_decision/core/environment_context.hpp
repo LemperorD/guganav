@@ -82,6 +82,11 @@ namespace simple_decision {
     bool is_game_over_{false};
     bool has_armors_{false};
 
+    enum class GameEvent : uint8_t { NONE, STARTED, OVER };
+
+    static GameEvent detectGameEvent(uint8_t prev, uint8_t current);
+    void reactToGameEvent(GameEvent event, int64_t now_ns);
+
     double attack_hold_sec_{1.5};
     double attacked_hold_sec_{1.5};
 
