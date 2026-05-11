@@ -116,11 +116,14 @@ namespace simple_decision {
     }
 
     void sendRobotStatus(uint16_t hp, uint16_t ammo,
-                         bool is_hp_deduced = false) {
+                         bool is_hp_deduced = false,
+                         double pose_x = 2.0, double pose_y = 0.5) {
       auto msg = guga_interfaces::msg::RobotStatus();
       msg.current_hp = hp;
       msg.projectile_allowance_17mm = ammo;
       msg.is_hp_deduced = is_hp_deduced;
+      msg.robot_pos.position.x = pose_x;
+      msg.robot_pos.position.y = pose_y;
       publishAndSpin(robot_status_pub_, msg);
     }
 
@@ -173,9 +176,11 @@ namespace simple_decision {
       return false;
     }
 
-    bool waitForChassisAtLeast(size_t n, std::chrono::milliseconds timeout) {
-      return waitUntil([this, n]() { return chassis_modes_.size() >= n; },
-                       timeout);
+    bool waitForChassisMode(ChassisMode mode, std::chrono::milliseconds timeout) {
+      return waitUntil([this, mode]() {
+        return !chassis_modes_.empty()
+            && chassis_modes_.back() == static_cast<uint8_t>(mode);
+      }, timeout);
     }
 
     bool waitForGoalAtLeast(size_t n, std::chrono::milliseconds timeout) {
@@ -262,7 +267,7 @@ namespace simple_decision {
     sendGameStatus(GameStatus::RUNNING);
     spinFor(300ms);
     EXPECT_EQ(chassis_modes_.size(), initial);
-    EXPECT_EQ(goal_poses_.size(), 0u);
+    EXPECT_EQ(goal_poses_.size(), 0U);
   }
 
   // 有 robot_status 且 require_game_running=false 时立刻发 goal
@@ -325,7 +330,7 @@ namespace simple_decision {
     spinFor(p.wait);
 
     if (!p.expect_goal) {
-      EXPECT_EQ(goal_poses_.size(), 0u);
+      EXPECT_EQ(goal_poses_.size(), 0U);
       return;
     }
     ASSERT_TRUE(waitForGoalAtLeast(1, 2000ms));
@@ -351,8 +356,8 @@ namespace simple_decision {
     sendGameStatus(guga_interfaces::msg::GameStatus::GAME_OVER);
     spinFor(500ms);
 
-    EXPECT_EQ(chassis_modes_.size(), 0u);
-    EXPECT_EQ(goal_poses_.size(), 0u);
+    EXPECT_EQ(chassis_modes_.size(), 0U);
+    EXPECT_EQ(goal_poses_.size(), 0U);
   }
 
   // 四种门控状态对应的 warn 日志均不崩溃，READY 走 default 分支结束
@@ -399,25 +404,19 @@ namespace simple_decision {
   // 受击后 chassis 切为 LITTLE_TES，增加闪避
   TEST_F(DecisionSimpleTest, AttackedRecent_UsesLittleTesMode) {
     sendRobotStatus(500, 120, true);
-    ASSERT_TRUE(waitForChassisAtLeast(2, 2000ms));
-    EXPECT_EQ(chassis_modes_.back(),
-              static_cast<uint8_t>(ChassisMode::LITTLE_TES));
+    ASSERT_TRUE(waitForChassisMode(ChassisMode::LITTLE_TES, 2000ms));
   }
 
   // attacked_recent hold 过期后 chassis 从 LITTLE_TES 回到 CHASSIS_FOLLOWED
   TEST_F(DecisionSimpleTest, AttackedHoldExpired_BackToFollowed) {
     sendRobotStatus(500, 120, true);
-    ASSERT_TRUE(waitForChassisAtLeast(2, 2000ms));
-    EXPECT_EQ(chassis_modes_.back(),
-              static_cast<uint8_t>(ChassisMode::LITTLE_TES));
+    ASSERT_TRUE(waitForChassisMode(ChassisMode::LITTLE_TES, 2000ms));
 
     clearReceived();
     sendRobotStatus(500, 120, false);
     spinFor(2000ms);
 
-    ASSERT_TRUE(waitForChassisAtLeast(1, 2000ms));
-    EXPECT_EQ(chassis_modes_.back(),
-              static_cast<uint8_t>(ChassisMode::CHASSIS_FOLLOWED));
+    ASSERT_TRUE(waitForChassisMode(ChassisMode::CHASSIS_FOLLOWED, 2000ms));
   }
 
   // ------ Rate-limiting -----------------------------------------------
