@@ -38,10 +38,11 @@ namespace simple_decision {
     void onArmors(ArmorsMsg::SharedPtr msg);
     void onTarget(TargetMsg::SharedPtr msg);
 
-    // tick
+    ContextConfig declareParams();
+    void setupInfrastructure();
+
     void processDecision();
 
-    // helpers
     static Stamp makeStamped(rclcpp::Time time);
     void executeAction(DecisionAction action);
     void publishGoal(const PoseStampedMsg& goal, State state);

@@ -1,13 +1,10 @@
 #include "simple_decision/node/simple_decision.hpp"
 namespace simple_decision {
-  using nanoseconds = int64_t;
 
-  DecisionSimple::DecisionSimple(const rclcpp::NodeOptions& options)
-      : Node("simple_decision", options) {
+  ContextConfig DecisionSimple::declareParams() {
     frame_id_ = this->declare_parameter<std::string>("frame_id", "map");
     base_frame_id_ = this->declare_parameter<std::string>("base_frame_id",
                                                           "base_footprint");
-
     robot_status_topic_ = this->declare_parameter<std::string>(
         "referee_robot_status_topic", "referee/robot_status");
     goal_pose_topic_ = this->declare_parameter<std::string>("goal_pose_topic",
@@ -22,50 +19,31 @@ namespace simple_decision {
         "detector_armors_topic", "detector/armors");
     tracker_target_topic_ = this->declare_parameter<std::string>(
         "tracker_target_topic", "tracker/target");
+    tick_hz_ = this->declare_parameter<double>("tick_hz", 20.0);
+    default_goal_hz_ = this->declare_parameter<double>("default_goal_hz", 2.0);
+    supply_goal_hz_ = this->declare_parameter<double>("supply_goal_hz", 2.0);
+    attack_goal_hz_ = this->declare_parameter<double>("attack_goal_hz", 10.0);
+    start_delay_sec_ = this->declare_parameter<double>("start_delay_sec", 5.0);
 
-    const bool require_game_running = this->declare_parameter<bool>(
-        "require_game_running", true);
-    const double start_delay_sec = this->declare_parameter<double>(
-        "start_delay_sec", 5.0);
-    const double default_spin_keep_xy_tol = this->declare_parameter<double>(
-        "default_spin_keep_xy_tol", 0.80);
-    const double supply_x = this->declare_parameter<double>("supply_x", 0.0);
-    const double supply_y = this->declare_parameter<double>("supply_y", 0.0);
-    const double supply_yaw = this->declare_parameter<double>("supply_yaw",
-                                                              0.0);
-    const double default_x = this->declare_parameter<double>("default_x", 2.0);
-    const double default_y = this->declare_parameter<double>("default_y", 0.5);
-    const double default_yaw = this->declare_parameter<double>("default_yaw",
-                                                               0.0);
-    const double default_arrive_xy_tol = this->declare_parameter<double>(
-        "default_arrive_xy_tol", 0.30);
-    const int hp_enter_supply = static_cast<int>(
-        this->declare_parameter<int>("hp_survival_enter", 120));
-    const int hp_exit_supply = static_cast<int>(
-        this->declare_parameter<int>("hp_survival_exit", 300));
-    const int ammo_min = static_cast<int>(
-        this->declare_parameter<int>("ammo_min", 0));
-    const double combat_max_distance = this->declare_parameter<double>(
-        "combat_max_distance", 8.0);
+    return {
+        static_cast<int>(this->declare_parameter<int>("hp_survival_enter", 120)),
+        static_cast<int>(this->declare_parameter<int>("hp_survival_exit", 300)),
+        static_cast<int>(this->declare_parameter<int>("ammo_min", 0)),
+        this->declare_parameter<double>("combat_max_distance", 8.0),
+        this->declare_parameter<bool>("require_game_running", true),
+        start_delay_sec_,
+        this->declare_parameter<double>("default_x", 2.0),
+        this->declare_parameter<double>("default_y", 0.5),
+        this->declare_parameter<double>("default_yaw", 0.0),
+        this->declare_parameter<double>("supply_x", 0.0),
+        this->declare_parameter<double>("supply_y", 0.0),
+        this->declare_parameter<double>("supply_yaw", 0.0),
+        this->declare_parameter<double>("default_arrive_xy_tol", 0.30),
+        this->declare_parameter<double>("default_spin_keep_xy_tol", 0.80),
+    };
+  }
 
-    const ContextConfig context_config{hp_enter_supply,
-                                       hp_exit_supply,
-                                       ammo_min,
-                                       combat_max_distance,
-                                       require_game_running,
-                                       start_delay_sec,
-                                       default_x,
-                                       default_y,
-                                       default_yaw,
-                                       supply_x,
-                                       supply_y,
-                                       supply_yaw,
-                                       default_arrive_xy_tol,
-                                       default_spin_keep_xy_tol};
-
-    environment_ = std::make_unique<EnvironmentContext>(context_config);
-    controller_ = std::make_unique<Decision>(context_config);
-
+  void DecisionSimple::setupInfrastructure() {
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
@@ -95,21 +73,18 @@ namespace simple_decision {
           environment_->onTarget(ConvertTarget(msg));
         });
 
-    tick_hz_ = this->declare_parameter<double>("tick_hz", 20.0);
-    default_goal_hz_ = this->declare_parameter<double>("default_goal_hz", 2.0);
-    supply_goal_hz_ = this->declare_parameter<double>("supply_goal_hz", 2.0);
-    attack_goal_hz_ = this->declare_parameter<double>("attack_goal_hz", 10.0);
-
-    if (environment_->changeState(State::DEFAULT)) {
-      RCLCPP_INFO(this->get_logger(), "State -> %u",
-                  static_cast<unsigned>(State::DEFAULT));
-    }
-    publishChassisMode(ChassisMode::CHASSIS_FOLLOWED);
-
     const double frequency = std::max(1e-6, tick_hz_);
     const auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::duration<double>(1.0 / frequency));
     timer_ = this->create_wall_timer(period, [this] { processDecision(); });
+  }
+
+  DecisionSimple::DecisionSimple(const rclcpp::NodeOptions& options)
+      : Node("simple_decision", options) {
+    const auto cfg = declareParams();
+    environment_ = std::make_unique<EnvironmentContext>(cfg);
+    controller_ = std::make_unique<Decision>(cfg);
+    setupInfrastructure();
 
     RCLCPP_INFO(this->get_logger(),
                 "simple_decision(min+mode) started. ns=%s goal_pose=%s "
