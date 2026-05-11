@@ -1,5 +1,61 @@
 # simple_decision 测试
 
+## 概述
+
+**策略**：纯逻辑走单元测试（快、精确、无 ROS2 依赖），ROS2 接线和编排走集成测试（黑盒、真实消息）。不 mock 内部组件。
+
+**被测范围**：消息转换 (`transform`) → 环境聚合 (`environment_context`) → 决策算法 (`decision`) → 节点编排 (`simple_decision`)。
+
+**不测**：ROS2 框架行为（`rclcpp::Node::declare_parameter`、`create_publisher` 等）、tf2 底层。
+
+## 前置依赖
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/nav2_ws/install/setup.bash    # pb_rm_interfaces, auto_aim_interfaces
+source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
+```
+
+需要的 ROS2 包：`rclcpp`, `rclcpp_components`, `tf2_ros`, `geometry_msgs`, `std_msgs`, `guga_interfaces`。
+
+## 测试输入约定
+
+集成测试夹具 `DecisionSimpleTest` 创建节点时 `require_game_running=false`（默认），即发 RS 后不等待比赛状态就进入决策。门控测试通过 `CreateSystem({require, delay, hz})` 覆盖不同配置。
+
+| Helper | 默认行为 |
+|--------|---------|
+| `SendRobotStatus(hp, ammo)` | is_hp_deduced=false，无 armor/target 数据 |
+| `SendGameStatus(progress)` | 仅设置 game_progress 字段 |
+| `PublishStaticTF(parent, child, x, y, yaw)` | 发布静态 TF 后 spin 200ms 等待生效 |
+| `SpinFor(ms)` | `spin_some()` + 10ms sleep 循环，不精确计时 |
+| `WaitForGoalAtLeast(n)` | 轮询 `spin_some()`，超时 2s 返回 false |
+
+## 阈值常量
+
+| 常量 | 值 | 含义 |
+|------|-----|------|
+| `kSupplyX / kSupplyY` | 0.0, 0.0 | 补给点坐标 |
+| `kDefaultX / kDefaultY / kDefaultYaw` | 2.0, 0.5, 0.0 | 默认目标点 |
+| `hp_survival_enter` | 120 | HP 低于此值进入补给 |
+| `hp_survival_exit` | 300 | HP 高于此值退出补给 |
+| `ammo_min` | 0 | 弹药等于此值进入补给 |
+| `start_delay_sec` | 5.0 | 比赛开始后延迟决策秒数 |
+| `attack_hold_sec_` | 1.5 | 受击后 LITTLE_TES 保持秒数 |
+| `combat_max_distance` | 8.0 | 侦测敌人的最大距离 (m) |
+
+## 已知缺口
+
+- 集成层缺少「有敌人 → 进入 ATTACK 态且 target 坐标正确」的测试
+- `start_delay_sec` 边界未测 1s / 0s 的精确到期行为
+- `handleGateLog` 仅测不崩溃，未验证各分支确实输出了对应日志
+
+---
+
+- [概述](#概述)
+- [前置依赖](#前置依赖)
+- [测试输入约定](#测试输入约定)
+- [阈值常量](#阈值常量)
+- [已知缺口](#已知缺口)
 - [单元测试](#单元测试)
   - [test_transform.cpp](#test_transformcpp--消息转换)
   - [test_environment_context.cpp](#test_environment_contextcpp--环境状态聚合)
