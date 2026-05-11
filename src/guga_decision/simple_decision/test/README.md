@@ -63,28 +63,29 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | `combat_max_distance`                 | 8.0           | 侦测敌人的最大距离 (m)     |
 
 ## 覆盖矩阵
+根据要求,分割出下列覆盖矩阵.
 
-| 需求 | 单元测试 | 集成测试 |
-|------|---------|---------|
-| 无 RS 不发 | `CheckReadiness_NoRS` | `Tick_NoRobotStatus_NoOutput` |
-| 无 GS 不发 | `CheckReadiness_NoGS` | `GateBehavior/1` |
-| 比赛未开始不发 | `CheckReadiness_GameNotStarted` | `GateBehavior/2` |
-| delay 内不发 | `CheckReadiness_StartedButInDelay` | `GateBehavior/3` |
-| delay 后发 | `CheckReadiness_StartedAfterDelay` | `GateBehavior/4` |
-| 离开 RUNNING 复位 | — | `LeaveRunning_ResetsGate` |
-| gatelog 日志 | — | `HandleGateLog_AllStatuses` |
-| HP 低→SUPPLY | `ComputeAction_StatusBad`, `IsStatusBad` | `LowHp_EntersSupply` |
-| 弹药空→SUPPLY | `ComputeAction_LowAmmo` | — |
-| SUPPLY 恢复→DEFAULT | `ComputeAction_SupplyRecovered`, `IsStatusRecovered` | `SupplyRecovered_ExitsToDefault` |
-| 受击→LITTLE_TES | `ComputeAction_EnemyRecentAndAttacked` | `AttackedRecent_UsesLittleTes` |
-| 受击 hold 到期→FOLLOWED | — | `AttackedHoldExpired_BackToFollowed` |
-| 有敌人→ATTACK | `ComputeAction_EnemyRecentWithAttackGoal` | — |
-| 有追踪目标→target 坐标 | `FindAttackPosition_*` | — |
-| 默认点驻留→spin 锁存 | `ComputeAction_Default_AtCenterAndKeepSpin` | — |
-| 默认态 goal 坐标 | `ComputeAction_Default_UsesDefaultCoordinates` | — |
-| goal 节流 | — | `DefaultGoalPublishing_ThrottledByHz` |
-| SUPPLY goal 节流 | — | `SupplyGoalPublishing_ThrottledByHz` |
-| TF 查询 | — | `GetRobotPoseMap_*` |
+| 需求                    | 单元测试                                             | 集成测试                              |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------- |
+| 无 RS 不发              | `CheckReadiness_NoRS`                                | `Tick_NoRobotStatus_NoOutput`         |
+| 无 GS 不发              | `CheckReadiness_NoGS`                                | `GateBehavior/1`                      |
+| 比赛未开始不发          | `CheckReadiness_GameNotStarted`                      | `GateBehavior/2`                      |
+| delay 内不发            | `CheckReadiness_StartedButInDelay`                   | `GateBehavior/3`                      |
+| delay 后发              | `CheckReadiness_StartedAfterDelay`                   | `GateBehavior/4`                      |
+| 离开 RUNNING 复位       | —                                                    | `LeaveRunning_ResetsGate`             |
+| gatelog 日志            | —                                                    | `HandleGateLog_AllStatuses`           |
+| HP 低→SUPPLY            | `ComputeAction_StatusBad`, `IsStatusBad`             | `LowHp_EntersSupply`                  |
+| 弹药空→SUPPLY           | `ComputeAction_LowAmmo`                              | —                                     |
+| SUPPLY 恢复→DEFAULT     | `ComputeAction_SupplyRecovered`, `IsStatusRecovered` | `SupplyRecovered_ExitsToDefault`      |
+| 受击→LITTLE_TES         | `ComputeAction_EnemyRecentAndAttacked`               | `AttackedRecent_UsesLittleTes`        |
+| 受击 hold 到期→FOLLOWED | —                                                    | `AttackedHoldExpired_BackToFollowed`  |
+| 有敌人→ATTACK           | `ComputeAction_EnemyRecentWithAttackGoal`            | —                                     |
+| 有追踪目标→target 坐标  | `FindAttackPosition_*`                               | —                                     |
+| 默认点驻留→spin 锁存    | `ComputeAction_Default_AtCenterAndKeepSpin`          | —                                     |
+| 默认态 goal 坐标        | `ComputeAction_Default_UsesDefaultCoordinates`       | —                                     |
+| goal 节流               | —                                                    | `DefaultGoalPublishing_ThrottledByHz` |
+| SUPPLY goal 节流        | —                                                    | `SupplyGoalPublishing_ThrottledByHz`  |
+| TF 查询                 | —                                                    | `GetRobotPoseMap_*`                   |
 
 `—` = 缺覆盖
 

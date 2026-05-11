@@ -1,4 +1,5 @@
 #include "simple_decision/node/simple_decision.hpp"
+
 namespace simple_decision {
   DecisionSimple::DecisionSimple(const rclcpp::NodeOptions& options)
       : Node("simple_decision", options) {
