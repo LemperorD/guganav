@@ -5,20 +5,8 @@
 #include <string>
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 
-#include "guga_interfaces/msg/armors.hpp"
-#include "guga_interfaces/msg/target.hpp"
-#include "guga_interfaces/msg/game_status.hpp"
-#include "guga_interfaces/msg/robot_status.hpp"
-
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-
-#include "rcl/time.h"
-#include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/u_int8.hpp"
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 #include "types.hpp"
 
 namespace simple_decision {
@@ -52,20 +40,16 @@ namespace simple_decision {
     bool isGameOver() const;
     void resetGameOver();
 
-    bool getRobotPoseMap(double& x, double& y, double& yaw);
-
     Snapshot buildSnapshot(Stamp now);
     void updateTracking(Stamp now, const Snapshot& snapshot);
 
     bool isStatusBad(const RobotStatus& robotstatus) const;
-    bool isStatusRecovered(const RobotStatus& robotstatus) const;
 
     bool detectEnemy(const Armors& armors,
                      const std::optional<Target>& target_opt) const;
 
     bool changeState(State state);
 
-    void setChassisMode(ChassisMode mode);
     Readiness checkReadiness(int64_t now) const;
     void updatePose(double x, double y, double yaw);
     bool isNearRobotPose(double target_x, double target_y,

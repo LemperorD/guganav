@@ -98,11 +98,11 @@ namespace simple_decision {
   }
 
   namespace {
-  bool isRecent(Stamp last, int64_t now_ns, double hold_sec) {
-    const int64_t last_ns = toFullNanos(last.sec, last.nanosec);
-    return (last_ns != 0)
-        && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
-  }
+    bool isRecent(Stamp last, int64_t now_ns, double hold_sec) {
+      const int64_t last_ns = toFullNanos(last.sec, last.nanosec);
+      return (last_ns != 0)
+          && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
+    }
   }  // namespace
 
   void EnvironmentContext::updateTracking(Stamp now, const Snapshot& snapshot) {

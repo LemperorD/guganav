@@ -1,5 +1,7 @@
 #include "simple_decision/core/decision.hpp"
 
+#include <cmath>
+
 namespace simple_decision {
 
   Decision::Decision(const ContextConfig& context_config)
