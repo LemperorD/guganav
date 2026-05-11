@@ -249,7 +249,9 @@ namespace simple_decision {
     std::vector<geometry_msgs::msg::PoseStamped> debug_attack_poses_;
   };
 
-  // ── Tick without robot status produces no output ──
+  // ------ Gate --------------------------------------------------------
+  // 没有 robot_status 时节点不发任何 goal_pose，避免基于过期数据做决策
+
   TEST_F(DecisionSimpleTest, Tick_NoRobotStatus_NoOutput) {
     size_t initial = chassis_modes_.size();
     SendGameStatus(GameStatus::RUNNING);
@@ -258,30 +260,13 @@ namespace simple_decision {
     EXPECT_EQ(goal_poses_.size(), 0u);
   }
 
-  // ── handleGateLog all statuses ──
-  TEST_F(DecisionSimpleTest, HandleGateLog_AllStatuses_DoNotCrash) {
-    Readiness r;
-    r.status = Readiness::Status::NO_RS;
-    CallHandleGateLog(r);
-    r.status = Readiness::Status::NO_GS;
-    CallHandleGateLog(r);
-    r.status = Readiness::Status::NOT_STARTED;
-    CallHandleGateLog(r);
-    r.status = Readiness::Status::IN_DELAY;
-    r.elapsed = 1.5;
-    CallHandleGateLog(r);
-    r.status = Readiness::Status::READY;
-    CallHandleGateLog(r);
-    SUCCEED();
-  }
-
-  // ── Tick with robot status publishes goal ──
+  // 有 robot_status 且 require_game_running=false 时立刻发 goal
   TEST_F(DecisionSimpleTest, Tick_WithRobotStatus_PublishesGoal) {
     SendRobotStatus(500, 120);
     ASSERT_TRUE(WaitForGoalAtLeast(1, 2000ms));
   }
 
-  // ── Gate cases (parameterized) ──
+  // 门控组合：require_game + start_delay + RS/GS 状态 → 是否发 goal
   struct GateTestParam {
     bool require_game_running;
     double start_delay_sec;
@@ -306,23 +291,22 @@ namespace simple_decision {
 
   INSTANTIATE_TEST_SUITE_P(
       Gates, DecisionSimpleGateTest,
-      testing::Values(GateTestParam{true, 5.0, false, true,
-                                    guga_interfaces::msg::GameStatus::RUNNING,
-                                    500ms, false},
-                      GateTestParam{true, 5.0, true, false,
-                                    guga_interfaces::msg::GameStatus::NOT_START,
-                                    500ms, false},
-                      GateTestParam{
-                          true, 5.0, true, true,
-                          guga_interfaces::msg::GameStatus::COUNT_DOWN, 600ms,
-                          false},
-                      GateTestParam{true, 5.0, true, true,
-                                    guga_interfaces::msg::GameStatus::RUNNING,
-                                    300ms, false},
-                      GateTestParam{true, 0.1, true, true,
-                                    guga_interfaces::msg::GameStatus::RUNNING,
-                                    1400ms, true}));
+      testing::Values(
+          GateTestParam{true, 5.0, false, true,
+                        guga_interfaces::msg::GameStatus::RUNNING, 500ms, false},
+          GateTestParam{true, 5.0, true, false,
+                        guga_interfaces::msg::GameStatus::NOT_START, 500ms,
+                        false},
+          GateTestParam{true, 5.0, true, true,
+                        guga_interfaces::msg::GameStatus::COUNT_DOWN, 600ms,
+                        false},
+          GateTestParam{true, 5.0, true, true,
+                        guga_interfaces::msg::GameStatus::RUNNING, 300ms, false},
+          GateTestParam{true, 0.1, true, true,
+                        guga_interfaces::msg::GameStatus::RUNNING, 1400ms,
+                        true}));
 
+  // 五个场景：无RS→不发 / 无GS→不发 / 未开始→不发 / delay内→不发 / delay后→发
   TEST_P(DecisionSimpleGateTest, GateBehavior) {
     const auto& p = GetParam();
     if (p.send_robot) {
@@ -340,7 +324,7 @@ namespace simple_decision {
     ASSERT_TRUE(WaitForGoalAtLeast(1, 2000ms));
   }
 
-  // ── Game over resets gate ──
+  // 比赛离开 RUNNING 状态后门控复位，不再发 goal
   class DecisionSimpleRunningGateTest : public DecisionSimpleTest {
   protected:
     DecisionSimpleRunningGateTest() {
@@ -364,23 +348,26 @@ namespace simple_decision {
     EXPECT_EQ(goal_poses_.size(), 0u);
   }
 
-  // ── getRobotPoseMap ──
-  TEST_F(DecisionSimpleTest, GetRobotPoseMap_TfExists_ReturnsPose) {
-    PublishStaticTF("map", "base_footprint", 1.0, 2.0, 0.0);
-
-    auto result = CallGetRobotPoseMap();
-    ASSERT_TRUE(result.has_value());
-    EXPECT_DOUBLE_EQ(result->x, 1.0);
-    EXPECT_DOUBLE_EQ(result->y, 2.0);
-    EXPECT_DOUBLE_EQ(result->yaw, 0.0);
+  // 四种门控状态对应的 warn 日志均不崩溃，READY 走 default 分支结束
+  TEST_F(DecisionSimpleTest, HandleGateLog_AllStatuses_DoNotCrash) {
+    Readiness r;
+    r.status = Readiness::Status::NO_RS;
+    CallHandleGateLog(r);
+    r.status = Readiness::Status::NO_GS;
+    CallHandleGateLog(r);
+    r.status = Readiness::Status::NOT_STARTED;
+    CallHandleGateLog(r);
+    r.status = Readiness::Status::IN_DELAY;
+    r.elapsed = 1.5;
+    CallHandleGateLog(r);
+    r.status = Readiness::Status::READY;
+    CallHandleGateLog(r);
+    SUCCEED();
   }
 
-  TEST_F(DecisionSimpleTest, GetRobotPoseMap_NoTf_ReturnsNullopt) {
-    auto result = CallGetRobotPoseMap();
-    EXPECT_FALSE(result.has_value());
-  }
+  // ------ Decision ----------------------------------------------------
 
-  // ── Low HP → Supply ──
+  // hp 低于补给阈值 → 进入 SUPPLY 态，target 坐标指向补给点
   TEST_F(DecisionSimpleTest, LowHp_EntersSupply_PublishesSupplyGoal) {
     SendRobotStatus(100, 120);
     ASSERT_TRUE(WaitForGoalAtLeast(1, 2000ms));
@@ -389,7 +376,7 @@ namespace simple_decision {
     EXPECT_NEAR(g.pose.position.y, kSupplyY, 1e-6);
   }
 
-  // ── Supply recovery → default ──
+  // hp/ammo 恢复到阈值以上 → 从 SUPPLY 退出到 DEFAULT，target 坐标切回默认点
   TEST_F(DecisionSimpleTest, SupplyRecovered_ExitsToDefaultGoal) {
     SendRobotStatus(100, 120);
     ASSERT_TRUE(WaitForGoalAtLeast(1, 2000ms));
@@ -402,7 +389,7 @@ namespace simple_decision {
     EXPECT_NEAR(g.pose.position.y, kDefaultY, 1e-6);
   }
 
-  // ── Attacked → little TES ──
+  // 受击后 chassis 切为 LITTLE_TES，增加闪避
   TEST_F(DecisionSimpleTest, AttackedRecent_UsesLittleTesMode) {
     SendRobotStatus(500, 120, true);
     ASSERT_TRUE(WaitForChassisAtLeast(2, 2000ms));
@@ -410,12 +397,30 @@ namespace simple_decision {
               static_cast<uint8_t>(ChassisMode::LITTLE_TES));
   }
 
-  // ── Default goal throttling ──
+  // attacked_recent hold 过期后 chassis 从 LITTLE_TES 回到 CHASSIS_FOLLOWED
+  TEST_F(DecisionSimpleTest, AttackedHoldExpired_BackToFollowed) {
+    SendRobotStatus(500, 120, true);
+    ASSERT_TRUE(WaitForChassisAtLeast(2, 2000ms));
+    EXPECT_EQ(chassis_modes_.back(),
+              static_cast<uint8_t>(ChassisMode::LITTLE_TES));
+
+    ClearReceived();
+    SendRobotStatus(500, 120, false);
+    SpinFor(2000ms);
+
+    ASSERT_TRUE(WaitForChassisAtLeast(1, 2000ms));
+    EXPECT_EQ(chassis_modes_.back(),
+              static_cast<uint8_t>(ChassisMode::CHASSIS_FOLLOWED));
+  }
+
+  // ------ Rate-limiting -----------------------------------------------
+
+  // 默认态 goal_pose 发布按 default_goal_hz=1.0 节流
   class DecisionSimpleGoalHzTest : public DecisionSimpleTest {
   protected:
     DecisionSimpleGoalHzTest() {
       DestroySystem();
-      CreateSystem({false, 5.0, 1.0});  // default_goal_hz = 1.0
+      CreateSystem({false, 5.0, 1.0});
       ClearReceived();
     }
   };
@@ -432,12 +437,12 @@ namespace simple_decision {
     EXPECT_GE(goal_poses_.size(), count + 1) << "past throttle window";
   }
 
-  // ── Supply goal throttling ──
+  // SUPPLY 态 goal_pose 按 supply_goal_hz=1.0 节流
   class DecisionSimpleSupplyHzTest : public DecisionSimpleTest {
   protected:
     DecisionSimpleSupplyHzTest() {
       DestroySystem();
-      CreateSystem({false, 5.0, 2.0, 1.0});  // default=2, supply=1
+      CreateSystem({false, 5.0, 2.0, 1.0});
       ClearReceived();
     }
   };
@@ -454,20 +459,23 @@ namespace simple_decision {
     EXPECT_GE(goal_poses_.size(), count + 1) << "past throttle window";
   }
 
-  // ── Attacked hold expired → back to followed ──
-  TEST_F(DecisionSimpleTest, AttackedHoldExpired_BackToFollowed) {
-    SendRobotStatus(500, 120, true);
-    ASSERT_TRUE(WaitForChassisAtLeast(2, 2000ms));
-    EXPECT_EQ(chassis_modes_.back(),
-              static_cast<uint8_t>(ChassisMode::LITTLE_TES));
+  // ------ Helpers -----------------------------------------------------
 
-    ClearReceived();
-    SendRobotStatus(500, 120, false);
-    SpinFor(2000ms);
+  // TF 存在时返回 Pose2D，x/y/yaw 与静态 TF 一致
+  TEST_F(DecisionSimpleTest, GetRobotPoseMap_TfExists_ReturnsPose) {
+    PublishStaticTF("map", "base_footprint", 1.0, 2.0, 0.0);
 
-    ASSERT_TRUE(WaitForChassisAtLeast(1, 2000ms));
-    EXPECT_EQ(chassis_modes_.back(),
-              static_cast<uint8_t>(ChassisMode::CHASSIS_FOLLOWED));
+    auto result = CallGetRobotPoseMap();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_DOUBLE_EQ(result->x, 1.0);
+    EXPECT_DOUBLE_EQ(result->y, 2.0);
+    EXPECT_DOUBLE_EQ(result->yaw, 0.0);
+  }
+
+  // 没有静态 TF 时返回 nullopt，不崩溃
+  TEST_F(DecisionSimpleTest, GetRobotPoseMap_NoTf_ReturnsNullopt) {
+    auto result = CallGetRobotPoseMap();
+    EXPECT_FALSE(result.has_value());
   }
 
 }  // namespace simple_decision
