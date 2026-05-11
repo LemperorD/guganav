@@ -78,36 +78,38 @@ namespace simple_decision {
 
     robot_status_sub_ = this->create_subscription<RobotStatusMsg>(
         robot_status_topic_, rclcpp::QoS(10),
-        std::bind(&DecisionSimple::onRobotStatus, this, std::placeholders::_1));
+        [this](RobotStatusMsg::SharedPtr msg) {
+          environment_->onRobotStatus(ConvertRobotStatus(std::move(msg)));
+        });
     game_status_sub_ = this->create_subscription<GameStatusMsg>(
         game_status_topic_, rclcpp::QoS(10),
-        std::bind(&DecisionSimple::onGameStatus, this, std::placeholders::_1));
+        [this](GameStatusMsg::SharedPtr msg) { onGameStatus(std::move(msg)); });
     armors_sub_ = this->create_subscription<ArmorsMsg>(
         detector_armors_topic_, rclcpp::QoS(10),
-        std::bind(&DecisionSimple::onArmors, this, std::placeholders::_1));
+        [this](ArmorsMsg::SharedPtr msg) {
+          environment_->onArmors(ConvertArmors(msg));
+        });
     target_sub_ = this->create_subscription<TargetMsg>(
         tracker_target_topic_, rclcpp::QoS(10),
-        std::bind(&DecisionSimple::onTarget, this, std::placeholders::_1));
+        [this](TargetMsg::SharedPtr msg) {
+          environment_->onTarget(ConvertTarget(msg));
+        });
 
-    // Declare frequency parameters before using them
     tick_hz_ = this->declare_parameter<double>("tick_hz", 20.0);
     default_goal_hz_ = this->declare_parameter<double>("default_goal_hz", 2.0);
     supply_goal_hz_ = this->declare_parameter<double>("supply_goal_hz", 2.0);
     attack_goal_hz_ = this->declare_parameter<double>("attack_goal_hz", 10.0);
 
-    // init
-    if (trySetState(State::DEFAULT)) {
+    if (environment_->changeState(State::DEFAULT)) {
       RCLCPP_INFO(this->get_logger(), "State -> %u",
                   static_cast<unsigned>(State::DEFAULT));
     }
     publishChassisMode(ChassisMode::CHASSIS_FOLLOWED);
 
-    // timer
-    const double hz = std::max(1e-6, tick_hz_);
+    const double frequency = std::max(1e-6, tick_hz_);
     const auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::duration<double>(1.0 / hz));
-    timer_ = this->create_wall_timer(period,
-                                     std::bind(&DecisionSimple::tick, this));
+        std::chrono::duration<double>(1.0 / frequency));
+    timer_ = this->create_wall_timer(period, [this] { processDecision(); });
 
     RCLCPP_INFO(this->get_logger(),
                 "simple_decision(min+mode) started. ns=%s goal_pose=%s "
@@ -116,27 +118,17 @@ namespace simple_decision {
                 robot_status_topic_.c_str(), chassis_mode_topic_.c_str());
   }
 
-  // ================= callbacks =================
-  void DecisionSimple::onRobotStatus(const RobotStatusMsg::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mtx_);
-    environment_->onRobotStatus(ConvertRobotStatus(msg));
-  }
-
   void DecisionSimple::onGameStatus(const GameStatusMsg::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mtx_);
     environment_->onGameStatus(ConvertGameStatus(msg),
                                this->now().nanoseconds());
 
-    // 从“非比赛中” -> “比赛中(4)”，开始新一轮倒计时
     if (environment_->isGameStarted()) {
       RCLCPP_INFO(this->get_logger(),
                   "Game started detected, delaying decision for %.1f seconds",
                   start_delay_sec_);
     }
 
-    // 从“比赛中(4)” -> “非比赛中”，复位，为下一局做准备
     if (environment_->isGameOver()) {
-      // 清掉上一局遗留的默认点小陀螺锁存
       default_spin_latched_ = false;
       RCLCPP_INFO(this->get_logger(),
                   "Game left running state, reset match-start gate.");
@@ -144,44 +136,20 @@ namespace simple_decision {
     }
   }
 
-  void DecisionSimple::onArmors(const ArmorsMsg::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mtx_);
-
-    environment_->onArmors(ConvertArmors(msg));
-  }
-
-  void DecisionSimple::onTarget(const TargetMsg::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mtx_);
-
-    environment_->onTarget(ConvertTarget(msg));
-  }
-
-  void DecisionSimple::tick() {
-    // snapshot
-    double x{};
-    double y{};
-    double yaw{};
+  void DecisionSimple::processDecision() {
     const auto now = this->now();
-
     auto readiness = environment_->checkReadiness(now.nanoseconds());
 
     if (readiness.status != Readiness::Status::READY) {
       handleGateLog(readiness);
       return;
     }
-
-    Pose2D pose{x, y, yaw};
-    if (this->getRobotPoseMap(pose)) {
-      x = pose.x;
-      y = pose.y;
-      yaw = pose.yaw;
-      environment_->updatePose(x, y, yaw);
+    if (auto opt_pose = getRobotPoseMap()) {
+      environment_->updatePose(opt_pose->x, opt_pose->y, opt_pose->yaw);
     }
 
     Snapshot snapshot = environment_->getSnapshot(makeStamped(now));
-
     auto action = controller_->computeAction(snapshot);
-
     executeAction(action);
   }
 
@@ -192,80 +160,72 @@ namespace simple_decision {
   }
 
   void DecisionSimple::executeAction(DecisionAction action) {
-    if (trySetState(action.next_state)) {
+    if (environment_->changeState(action.next_state)) {
       RCLCPP_INFO(this->get_logger(), "State -> %u",
                   static_cast<unsigned>(action.next_state));
     }
     publishChassisMode(action.chassis_mode);
 
     if (action.should_publish_goal) {
-      publishGoal(action);
+      const auto goal = makePoseXYZYaw(
+          frame_id_, {action.target_x, action.target_y, action.target_yaw});
+      publishGoal(goal, action.next_state);
+      if (action.next_state == State::ATTACK) {
+        debug_attack_pose_pub_->publish(goal);
+      }
     }
   }
 
-  void DecisionSimple::publishGoal(const DecisionAction& action) {
-    const auto goal = makePoseXYZYaw(
-        frame_id_, {action.target_x, action.target_y, action.target_yaw});
-
-    // For attack state, also publish debug pose
-    if (action.next_state == State::ATTACK) {
-      debug_attack_pose_pub_->publish(goal);
-    }
-
-    // Throttle based on state
-    if (action.next_state == State::SUPPLY) {
+  void DecisionSimple::publishGoal(const PoseStampedMsg& goal, State state) {
+    if (state == State::SUPPLY) {
       publishGoalThrottled(goal, last_supply_pub_, supply_goal_hz_);
-    } else if (action.next_state == State::ATTACK) {
+    } else if (state == State::ATTACK) {
       publishGoalThrottled(goal, last_attack_pub_, attack_goal_hz_);
     } else {
       publishGoalThrottled(goal, last_default_pub_, default_goal_hz_);
     }
   }
 
-  // TODO: refactor: convertfunction;
   PoseStampedMsg DecisionSimple::makePoseXYZYaw(const std::string& frame,
                                                 const Pose2D& position) const {
     PoseStampedMsg p;
+    tf2::Quaternion q;
+    q.setRPY(0.0, 0.0, position.yaw);
+
+    p.pose.orientation.x = q.x();
+    p.pose.orientation.y = q.y();
+    p.pose.orientation.z = q.z();
+    p.pose.orientation.w = q.w();
     p.header.frame_id = frame;
     p.header.stamp = this->now();
     p.pose.position.x = position.x;
     p.pose.position.y = position.y;
     p.pose.position.z = 0.0;
 
-    tf2::Quaternion q;
-    q.setRPY(0.0, 0.0, position.yaw);
-    p.pose.orientation.x = q.x();
-    p.pose.orientation.y = q.y();
-    p.pose.orientation.z = q.z();
-    p.pose.orientation.w = q.w();
     return p;
   }
 
-  bool DecisionSimple::getRobotPoseMap(Pose2D& position) {
+  std::optional<Pose2D> DecisionSimple::getRobotPoseMap() {
     try {
       const auto tf = tf_buffer_->lookupTransform(frame_id_, base_frame_id_,
                                                   tf2::TimePointZero);
-      position.x = tf.transform.translation.x;
-      position.y = tf.transform.translation.y;
+      Pose2D pose{};
+      pose.x = tf.transform.translation.x;
+      pose.y = tf.transform.translation.y;
       const double qx = tf.transform.rotation.x;
       const double qy = tf.transform.rotation.y;
       const double qz = tf.transform.rotation.z;
       const double qw = tf.transform.rotation.w;
-      position.yaw = std::atan2(2.0 * ((qw * qz) + (qx * qy)),
-                                1.0 - (2.0 * ((qy * qy) + (qz * qz))));
-      return true;
+      pose.yaw = std::atan2(2.0 * ((qw * qz) + (qx * qy)),
+                            1.0 - (2.0 * ((qy * qy) + (qz * qz))));
+      return pose;
     } catch (const tf2::TransformException& ex) {
       RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
                             "TF lookup failed (%s -> %s): %s",
                             frame_id_.c_str(), base_frame_id_.c_str(),
                             ex.what());
-      return false;
+      return std::nullopt;
     }
-  }
-
-  bool DecisionSimple::trySetState(State state) {
-    environment_->setState(state);
-    return environment_->isStateChanged();
   }
 
   void DecisionSimple::publishChassisMode(ChassisMode mode) {
@@ -288,34 +248,33 @@ namespace simple_decision {
 
   void DecisionSimple::handleGateLog(Readiness& readiness) {
     using Status = Readiness::Status;
-    if (readiness.status == Status::NO_RS) {
-      RCLCPP_WARN_THROTTLE(
-          this->get_logger(), *this->get_clock(), 2000,
-          "Gate: no robot_status received; withholding decisions");
-    }
-
-    if (readiness.status == Status::NO_GS) {
-      RCLCPP_WARN_THROTTLE(
-          this->get_logger(), *this->get_clock(), 2000,
-          "Gate: no game_status received; waiting for referee");
-    }
-
-    if (readiness.status == Status::NO_RS) {
-      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                           "Gate: match not started yet; decisions disabled");
-    }
-
-    if (readiness.status == Status::NO_RS) {
-      RCLCPP_WARN_THROTTLE(
-          this->get_logger(), *this->get_clock(), 2000,
-          "Gate: match started but delaying decisions (elapsed=%.2f s)",
-          readiness.elapsed);
+    switch (readiness.status) {
+      case Status::NO_RS:
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 2000,
+            "Gate: no robot_status received; withholding decisions");
+        break;
+      case Status::NO_GS:
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 2000,
+            "Gate: no game_status received; waiting for referee");
+        break;
+      case Status::NOT_STARTED:
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "Gate: match not started yet; decisions disabled");
+        break;
+      case Status::IN_DELAY:
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 2000,
+            "Gate: match started but delaying decisions (elapsed=%.2f s)",
+            readiness.elapsed);
+        break;
+      default:
+        break;
     }
   }
 
 }  // namespace simple_decision
-
-// namespace simple_decision
 
 #include <rclcpp_components/register_node_macro.hpp>
 RCLCPP_COMPONENTS_REGISTER_NODE(simple_decision::DecisionSimple)
