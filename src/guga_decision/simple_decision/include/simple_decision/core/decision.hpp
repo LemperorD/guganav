@@ -7,8 +7,6 @@ namespace simple_decision {
   public:
     explicit Decision(const ContextConfig& context_config);
     [[nodiscard]] DecisionAction computeAction(const Snapshot& snapshot) const;
-    [[nodiscard]] bool isStatusRecovered(const RobotStatus& rs) const;
-    [[nodiscard]] bool isStatusBad(const RobotStatus& rs) const;
     [[nodiscard]] static std::optional<Pose2D> findAttackPosition(
         const Armors& armors, const std::optional<Target>& target_opt);
 

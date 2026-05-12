@@ -7,28 +7,13 @@ namespace simple_decision {
   }
 
   DecisionAction Decision::computeAction(const Snapshot& snapshot) const {
-    if (snapshot.state == State::SUPPLY && !isStatusRecovered(snapshot.rs)) {
-      return supplyAction();
-    }
-    if (isStatusBad(snapshot.rs)) {
+    if (snapshot.needs_supply) {
       return supplyAction();
     }
     if (snapshot.enemy_recent) {
       return attackAction(snapshot);
     }
     return defaultAction(snapshot);
-  }
-
-  bool Decision::isStatusRecovered(const RobotStatus& rs) const {
-    const int hp = static_cast<int>(rs.current_hp);
-    const int ammo = static_cast<int>(rs.projectile_allowance_17mm);
-    return (hp >= config_.hp_exit_supply) && (ammo > config_.ammo_min);
-  }
-
-  bool Decision::isStatusBad(const RobotStatus& rs) const {
-    const int hp = static_cast<int>(rs.current_hp);
-    const int ammo = static_cast<int>(rs.projectile_allowance_17mm);
-    return (hp < config_.hp_enter_supply) || (ammo <= config_.ammo_min);
   }
 
   std::optional<Pose2D> Decision::findAttackPosition(

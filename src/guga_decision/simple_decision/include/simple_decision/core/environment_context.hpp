@@ -41,6 +41,7 @@ namespace simple_decision {
     [[nodiscard]] Readiness checkReadiness(int64_t now) const;
 
     [[nodiscard]] bool isStatusBad(const RobotStatus& robotstatus) const;
+    [[nodiscard]] bool isStatusRecovered(const RobotStatus& robotstatus) const;
     [[nodiscard]] bool detectEnemy(
         const Armors& armors, const std::optional<Target>& target_opt) const;
     [[nodiscard]] bool isNearRobotPose(double target_x, double target_y,
