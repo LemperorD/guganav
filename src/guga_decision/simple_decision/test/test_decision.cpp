@@ -15,8 +15,6 @@ namespace simple_decision {
       Snapshot s = HealthyNotAttackedSnapshot();
       s.state = State::SUPPLY;
       s.needs_supply = true;
-      s.robotstatus.current_hp = 200;
-      s.robotstatus.projectile_allowance_17mm = 50;
       return s;
     }
 
@@ -24,13 +22,10 @@ namespace simple_decision {
       Snapshot s = HealthyNotAttackedSnapshot();
       s.state = State::SUPPLY;
       s.needs_supply = false;
-      s.robotstatus.current_hp = 400;
-      s.robotstatus.projectile_allowance_17mm = 100;
       return s;
     }
   };
 
-  // ── computeAction ──
   TEST_F(DecisionTest, ComputeAction_SupplyNotRecovered_HoldsSupply) {
     auto a = dec_.computeAction(SupplyNotRecovered());
     EXPECT_EQ(a.next_state, State::SUPPLY);
@@ -45,7 +40,6 @@ namespace simple_decision {
 
   TEST_F(DecisionTest, ComputeAction_StatusBad_EntersSupply) {
     Snapshot s = HealthyNotAttackedSnapshot();
-    s.robotstatus.current_hp = 50;
     s.needs_supply = true;
 
     auto a = dec_.computeAction(s);
@@ -54,7 +48,6 @@ namespace simple_decision {
 
   TEST_F(DecisionTest, ComputeAction_LowAmmo_EntersSupply) {
     Snapshot s = HealthyNotAttackedSnapshot();
-    s.robotstatus.projectile_allowance_17mm = 0;
     s.needs_supply = true;
 
     auto a = dec_.computeAction(s);
@@ -155,7 +148,6 @@ namespace simple_decision {
     EXPECT_DOUBLE_EQ(a.target_yaw, kDefaultYaw);
   }
 
-  // ── findAttackPosition ──
   TEST_F(DecisionTest, FindAttackPosition_TrackingTarget_UsesTargetPose) {
     auto target = TrackingTarget();
     target.position.x = 1.0;
