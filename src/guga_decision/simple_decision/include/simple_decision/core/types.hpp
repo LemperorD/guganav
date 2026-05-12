@@ -1,8 +1,7 @@
 #pragma once
 
-#include <chrono>
+#include <cmath>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -125,6 +124,10 @@ namespace simple_decision {
             static_cast<uint32_t>(full_nanos % 1'000'000'000LL)};
   }
 
+  inline double distance3D(double x, double y, double z) {
+    return std::sqrt((x * x) + (y * y) + (z * z));
+  }
+
   struct Header {
     Stamp stamp;
     std::string frame_id;
@@ -149,9 +152,6 @@ namespace simple_decision {
   };
 
   struct Snapshot {
-    bool has_rs = false;
-    bool has_gs = false;
-    bool has_armors = false;
     bool has_attack_goal{false};
     bool match_started = false;
     bool enemy_recent = false;

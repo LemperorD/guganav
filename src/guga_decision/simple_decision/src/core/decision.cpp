@@ -6,8 +6,6 @@ namespace simple_decision {
       : config_(context_config) {
   }
 
-  // ── public ──
-
   DecisionAction Decision::computeAction(const Snapshot& snapshot) const {
     if (snapshot.state == State::SUPPLY && !isStatusRecovered(snapshot.rs)) {
       return supplyAction();
@@ -47,12 +45,10 @@ namespace simple_decision {
     const auto* best = &armors.armors.front();
     double best_dist = 1e18;
     for (const auto& a : armors.armors) {
-      const double x = a.pose.position.x;
-      const double y = a.pose.position.y;
-      const double z = a.pose.position.z;
-      const double dist = std::sqrt((x * x) + (y * y) + (z * z));
-      if (dist < best_dist) {
-        best_dist = dist;
+      const double distance = distance3D(a.pose.position.x, a.pose.position.y,
+                                         a.pose.position.z);
+      if (distance < best_dist) {
+        best_dist = distance;
         best = &a;
       }
     }

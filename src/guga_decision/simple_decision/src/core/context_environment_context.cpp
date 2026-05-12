@@ -1,5 +1,8 @@
 #include "simple_decision/core/environment_context.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 namespace simple_decision {
 
   EnvironmentContext::EnvironmentContext(const ContextConfig& context_config)
@@ -25,8 +28,12 @@ namespace simple_decision {
 
   EnvironmentContext::GameEvent EnvironmentContext::detectGameEvent(
       uint8_t prev, uint8_t current) {
-    if (prev != 4 && current == 4) return GameEvent::STARTED;
-    if (prev == 4 && current != 4) return GameEvent::OVER;
+    if (prev != 4 && current == 4) {
+      return GameEvent::STARTED;
+    }
+    if (prev == 4 && current != 4) {
+      return GameEvent::OVER;
+    }
     return GameEvent::NONE;
   }
 
@@ -65,7 +72,6 @@ namespace simple_decision {
     std::lock_guard<std::mutex> lock(mtx_);
 
     last_armors_ = armors;
-    has_armors_ = true;
   }
 
   void EnvironmentContext::onTarget(const Target& target) {
@@ -74,67 +80,61 @@ namespace simple_decision {
     last_target_opt_ = target;
   }
 
+  bool EnvironmentContext::inRange(double x, double y, double z) const {
+    return distance3D(x, y, z) <= config_.combat_max_distance;
+  }
+
   bool EnvironmentContext::detectEnemy(
       const Armors& armors, const std::optional<Target>& target_opt) const {
     if (target_opt.has_value() && target_opt->tracking) {
-      const double x = target_opt->position.x;
-      const double y = target_opt->position.y;
-      const double z = target_opt->position.z;
-      const double dist = std::sqrt((x * x) + (y * y) + (z * z));
-      return dist <= config_.combat_max_distance;
+      return inRange(target_opt->position.x, target_opt->position.y,
+                     target_opt->position.z);
     }
 
-    return std::any_of(armors.armors.begin(), armors.armors.end(),
-                       [&](const auto& armor) {
-                         const double dist = std::sqrt(
-                             (armor.pose.position.x * armor.pose.position.x)
-                             + (armor.pose.position.y * armor.pose.position.y)
-                             + (armor.pose.position.z * armor.pose.position.z));
-                         return dist <= config_.combat_max_distance;
-                       });
+    return std::any_of(
+        armors.armors.begin(), armors.armors.end(), [&](const auto& armor) {
+          return inRange(armor.pose.position.x, armor.pose.position.y,
+                         armor.pose.position.z);
+        });
   }
 
-  Snapshot EnvironmentContext::getSnapshot(Stamp now) {
-    std::lock_guard<std::mutex> lock(mtx_);
+  namespace {
+    bool isRecent(Stamp last, int64_t now_ns, double hold_sec) {
+      const int64_t last_ns = toFullNanos(last.sec, last.nanosec);
+      return (last_ns != 0)
+          && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
+    }
+  }  // namespace
 
-    Snapshot snapshot;
-    snapshot.has_rs = has_robot_status_;
-    if (snapshot.has_rs) {
-      snapshot.rs = last_robot_status_;
-    }
-    snapshot.has_gs = has_game_status_;
-    snapshot.match_started = match_started_;
-    snapshot.match_start_time = toStamp(match_start_time_);
-    snapshot.has_armors = has_armors_;
-    snapshot.state = state_;
-    if (snapshot.has_armors) {
-      snapshot.armors = last_armors_;
-    }
-    snapshot.target_opt = last_target_opt_;
-
-    if (snapshot.has_armors || snapshot.target_opt.has_value()) {
-      snapshot.enemy = detectEnemy(snapshot.armors, snapshot.target_opt);
-    }
+  void EnvironmentContext::updateTracking(Stamp now, const Snapshot& snapshot) {
     if (snapshot.enemy) {
       last_enemy_seen_ = now;
     }
-
-    const int64_t now_ns = toFullNanos(now.sec, now.nanosec);
-    const int64_t last_enemy_ns = toFullNanos(last_enemy_seen_.sec,
-                                              last_enemy_seen_.nanosec);
-    snapshot.enemy_recent = (last_enemy_ns != 0)
-                         && (static_cast<double>(now_ns - last_enemy_ns) * 1e-9
-                             <= attack_hold_sec_);
-
     if (snapshot.rs.is_hp_deduced) {
       last_attacked_ = now;
     }
-    const int64_t last_attacked_ns = toFullNanos(last_attacked_.sec,
-                                                 last_attacked_.nanosec);
-    snapshot.attacked_recent = (last_attacked_ns != 0)
-                            && (static_cast<double>(now_ns - last_attacked_ns)
-                                    * 1e-9
-                                <= attacked_hold_sec_);
+  }
+
+  Snapshot EnvironmentContext::buildSnapshot(Stamp now) {
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    Snapshot snapshot;
+    snapshot.rs = last_robot_status_;
+    snapshot.match_started = match_started_;
+    snapshot.match_start_time = toStamp(match_start_time_);
+    snapshot.state = state_;
+    snapshot.armors = last_armors_;
+    snapshot.target_opt = last_target_opt_;
+
+    if (!snapshot.armors.armors.empty() || snapshot.target_opt.has_value()) {
+      snapshot.enemy = detectEnemy(snapshot.armors, snapshot.target_opt);
+    }
+
+    const int64_t now_ns = toFullNanos(now.sec, now.nanosec);
+    snapshot.enemy_recent = isRecent(last_enemy_seen_, now_ns,
+                                     attack_hold_sec_);
+    snapshot.attacked_recent = isRecent(last_attacked_, now_ns,
+                                        attacked_hold_sec_);
 
     snapshot.default_spin_latched = default_spin_latched_;
     snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,

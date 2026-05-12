@@ -131,7 +131,9 @@ namespace simple_decision {
       environment_->updatePose(opt_pose->x, opt_pose->y, opt_pose->yaw);
     }
 
-    Snapshot snapshot = environment_->getSnapshot(makeStamped(now));
+    auto stamped_now = makeStamped(now);
+    Snapshot snapshot = environment_->buildSnapshot(stamped_now);
+    environment_->updateTracking(stamped_now, snapshot);
     auto action = controller_->computeAction(snapshot);
     executeAction(action);
   }

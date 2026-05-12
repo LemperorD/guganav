@@ -109,7 +109,6 @@ namespace simple_decision {
 
   inline Snapshot HealthyNotAttackedSnapshot() {
     Snapshot s{};
-    s.has_rs = true;
     s.rs = HealthyRobotStatus();
     s.state = State::DEFAULT;
     return s;
@@ -117,7 +116,6 @@ namespace simple_decision {
 
   inline Snapshot EnemyRecentSnapshot() {
     Snapshot s = HealthyNotAttackedSnapshot();
-    s.has_armors = true;
     s.armors = ArmorInRange();
     s.enemy = true;
     s.enemy_recent = true;

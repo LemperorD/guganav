@@ -22,8 +22,8 @@ namespace simple_decision {
   // ── onRobotStatus ──
   TEST_F(EnvironmentContextTest, OnRobotStatus_StoresItAndSetsHasRs) {
     ctx_.onRobotStatus(HealthyRobotStatus());
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
-    EXPECT_TRUE(snap.has_rs);
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
+    EXPECT_EQ(snap.rs.current_hp, 500);
   }
 
   // ── onGameStatus ──
@@ -66,14 +66,13 @@ namespace simple_decision {
   // ── onArmors / onTarget ──
   TEST_F(EnvironmentContextTest, OnArmors_StoresArmorData) {
     ctx_.onArmors(ArmorInRange());
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
-    EXPECT_TRUE(snap.has_armors);
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
     EXPECT_EQ(snap.armors.armors.size(), 1u);
   }
 
   TEST_F(EnvironmentContextTest, OnTarget_StoresTargetData) {
     ctx_.onTarget(TrackingTarget());
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
     EXPECT_TRUE(snap.target_opt.has_value());
     EXPECT_TRUE(snap.target_opt->tracking);
   }
@@ -209,48 +208,53 @@ namespace simple_decision {
     EXPECT_TRUE(ctx_.isNearRobotPose(0.0, 0.0, 0.3));
   }
 
-  // ── getSnapshot ──
+  // ── buildSnapshot ──
   TEST_F(EnvironmentContextTest, GetSnapshot_NoData_ReturnsDefaultsAndNoEnemy) {
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
-    EXPECT_FALSE(snap.has_rs);
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
+    EXPECT_EQ(snap.rs.current_hp, 0);
     EXPECT_FALSE(snap.enemy);
     EXPECT_FALSE(snap.enemy_recent);
     EXPECT_FALSE(snap.attacked_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_WithArmorInRange_DetectsEnemyAndSetsRecent) {
+         BuildSnapshot_WithArmorInRange_DetectsEnemy) {
     ctx_.onRobotStatus(HealthyRobotStatus());
     ctx_.onArmors(ArmorInRange());
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 1000000000u));
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 1000000000u));
     EXPECT_TRUE(snap.enemy);
-    EXPECT_TRUE(snap.enemy_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_WithTrackingTargetInRange_DetectsEnemy) {
+         UpdateTracking_AfterEnemy_NextSnapshotHasRecentTrue) {
     ctx_.onRobotStatus(HealthyRobotStatus());
-    ctx_.onTarget(TrackingTarget());
+    ctx_.onArmors(ArmorInRange());
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 500000000u));
-    EXPECT_TRUE(snap.enemy);
-    EXPECT_TRUE(snap.enemy_recent);
+    auto s1 = ctx_.buildSnapshot(MakeStamp(0, 500000000u));
+    ctx_.updateTracking(MakeStamp(0, 500000000u), s1);
+
+    auto s2 = ctx_.buildSnapshot(MakeStamp(0, 1000000000u));
+    EXPECT_TRUE(s2.enemy);
+    EXPECT_TRUE(s2.enemy_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_AttackedStatus_SetsAttackedRecent) {
+         UpdateTracking_AfterAttacked_NextSnapshotHasAttackedRecent) {
     ctx_.onRobotStatus(AttackedRobotStatus());
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 500000000u));
-    EXPECT_TRUE(snap.attacked_recent);
+    auto s1 = ctx_.buildSnapshot(MakeStamp(0, 500000000u));
+    ctx_.updateTracking(MakeStamp(0, 500000000u), s1);
+
+    auto s2 = ctx_.buildSnapshot(MakeStamp(0, 1000000000u));
+    EXPECT_TRUE(s2.attacked_recent);
   }
 
   TEST_F(EnvironmentContextTest,
-         GetSnapshot_HealthyStatus_AttackedRecentFalse) {
+         BuildSnapshot_HealthyStatus_AttackedRecentFalse) {
     ctx_.onRobotStatus(HealthyRobotStatus());
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
     EXPECT_FALSE(snap.attacked_recent);
   }
 
@@ -258,7 +262,7 @@ namespace simple_decision {
     ctx_.onRobotStatus(HealthyRobotStatus());
     ctx_.updatePose(kDefaultX + 0.1, kDefaultY + 0.1, 0.0);
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
     EXPECT_TRUE(snap.at_center);
     EXPECT_TRUE(snap.in_center_keep_spin);
   }
@@ -267,7 +271,7 @@ namespace simple_decision {
     ctx_.onRobotStatus(HealthyRobotStatus());
     ctx_.updatePose(10.0, 10.0, 0.0);
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
     EXPECT_FALSE(snap.at_center);
     EXPECT_FALSE(snap.in_center_keep_spin);
   }
@@ -275,7 +279,7 @@ namespace simple_decision {
   TEST_F(EnvironmentContextTest, GetSnapshot_CopiesMatchStartTime) {
     ctx_.onGameStatus(RunningGameStatus(), 5000000000LL);
 
-    auto snap = ctx_.getSnapshot(MakeStamp(0, 0));
+    auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
     EXPECT_EQ(snap.match_start_time.sec, 5);
     EXPECT_EQ(snap.match_start_time.nanosec, 0u);
   }

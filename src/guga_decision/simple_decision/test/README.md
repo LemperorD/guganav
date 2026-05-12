@@ -124,7 +124,7 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | 测试                                      | 意图                                         |
 | ----------------------------------------- | -------------------------------------------- |
 | `DefaultConstructor`                      | 默认构造后 isGameStarted/isGameOver 为 false |
-| `OnRobotStatus`                           | 存储 RS 并设置 has_rs                        |
+| `OnRobotStatus`                           | 存储 RS 后 buildSnapshot 可读到 current_hp   |
 | `OnGameStatus_NotStartedToRunning`        | COUNT_DOWN → RUNNING 触发 isGameStarted      |
 | `OnGameStatus_RunningToGameOver`          | RUNNING → GAME_OVER 触发 isGameOver          |
 | `OnGameStatus_ResetGameOver`              | resetGameOver 清除标记                       |
@@ -139,8 +139,8 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | `IsStatusBad_HpBelowEnter`                | HP < 阈值 → true                             |
 | `IsStatusBad_AmmoAtMin`                   | 弹药 = 0 → true                              |
 | `IsStatusBad_HpAndAmmoOk`                 | HP 和弹药正常 → false                        |
-| `SetState_DifferentState`                 | 设不同状态 → 返回 true                       |
-| `SetState_SameStateTwice`                 | 设相同状态 → 第二次返回 false                |
+| `changeState_DifferentState`              | 设不同状态 → 返回 true                       |
+| `changeState_SameStateTwice`              | 设相同状态 → 第二次返回 false                |
 | `CheckReadiness_NoRS`                     | 无 RS → NO_RS                                |
 | `CheckReadiness_NoGS`                     | require_game + 无 GS → NO_GS                 |
 | `CheckReadiness_GameNotStarted`           | 比赛未开始 → NOT_STARTED                     |
@@ -151,13 +151,13 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | `IsNearRobotPose_WithinTolerance`         | 在容差内 → true                              |
 | `IsNearRobotPose_BeyondTolerance`         | 超出容差 → false                             |
 | `IsNearRobotPose_ExactlyAtTolerance`      | 边界值 → true                                |
-| `GetSnapshot_NoData`                      | 无数据时返回默认值                           |
-| `GetSnapshot_WithArmorInRange`            | 有装甲 → enemy=true, enemy_recent=true       |
-| `GetSnapshot_EnemyRecent`                 | 持续有敌人 → enemy_recent 保持               |
-| `GetSnapshot_AttackedRecent`              | 受击 → attacked_recent=true                  |
-| `GetSnapshot_AtCenter`                    | 在默认点 → at_center=true                    |
-| `GetSnapshot_FarFromCenter`               | 远离默认点 → at_center=false                 |
-| `GetSnapshot_CopiesMatchStartTime`        | match_start_time 正确转换为 Stamp            |
+| `BuildSnapshot_NoData`                    | 无数据时返回默认值                           |
+| `BuildSnapshot_WithArmorInRange`          | 有装甲 → enemy=true                          |
+| `UpdateTracking_AfterEnemy`               | tick1 敌现→tick2 enemy_recent=true           |
+| `UpdateTracking_AfterAttacked`            | tick1 受击→tick2 attacked_recent=true        |
+| `BuildSnapshot_AtCenter`                  | 在默认点 → at_center=true                    |
+| `BuildSnapshot_FarFromCenter`             | 远离默认点 → at_center=false                 |
+| `BuildSnapshot_CopiesMatchStartTime`      | match_start_time 正确转换为 Stamp            |
 
 ### test_decision.cpp — 决策算法
 

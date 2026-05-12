@@ -60,7 +60,6 @@ namespace simple_decision {
   TEST_F(DecisionTest, ComputeAction_EnemyRecentNotAttacked_UsesFollowed) {
     Snapshot s = EnemyRecentSnapshot();
     s.armors = Armors{};
-    s.has_armors = false;
     s.target_opt = std::nullopt;
 
     auto a = dec_.computeAction(s);
@@ -73,7 +72,6 @@ namespace simple_decision {
     Snapshot s = EnemyRecentSnapshot();
     s.attacked_recent = true;
     s.armors = Armors{};
-    s.has_armors = false;
     s.target_opt = std::nullopt;
 
     auto a = dec_.computeAction(s);
@@ -85,7 +83,6 @@ namespace simple_decision {
          ComputeAction_EnemyRecentWithAttackGoal_UsesAttackPosition) {
     Snapshot s = EnemyRecentSnapshot();
     s.armors = ArmorInRange();
-    s.has_armors = true;
     s.has_attack_goal = false;
 
     auto a = dec_.computeAction(s);

@@ -1,24 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <mutex>
 #include <optional>
-#include <string>
-#include <algorithm>
-#include <cstdint>
 
-#include "guga_interfaces/msg/armors.hpp"
-#include "guga_interfaces/msg/target.hpp"
-#include "guga_interfaces/msg/game_status.hpp"
-#include "guga_interfaces/msg/robot_status.hpp"
-
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-
-#include "rcl/time.h"
-#include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/u_int8.hpp"
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 #include "types.hpp"
 
 namespace simple_decision {
@@ -32,11 +17,9 @@ namespace simple_decision {
       IN_DELAY
     };
     Status status = Status::NOT_STARTED;
-    double elapsed = 0.0;  // 仅供 Log 使用
+    double elapsed = 0.0;
   };
 
-  /// Environment state aggregation layer
-  /// Translates low-level ROS messages into high-level business facts
   class EnvironmentContext {
   public:
     explicit EnvironmentContext() = default;
@@ -48,27 +31,24 @@ namespace simple_decision {
     void onTarget(const Target& target);
     void onGameStatus(GameStatus game_status, int64_t match_start_time_ns);
 
-    bool isGameStarted() const;
-    bool isGameOver() const;
+    [[nodiscard]] bool isGameStarted() const;
+    [[nodiscard]] bool isGameOver() const;
     void resetGameOver();
 
-    bool getRobotPoseMap(double& x, double& y, double& yaw);
+    [[nodiscard]] Snapshot buildSnapshot(Stamp now);
+    void updateTracking(Stamp now, const Snapshot& snapshot);
 
-    Snapshot getSnapshot(Stamp now);
+    [[nodiscard]] Readiness checkReadiness(int64_t now) const;
 
-    bool isStatusBad(const RobotStatus& robotstatus) const;
-    bool isStatusRecovered(const RobotStatus& robotstatus) const;
-
-    bool detectEnemy(const Armors& armors,
-                     const std::optional<Target>& target_opt) const;
+    [[nodiscard]] bool isStatusBad(const RobotStatus& robotstatus) const;
+    [[nodiscard]] bool detectEnemy(
+        const Armors& armors, const std::optional<Target>& target_opt) const;
+    [[nodiscard]] bool isNearRobotPose(double target_x, double target_y,
+                                       double tolerance) const;
+    [[nodiscard]] bool inRange(double x, double y, double z) const;
 
     bool changeState(State state);
-
-    void setChassisMode(ChassisMode mode);
-    Readiness checkReadiness(int64_t now) const;
-    void updatePose(double x, double y, double z);
-    bool isNearRobotPose(double target_x, double target_y,
-                         double tolerance) const;
+    void updatePose(double x, double y, double yaw);
 
   private:
     const ContextConfig config_;
@@ -80,8 +60,6 @@ namespace simple_decision {
     bool default_spin_latched_{false};
     bool is_game_started_{false};
     bool is_game_over_{false};
-    bool has_armors_{false};
-
     enum class GameEvent : uint8_t { NONE, STARTED, OVER };
 
     static GameEvent detectGameEvent(uint8_t prev, uint8_t current);
