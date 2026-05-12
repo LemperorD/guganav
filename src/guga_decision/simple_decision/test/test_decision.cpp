@@ -11,14 +11,14 @@ namespace simple_decision {
 
     Decision dec_;
 
-    Snapshot SupplyNotRecovered() {
+    static Snapshot SupplyNotRecovered() {
       Snapshot s = HealthyNotAttackedSnapshot();
       s.state = State::SUPPLY;
       s.needs_supply = true;
       return s;
     }
 
-    Snapshot SupplyRecovered() {
+    static Snapshot SupplyRecovered() {
       Snapshot s = HealthyNotAttackedSnapshot();
       s.state = State::SUPPLY;
       s.needs_supply = false;
