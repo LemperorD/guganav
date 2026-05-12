@@ -31,9 +31,11 @@ find_package(message_filters REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 
-add_executable(terrainAnalysis src/terrainAnalysis.cpp)
+# Library
+add_library(terrain_analysis_lib src/terrainAnalysis.cpp)
+target_include_directories(terrain_analysis_lib PUBLIC include)
 ament_target_dependencies(
-  terrainAnalysis
+  terrain_analysis_lib
   rclcpp
   std_msgs
   sensor_msgs
@@ -46,11 +48,18 @@ ament_target_dependencies(
   pcl_ros
   pcl_conversions)
 
+# Executable
+add_executable(terrainAnalysis src/main.cpp)
+target_link_libraries(terrainAnalysis terrain_analysis_lib)
 install(TARGETS terrainAnalysis DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_terrain_analysis test/test_terrain_analysis.cpp)
+  target_include_directories(test_terrain_analysis PRIVATE test)
+  target_link_libraries(test_terrain_analysis terrain_analysis_lib)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
