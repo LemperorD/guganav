@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html"><span>环境配置</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="header">
+  <div class="headertitle">
+<div class="title">弃用列表 </div>  </div>
+</div><!--header-->
+<div class="contents">
+<div class="textblock"><dl class="reflist">
+<dt>全局 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga015c52bd6f25970e9169409093369e30">MV_CAML_GetSupportBauderates</a>  (IN void *handle, unsigned int *pnBaudrateAblity)</dt>
+<dd><a class="anchor" id="_deprecated000001"></a>该接口已弃用，建议改用 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE8_xAE_xBE_xE5_xA4_x87.html#ga08f667540f465a8c14ff1256321abf7f" title="获取设备与主机间连接支持的波特率">MV_CAML_GetSupportBaudrates()</a> 接口 </dd>
+<dt>全局 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga1f3835e65ca878f82c084f626c228802">MV_USB_RegisterStreamExceptionCallBack</a>  (IN void *handle, IN void(__stdcall *cbException)(MV_CC_STREAM_EXCEPTION_TYPE enExceptionType, void *pUser), IN void *pUser)</dt>
+<dd><a class="anchor" id="_deprecated000002"></a>自V4.6.0废弃。建议改用 <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#ga85930669d3bf30dc7af81db20e9350b5" title="注册流异常消息回调">MV_CC_RegisterStreamExceptionCallBack()</a> </dd>
+</dl>
+</div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+<script>
+	// 当前选中的菜单
+	var currentMenuItem = document.querySelector('.tablist > li.current > a')
+	if (currentMenuItem) { // 子菜单情况
+	  window.parent.postMessage({
+		navHref: currentMenuItem.href
+	  }, '*')
+	} else {
+	  window.parent.postMessage({
+		url: window.location.href
+	  }, '*')
+	}
+  </script>
+</body>
+</html>

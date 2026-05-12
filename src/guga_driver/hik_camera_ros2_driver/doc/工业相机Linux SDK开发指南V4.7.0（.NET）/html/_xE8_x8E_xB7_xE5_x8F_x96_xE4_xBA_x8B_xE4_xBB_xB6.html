@@ -1,0 +1,99 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="usergroup0.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">获取事件</div> </div> </div> <div> <br />
+ </div><div>SDK的事件分为正常通知事件和异常告警事件两种。</div><div> <ul>
+<li>
+正常通知事件指采集卡/相机处于正常状态下发出的的事件。 </li>
+<li>
+异常告警事件是SDK产生的异常，可直接从SDK中获取。此类事件为采集卡/相机或者SDK运行中的异常（例如相机掉线等事件），用于提醒用户及时排查。 </li>
+</ul>
+<div class="mainparams"> <h2 id="正常通知事件">正常通知事件</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"></div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">可依次通过订阅、启用、获取、关闭和取消订阅完成正常通知事件的处理流程。</div></div><div><div class="subparamswhite"> <dl class="section attention"><dt>注意</dt><dd>若要获取正常通知事件，需先通过客户端配置采集卡/相机的 EventControl 属性。配置操作详情参见客户端用户手册。</dd></dl>
+<ol>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>订阅</b>：调用 <a class="el" href="interface_i_event_grabber.html#a52cabc07f20b5bf77a3ffa501f29fa91" title="订阅事件">IEventGrabber.SubscribeEvent()</a> ，调用时输入事件名称 eventName ，订阅该事件。</p>
+<p class="interli"></p>
+<p class="interli">如下两段示例代码分别演示了如何订阅采集卡帧开始事件和相机曝光结束事件。</p>
+<div class="fragment"><div class="line"><span class="comment">/*订阅采集卡帧开始事件*/</span></div><div class="line">interface.EventGrabber.DeviceEvent += DeviceEventGrabedHandler;</div><div class="line">interface.EventGrabber.SubscribeEvent(<span class="stringliteral">&quot;ReceiveImageFrameStart0&quot;</span>);</div></div><!-- fragment --><p> <br />
+ </p><div class="fragment"><div class="line"><span class="comment">/*订阅相机曝光结束事件*/</span></div><div class="line">device.EventGrabber.DeviceEvent += DeviceEventGrabedHandler;</div><div class="line">device.EventGrabber.SubscribeEvent(<span class="stringliteral">&quot;ExposureEnd&quot;</span>);</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>启用</b>：调用 <a class="el" href="interface_i_device.html#a284dbf57e59f32bc5ad8566a44d579c9" title="开启设备指定事件">IDevice.EventNotificationOn()</a> 和 <a class="el" href="interface_i_interface.html#a4a4621f8a2cb6da935c035d1a905c302" title="开启设备指定事件">IInterface.EventNotificationOn()</a> ，调用时传入事件名称（eventName），可以启用对应的事件。</p>
+<dl class="section note"><dt>注解</dt><dd>采集卡事件可以通过采集卡事件配置工具进行配置。 </dd></dl>
+<p>如下两段示例代码分别演示了启用采集卡帧开始事件和相机曝光结束事件的流程。</p>
+<dl class="section note"><dt>注解</dt><dd>您可以从MVS客户端获取对应的事件名称。</dd></dl>
+<div class="fragment"><div class="line"><span class="comment">/*启用采集卡的Channel0的帧开始事件*/</span></div><div class="line">interface.EventNotificationOn(<span class="stringliteral">&quot;ReceiveImageFrameStart0&quot;</span>);</div></div><!-- fragment --><p> <br />
+ </p><div class="fragment"><div class="line"><span class="comment">/*启用相机的曝光结束事件*/</span></div><div class="line">device.EventNotificationOn(<span class="stringliteral">&quot;ExposureEnd&quot;</span>);</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>获取</b>：当采集卡/相机生成一个事件时，SDK会触发对应的事件回调函数，将该事件信息推送给用户。一般情况下，推送给用户的事件信息中包含事件名称、事件ID和时间戳等关键信息。其他信息，如帧号和事件数据等，则不一定包含。不同事件所包含的信息会存在差异。</p>
+<dl class="section attention"><dt>注意</dt><dd>不建议在事件回调函数中进行耗时操作。如进行耗时操作，后续事件信息的推送将被阻塞。</dd></dl>
+<div class="fragment"><div class="line"><span class="comment">/*采集卡/设备事件回调函数*/</span></div><div class="line"><span class="keywordtype">void</span> DeviceEventGrabedHandler(<span class="keywordtype">object</span> sender, <a class="code" href="class_device_event_args.html">DeviceEventArgs</a> e)</div><div class="line">{</div><div class="line">    Console.WriteLine(<span class="stringliteral">&quot;EventName[{0}], EventID[{1}]&quot;</span>, e.<a class="code" href="class_device_event_args.html#a5a4a33da877482bc61663f52b5d20f21">EventInfo</a>.<a class="code" href="interface_i_event_out_info.html#a719d2d8d7a7bf51558e39c3d666d420b">EventName</a>, e.<a class="code" href="class_device_event_args.html#a5a4a33da877482bc61663f52b5d20f21">EventInfo</a>.<a class="code" href="interface_i_event_out_info.html#ad1882599fdc6484d48e1859346649892">EventID</a>);</div><div class="line">    <span class="keywordflow">if</span> (e.<a class="code" href="class_device_event_args.html#a5a4a33da877482bc61663f52b5d20f21">EventInfo</a>.<a class="code" href="interface_i_event_out_info.html#a61c9111a321c044ee74b3cd5d514bce5">EventData</a> != <span class="keyword">null</span>)</div><div class="line">    {</div><div class="line">        <span class="comment">//TODO：数据拷贝等操作</span></div><div class="line">    }</div><div class="line">}</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>关闭</b>：当需要关闭事件时，调用 <a class="el" href="interface_i_interface.html#a4a4621f8a2cb6da935c035d1a905c302" title="开启设备指定事件">IInterface.EventNotificationOn()</a> 和 <a class="el" href="interface_i_device.html#a284dbf57e59f32bc5ad8566a44d579c9" title="开启设备指定事件">IDevice.EventNotificationOn()</a> ，调用时传入事件名称（eventName），可以关闭对应的事件。</p>
+<div class="fragment"><div class="line"><span class="comment">/*关闭采集卡的Channel0的帧开始事件*/</span></div><div class="line">interface.EventNotificationOff(<span class="stringliteral">&quot;ReceiveImageFrameStart0&quot;</span>);</div></div><!-- fragment --><p> <br />
+ </p><div class="fragment"><div class="line"><span class="comment">/*关闭相机的曝光结束事件*/</span></div><div class="line">device.EventNotificationOff(<span class="stringliteral">&quot;ExposureEnd&quot;</span>);</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>取消订阅</b>：调用 <a class="el" href="interface_i_event_grabber.html#a51cd6d3e025d28393c68d7b4814f2f8a" title="取消事件订阅">IEventGrabber.UnSubscribeEvent()</a> 。调用时需输入事件名称 eventName 。调用成功则取消订阅该事件。</p>
+<div class="fragment"><div class="line"><span class="comment">/*取消订阅采集卡帧开始事件*/</span></div><div class="line">interface.EventGrabber.UnSubscribeEvent(<span class="stringliteral">&quot;ReceiveImageFrameStart0&quot;</span>);</div></div><!-- fragment --><p> <br />
+ </p><div class="fragment"><div class="line"><span class="comment">/*取消订阅相机曝光结束事件*/</span></div><div class="line">device.EventGrabber.UnSubscribeEvent(<span class="stringliteral">&quot;ExposureEnd&quot;</span>);</div></div><!-- fragment -->  </li>
+</ol>
+</div> <div class="mainparams"> <h2 id="异常告警事件">异常告警事件</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"></div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">异常告警事件可直接从SDK中获取。该类型事件的处理流程包括注册、获取和注销。</div></div><div><div class="subparamswhite"> <ol>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>注册</b>：通过向指定实例的异常事件 DeviceExceptionEvent 添加事件委托来完成该事件的注册。</p>
+<div class="fragment"><div class="line"><span class="comment">/*注册异常事件*/</span></div><div class="line">device.DeviceExceptionEvent += DeviceExceptionHandler;</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>获取</b>：当SDK出现异常时，会触发异常事件回调函数，将该异常事件的类型推送给用户。</p>
+<dl class="section attention"><dt>注意</dt><dd>不建议在异常事件回调函数中进行耗时操作。如进行耗时操作，后续事件信息的推送将被阻塞。</dd></dl>
+<div class="fragment"><div class="line"><span class="comment">/*异常事件回调函数*/</span></div><div class="line"><span class="keywordtype">void</span> DeviceExceptionHandler(<span class="keywordtype">object</span> sender, <a class="code" href="class_device_exception_args.html">DeviceExceptionArgs</a> e)</div><div class="line">{</div><div class="line">    Console.WriteLine(<span class="stringliteral">&quot;Exception[{0}]&quot;</span>, e.<a class="code" href="class_device_exception_args.html#a73bfd4ad12489f22804a613fad1e77f7">MsgType</a>);</div><div class="line">    <span class="comment">//TODO: 处理异常事件</span></div><div class="line">}</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>注销</b>：调用采集卡/相机实例的设备异常事件 DeviceExceptionEvent ，移除事件委托。</p>
+<div class="fragment"><div class="line"><span class="comment">/*注销异常事件*/</span></div><div class="line">device.DeviceExceptionEvent -= DeviceExceptionHandler;</div></div><!-- fragment -->  </li>
+</ol>
+</div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+</body>
+</html>

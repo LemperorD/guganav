@@ -1,0 +1,93 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html"><span>环境配置</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">开发前必读</div> </div> </div><div> <br />
+ </div><div>在开发您的程序前，建议您先了解SDK在相机与采集卡的调用流程、调用方式及错误处理，以更好的实现您的应用程序。</div><div> <ul>
+<li>
+<a href="#MVCCProcess">相机调用流程</a> </li>
+<li>
+<a href="#MVFGProcess">采集卡调用流程</a> </li>
+<li>
+<a href="#Error">错误处理和错误码</a> </li>
+</ul>
+</div> <div> <div class="mainparams"> <h2 id="MVCCProcess">相机调用流程</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">您可通过SDK，初始化相机、设置参数并最终实现采集图像。</div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">在实例生命周期内，相机的基础调用流程如下图所示。</div></div><div><div class="subparamswhite"> <br />
+ <img src="MVCC_Process.png" width="1200" alt="相机调用流程图示" class="inline"/>
+ <br />
+ </div> </div> <div> <div class="mainparams"> <h2 id="MVFGProcess">采集卡调用流程</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">您可通过SDK，初始化采集卡和设置参数等。</div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">在实例生命周期内，采集卡的基础调用流程如下图所示。</div></div><div><div class="subparamswhite"> <br />
+ <img src="MVFG_Process.png" width="500" alt="采集卡调用流程图示" class="inline"/>
+ <br />
+ </div> </div> <div> <div class="mainparams"> <h2 id="Error">错误处理和错误码</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">在您在程序中调用SDK接口后，接口会返回一个代表int型的状态码。状态码以16进制的形式呈现，其格式为“0x%x”。</div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">如果接口调用正常，且未检测到任何错误，则会返回“0x00000000”，代表“成功，无错误”；否则，接口将返回错误码。</div></div><div><div class="subparamswhite"> <dl class="section note"><dt>注解</dt><dd>您可在“MvErrorDefine.h”文件或 <a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 中，查找错误码及其对应定义和解释。 <br />
+ <div> </div></dd></dl>
+您可以参照如下示例，在您的程序中检查接口异常并返回错误信息。</div></div><div><div class="subparamswhite"><div> <div class="fragment"><div class="line"><span class="keywordtype">int</span> nRet = <a class="code" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html#gacc4f15d534603b339f751d8b2d569305">MV_OK</a>;</div><div class="line">nRet = <a class="code" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga308c9a9869be7a457d27aadd94ce57dd">MV_CC_OpenDevice</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>);</div><div class="line"><span class="keywordflow">if</span> (<a class="code" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html#gacc4f15d534603b339f751d8b2d569305">MV_OK</a> != nRet)</div><div class="line">{</div><div class="line">    printf(<span class="stringliteral">&quot;Open Device fail! nRet [0x%x]\n&quot;</span>, nRet);</div><div class="line">    <span class="keywordflow">return</span> nRet;</div><div class="line">}</div></div><!-- fragment --> </div></div></div><div><div class="subparamswhite"><div>该例演示了打开相机时，获取 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga308c9a9869be7a457d27aadd94ce57dd" title="打开设备">MV_CC_OpenDevice()</a> 的调用情况。</div></div></div><div><div class="subparamswhite"><div> <ul>
+<li>
+若能够正常打开相机，则该例不会返回报错信息。 </li>
+<li>
+<p class="startli">若调用接口时，相机设备已连接至第三方软件，则 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga308c9a9869be7a457d27aadd94ce57dd" title="打开设备">MV_CC_OpenDevice()</a> 无法正常打开相机。此时，该接口会返回如下信息。 <br />
+</p><div class="fragment"><div class="line">Open Device fail! nRet [0x80000203]</div></div><!-- fragment --> <p class="interli">在获得错误信息和对应状态码后，您可在<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 中，查找对应内容。该例中，“0x80000203”代表“设备无访问权限”。</p>
+<p class="endli"></p>
+</li>
+</ul>
+</div> </div> </div><div> <br />
+ <br />
+ <br />
+ <table width="60%">
+<tr>
+<td>上一篇： <a class="el" href="_xE9_x85_x8D_xE7_xBD_xAE_xE5_xBC_x80_xE5_x8F_x91_xE7_x8E_xAF_xE5_xA2_x83.html">配置开发环境</a> </td><td>下一篇： <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_s_d_k.html">初始化SDK</a>  </td></tr>
+</table>
+</div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+<script>
+	// 当前选中的菜单
+	var currentMenuItem = document.querySelector('.tablist > li.current > a')
+	if (currentMenuItem) { // 子菜单情况
+	  window.parent.postMessage({
+		navHref: currentMenuItem.href
+	  }, '*')
+	} else {
+	  window.parent.postMessage({
+		url: window.location.href
+	  }, '*')
+	}
+  </script>
+</body>
+</html>

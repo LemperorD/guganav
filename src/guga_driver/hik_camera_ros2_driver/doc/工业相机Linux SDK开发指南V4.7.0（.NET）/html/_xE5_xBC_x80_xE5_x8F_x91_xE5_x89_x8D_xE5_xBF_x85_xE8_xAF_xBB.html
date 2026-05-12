@@ -1,0 +1,226 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="usergroup0.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">开发前必读</div> </div> </div> <div> <br />
+ </div><div>开始开发您的程序之前，建议您先了解SDK的.Net程序集的全局概况，包括该库核心类、各核心类的调用流程，以及该库接口的通用调用方式。</div><div> <ul>
+<li>
+<a href="#KeyClasses">.Net程序集核心类</a> </li>
+<li>
+<a href="#CallProcess">基础调用流程</a> </li>
+<li>
+<a href="#GeneralCallMethod">通用调用方式</a> <ul>
+<li>
+<a href="#ResourceRelease">非托管内存释放</a> </li>
+<li>
+<a href="#DeviceControl">设备控制</a> </li>
+<li>
+<a href="#RegisterEvent">事件注册与处理</a> </li>
+<li>
+<a href="#ErrorAndException">错误与异常处理</a> </li>
+</ul>
+</li>
+</ul>
+<div class="mainparams"> <h2 id="keyClasses">.Net程序集核心类</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">下图展示了.Net程序集的核心类。</div></div><div><div class="subparamswhite"> <img src="keyClasses.png" class="img_main" width="1000" alt="" class="inline"/>
+ </div></div><div><div class="subparamswhite">上图中各类的简介如下：</div></div><div><div class="subparamswhite"> <div id="tableStyle"> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="class_s_d_k_system.html" title="SDk全局信息及操作接口">SDKSystem</a> ：获取和配置SDK全局信息。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">相机模块</p>
+<ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_device_info.html" title="设备基本信息">IDeviceInfo</a> ：相机基本信息类，包含相机级接口类型、型号、序列号等属性。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="class_device_enumerator.html" title="设备枚举类，支持枚举GigE Vision、USB3 Vision相机，及采集卡上的相机（GigE Vision、CameraLink、CoaXPress、XoFlink）">DeviceEnumerator</a> ：相机枚举类，用于获取相机信息 <a class="el" href="interface_i_device_info.html" title="设备基本信息">IDeviceInfo</a> 。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="class_device_factory.html" title="相机工厂类，用于创建相机实例">DeviceFactory</a> ：相机工厂类，用于创建相机实例 <a class="el" href="interface_i_device.html" title="提供设备通用的属性和接口">IDevice</a> 。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_device.html" title="提供设备通用的属性和接口">IDevice</a> ：相机控制类，用于控制相机，如打开和关闭相机。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="class_gen_t_l_manager.html" title="提供GenTL相关接口">GenTLManager</a> ：GenTL设备控制类，用于加载第三方GenTL库，控制第三方采集卡上的相机。</p>
+<p class="endli"></p>
+</li>
+</ul>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">采集卡模块</p>
+<ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_interface_info.html" title="采集卡信息">IInterfaceInfo</a> ：采集卡基本信息类，包含采集卡接口类型、采集卡ID、序列号等属性。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="class_interface_enumerator.html" title="提供枚举采集卡接口">InterfaceEnumerator</a> ：采集卡枚举类，用于获取采集卡信息 <a class="el" href="interface_i_interface_info.html" title="采集卡信息">IInterfaceInfo</a> 。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="class_interface_factory.html" title="采集卡工厂类，创建采集卡实例">InterfaceFactory</a> ：采集卡工厂类，用于创建采集卡实例。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_interface.html" title="提供采集卡属性和接口">IInterface</a> ：采集卡控制类，用于控制采集卡，如打开和关闭采集卡。</p>
+<p class="endli"></p>
+</li>
+</ul>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">参数和事件模块</p>
+<ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_parameters.html" title="提供设备参数配置相关接口">IParameters</a> ：参数类，获取/设置相机和采集卡的参数。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_event_grabber.html" title="提供设备事件订阅相关接口">IEventGrabber</a> ：事件类，用于获取相机和采集卡的事件信息。</p>
+<p class="endli"></p>
+</li>
+</ul>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">图像模块</p>
+<ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_stream_grabber.html" title="提供取流相关接口">IStreamGrabber</a> ：取流类，用于取流、获取一帧图像、停止取流等。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_image_process.html" title="提供图像处理相关接口，比如旋转、翻转、对比度、饱和度等">IImageProcess</a> ：图像处理类。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_image_decoder.html" title="图像解码">IImageDecoder</a> ：图像解码类。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_image_render.html" title="提供图像渲染、图形绘制接口">IImageRender</a> ：图像渲染类。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_pixel_type_converter.html" title="提供像素格式转换相关接口">IPixelTypeConverter</a> ：格式转换类。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_image_saver.html" title="提供保存图像数据到文件的接口，支持BMP、JPG、PNG、TIFF格式图像">IImageSaver</a> ：图像保存类。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><a class="el" href="interface_i_video_recorder.html" title="录像,将图片录制成AVI格式视频">IVideoRecorder</a> ：录像类。</p>
+<p class="endli"></p>
+</li>
+</ul>
+</li>
+</ul>
+</div> </div> <div class="mainparams"> <h2 id="CallProcess">基础调用流程</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">SDK实例生命周期内，相机模块和采集卡模块的基础调用流程如下图所示。</div></div><div><div class="subparamswhite"> <img src="basicProcess.png" class="img_main" width="1200" alt="" class="inline"/>
+ <dl class="section note"><dt>注解</dt><dd><ul>
+<li>
+上图涉及的具体接口调用流程，请参见 <a class="el" href="_xE6_x8E_xA7_xE5_x88_xB6_xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1.html">控制采集卡</a> 和 <a class="el" href="_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE6_x9C_xBA.html">控制相机</a> 。</li>
+<li>
+上图中的 Dispose() 为.NET接口。</li>
+</ul>
+</dd></dl>
+</div> <div class="mainparams"> <h2 id="GeneralCallMethod">通用调用方式</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">开始接口调用之前，请先了解.Net程序集的通用调用方式，包括非托管内存释放的调用方式、设备控制功能的调用方式、SDK事件调用方式，以及错误与异常处理的调用方式。</div></div><div><div class="subparamswhite"> <div class="mainparams"> <h3 id="ResourceRelease">非托管内存释放</h3>
+</div></div></div><div><div class="subparamswhite"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">.Net程序集的很多类，例如相机类 <a class="el" href="interface_i_device.html" title="提供设备通用的属性和接口">IDevice</a> 和采集卡类 <a class="el" href="interface_i_interface.html" title="提供采集卡属性和接口">IInterface</a> ，会向系统申请非托管内存。为了安全释放非托管内存，这些类都实现了<code>System.IDispose</code>，可让.NET框架的垃圾回收机制自动回收SDK所占用的资源。由于该垃圾回收机制存在滞后性，建议您主动释放资源，以保证资源及时被释放。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">可通过如下两种方式主动释放资源。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>方式1：调用.NET的 Dispose() </b></p>
+<p class="interli"></p>
+<p class="interli">以下示例代码演示了如何通过调用该接口，实现将相机实例占用的非托管内存及时释放。</p>
+<div class="fragment"><div class="line"><span class="keywordflow">try</span></div><div class="line">{</div><div class="line">    <span class="comment">// ch:创建设备 | en:Create device</span></div><div class="line">    device = <a class="code" href="class_device_factory.html">DeviceFactory</a>.<a class="code" href="class_device_factory.html#a19ad2c419b04a772be6cc852467b1b68">CreateDevice</a>(deviceInfo);</div><div class="line">}</div><div class="line"><span class="keywordflow">catch</span> (Exception e)</div><div class="line">{</div><div class="line">    Console.WriteLine(e.Message);</div><div class="line">}</div><div class="line"><span class="keywordflow">finally</span></div><div class="line">{</div><div class="line">    <span class="keywordflow">if</span> (device != <span class="keyword">null</span>)</div><div class="line">    {</div><div class="line">        <span class="comment">// ch:释放设备资源 | en:Dispose resource</span></div><div class="line">        device.Dispose();</div><div class="line">    }</div><div class="line">}</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>方式2：使用<code>using</code>命令释放资源</b></p>
+<p class="interli"></p>
+<p class="interli">若使用了该命令，该命令执行结束后，.NET框架将自动调用方式1中提及的 dispose()，实现资源及时释放。</p>
+<div class="fragment"><div class="line"><span class="comment">// ch:创建设备 | en:Create device</span></div><div class="line"><span class="keyword">using</span> (<a class="code" href="interface_i_device.html">IDevice</a> device = <a class="code" href="class_device_factory.html">DeviceFactory</a>.<a class="code" href="class_device_factory.html#a19ad2c419b04a772be6cc852467b1b68">CreateDevice</a>(deviceInfo))</div><div class="line">{</div><div class="line">    <span class="comment">// ch:打开设备 | en:Open device</span></div><div class="line">    device.<a class="code" href="interface_i_device.html#a3d7c509521042ad1ed2addced19d0304">Open</a>();</div><div class="line"></div><div class="line">    <span class="comment">// ch:关闭设备 | en:Close device</span></div><div class="line">    device.<a class="code" href="interface_i_device.html#adb72189b679fc15d5055763918547999">Close</a>();</div><div class="line">}</div></div><!-- fragment -->  </li>
+</ul>
+</div> <div class="mainparams"> <h3 id="DeviceControl">设备控制</h3>
+</div></div></div><div><div class="subparamswhite"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">若要实现相机实例 <a class="el" href="interface_i_device.html" title="提供设备通用的属性和接口">IDevice</a> 和采集卡实例 <a class="el" href="interface_i_interface.html" title="提供采集卡属性和接口">IInterface</a> 与实际设备通信，必须先与实际设备建立连接，获取实际设备的访问权限。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">以相机实例 <a class="el" href="interface_i_device.html" title="提供设备通用的属性和接口">IDevice</a> 为例，调用 <a class="el" href="class_device_factory.html#a19ad2c419b04a772be6cc852467b1b68" title="创建相机对象">DeviceFactory.CreateDevice()</a> 创建该实例后，该实例尚未与实际设备建立连接。若需建立连接，需调用 <a class="el" href="interface_i_device.html#a3d7c509521042ad1ed2addced19d0304" title="打开设备，默认以“独占”模式访问设备。设备访问模式相关详情，请参见DeviceAccessMode">IDevice.Open()</a> 。调用成功后， <a class="el" href="interface_i_device.html" title="提供设备通用的属性和接口">IDevice</a> 实例才可访问相机的参数并采集图像。不再需要与实际设备通信时，调用 <a class="el" href="interface_i_device.html#adb72189b679fc15d5055763918547999" title="关闭设备">IDevice.Close()</a> 断开与设备的连接。采集卡实例 <a class="el" href="interface_i_interface.html" title="提供采集卡属性和接口">IInterface</a> 也是同样的逻辑。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">// ch:创建设备 | en:Create device</span></div><div class="line">device = <a class="code" href="class_device_factory.html">DeviceFactory</a>.<a class="code" href="class_device_factory.html#a19ad2c419b04a772be6cc852467b1b68">CreateDevice</a>(devInfoList[devIndex]);</div><div class="line"></div><div class="line"><span class="comment">// ch:打开设备，获取设备访问权限 | en:Open device</span></div><div class="line">device.<a class="code" href="interface_i_device.html#a3d7c509521042ad1ed2addced19d0304">Open</a>();</div><div class="line"></div><div class="line"><span class="comment">// ch:获取相机参数 || en:Get parameter of the device</span></div><div class="line">device.<a class="code" href="interface_i_device.html#ac6c5038b94b5d23b5c85d824b69f13bf">Parameters</a>.<a class="code" href="interface_i_parameters.html#a48d03fbb2c39e14ec97696be3167b61b">GetIntValue</a>(<span class="stringliteral">&quot;Width&quot;</span>, out intValue);</div><div class="line">device.<a class="code" href="interface_i_device.html#ac6c5038b94b5d23b5c85d824b69f13bf">Parameters</a>.<a class="code" href="interface_i_parameters.html#a48d03fbb2c39e14ec97696be3167b61b">GetIntValue</a>(<span class="stringliteral">&quot;Height&quot;</span>, out intValue);</div><div class="line"></div><div class="line"><span class="comment">// ch:关闭设备 | en:Close device</span></div><div class="line">device.<a class="code" href="interface_i_device.html#adb72189b679fc15d5055763918547999">Close</a>();</div></div><!-- fragment --> </div> <div class="mainparams"> <h3 id="RegisterEvent">事件注册与处理</h3>
+</div></div></div><div><div class="subparamswhite"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">SDK提供的事件（例如 <a class="el" href="interface_i_event_grabber.html#a5ed8274b289baa6db4587c00a5ad177d" title="设备事件">IEventGrabber.DeviceEvent</a> ）通过.NET的标准event实现，您可使用标准event的方式处理SDK事件。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">假设您自定义的事件处理函数如下：</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">// ch:事件处理函数 | en:Event handling function</span></div><div class="line"><span class="keywordtype">void</span> DeviceEventGrabedHandler(<span class="keywordtype">object</span> sender, <a class="code" href="class_device_event_args.html">DeviceEventArgs</a> e)</div><div class="line">{</div><div class="line">    Console.WriteLine(<span class="stringliteral">&quot;EventName[{0}], EventID[{1}]&quot;</span>, e.<a class="code" href="class_device_event_args.html#a5a4a33da877482bc61663f52b5d20f21">EventInfo</a>.<a class="code" href="interface_i_event_out_info.html#a719d2d8d7a7bf51558e39c3d666d420b">EventName</a>, e.<a class="code" href="class_device_event_args.html#a5a4a33da877482bc61663f52b5d20f21">EventInfo</a>.<a class="code" href="interface_i_event_out_info.html#ad1882599fdc6484d48e1859346649892">EventID</a>);</div><div class="line">}</div></div><!-- fragment --> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">以下示例代码演示了如下逻辑：</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">注册SDK的设备事件（+=表示注册），并通过上述事件处理函数处理设备事件。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">// ch:注册event | en:Register event</span></div><div class="line">device.<a class="code" href="interface_i_device.html#a22bda696b243e7da1702b7f25e9ae2fd">EventGrabber</a>.<a class="code" href="interface_i_event_grabber.html#a5ed8274b289baa6db4587c00a5ad177d">DeviceEvent</a> += DeviceEventGrabedHandler;</div></div><!-- fragment --> </div> <div class="mainparams"> <h3 id="ErrorAndException">错误与异常处理</h3>
+</div></div></div><div><div class="subparamswhite"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div class="subparamswhite"><div class="subparamswhite">SDK部分接口在调用后返回错误码，另一部分接口不返回错误码，而是抛出异常信息。</div></div></div><div><div class="subparamswhite"><div class="subparamswhite"> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>错误码</b></p>
+<p class="interli"></p>
+<p class="interli">SDK大部分接口在被调用后都会返回代表错误码的int值。可通过该返回值判断是否调用成功。错误码定义请参见 <a class="el" href="class_mv_error.html" title="错误码定义">MvError</a> 类。</p>
+<div class="fragment"><div class="line"><span class="comment">// ch:获取相机宽度信息 || en:Get &#39;Width&#39; info of device</span></div><div class="line"><span class="keywordtype">int</span> ret = device.<a class="code" href="interface_i_device.html#ac6c5038b94b5d23b5c85d824b69f13bf">Parameters</a>.<a class="code" href="interface_i_parameters.html#a48d03fbb2c39e14ec97696be3167b61b">GetIntValue</a>(<span class="stringliteral">&quot;Width&quot;</span>, out intValue);</div><div class="line"><span class="keywordflow">if</span> (ret != <a class="code" href="class_mv_error.html">MvError</a>.<a class="code" href="class_mv_error.html#aae781ef0f6a59940c564cc5bcaac1792">MV_OK</a>)</div><div class="line">{</div><div class="line">    Console.WriteLine(<span class="stringliteral">&quot;Get Width failed:{0:x8}&quot;</span>, ret);</div><div class="line">    <span class="keywordflow">return</span>;</div><div class="line">}</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>异常处理</b></p>
+<p class="interli"></p>
+<p class="interli">一些特殊接口无法返回错误码，如创建设备和注册事件等接口。这些接口被调用后，SDK会抛出异常信息，您需通过 try...catch 捕获对应的异常信息。</p>
+<div class="fragment"><div class="line"><span class="keywordflow">try</span></div><div class="line">{</div><div class="line">    <span class="comment">// ch:创建设备 | en:Create device</span></div><div class="line">    device = <a class="code" href="class_device_factory.html">DeviceFactory</a>.<a class="code" href="class_device_factory.html#a19ad2c419b04a772be6cc852467b1b68">CreateDevice</a>(devInfoList[devIndex]);</div><div class="line">}</div><div class="line"><span class="keywordflow">catch</span> (<a class="code" href="class_mv_exception.html">MvException</a> e)</div><div class="line">{</div><div class="line">    Console.WriteLine(e.Message);</div><div class="line">    Console.WriteLine(<span class="stringliteral">&quot;ErrorCode: &quot;</span> + e.<a class="code" href="class_mv_exception.html#adf02bf525fb1e46e1fbc3b49e2dfc647">ErrorCode</a>.ToString(<span class="stringliteral">&quot;X&quot;</span>));</div><div class="line">}</div><div class="line"><span class="keywordflow">finally</span></div><div class="line">{</div><div class="line">    <span class="keywordflow">if</span> (device != <span class="keyword">null</span>)</div><div class="line">    {</div><div class="line">        device.Dispose();</div><div class="line">    }</div><div class="line">}</div></div><!-- fragment -->  </li>
+</ul>
+</div> </div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+</body>
+</html>

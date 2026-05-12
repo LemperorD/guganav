@@ -1,0 +1,75 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html"><span>环境配置</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">初始化SDK</div> </div> </div> <div> <br />
+ </div><div>在进程中调用SDK时，您需要首先初始化SDK的运行环境，以提升后续接口调用的流程性。</div><div> <br />
+ <div class="subparamswhite"> </div></div><div><div class="subparamswhite">您可参照如下示例代码，在您的进程中初始化SDK的运行环境，并在进程退出时反初始化SDK。</div></div><div><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code" href="_parametrize_camera___area_scan_i_o_settings_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>()</div><div class="line">{</div><div class="line">    <span class="keywordtype">int</span> nRet = <a class="code" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html#gacc4f15d534603b339f751d8b2d569305">MV_OK</a>;</div><div class="line">    <a class="code" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga768544eb6e6435313dd99ee9cf92d59d">MV_CC_Initialize</a>();     <span class="comment">// 1. 程序启动后，初始化SDK</span></div><div class="line"></div><div class="line">    <span class="comment">// 2. 进行设备发现，控制，图像采集等操作</span></div><div class="line"></div><div class="line">    <a class="code" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gafa1820a0da8671fc6f77dc9a7dfa69d3">MV_CC_Finalize</a>();       <span class="comment">// 3. 程序退出时，反初始化SDK</span></div><div class="line">    <span class="keywordflow">return</span> nRet;</div><div class="line">}</div></div><!-- fragment --> <ol>
+<li>
+调用 <a class="el" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga768544eb6e6435313dd99ee9cf92d59d" title="初始化SDK">MV_CC_Initialize()</a> ，初始化SDK的运行环境。该操作可提前申请和分配所必需的系统资源，从而提升后续接口调用的流畅性。 </li>
+<li>
+在初始化SDK后，在此处调用其他接口，以实现初始化相机/采集卡、设置参数、采集和处理图像等操作。 </li>
+<li>
+在完成所需操作后，调用 <a class="el" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gafa1820a0da8671fc6f77dc9a7dfa69d3" title="反初始化SDK，释放资源">MV_CC_Finalize()</a> 进行反初始化，释放SDK占用的系统资源。 </li>
+</ol>
+<dl class="section attention"><dt>注意</dt><dd>在单个进程中，您仅可执行 <a class="el" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga768544eb6e6435313dd99ee9cf92d59d" title="初始化SDK">MV_CC_Initialize()</a> 和 <a class="el" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gafa1820a0da8671fc6f77dc9a7dfa69d3" title="反初始化SDK，释放资源">MV_CC_Finalize()</a> 各一次。 </dd></dl>
+<div> <br />
+ <br />
+ <br />
+ <table width="60%">
+<tr>
+<td>上一篇： <a class="el" href="_xE5_xBC_x80_xE5_x8F_x91_xE5_x89_x8D_xE5_xBF_x85_xE8_xAF_xBB.html">开发前必读</a> </td><td>下一篇： <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_xE7_x9B_xB8_xE6_x9C_xBA.html">初始化相机</a>  </td></tr>
+</table>
+</div> </div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+<script>
+	// 当前选中的菜单
+	var currentMenuItem = document.querySelector('.tablist > li.current > a')
+	if (currentMenuItem) { // 子菜单情况
+	  window.parent.postMessage({
+		navHref: currentMenuItem.href
+	  }, '*')
+	} else {
+	  window.parent.postMessage({
+		url: window.location.href
+	  }, '*')
+	}
+  </script>
+</body>
+</html>

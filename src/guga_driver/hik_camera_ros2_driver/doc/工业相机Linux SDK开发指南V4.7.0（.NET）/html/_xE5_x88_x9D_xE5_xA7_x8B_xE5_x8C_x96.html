@@ -1,0 +1,45 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="usergroup0.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">初始化</div> </div> </div> <div> <br />
+ </div><div>将.Net程序集的命名空间引用至您的项目后，需先对SDK进行初始化。 <div class="mainparams"> <h2 id="前提条件">前提条件</h2>
+</div></div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">已配置符合要求的开发环境。并已引用SDK的.Net程序集及该程序集的命名空间。详情参见<a class="el" href="_xE9_x85_x8D_xE7_xBD_xAE_xE5_xBC_x80_xE5_x8F_x91_xE7_x8E_xAF_xE5_xA2_x83.html">引入SDK的.Net程序集</a>。</div></div><div><div class="subparamswhite"> </div> <div class="mainparams"> <h2 id="初始化SDK">初始化SDK</h2>
+</div></div><div><div class="mainparams"> </div></div><div> <div class="subparamswhite"> </div></div><div><div class="subparamswhite">调用 <a class="el" href="class_s_d_k_system.html#a7013f5c07ae783a105f910ecb2c7b800" title="初始化SDK">SDKSystem.Initialize()</a> 初始化该SDK的运行环境，以便于提前申请和分配所必须的系统资源，提升后续接口调用的流畅性。</div></div><div><div class="subparamswhite"></div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">在程序退出时，可调用 <a class="el" href="class_s_d_k_system.html#aa54962a71ad911c8fb67f7d395049e19" title="反初始化SDK，释放资源">SDKSystem.Finalize()</a> 进行反初始化，释放被该SDK所占用的系统资源。</div></div><div><div class="subparamswhite"> </div></div><div><div class="subparamswhite">如下示例代码演示了初始化运行环境的过程。</div></div><div><div class="subparamswhite"></div></div><div><div class="subparamswhite"><div class="fragment"><div class="line"><span class="comment">// ch: 初始化 SDK | en: Initialize SDK</span></div><div class="line"><a class="code" href="class_s_d_k_system.html">SDKSystem</a>.<a class="code" href="class_s_d_k_system.html#a7013f5c07ae783a105f910ecb2c7b800">Initialize</a>()</div><div class="line"></div><div class="line"><span class="comment">// TODO：进行设备控制，图像采集等操作 | en: You can type your own code here.</span></div><div class="line"></div><div class="line"><span class="comment">// ch: 反初始化SDK | en: Finalize SDK</span></div><div class="line"><a class="code" href="class_s_d_k_system.html">SDKSystem</a>.<a class="code" href="class_s_d_k_system.html#aa54962a71ad911c8fb67f7d395049e19">Finalize</a>()</div></div><!-- fragment --> </div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+</body>
+</html>

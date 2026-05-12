@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">初始化相机</div> </div> </div> <div id="shortdesc"> <br />
+ </div><div id="shortdesc">本节介绍如何通过调用相应的SDK接口完成相机初始化，实现枚举相机、打开或关闭相机等基础相机控制功能。在此基础上，您还可以继续配置相机参数，实现图像采集、图像处理等核心功能。</div><div id="shortdesc"> <br />
+ </div><div id="shortdesc">基本的相机控制流程包含：</div><div id="shortdesc"> <ol>
+<li>
+<a href="#step1">枚举相机</a> </li>
+<li>
+<a href="#step2">创建相机实例</a> </li>
+<li>
+<a href="#step3">打开相机</a> </li>
+<li>
+<a href="#step4">参数设置（可选）</a> </li>
+<li>
+<a href="#step5">关闭相机</a> </li>
+<li>
+<a href="#step6">销毁相机实例</a> </li>
+</ol>
+</div><div> <div id="step1"> <div class="mainparams"> <h2>步骤一：枚举相机</h2>
+</div></div></div><div><div id="step1"><div class="mainparams"> </div> </div></div><div><div id="step1">在控制相机时，您需首先通过SDK枚举相机。</div></div><div><div id="step1"> <div class="subparamswhite"> <div class="mainparams" id="EnumerateCameras"> <h3>枚举相机</h3>
+</div></div></div></div><div><div id="step1"><div class="subparamswhite"><div class="mainparams" id="EnumerateCameras"> </div> <div> </div></div></div></div><div><div id="step1"><div class="subparamswhite"><div>按需调用如下枚举接口（三选一）。不同相机类型的枚举方法相同。</div></div></div></div><div><div id="step1"><div class="subparamswhite"><div> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项1</b>：调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga08f0b848d8cf27bba13c55e863e1d241" title="枚举设备">MV_CC_EnumDevices()</a> 获取设备列表时，需传入对应的设备接口类型nTLayerType。调用成功后，该接口返回对应接口类型的设备列表pstDevList 。</p>
+<p class="interli"></p>
+<p class="interli">下表展示了部分可选的设备接口类型及对应的枚举设备，更多详情，请参见 <a class="el" href="group___xE5_x8F_x98_xE9_x87_x8F.html#设备类型定义">设备类型定义</a> 。</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">设备接口类型  </th><th class="markdownTableHeadNone">枚举到的设备   </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">MV_GIGE_DEVICE  </td><td class="markdownTableBodyNone">所有GigE相机，包含虚拟GigE相机和采集卡上的GigE相机   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">MV_USB_DEVICE  </td><td class="markdownTableBodyNone">所有USB相机，包含虚拟USB相机   </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">MV_CAMERALINK_DEVICE  </td><td class="markdownTableBodyNone">所有串口设备，包含Camera Link相机和串口光源控制器。   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">MV_GENTL_CAMERALINK_DEVICE  </td><td class="markdownTableBodyNone">所有Camera Link采集卡下的Camera Link相机   </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">MV_GENTL_CXP_DEVICE  </td><td class="markdownTableBodyNone">所有CoaXPress采集卡下的CoaXPress相机   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">MV_GENTL_XOF_DEVICE  </td><td class="markdownTableBodyNone">所有XoFLink采集卡下的XoFLink相机   </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">MV_GENTL_VIR_DEVICE  </td><td class="markdownTableBodyNone">所有虚拟采集卡下的虚拟相机   </td></tr>
+</table>
+<dl class="section attention"><dt>注意</dt><dd>设备列表的内存直接从SDK内部分配。当您调用该接口时，SDK会进行设备列表内存申请和释放，因此请避免多线程枚举操作。<br />
+</dd></dl>
+<p class="interli">示例代码如下：</p>
+<div class="fragment"><div class="line">deviceList = MV_CC_DEVICE_INFO_LIST()</div><div class="line">tlayerType = (MV_GIGE_DEVICE | MV_USB_DEVICE | MV_GENTL_CAMERALINK_DEVICE | MV_GENTL_CXP_DEVICE | MV_GENTL_XOF_DEVICE)</div><div class="line"></div><div class="line"><span class="comment"># ch:枚举设备 | en:Enum device</span></div><div class="line">ret = MvCamera.MV_CC_EnumDevices(tlayerType, deviceList)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;enum devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> <p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项2</b>：调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#gaeb0f9e035d4bd9088f4987d186281a72" title="根据厂商名字枚举设备">MV_CC_EnumDevicesEx()</a> 获取设备列表。相比于普通枚举接口 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga08f0b848d8cf27bba13c55e863e1d241" title="枚举设备">MV_CC_EnumDevices()</a>，调用该接口时可传入厂商名称strManufacturerName 用来过滤枚举结果。调用成功后，该接口返回与指定厂商名称匹配的设备列表pstDevList。</p>
+<p class="interli"></p>
+<p class="interli">示例代码如下:</p>
+<div class="fragment"><div class="line">deviceList = MV_CC_DEVICE_INFO_LIST()</div><div class="line">tlayerType = (MV_GIGE_DEVICE | MV_USB_DEVICE | MV_GENTL_CAMERALINK_DEVICE | MV_GENTL_CXP_DEVICE | MV_GENTL_XOF_DEVICE)</div><div class="line">strManufacturerName = ‘XXX’</div><div class="line"></div><div class="line"><span class="comment"># ch:枚举设备 | en:Enum device</span></div><div class="line">ret = MvCamera.MV_CC_EnumDevicesEx(tlayerType, deviceList, strManufacturerName)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;enum devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> <p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项3</b>：调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga734eeb04780610ee9f1bb641c552e54a" title="枚举设备扩展（可指定排序方式枚举、根据厂商名字过滤）">MV_CC_EnumDevicesEx2()</a> 获取设备列表。相比于普通枚举接口 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga08f0b848d8cf27bba13c55e863e1d241" title="枚举设备">MV_CC_EnumDevices()</a> ，调用该接口时您可以：</p>
+<ul>
+<li>
+<p class="startli"></p>
+<p class="interli">传入strManufacturerName过滤枚举结果，并获取与指定厂商名称匹配的设备列表devInfoList。若strManufacturerName设置为NULL，则返回所有厂商的设备列表。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">对返回的设备列表进行排序。支持多种排序方式，如根据序列号排序、根据相机IP地址排序等。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">严格按照枚举类型nTLayerType枚举设备。例如，当设备接口类型设置为MV_GIGE_DEVICE时，仅枚举同网段内的GigE相机，不包含虚拟GigE相机和GigE采集卡所连接的相机。</p>
+<p class="endli"></p>
+</li>
+</ul>
+<p class="interli">示例代码如下:</p>
+<div class="fragment"><div class="line">deviceList = MV_CC_DEVICE_INFO_LIST()</div><div class="line">tlayerType = (MV_GIGE_DEVICE | MV_USB_DEVICE | MV_GENTL_CAMERALINK_DEVICE | MV_GENTL_CXP_DEVICE | MV_GENTL_XOF_DEVICE)</div><div class="line">strManufacturerName = ‘XXX’</div><div class="line"></div><div class="line"><span class="comment"># ch:枚举设备 | en:Enum device</span></div><div class="line">ret = MvCamera.MV_CC_EnumDevicesEx2(tlayerType, deviceList, strManufacturerName, SortMethod_SerialNumber)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;enum devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项4</b>：枚举指定采集卡下的相机。</p>
+<p class="interli"></p>
+<p class="interli">若需要枚举指定采集卡下的相机，可以先枚举采集卡，打开具体的采集卡，然后通过已经打开的采集卡，枚举这个采集卡下的相机。具体步骤如下：</p>
+<ol>
+<li>
+枚举采集卡。  </li>
+<li>
+创建采集卡实例。 </li>
+<li>
+打开采集卡。 </li>
+<li>
+调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga6cfbbbed852ca5deb08247785f60bdfa" title="通过采集卡句柄枚举设备">MV_CC_EnumDevicesByInterface()</a> ，传入采集卡句柄，返回这个采集卡下的相机。 </li>
+</ol>
+<dl class="section note"><dt>注解</dt><dd>枚举，创建实例和打开采集卡操作，请参见 <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1.html">初始化采集卡</a> 章节。</dd></dl>
+</li>
+</ul>
+</div> <div class="mainparams" id="OptimizeEnumeration"> <h3>GigE和串口设备枚举时间优化</h3>
+</div></div></div></div><div><div id="step1"><div class="subparamswhite"><div class="mainparams" id="OptimizeEnumeration"> </div> <div> </div></div></div></div><div><div id="step1"><div class="subparamswhite"><div>您可以参照如下内容，在程序中优化GigE和串口设备的枚举时间。</div></div></div></div><div><div id="step1"><div class="subparamswhite"><div> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>GigE相机枚举时间设置</b></p>
+<p class="interli"></p>
+<p class="interli">当枚举GigE相机时，SDK会遍历网卡，并且在向每个网卡发送枚举命令的同时接收响应结果。若等待超时，则SDK会对下一个网卡进行枚举。当前超时时间是100ms，如果环境中存在较多网卡，则枚举时间会相对较长。该情况下，您可以根据实际情况减少每个网卡的枚举超时时间，从而减少枚举GigE设备的整体耗时。</p>
+<p class="interli"></p>
+<p class="interli">如下示例代码演示了如何配置GigE相机的枚举超时时间并按照设备序列号给枚举出的GigE相机排序：</p>
+<div class="fragment"><div class="line"><span class="comment"># ch: 配置GigE相机枚举超时时间</span></div><div class="line">ret = MvCamera.MV_GIGE_SetEnumDevTimeout(50) </div><div class="line"><span class="keywordflow">if</span> ret != 0: </div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_GIGE_SetEnumDevTimeout devices fail! ret[0x%x]&quot;</span> % ret) sys.exit()</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line">deviceList = MV_CC_DEVICE_INFO_LIST()</div><div class="line">tlayerType = (MV_GIGE_DEVICE | MV_USB_DEVICE | MV_GENTL_CAMERALINK_DEVICE | MV_GENTL_CXP_DEVICE | MV_GENTL_XOF_DEVICE)</div><div class="line">strManufacturerName = ‘XXX’</div><div class="line"></div><div class="line"><span class="comment"># ch:枚举设备 | en:Enum device</span></div><div class="line">ret = MvCamera.MV_CC_EnumDevicesEx2(tlayerType, deviceList, strManufacturerName, SortMethod_SerialNumber)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;enum devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> <p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>串口设备枚举时间优化</b></p>
+<p class="interli"></p>
+<p class="interli">串口设备通过串口进行通信。若工控机上提供多个串口，在枚举时，SDK会遍历所有串口以查找所需设备。又因串口通信速度较慢，遍历串口可能导致枚举操作的整体耗时较长。</p>
+<p class="interli"></p>
+<p class="interli">此时，您可以通过以下方法进行优化。</p>
+<ol>
+<li>
+<p class="startli"></p>
+<p class="interli">调用 <a class="el" href="group___camera_link_xE8_xAE_xBE_xE5_xA4_x87.html#ga9b08cad9862ac66de892c47dd04a17e1" title="获取串口信息列表">MV_CAML_GetSerialPortList()</a> 获取当前PC的所有串口列表。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">调用 <a class="el" href="group___camera_link_xE8_xAE_xBE_xE5_xA4_x87.html#ga4bb99f4638da70e8077c661c52203d7b" title="设置取指定枚举串口">MV_CAML_SetEnumSerialPorts()</a> 设置枚举部分指定串口。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga08f0b848d8cf27bba13c55e863e1d241" title="枚举设备">MV_CC_EnumDevices()</a> 枚举接口，枚举串口设备。</p>
+<p class="endli"></p>
+</li>
+</ol>
+<p class="interli">示例代码如下：</p>
+<div class="fragment"><div class="line"><span class="comment"># 获取当前PC的所有串口</span></div><div class="line">stSerialList = MV_CAML_SERIAL_PORT_LIST()</div><div class="line">ret = MvCamera.MV_CAML_GetSerialPortList(stSerialList)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CAML_GetSerialPortList devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit() </div><div class="line"></div><div class="line"><span class="keywordflow">print</span> (<span class="stringliteral">&quot;find %d devices!&quot;</span> % stSerialList.nSerialPortNum)</div><div class="line"></div><div class="line"></div><div class="line"><span class="comment"># 配置只枚举的部分串口, 根据实际情况配置</span></div><div class="line">enumSerialList = MV_CAML_SERIAL_PORT_LIST()</div><div class="line"></div><div class="line">ret = MvCamera.MV_CAML_SetEnumSerialPorts(enumSerialList)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CAML_SetEnumSerialPorts devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 枚举Cameralink 设备</span></div><div class="line">deviceList = MV_CC_DEVICE_INFO_LIST()</div><div class="line">ret = MvCamera.MV_CC_EnumDevices(MV_GENTL_CAMERALINK_DEVICE, deviceList)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;enum devices fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment -->  </li>
+</ul>
+</div> </div><p> <br />
+ </div> <div id="step2"> <div class="mainparams"> <h2>步骤二：创建相机实例</h2>
+</div></div></div><div><div id="step2"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div id="step2"><div class="subparamswhite">可根据如下方式创建相机实例。</div></div></div><div><div id="step2"><div class="subparamswhite"> </div></div></div><div><div id="step2"><div class="subparamswhite">调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#ga4b61f12ebd7ec3aead9687868c833c8c" title="创建设备句柄">MV_CC_CreateHandle()</a> 创建相机实例。调用该接口时需传入设备信息pstDevInfo。该接口可根据传入的设备信息创建不同的相机实例。</div></div></div><div><div id="step2"><div class="subparamswhite"> </div></div></div><div><div id="step2"><div class="subparamswhite">示例代码如下：</div></div></div><div><div id="step2"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment"># ch:创建相机实例 | en:Creat Camera Object</span></div><div class="line">cam = MvCamera()</div><div class="line"></div><div class="line"><span class="comment"># ch:选择设备并创建句柄 | en:Select device and create handle</span></div><div class="line">stDeviceList = cast(deviceList.pDeviceInfo[int(nConnectionNum)], POINTER(MV_CC_DEVICE_INFO)).contents</div><div class="line"></div><div class="line">ret = cam.MV_CC_CreateHandle(stDeviceList)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;create handle fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> </div><p> <br />
+ </div> <div id="step3"> <div class="mainparams"> <h2>步骤三：打开相机</h2>
+</div></div></div><div><div id="step3"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div id="step3"><div class="subparamswhite">“打开相机”指建立相机实例与物理相机的连接，使相机实例获得物理相机的访问权限，实现相机实例与物理相机的通信。</div></div></div><div><div id="step3"><div class="subparamswhite"> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项1</b>：调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#gab24bcc2d36ffe7bdd0f54894ac7c35f1" title="打开设备">MV_CC_OpenDevice()</a> 打开相机。该方式默认相机实例独占物理相机的访问权限。</p>
+<p class="interli"></p>
+<p class="interli">示例代码如下：</p>
+<div class="fragment"><div class="line"><span class="comment"># ch:打开设备 | en:Open device</span></div><div class="line">ret = cam.MV_CC_OpenDevice()</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;open device fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项2</b>：调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#gab24bcc2d36ffe7bdd0f54894ac7c35f1" title="打开设备">MV_CC_OpenDevice()</a> 打开GigE相机。调用时需传入访问权限nAccessMode和切换访问权限时的密钥nSwitchoverKey，使用指定访问权限打开设备。</p>
+<dl class="section attention"><dt>注意</dt><dd>该方式仅适用于打开GigE相机或通过GEV采集卡连接的各相机，不支持打开其他设备。<br />
+ </dd></dl>
+<p>示例代码如下：</p>
+<div class="fragment"><div class="line"><span class="comment"># ch:打开设备 | en:Open device</span></div><div class="line">ret = cam.MV_CC_OpenDevice(MV_ACCESS_Exclusive, 0)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;open device fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment -->  </li>
+</ul>
+</div><p> <br />
+ </div> <div id="step4"> <div class="mainparams"> <h2>步骤四：设置参数（可选）</h2>
+</div></div></div><div><div id="step4"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div id="step4"><div class="subparamswhite">打开相机后，您可以：</div></div></div><div><div id="step4"><div class="subparamswhite"> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli">配置设备参数。详情参见<a class="el" href="_xE8_xAE_xBE_xE7_xBD_xAE_xE5_x8F_x82_xE6_x95_xB0.html">设置参数</a> 章节。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">获取设备通知事件或者异常告警事件。详情参见<a class="el" href="_xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html">事件及异常</a> 章节。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">实现图像采集相关功能。详情参见<a class="el" href="_xE9_x87_x87_xE9_x9B_x86_xE5_x9B_xBE_xE5_x83_x8F.html">采集图像</a> 章节。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">实现图像采集之后，还可进一步实现各种图像处理操作。详情参见<a class="el" href="_xE5_xA4_x84_xE7_x90_x86_xE5_x9B_xBE_xE5_x83_x8F.html">处理图像</a> 章节。</p>
+<p class="endli"></p>
+</li>
+</ul>
+</div> </div> <div id="step5"> <div class="mainparams"> <h2 id="关闭相机">步骤五：关闭相机</h2>
+</div></div></div><div><div id="step5"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div id="step5"><div class="subparamswhite">若相机实例不再需要与物理相机通信，您可以调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#gab52e62e2569458cf5cba038f1e08c2ab" title="关闭设备">MV_CC_CloseDevice()</a> 关闭相机。</div></div></div><div><div id="step5"><div class="subparamswhite"> </div></div></div><div><div id="step5"><div class="subparamswhite">示例代码如下：</div></div></div><div><div id="step5"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment"># ch:关闭设备 | Close device</span></div><div class="line">ret = cam.MV_CC_CloseDevice()</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;close deivce fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> </div><p> <br />
+ </div> <div id="step6"> <div class="mainparams"> <h2 id="销毁相机实例">步骤六：销毁相机实例</h2>
+</div></div></div><div><div id="step6"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div id="step6"><div class="subparamswhite">调用 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE7_x9B_xB8_xE5_x85_xB3_xE9_x85_x8D_xE7_xBD_xAE.html#gafb2eb39af899aba6b060024ed91dc52e" title="销毁设备句柄">MV_CC_DestroyHandle()</a> 销毁相机实例，并释放相机实例所占用的资源。</div></div></div><div><div id="step6"><div class="subparamswhite"> <dl class="section attention"><dt>注意</dt><dd>调用该接口后，原先的相机实例将失效，不能再用于其他接口的调用。<br />
+ </dd></dl>
+示例代码如下：</div></div></div><div><div id="step6"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment"># ch:销毁句柄 | Destroy handle</span></div><div class="line">ret = cam.MV_CC_DestroyHandle()</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;destroy handle fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> </div> </div></div><div> <div> <br />
+ <br />
+ <br />
+ <table width="60%">
+<tr>
+<td>上一篇： <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_s_d_k.html">初始化SDK</a> </td><td>下一篇： <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1.html">初始化采集卡</a>  </td></tr>
+</table>
+</div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+</body>
+</html>

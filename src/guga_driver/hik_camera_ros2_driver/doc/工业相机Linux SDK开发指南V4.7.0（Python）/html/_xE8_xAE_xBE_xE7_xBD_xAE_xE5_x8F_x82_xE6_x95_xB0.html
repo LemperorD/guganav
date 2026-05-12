@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">设置参数</div> </div> </div><div id="shortdesc"> <br />
+ </div><div id="shortdesc">SDK通过GenICam标准协议实现读取和设置设备参数，并提供了一套相机和采集卡均通用的参数配置接口。通过接口，您可获取和配置包括整型、枚举型、浮点型、布尔型、字符串型和命令型总共6种类型的参数节点。</div><div id="shortdesc"> <br />
+ </div><div id="shortdesc">本节内容包含： <ul>
+<li>
+<a href="#CheckNode">查询节点名称和类型</a> </li>
+<li>
+<a href="#GetNode">获取和设置节点</a> </li>
+<li>
+<a href="#GIGE">GigE相机专有配置</a> </li>
+<li>
+<a href="#U3V">U3V相机专有配置</a> </li>
+<li>
+<a href="#SERIAL">串口设备专有配置</a> </li>
+</ul>
+</div><div id="content"> <div id="CheckNode"> <div class="mainparams"> <h2>查询节点名称和类型</h2>
+</div></div></div><div id="content"><div id="CheckNode"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div id="content"><div id="CheckNode"><div class="subparamswhite">调用用于<a href="#GetNode">获取和设置节点</a>的接口时，您需传入节点名称和节点类型。</div></div></div><div id="content"><div id="CheckNode"><div class="subparamswhite"> </div></div></div><div id="content"><div id="CheckNode"><div class="subparamswhite">您可通过客户端查询节点的名称和类型。</div></div></div><div id="content"><div id="CheckNode"><div class="subparamswhite"></div></div></div><div id="content"><div id="CheckNode"><div class="subparamswhite"> <ol>
+<li>
+<p class="startli"></p>
+<p class="interli">通过客户端连接设备。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">在客户端属性树上选中某个属性的参数，即可在属性下方查看该参数的节点信息。</p>
+<dl class="section note"><dt>注解</dt><dd>若您使用的客户端版本高于等于4.4.0，您还可以查看节点的调用示例。</dd></dl>
+<p class="interli">下图以Width参数为例。</p>
+<img src="bi_img_Prog06_width.png" class="img_main" height="600" alt="查看width参数的节点信息" class="inline"/>
+  </li>
+</ol>
+<dl class="section note"><dt>注解</dt><dd>更多操作详情，请参见客户端用户手册。</dd></dl>
+</div> </div></div><div id="content"> <div id="GetNode"> <div class="mainparams"> <h2>获取和配置节点</h2>
+</div></div></div><div id="content"><div id="GetNode"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div id="content"><div id="GetNode"><div class="subparamswhite">您可参照本节的示例代码，在您的程序中获取和配置节点值。</div></div></div><div id="content"><div id="GetNode"><div class="subparamswhite"> </div></div></div><div id="content"><div id="GetNode"><div class="subparamswhite">您可配置总共6种类型的参数节点，包括：<a href="#int">整型</a>、<a href="#enum">枚举型</a>、<a href="#float">浮点型</a>、<a href="#bool">布尔型</a>、<a href="#string">字符串型</a>和<a href="#userset">命令型</a>。</div></div></div><div id="content"><div id="GetNode"><div class="subparamswhite"> <ul>
+<li id="int">
+<p class="startli"></p>
+<p class="interli"><b>整型节点</b>：</p>
+<ul>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#gac2872651db49fc32343da3f0ebb72fec" title="获取Integer属性值">MV_CC_GetIntValueEx()</a> 获取整型节点。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga47f7b83ac714b62448b97e34377fce1e" title="设置Integer型属性值">MV_CC_SetIntValueEx()</a> 配置整型节点。 </li>
+</ul>
+<div class="fragment"><div class="line">NodeName = <span class="stringliteral">&quot;Width&quot;</span></div><div class="line"><span class="comment"># 获取整型节点 </span></div><div class="line">stIntValue = MVCC_INTVALUE_EX()</div><div class="line">ret = cam.MV_CC_GetIntValueEx(NodeName ,stIntValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_GetIntValueEx fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 设置整型节点 </span></div><div class="line">ret = cam.MV_CC_SetIntValueEx(NodeName ,stIntValue.nCurValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetIntValueEx fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --><p> <br />
+  </p>
+</li>
+<li id="enum">
+<p class="startli"></p>
+<p class="interli"><b>枚举型节点</b>：</p>
+<ul>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#gaf90e3d0f751c6b7ec5796715a9cb5326" title="获取Enum属性值">MV_CC_GetEnumValue()</a> 获取枚举型节点。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga2f871447ff9588d4b7bfee4a5f7ac1a5" title="设置Enum型属性值">MV_CC_SetEnumValue()</a> 设置枚举型节点。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga6c3c91fd7c756e8d038c145e83459690" title="获取Enum型节点指定值的符号">MV_CC_GetEnumEntrySymbolic()</a> 获取枚举型节点指定的符号。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga3a8390a9ab6220a8bafdfcba6b846706" title="设置Enum型属性值">MV_CC_SetEnumValueByString()</a> 设置枚举型属性值。 </li>
+</ul>
+<div class="fragment"><div class="line">NodeName = <span class="stringliteral">&quot;PixelFormat&quot;</span>;</div><div class="line">stEnumEntry = MVCC_ENUMENTRY()</div><div class="line">stEnumValue = MVCC_ENUMVALUE ()</div><div class="line"><span class="comment"># 获取枚举型节点</span></div><div class="line">ret = cam.MV_CC_GetEnumValue(NodeName, stEnumValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_GetEnumValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 获取枚举型节点的符号</span></div><div class="line">stEnumEntry.nValue = stEnumValue.nCurValue;</div><div class="line">ret = cam.MV_CC_GetEnumEntrySymbolic(NodeName, stEnumEntry)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_GetEnumEntrySymbolic fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"></div><div class="line"><span class="comment"># 设置枚举型节点</span></div><div class="line">nRet = cam.MV_CC_SetEnumValue(NodeName ,stEnumValue.nCurValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetEnumValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 设置枚举型节点(通过符号) </span></div><div class="line">strValue = <span class="stringliteral">&quot;Mono8&quot;</span></div><div class="line">ret = cam.MV_CC_SetEnumValueByString (NodeName, strValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetEnumValueByString fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --><p> <br />
+  </p>
+</li>
+<li id="float">
+<p class="startli"></p>
+<p class="interli"><b>浮点型节点</b>：</p>
+<ul>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga1dcfebaf362171f2c47c9b02b258116a" title="获取Float属性值">MV_CC_GetFloatValue()</a> 获取浮点型节点。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga1ebd1708e8703067d7f2233a2658e9db" title="设置float型属性值">MV_CC_SetFloatValue()</a> 设置浮点型节点。 </li>
+</ul>
+<div class="fragment"><div class="line">NodeName = <span class="stringliteral">&quot;ExposureTime&quot;</span></div><div class="line"><span class="comment"># 获取浮点型节点</span></div><div class="line">FloatValue  = MVCC_FLOATVALUE ()</div><div class="line">ret = cam.MV_CC_GetFloatValue(NodeName , FloatValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_GetFloatValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 设置浮点型节点</span></div><div class="line">ret = cam.MV_CC_SetFloatValue(NodeName , FloatValue.fCurValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetFloatValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --><p> <br />
+  </p>
+</li>
+<li id="bool">
+<p class="startli"></p>
+<p class="interli"><b>布尔型节点</b>：</p>
+<ul>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga4e01252e5a63f7777963d62a18f059be" title="获取Boolean属性值">MV_CC_GetBoolValue()</a> 获取布尔型节点。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#gaaa63269d3689f9835050f27a3ba6a253" title="设置Boolean型属性值">MV_CC_SetBoolValue()</a> 设置布尔型节点。 </li>
+</ul>
+<div class="fragment"><div class="line">NodeName = <span class="stringliteral">&quot;GammaEnable&quot;</span></div><div class="line"><span class="comment"># 获取布尔型节点</span></div><div class="line">bValue = ctypes.c_bool() </div><div class="line">ret = cam.MV_CC_GetBoolValue(NodeName , bValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_GetBoolValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line">    </div><div class="line"><span class="comment"># 设置布尔型节点</span></div><div class="line">ret = cam.MV_CC_SetBoolValue(NodeName , bValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetBoolValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --><p> <br />
+  </p>
+</li>
+<li id="string">
+<p class="startli"></p>
+<p class="interli"><b>字符串型节点</b>：</p>
+<ul>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#gaf62bc4f96d662f376ee7e108e60da820" title="获取String属性值">MV_CC_GetStringValue()</a> 获取字符串型节点。 </li>
+<li>
+调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#ga7eed1f49e2e1c23da92ee97eff8484d8" title="设置String型属性值">MV_CC_SetStringValue()</a> 设置字符串型节点。 </li>
+</ul>
+<div class="fragment"><div class="line">NodeName = <span class="stringliteral">&quot;DeviceUserID&quot;</span></div><div class="line"><span class="comment"># 获取字符串型节点</span></div><div class="line">StringValue = MVCC_STRINGVALUE()</div><div class="line">ret = cam.MV_CC_GetStringValue(NodeName , StringValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_GetStringValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 设置字符串型节点</span></div><div class="line">newStringValue = <span class="stringliteral">&quot;1234&quot;</span></div><div class="line">ret = cam.MV_CC_SetStringValue(NodeName , newStringValue)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetStringValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --><p> <br />
+  </p>
+</li>
+<li id="userset">
+<p class="startli"></p>
+<p class="interli"><b>命令型节点</b>：调用 <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_xB1_x9E_xE6_x80_xA7.html#gaa4086c59dbd687d3e9b92aed8f25d5fe" title="设置Command型属性值">MV_CC_SetCommandValue()</a> 设置命令型节点。</p>
+<div class="fragment"><div class="line"><span class="comment">#设置命令型节点</span></div><div class="line">NodeName = <span class="stringliteral">&quot;UserSetLoad&quot;</span></div><div class="line">ret = cam.MV_CC_SetCommandValue(NodeName)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CC_SetCommandValue fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --><p> <br />
+  </p>
+</li>
+</ul>
+</div> </div></div><div id="content"> <div id="GIGE"> <div class="mainparams"> <h2>GigE相机专有配置</h2>
+</div></div></div><div id="content"><div id="GIGE"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div id="content"><div id="GIGE"><div class="subparamswhite">若您使用的相机为GigE相机，您可<a href="#gige_PackageSize">设置最佳包大小</a>和<a href="#SetResendPack">设置重发包</a>。</div></div></div><div id="content"><div id="GIGE"><div class="subparamswhite"> <ul>
+<li id="gige_PackageSize">
+<p class="startli"></p>
+<p class="interli"><b>设置最佳包大小</b></p>
+<p class="interli"></p>
+<p class="interli">在打开GigE相机并开始取流前，您可通过 <a class="el" href="group___gig_e_xE8_xAE_xBE_xE5_xA4_x87.html#ga73cd516f384d5bc1b0e07c3e48028961" title="获取最佳的packet size，该接口目前只支持GigE设备">MV_CC_GetOptimalPacketSize()</a> 探测当前网络，获取当前网络最佳通信的数据包大小。</p>
+<p class="interli"></p>
+<p class="interli">您可以使用该数据包大小配置相机发送流数据时的数据包大小，从而充分利用带宽并提高流数据的传输速度。</p>
+<div class="fragment"><div class="line"><span class="comment"># ch:探测网络最佳包大小(只对GigE相机有效) | en:Detection network optimal package size(It only works for the GigE camera)</span></div><div class="line"><span class="keywordflow">if</span> stDeviceList.nTLayerType == MV_GIGE_DEVICE <span class="keywordflow">or</span> stDeviceList.nTLayerType == MV_GENTL_GIGE_DEVICE:</div><div class="line">    nPacketSize = cam.MV_CC_GetOptimalPacketSize()</div><div class="line">    <span class="keywordflow">if</span> int(nPacketSize) &gt; 0:</div><div class="line">        ret = cam.MV_CC_SetIntValue(<span class="stringliteral">&quot;GevSCPSPacketSize&quot;</span>,nPacketSize)</div><div class="line">        <span class="keywordflow">if</span> ret != 0:</div><div class="line">            <span class="keywordflow">print</span> (<span class="stringliteral">&quot;Warning: Set Packet Size fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    <span class="keywordflow">else</span>:</div><div class="line">        <span class="keywordflow">print</span> (<span class="stringliteral">&quot;Warning: Get Packet Size fail! ret[0x%x]&quot;</span> % nPacketSize)</div></div><!-- fragment -->  </li>
+<li id="SetResendPack">
+<p class="startli"></p>
+<p class="interli"><b>设置重发包</b></p>
+<p class="interli"></p>
+<p class="interli">GigE设备通过网络进行数据通信，在网络拥塞等异常情况下，可能造成SDK侧收到的数据包不完整。可以通过重发命令控制设备对不完整部分进行重传。</p>
+<dl class="section attention"><dt>注意</dt><dd><ul>
+<li>
+重发包需要相机支持，才可以使用。 </li>
+<li>
+网络偶尔拥塞时，您可通过重发解决偶尔丢包问题。 </li>
+<li>
+网络持续拥塞时，建议您首先排查并优化网络。若直接开启重发包，可能会造成网络拥塞加剧，请谨慎使用。 </li>
+</ul>
+</dd></dl>
+<ul>
+<li>
+<p class="startli"></p>
+<p class="interli">您可参考如下示例，在应用程序中调用 <a class="el" href="group___gig_e_xE8_xAE_xBE_xE5_xA4_x87.html#ga24c4fed7b596cf711ecf33ce0d2aa639" title="设置是否打开重发包支持，及重发包设置">MV_GIGE_SetResend()</a> 开启重发包功能。</p>
+<div class="fragment"><div class="line">bEnable = <span class="keyword">True</span>  <span class="comment"># 开启重发包</span></div><div class="line">nMaxResendPercent = 100 <span class="comment"># 设置最大重发比</span></div><div class="line">nResendTimeout = 50 <span class="comment"># 设置重发超时时间，单位ms</span></div><div class="line">ret = cam.MV_GIGE_SetResend(bEnable, nMaxResendPercent, nResendTimeout)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_GIGE_SetResend fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> <ol>
+<li>
+<b>bEnable</b>，代表是否开启重发包功能。 </li>
+<li>
+<b>nMaxResendPercent</b>，设置重发当前帧丢包数据的比例，超过部分不重发，以避免加剧网络拥塞。当该值设置为100时，SDK重发当前帧的所有丢包。 </li>
+<li>
+<b>nResendTimeout</b>，设置重发包超时时间。在当前帧结束后开始计时，若计时时间超出该值，则SDK不再请求重发该丢包数据。 </li>
+</ol>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">在发送重发命令后，若SDK未收到设备响应和重发的数据，您需要控制SDK继续发送重发请求。</p>
+<p class="interli"></p>
+<p class="interli">您可参考如下示例，调用 <a class="el" href="group___gig_e_xE8_xAE_xBE_xE5_xA4_x87.html#ga75410f37e0ef309caae7ef2a6f43c471" title="设置同一重传包多次请求之间的时间间隔">MV_GIGE_SetResendTimeInterval()</a> 控制单个重发包的间隔和 <a class="el" href="group___gig_e_xE8_xAE_xBE_xE5_xA4_x87.html#ga3a26e63811cda6c205c87ab6e0315008" title="设置重传命令最大尝试次数">MV_GIGE_SetResendMaxRetryTimes()</a> 设置最大重发次数。</p>
+<div class="fragment"><div class="line"><span class="comment"># 配置重发包间隔</span></div><div class="line">nMillisec = 10</div><div class="line">ret = cam.MV_GIGE_SetResendTimeInterval(nMillisec);</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_GIGE_SetResendTimeInterval fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 配置重发包最大重发的次数</span></div><div class="line">nRetryTimes = 10</div><div class="line">ret  = cam.MV_GIGE_SetResendMaxRetryTimes(nRetryTimes)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_GIGE_SetResendMaxRetryTimes fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment --> <ul>
+<li>
+<b>nMillisec</b>，重发包间隔默认10ms，代表两次重传命令请求的时间间隔。时间间隔越小，占用的网络资源越多，网络和设备压力越大。 </li>
+<li>
+<b>nRetryTimes</b>，默认值20，表示对于单个丢包数据，SDK最多请求20次重传命令。 </li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div><p> <br />
+ </div></div><div id="content"> <div id="U3V"> <div class="mainparams"> <h2>U3V相机专有配置</h2>
+</div></div></div><div id="content"><div id="U3V"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div id="content"><div id="U3V"><div class="subparamswhite">若您使用的相机为U3V相机，您可调节其<a href="#Control">控制链路</a>和<a href="#Stream">流链路</a>，以兼容和解决对应的异常。</div></div></div><div id="content"><div id="U3V"><div class="subparamswhite"> <ul>
+<li id="Control">
+<p class="startli"></p>
+<p class="interli">控制链路用于传入控制命令。若控制链路异常，可能导致传输控制命令慢，导致接口超时返回异常。</p>
+<p class="interli"></p>
+<p class="interli">此时，您可参照如下代码示例，在您的程序中调用 <a class="el" href="group___u3_v_xE8_xAE_xBE_xE5_xA4_x87.html#ga437930e3db8cdce92c0d5bb128377591" title="设置U3V的同步读写超时时间，范围为:[1000, UINT_MAX]">MV_USB_SetSyncTimeOut()</a> 调节控制链路的超时时间，从而兼容对此类异常进行兼容。</p>
+<div class="fragment"><div class="line"><span class="comment"># 默认超时时间1s</span></div><div class="line">Mills = 1000</div><div class="line"><span class="comment"># 设置U3V相机同步读写超时时间</span></div><div class="line">ret = cam.MV_USB_SetSyncTimeOut(Mills)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_USB_SetSyncTimeOut fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div></div><!-- fragment -->  </li>
+<li id="Stream">
+<p class="startli"></p>
+<p class="interli">流链路用于传入流数据。若流链路带宽不足或系统资源不足，可能导致传输失败、资源创建失败。</p>
+<p class="interli"></p>
+<p class="interli">您可参照如下代码示例，在您的程序中调用 <a class="el" href="group___u3_v_xE8_xAE_xBE_xE5_xA4_x87.html#gae9094abea420a575cf50c97d9a19a233" title="设置U3V的传输包大小">MV_USB_SetTransferSize()</a> 调节流数据包的大小，或调用 <a class="el" href="group___u3_v_xE8_xAE_xBE_xE5_xA4_x87.html#ga9db10dd9d3d6d369faf3b0513ca2cb21" title="设置U3V的传输通道个数">MV_USB_SetTransferWays()</a> 调节U3V流通道个数，减少资源占用。</p>
+<div class="fragment"><div class="line"><span class="preprocessor"># 配置U3V相机流数据的最大数据包大小</span></div><div class="line">TransferSize = 1*1024*1024</div><div class="line"><a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#af1ec77bdca1b30e8153fc5da88f603db">ret</a> = <a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#ab67a8f3075a787a46b8016f8ccb0b0fb">cam</a>.MV_USB_SetTransferSize(TransferSize)</div><div class="line"><span class="keywordflow">if</span> <a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#af1ec77bdca1b30e8153fc5da88f603db">ret</a> != 0:</div><div class="line">    print (<span class="stringliteral">&quot;MV_USB_SetTransferSize fail! ret[0x%x]&quot;</span> % <a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#af1ec77bdca1b30e8153fc5da88f603db">ret</a>)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="preprocessor"># 配置SDK 内部U3V的流通道缓存个数</span></div><div class="line">TransferWay = 2; </div><div class="line"><a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#af1ec77bdca1b30e8153fc5da88f603db">ret</a> = <a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#ab67a8f3075a787a46b8016f8ccb0b0fb">cam</a>.MV_USB_SetTransferWays(TransferWay)</div><div class="line"><span class="keywordflow">if</span> <a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#af1ec77bdca1b30e8153fc5da88f603db">ret</a> != 0:</div><div class="line">    print (<span class="stringliteral">&quot;MV_USB_SetTransferWays fail! ret[0x%x]&quot;</span> % <a class="code" href="namespace_parametrize_camera___area_scan_i_o_settings.html#af1ec77bdca1b30e8153fc5da88f603db">ret</a>)</div><div class="line">    sys.exit()</div></div><!-- fragment -->  </li>
+</ul>
+</div><p> <br />
+ </div></div><div id="content"> <div id="SERIAL"> <div class="mainparams"> <h2>串口设备专有配置</h2>
+</div></div></div><div id="content"><div id="SERIAL"><div class="mainparams"> </div></div></div><div id="content"><div id="SERIAL"> <div class="subparamswhite"> </div></div></div><div id="content"><div id="SERIAL"><div class="subparamswhite">串口设备通过串口连接，并且通信协议符合GenCP协议。对于此类设备，您可通过 <a class="el" href="group___xE5_x8F_x98_xE9_x87_x8F.html#ga5b7a0c10599f13b4deca56e0d3bcc4e5" title="CameraLink设备">MV_CAMERALINK_DEVICE()</a> 类型枚举。</div></div></div><div id="content"><div id="SERIAL"><div class="subparamswhite"> <dl class="section note"><dt>注解</dt><dd>当前，串口设备包括：光源控制器和Camera Link相机。</dd></dl>
+</div></div></div><div id="content"><div id="SERIAL"><div class="subparamswhite">当设备通过串口通信时，您可以改变波特率，从而优化传输速度。具体步骤如下：</div></div></div><div id="content"><div id="SERIAL"><div class="subparamswhite"> <ol>
+<li>
+调用 <a class="el" href="group___camera_link_xE8_xAE_xBE_xE5_xA4_x87.html#ga28fe28faed27b129aedb2c8ce8d6ebe7" title="获取设备与主机间连接支持的波特率">MV_CAML_GetSupportBaudrates()</a> 获取当前设备和主机之间支持的波特率。 </li>
+<li>
+调用 <a class="el" href="group___camera_link_xE8_xAE_xBE_xE5_xA4_x87.html#ga9d54673eca03e1e91b044591b98217a2" title="设置设备波特率">MV_CAML_SetDeviceBaudrate()</a> 设置设备的波特率。 </li>
+</ol>
+<div class="fragment"><div class="line"><span class="comment"># 获取主机和当前设备 支持的波特率 </span></div><div class="line">BaudrateAblity = ctypes.c_int(0)</div><div class="line">ret  = cam.MV_CAML_GetSupportBaudrates(BaudrateAblity)</div><div class="line"><span class="keywordflow">if</span> ret != 0:</div><div class="line">    <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CAML_GetSupportBaudrates fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">    sys.exit()</div><div class="line"></div><div class="line"><span class="comment"># 检测释放支持，并配置115200波特率</span></div><div class="line"><span class="keywordflow">if</span> BaudrateAblity &amp; MV_CAML_BAUDRATE_115200:</div><div class="line">    ret = cam.MV_CAML_SetDeviceBaudrate(MV_CAML_BAUDRATE_115200)</div><div class="line">    <span class="keywordflow">if</span> ret != 0:</div><div class="line">        <span class="keywordflow">print</span> (<span class="stringliteral">&quot;MV_CAML_SetDeviceBaudrate fail! ret[0x%x]&quot;</span> % ret)</div><div class="line">        sys.exit()</div></div><!-- fragment --> </div> </div></div><div id="content"> <div> <br />
+ <br />
+ <br />
+ <table width="60%">
+<tr>
+<td>上一篇： <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1.html">初始化采集卡</a> </td><td>下一篇： <a class="el" href="_xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html">事件及异常</a>  </td></tr>
+</table>
+</div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+</body>
+</html>
