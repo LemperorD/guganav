@@ -91,9 +91,19 @@ ros2 launch simple_decision simple_decision.py
 详见 [test/README.md](test/README.md)
 
 ```bash
-cd build/simple_decision
-./test_transform             # 10 单元 — 消息转换
-./test_environment_context   # 40 单元 — 环境聚合
-./test_decision              # 17 单元 — 决策算法
-./test_simple_decision       # 17 集成 — ROS2 端到端
+#!/bin/bash
+set -e
+source /opt/ros/humble/setup.bash
+source ~/nav2_ws/install/setup.bash
+source ~/guganav/install/setup.bash
+
+colcon build --packages-select simple_decision \
+  --cmake-args -DBUILD_TESTING=ON
+
+cd ~/guganav/build/simple_decision
+
+echo "=== transform ===" && ./test_transform
+echo "=== environment ===" && ./test_environment_context
+echo "=== decision ===" && ./test_decision
+echo "=== integration ===" && ./test_simple_decision
 ```
