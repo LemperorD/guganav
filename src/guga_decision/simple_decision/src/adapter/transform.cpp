@@ -55,11 +55,13 @@ namespace simple_decision {
   }
 
   GameStatus ConvertGameStatus(
-      const guga_interfaces::msg::GameStatus::SharedPtr msg) {
+      guga_interfaces::msg::GameStatus::SharedPtr msg) {
+    if (!msg) {
+      throw std::invalid_argument(
+          "ConvertGameStatus received nullptr GameStatus message");
+    }
     GameStatus gamestatus;
-
     gamestatus.game_progress = msg->game_progress;
-
     return gamestatus;
   }
 
@@ -69,19 +71,17 @@ namespace simple_decision {
 
     if (!ros_armorsmsg) {
       throw std::invalid_argument(
-          "ConvertRobotStatus received nullptr Armors message");
+          "ConvertArmors received nullptr Armors message");
     }
     armors.header.stamp.nanosec = ros_armorsmsg->header.stamp.nanosec;
     armors.header.stamp.sec = ros_armorsmsg->header.stamp.sec;
     armors.header.frame_id = ros_armorsmsg->header.frame_id;
 
-    // 调整目标容器大小
     armors.armors.resize(ros_armorsmsg->armors.size());
 
-    // 使用 transform 进行批量转换映射
     std::transform(ros_armorsmsg->armors.begin(), ros_armorsmsg->armors.end(),
                    armors.armors.begin(), [](const auto& ros_armor) {
-                     return ConvertArmor(ros_armor);  // 调用单体转换逻辑
+                     return ConvertArmor(ros_armor);
                    });
 
     return armors;
@@ -94,7 +94,11 @@ namespace simple_decision {
   }
 
   Target ConvertTarget(
-      const guga_interfaces::msg::Target::SharedPtr ros_targetmsg) {
+      guga_interfaces::msg::Target::SharedPtr ros_targetmsg) {
+    if (!ros_targetmsg) {
+      throw std::invalid_argument(
+          "ConvertTarget received nullptr Target message");
+    }
     Target target;
     target.header.stamp.nanosec = ros_targetmsg->header.stamp.nanosec;
     target.header.stamp.sec = ros_targetmsg->header.stamp.sec;

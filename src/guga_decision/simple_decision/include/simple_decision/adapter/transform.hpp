@@ -15,7 +15,7 @@ namespace simple_decision {
   /// Convert ROS Quaternion message to domain Quaternion
   Quaternion ConvertQuaternion(const geometry_msgs::msg::Quaternion& ros_quat);
 
-  /// Convert ROS Pose message to domain Pose3D
+  /// Convert ROS Point message to domain Position
   Position ConvertPoint(const geometry_msgs::msg::Point& ros_point);
 
   Pose3D ConvertPose(const geometry_msgs::msg::Pose& ros_pose);
