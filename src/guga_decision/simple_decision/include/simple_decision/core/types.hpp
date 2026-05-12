@@ -63,9 +63,9 @@ namespace simple_decision {
   };
 
   struct Pose2D {
-    double x;
-    double y;
-    double yaw;
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
   };
   struct Pose3D {
     Position position;
@@ -152,7 +152,6 @@ namespace simple_decision {
   };
 
   struct Snapshot {
-    bool has_attack_goal{false};
     bool match_started = false;
     bool enemy_recent = false;
     bool attacked_recent = false;
@@ -161,13 +160,11 @@ namespace simple_decision {
     bool default_spin_latched{false};
     bool needs_supply{false};
     bool enemy{false};
-    double last_attack_yaw{0.0};
     RobotStatus robotstatus;
     Stamp match_start_time{0, 0};
     Armors armors;
     std::optional<Target> target_opt;
     State state{State::DEFAULT};
-    Position last_attack_position{0.0, 0.0, 0.0};
   };
 
 }  // namespace simple_decision

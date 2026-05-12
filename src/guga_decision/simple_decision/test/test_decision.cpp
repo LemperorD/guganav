@@ -80,7 +80,6 @@ namespace simple_decision {
          ComputeAction_EnemyRecentWithAttackGoal_UsesAttackPosition) {
     Snapshot s = EnemyRecentSnapshot();
     s.armors = ArmorInRange();
-    s.has_attack_goal = false;
 
     auto a = dec_.computeAction(s);
     EXPECT_EQ(a.next_state, State::ATTACK);
@@ -92,7 +91,6 @@ namespace simple_decision {
          ComputeAction_EnemyRecentWithTrackingTarget_UsesTargetPosition) {
     Snapshot s = EnemyRecentSnapshot();
     s.target_opt = TrackingTarget();
-    s.has_attack_goal = false;
 
     auto a = dec_.computeAction(s);
     EXPECT_EQ(a.next_state, State::ATTACK);
