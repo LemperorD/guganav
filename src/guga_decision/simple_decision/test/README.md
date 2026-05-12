@@ -27,6 +27,10 @@
 
 **不测**：ROS2 框架行为（`rclcpp::Node::declare_parameter`、`create_publisher` 等）、tf2 底层。
 
+**数据流**：订阅消息 → `Convert*` → `EnvironmentContext` 聚合 → `buildSnapshot` 构建快照 → `Decision::computeAction` 决策 → `executeAction` 发布
+
+**测试统计**：单元 67（transform 10 + environment 40 + decision 17），集成 17
+
 ## 前置依赖
 
 ```bash
