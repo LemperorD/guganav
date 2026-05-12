@@ -74,9 +74,9 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | delay 后发              | `CheckReadiness_StartedAfterDelay`                   | `GateBehavior/4`                      |
 | 离开 RUNNING 复位       | —                                                    | `LeaveRunning_ResetsGate`             |
 | gatelog 日志            | —                                                    | `HandleGateLog_AllStatuses`           |
-| HP 低→SUPPLY            | `ComputeAction_StatusBad`, `IsStatusBad`             | `LowHp_EntersSupply`                  |
-| 弹药空→SUPPLY           | `ComputeAction_LowAmmo`                              | —                                     |
-| SUPPLY 恢复→DEFAULT     | `ComputeAction_SupplyRecovered`, `IsStatusRecovered` | `SupplyRecovered_ExitsToDefault`      |
+| HP 低→SUPPLY            | `isStatusBad`, `ComputeAction_StatusBad`             | `LowHp_EntersSupply`                  |
+| 弹药空→SUPPLY           | `isStatusBad` (ammo=0), `ComputeAction_LowAmmo`      | —                                     |
+| SUPPLY 恢复→DEFAULT     | `isStatusRecovered`, `ComputeAction_SupplyRecovered` | `SupplyRecovered_ExitsToDefault`      |
 | 受击→LITTLE_TES         | `ComputeAction_EnemyRecentAndAttacked`               | `AttackedRecent_UsesLittleTes`        |
 | 受击 hold 到期→FOLLOWED | —                                                    | `AttackedHoldExpired_BackToFollowed`  |
 | 有敌人→ATTACK           | `ComputeAction_EnemyRecentWithAttackGoal`            | —                                     |
@@ -139,6 +139,9 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | `IsStatusBad_HpBelowEnter`                | HP < 阈值 → true                             |
 | `IsStatusBad_AmmoAtMin`                   | 弹药 = 0 → true                              |
 | `IsStatusBad_HpAndAmmoOk`                 | HP 和弹药正常 → false                        |
+| `IsStatusRecovered_HpAmmoOk`              | HP > exit 且 ammo > min → true               |
+| `IsStatusRecovered_HpBelowExit`           | HP < exit → false                            |
+| `IsStatusRecovered_AmmoAtMin`             | ammo = 0 → false                             |
 | `changeState_DifferentState`              | 设不同状态 → 返回 true                       |
 | `changeState_SameStateTwice`              | 设相同状态 → 第二次返回 false                |
 | `CheckReadiness_NoRS`                     | 无 RS → NO_RS                                |
@@ -163,10 +166,10 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 
 | 测试                                           | 意图                             |
 | ---------------------------------------------- | -------------------------------- |
-| `ComputeAction_SupplyNotRecovered`             | SUPPLY 态未恢复 → 保持 SUPPLY    |
-| `ComputeAction_SupplyRecovered`                | SUPPLY 态已恢复 → 切回 DEFAULT   |
-| `ComputeAction_StatusBad`                      | HP 低 → 进入 SUPPLY              |
-| `ComputeAction_LowAmmo`                        | 弹药不足 → 进入 SUPPLY           |
+| `ComputeAction_SupplyNotRecovered`             | SUPPLY + needs_supply=true → 保持 |
+| `ComputeAction_SupplyRecovered`                | SUPPLY + needs_supply=false → DEFAULT |
+| `ComputeAction_StatusBad`                      | needs_supply=true → SUPPLY       |
+| `ComputeAction_LowAmmo`                        | needs_supply=true → SUPPLY       |
 | `ComputeAction_EnemyRecentNotAttacked`         | 有敌人未受击 → FOLLOWED          |
 | `ComputeAction_EnemyRecentAndAttacked`         | 有敌人且受击 → LITTLE_TES        |
 | `ComputeAction_EnemyRecentWithAttackGoal`      | 有敌人 → target 指向最近装甲     |
@@ -176,12 +179,6 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 | `ComputeAction_Default_OutOfKeepSpin`          | 离开陀螺区 → 清除锁存            |
 | `ComputeAction_Default_AttackedRecent`         | 默认态受击 → LITTLE_TES          |
 | `ComputeAction_Default_UsesDefaultCoordinates` | 默认态 target 指向默认坐标       |
-| `IsStatusRecovered_HpAboveExit`                | HP > 退出阈值 → true             |
-| `IsStatusRecovered_HpBelowExit`                | HP < 退出阈值 → false            |
-| `IsStatusRecovered_AmmoAtMin`                  | 弹药为 0 → false                 |
-| `IsStatusBad_Healthy`                          | 健康 → false                     |
-| `IsStatusBad_HpBelowEnter`                     | HP 低 → true                     |
-| `IsStatusBad_AmmoAtMin`                        | 弹药不足 → true                  |
 | `FindAttackPosition_TrackingTarget`            | 追踪目标 → 用目标 pose + yaw     |
 | `FindAttackPosition_NoTargetWithArmors`        | 无目标 → 选最近装甲              |
 | `FindAttackPosition_NoTargetNoArmors`          | 无目标无装甲 → nullopt           |
