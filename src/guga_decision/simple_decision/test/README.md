@@ -240,16 +240,13 @@ source ~/guganav/install/setup.bash    # guga_interfaces, simple_decision
 ## 运行
 
 ```bash
+# 一键：构建 + 测试 + 覆盖率
+~/guganav/scripts/test/test_simple_decision_coverage.sh
+
+# 单独运行
 source /opt/ros/humble/setup.bash
 source ~/nav2_ws/install/setup.bash
 source ~/guganav/install/setup.bash
 cd ~/guganav/build/simple_decision
-
-# 全部
-for t in test_transform test_environment_context test_decision test_simple_decision; do
-  ./$t
-done
-
-# 单个
 ./test_simple_decision --gtest_filter="*LowHp*"
 ```
