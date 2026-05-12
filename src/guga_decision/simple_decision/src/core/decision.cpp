@@ -41,8 +41,6 @@ namespace simple_decision {
     return Pose2D{best->pose.position.x, best->pose.position.y, 0.0};
   }
 
-  // ── private ──
-
   DecisionAction Decision::supplyAction() const {
     DecisionAction action;
     action.should_publish_goal = true;
