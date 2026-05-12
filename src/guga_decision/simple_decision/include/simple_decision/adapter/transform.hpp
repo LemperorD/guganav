@@ -11,6 +11,11 @@
 #include "simple_decision/core/types.hpp"
 
 namespace simple_decision {
+  using RobotStatusMsg = guga_interfaces::msg::RobotStatus;
+  using GameStatusMsg = guga_interfaces::msg::GameStatus;
+  using ArmorsMsg = guga_interfaces::msg::Armors;
+  using ArmorMsg = guga_interfaces::msg::Armor;
+  using TargetMsg = guga_interfaces::msg::Target;
 
   /// Convert ROS Quaternion message to domain Quaternion
   Quaternion ConvertQuaternion(const geometry_msgs::msg::Quaternion& ros_quat);

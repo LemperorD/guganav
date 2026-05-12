@@ -28,8 +28,7 @@ namespace simple_decision {
     return pose;
   }
 
-  RobotStatus ConvertRobotStatus(
-      guga_interfaces::msg::RobotStatus::SharedPtr msg) {
+  RobotStatus ConvertRobotStatus(RobotStatusMsg::SharedPtr msg) {
     RobotStatus robotstatus;
     if (!msg) {
       throw std::invalid_argument(
@@ -54,8 +53,7 @@ namespace simple_decision {
     return robotstatus;
   }
 
-  GameStatus ConvertGameStatus(
-      guga_interfaces::msg::GameStatus::SharedPtr msg) {
+  GameStatus ConvertGameStatus(GameStatusMsg::SharedPtr msg) {
     if (!msg) {
       throw std::invalid_argument(
           "ConvertGameStatus received nullptr GameStatus message");
@@ -65,8 +63,7 @@ namespace simple_decision {
     return gamestatus;
   }
 
-  Armors ConvertArmors(
-      const guga_interfaces::msg::Armors::SharedPtr& ros_armorsmsg) {
+  Armors ConvertArmors(const ArmorsMsg::SharedPtr& ros_armorsmsg) {
     Armors armors;
 
     if (!ros_armorsmsg) {
@@ -87,14 +84,13 @@ namespace simple_decision {
     return armors;
   }
 
-  Armor ConvertArmor(const guga_interfaces::msg::Armor& ros_armormsg) {
+  Armor ConvertArmor(const ArmorMsg& ros_armormsg) {
     Armor armor;
     armor.pose = ConvertPose(ros_armormsg.pose);
     return armor;
   }
 
-  Target ConvertTarget(
-      guga_interfaces::msg::Target::SharedPtr ros_targetmsg) {
+  Target ConvertTarget(TargetMsg::SharedPtr ros_targetmsg) {
     if (!ros_targetmsg) {
       throw std::invalid_argument(
           "ConvertTarget received nullptr Target message");
