@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -121,6 +122,10 @@ namespace simple_decision {
   inline Stamp toStamp(int64_t full_nanos) {
     return {static_cast<int32_t>(full_nanos / 1'000'000'000LL),
             static_cast<uint32_t>(full_nanos % 1'000'000'000LL)};
+  }
+
+  inline double distance3D(double x, double y, double z) {
+    return std::sqrt((x * x) + (y * y) + (z * z));
   }
 
   struct Header {

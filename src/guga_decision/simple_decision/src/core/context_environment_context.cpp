@@ -81,7 +81,7 @@ namespace simple_decision {
   }
 
   bool EnvironmentContext::inRange(double x, double y, double z) const {
-    return std::sqrt((x * x) + (y * y) + (z * z)) <= config_.combat_max_distance;
+    return distance3D(x, y, z) <= config_.combat_max_distance;
   }
 
   bool EnvironmentContext::detectEnemy(

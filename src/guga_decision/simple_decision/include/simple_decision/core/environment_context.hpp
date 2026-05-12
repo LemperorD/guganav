@@ -17,11 +17,9 @@ namespace simple_decision {
       IN_DELAY
     };
     Status status = Status::NOT_STARTED;
-    double elapsed = 0.0;  // 仅供 Log 使用
+    double elapsed = 0.0;
   };
 
-  /// Environment state aggregation layer
-  /// Translates low-level ROS messages into high-level business facts
   class EnvironmentContext {
   public:
     explicit EnvironmentContext() = default;
@@ -43,10 +41,10 @@ namespace simple_decision {
     [[nodiscard]] Readiness checkReadiness(int64_t now) const;
 
     [[nodiscard]] bool isStatusBad(const RobotStatus& robotstatus) const;
-    [[nodiscard]] bool detectEnemy(const Armors& armors,
-                                    const std::optional<Target>& target_opt) const;
+    [[nodiscard]] bool detectEnemy(
+        const Armors& armors, const std::optional<Target>& target_opt) const;
     [[nodiscard]] bool isNearRobotPose(double target_x, double target_y,
-                                        double tolerance) const;
+                                       double tolerance) const;
     [[nodiscard]] bool inRange(double x, double y, double z) const;
 
     bool changeState(State state);
