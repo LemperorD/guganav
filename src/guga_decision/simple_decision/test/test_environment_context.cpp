@@ -23,7 +23,7 @@ namespace simple_decision {
   TEST_F(EnvironmentContextTest, OnRobotStatus_StoresItAndSetsHasRs) {
     ctx_.onRobotStatus(HealthyRobotStatus());
     auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
-    EXPECT_EQ(snap.rs.current_hp, 500);
+    EXPECT_EQ(snap.robotstatus.current_hp, 500);
   }
 
   // ── onGameStatus ──
@@ -123,6 +123,24 @@ namespace simple_decision {
     EXPECT_FALSE(ctx_.isStatusBad(HealthyRobotStatus()));
   }
 
+  // ── isStatusRecovered ──
+  TEST_F(EnvironmentContextTest,
+         IsStatusRecovered_HpAboveExitAndAmmoAboveMin_ReturnsTrue) {
+    EXPECT_TRUE(ctx_.isStatusRecovered(HealthyRobotStatus()));
+  }
+
+  TEST_F(EnvironmentContextTest, IsStatusRecovered_HpBelowExit_ReturnsFalse) {
+    RobotStatus rs = HealthyRobotStatus();
+    rs.current_hp = 200;
+    EXPECT_FALSE(ctx_.isStatusRecovered(rs));
+  }
+
+  TEST_F(EnvironmentContextTest, IsStatusRecovered_AmmoAtMin_ReturnsFalse) {
+    RobotStatus rs = HealthyRobotStatus();
+    rs.projectile_allowance_17mm = 0;
+    EXPECT_FALSE(ctx_.isStatusRecovered(rs));
+  }
+
   // ── setState ──
   TEST_F(EnvironmentContextTest, SetState_DifferentState_ReturnsTrue) {
     EXPECT_TRUE(ctx_.changeState(State::ATTACK));
@@ -211,14 +229,13 @@ namespace simple_decision {
   // ── buildSnapshot ──
   TEST_F(EnvironmentContextTest, GetSnapshot_NoData_ReturnsDefaultsAndNoEnemy) {
     auto snap = ctx_.buildSnapshot(MakeStamp(0, 0));
-    EXPECT_EQ(snap.rs.current_hp, 0);
+    EXPECT_EQ(snap.robotstatus.current_hp, 0);
     EXPECT_FALSE(snap.enemy);
     EXPECT_FALSE(snap.enemy_recent);
     EXPECT_FALSE(snap.attacked_recent);
   }
 
-  TEST_F(EnvironmentContextTest,
-         BuildSnapshot_WithArmorInRange_DetectsEnemy) {
+  TEST_F(EnvironmentContextTest, BuildSnapshot_WithArmorInRange_DetectsEnemy) {
     ctx_.onRobotStatus(HealthyRobotStatus());
     ctx_.onArmors(ArmorInRange());
 

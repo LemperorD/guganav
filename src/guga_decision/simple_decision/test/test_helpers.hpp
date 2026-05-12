@@ -109,7 +109,7 @@ namespace simple_decision {
 
   inline Snapshot HealthyNotAttackedSnapshot() {
     Snapshot s{};
-    s.rs = HealthyRobotStatus();
+    s.robotstatus = HealthyRobotStatus();
     s.state = State::DEFAULT;
     return s;
   }

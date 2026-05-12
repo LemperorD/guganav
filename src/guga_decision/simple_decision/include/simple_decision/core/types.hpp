@@ -159,9 +159,10 @@ namespace simple_decision {
     bool at_center{false};
     bool in_center_keep_spin{false};
     bool default_spin_latched{false};
+    bool needs_supply{false};
     bool enemy{false};
     double last_attack_yaw{0.0};
-    RobotStatus rs;
+    RobotStatus robotstatus;
     Stamp match_start_time{0, 0};
     Armors armors;
     std::optional<Target> target_opt;

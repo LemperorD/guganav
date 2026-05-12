@@ -11,24 +11,21 @@ namespace simple_decision {
 
     Decision dec_;
 
-    Snapshot SupplyNotRecovered() {
+    static Snapshot SupplyNotRecovered() {
       Snapshot s = HealthyNotAttackedSnapshot();
       s.state = State::SUPPLY;
-      s.rs.current_hp = 200;
-      s.rs.projectile_allowance_17mm = 50;
+      s.needs_supply = true;
       return s;
     }
 
-    Snapshot SupplyRecovered() {
+    static Snapshot SupplyRecovered() {
       Snapshot s = HealthyNotAttackedSnapshot();
       s.state = State::SUPPLY;
-      s.rs.current_hp = 400;
-      s.rs.projectile_allowance_17mm = 100;
+      s.needs_supply = false;
       return s;
     }
   };
 
-  // ── computeAction ──
   TEST_F(DecisionTest, ComputeAction_SupplyNotRecovered_HoldsSupply) {
     auto a = dec_.computeAction(SupplyNotRecovered());
     EXPECT_EQ(a.next_state, State::SUPPLY);
@@ -43,7 +40,7 @@ namespace simple_decision {
 
   TEST_F(DecisionTest, ComputeAction_StatusBad_EntersSupply) {
     Snapshot s = HealthyNotAttackedSnapshot();
-    s.rs.current_hp = 50;
+    s.needs_supply = true;
 
     auto a = dec_.computeAction(s);
     EXPECT_EQ(a.next_state, State::SUPPLY);
@@ -51,7 +48,7 @@ namespace simple_decision {
 
   TEST_F(DecisionTest, ComputeAction_LowAmmo_EntersSupply) {
     Snapshot s = HealthyNotAttackedSnapshot();
-    s.rs.projectile_allowance_17mm = 0;
+    s.needs_supply = true;
 
     auto a = dec_.computeAction(s);
     EXPECT_EQ(a.next_state, State::SUPPLY);
@@ -151,38 +148,6 @@ namespace simple_decision {
     EXPECT_DOUBLE_EQ(a.target_yaw, kDefaultYaw);
   }
 
-  // ── isStatusRecovered ──
-  TEST_F(DecisionTest,
-         IsStatusRecovered_HpAboveExitAndAmmoAboveMin_ReturnsTrue) {
-    EXPECT_TRUE(dec_.isStatusRecovered(HealthyRobotStatus()));
-  }
-
-  TEST_F(DecisionTest, IsStatusRecovered_HpBelowExit_ReturnsFalse) {
-    RobotStatus rs = HealthyRobotStatus();
-    rs.current_hp = 200;
-    EXPECT_FALSE(dec_.isStatusRecovered(rs));
-  }
-
-  TEST_F(DecisionTest, IsStatusRecovered_AmmoAtMin_ReturnsFalse) {
-    RobotStatus rs = HealthyRobotStatus();
-    rs.projectile_allowance_17mm = 0;
-    EXPECT_FALSE(dec_.isStatusRecovered(rs));
-  }
-
-  // ── isStatusBad ──
-  TEST_F(DecisionTest, IsStatusBad_Healthy_ReturnsFalse) {
-    EXPECT_FALSE(dec_.isStatusBad(HealthyRobotStatus()));
-  }
-
-  TEST_F(DecisionTest, IsStatusBad_HpBelowEnter_ReturnsTrue) {
-    EXPECT_TRUE(dec_.isStatusBad(LowHpRobotStatus()));
-  }
-
-  TEST_F(DecisionTest, IsStatusBad_AmmoAtMin_ReturnsTrue) {
-    EXPECT_TRUE(dec_.isStatusBad(LowAmmoRobotStatus()));
-  }
-
-  // ── findAttackPosition ──
   TEST_F(DecisionTest, FindAttackPosition_TrackingTarget_UsesTargetPose) {
     auto target = TrackingTarget();
     target.position.x = 1.0;

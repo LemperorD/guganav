@@ -110,7 +110,7 @@ namespace simple_decision {
     if (snapshot.enemy) {
       last_enemy_seen_ = now;
     }
-    if (snapshot.rs.is_hp_deduced) {
+    if (snapshot.robotstatus.is_hp_deduced) {
       last_attacked_ = now;
     }
   }
@@ -119,7 +119,7 @@ namespace simple_decision {
     std::lock_guard<std::mutex> lock(mtx_);
 
     Snapshot snapshot;
-    snapshot.rs = last_robot_status_;
+    snapshot.robotstatus = last_robot_status_;
     snapshot.match_started = match_started_;
     snapshot.match_start_time = toStamp(match_start_time_);
     snapshot.state = state_;
@@ -136,6 +136,10 @@ namespace simple_decision {
     snapshot.attacked_recent = isRecent(last_attacked_, now_ns,
                                         attacked_hold_sec_);
 
+    snapshot.needs_supply = isStatusBad(snapshot.robotstatus)
+                         || (snapshot.state == State::SUPPLY
+                             && !isStatusRecovered(snapshot.robotstatus));
+
     snapshot.default_spin_latched = default_spin_latched_;
     snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,
                                          config_.default_arrive_xy_tol);
@@ -149,6 +153,13 @@ namespace simple_decision {
     const int hp = static_cast<int>(robotstatus.current_hp);
     const int ammo = static_cast<int>(robotstatus.projectile_allowance_17mm);
     return (hp < config_.hp_enter_supply) || (ammo <= config_.ammo_min);
+  }
+
+  bool EnvironmentContext::isStatusRecovered(
+      const RobotStatus& robotstatus) const {
+    const int hp = static_cast<int>(robotstatus.current_hp);
+    const int ammo = static_cast<int>(robotstatus.projectile_allowance_17mm);
+    return (hp >= config_.hp_exit_supply) && (ammo > config_.ammo_min);
   }
 
   bool EnvironmentContext::changeState(State state) {
