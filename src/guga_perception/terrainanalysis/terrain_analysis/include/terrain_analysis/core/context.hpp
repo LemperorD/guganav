@@ -19,8 +19,14 @@ struct TerrainConfig {
 
   static constexpr int PLANAR_VOXEL_WIDTH = 51;
   static constexpr int PLANAR_VOXEL_HALF_WIDTH = (PLANAR_VOXEL_WIDTH - 1) / 2;
-  static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH
-                                        * PLANAR_VOXEL_WIDTH;
+  static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH * PLANAR_VOXEL_WIDTH;
+
+  static constexpr int terrain_voxel_index(int row, int col) {
+    return TERRAIN_VOXEL_WIDTH * row + col;
+  }
+  static constexpr int planar_voxel_index(int row, int col) {
+    return PLANAR_VOXEL_WIDTH * row + col;
+  }
 
   float scan_voxel_size = 0.05;
   float decay_time = 2.0;
@@ -77,15 +83,16 @@ struct TerrainState {
   pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_dwz;
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud;
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr
-      terrain_voxel_cloud[TerrainConfig::TERRAIN_VOXEL_NUM]{};
-
-  int terrain_voxel_update_num[TerrainConfig::TERRAIN_VOXEL_NUM]{};
-  float terrain_voxel_update_time[TerrainConfig::TERRAIN_VOXEL_NUM]{};
-  float planar_voxel_elev[TerrainConfig::PLANAR_VOXEL_NUM]{};
-  int planar_voxel_edge[TerrainConfig::PLANAR_VOXEL_NUM]{};
-  int planar_voxel_dy_obs[TerrainConfig::PLANAR_VOXEL_NUM]{};
-  std::vector<float> planar_point_elev[TerrainConfig::PLANAR_VOXEL_NUM];
+  std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,
+             TerrainConfig::TERRAIN_VOXEL_NUM>
+      terrain_voxel_cloud;
+  std::array<int, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_num;
+  std::array<float, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_time;
+  std::array<float, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_elev;
+  std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_edge;
+  std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_dy_obs;
+  std::array<std::vector<float>, TerrainConfig::PLANAR_VOXEL_NUM>
+      planar_point_elev;
 
   pcl::VoxelGrid<pcl::PointXYZI> down_size_filter;
 

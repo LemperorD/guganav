@@ -12,7 +12,8 @@ TerrainAnalysisContext::TerrainAnalysisContext() {
   state.laser_cloud_crop = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   state.laser_cloud_dwz = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   state.terrain_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  state.terrain_cloud_elev = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  state.terrain_cloud_elev =
+      std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
 
   for (auto& ptr : state.terrain_voxel_cloud) {
     ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -22,7 +23,7 @@ TerrainAnalysisContext::TerrainAnalysisContext() {
 TerrainAnalysisContext::~TerrainAnalysisContext() = default;
 
 void TerrainAnalysisContext::onOdometry(double x, double y, double z,
-                                         double roll, double pitch, double yaw) {
+                                        double roll, double pitch, double yaw) {
   state.vehicle_x = x;
   state.vehicle_y = y;
   state.vehicle_z = z;
@@ -41,7 +42,8 @@ void TerrainAnalysisContext::onOdometry(double x, double y, double z,
     state.no_data_inited = NoDataState::RECORDING;
   }
   if (state.no_data_inited == NoDataState::RECORDING) {
-    double dis = state.horizontalDistanceTo(state.vehicle_x_rec, state.vehicle_y_rec);
+    double dis = state.horizontalDistanceTo(state.vehicle_x_rec,
+                                            state.vehicle_y_rec);
     if (dis >= cfg.no_decay_dis) {
       state.no_data_inited = NoDataState::ACTIVE;
     }
@@ -61,7 +63,7 @@ void TerrainAnalysisContext::onLaserCloud(
 
   pcl::PointXYZI point;
   state.laser_cloud_crop->clear();
-  int sz = state.laser_cloud->points.size();
+  int sz = static_cast<int>(state.laser_cloud->points.size());
   for (int i = 0; i < sz; i++) {
     point = state.laser_cloud->points[i];
 
@@ -70,13 +72,15 @@ void TerrainAnalysisContext::onLaserCloud(
     float pz = point.z;
 
     double dis = state.horizontalDistanceTo(px, py);
-    if (pz - state.vehicle_z > cfg.min_rel_z - cfg.dis_ratio_z * dis &&
-        pz - state.vehicle_z < cfg.max_rel_z + cfg.dis_ratio_z * dis &&
-        dis < cfg.terrain_voxel_size * (TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH + 1)) {
+    if (pz - state.vehicle_z > cfg.min_rel_z - (cfg.dis_ratio_z * dis)
+        && pz - state.vehicle_z < cfg.max_rel_z + (cfg.dis_ratio_z * dis)
+        && dis < cfg.terrain_voxel_size
+                     * (TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH + 1)) {
       point.x = px;
       point.y = py;
       point.z = pz;
-      point.intensity = state.laser_cloud_time - state.system_init_time;
+      point.intensity = static_cast<float>(state.laser_cloud_time
+                                           - state.system_init_time);
       state.laser_cloud_crop->push_back(point);
     }
   }
