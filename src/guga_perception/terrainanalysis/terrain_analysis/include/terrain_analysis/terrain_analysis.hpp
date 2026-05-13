@@ -22,7 +22,7 @@ public:
   bool processOnce();
 
   const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev() const {
-    return context_.terrainCloudElev();
+    return context_.state.terrainCloudElev();
   }
 
   TerrainAnalysisContext context_;

@@ -18,67 +18,67 @@ TerrainAnalysis::TerrainAnalysis(rclcpp::Node* node) : node_(node) {
 TerrainAnalysis::~TerrainAnalysis() = default;
 
 void TerrainAnalysis::initialize() {
-  node_->declare_parameter<double>("scanVoxelSize", context_.scan_voxel_size_);
-  node_->declare_parameter<double>("decayTime", context_.decay_time_);
-  node_->declare_parameter<double>("noDecayDis", context_.no_decay_dis_);
-  node_->declare_parameter<double>("clearingDis", context_.clearing_dis_);
-  node_->declare_parameter<bool>("useSorting", context_.use_sorting_);
-  node_->declare_parameter<double>("quantileZ", context_.quantile_z_);
-  node_->declare_parameter<bool>("considerDrop", context_.consider_drop_);
+  node_->declare_parameter<double>("scanVoxelSize", context_.cfg.scan_voxel_size);
+  node_->declare_parameter<double>("decayTime", context_.cfg.decay_time);
+  node_->declare_parameter<double>("noDecayDis", context_.cfg.no_decay_dis);
+  node_->declare_parameter<double>("clearingDis", context_.cfg.clearing_dis);
+  node_->declare_parameter<bool>("useSorting", context_.cfg.use_sorting);
+  node_->declare_parameter<double>("quantileZ", context_.cfg.quantile_z);
+  node_->declare_parameter<bool>("considerDrop", context_.cfg.consider_drop);
   node_->declare_parameter<bool>("limitGroundLift",
-                                 context_.limit_ground_lift_);
-  node_->declare_parameter<double>("maxGroundLift", context_.max_ground_lift_);
-  node_->declare_parameter<bool>("clearDyObs", context_.clear_dy_obs_);
-  node_->declare_parameter<double>("minDyObsDis", context_.min_dy_obs_dis_);
-  node_->declare_parameter<double>("minDyObsAngle", context_.min_dy_obs_angle_);
-  node_->declare_parameter<double>("minDyObsRelZ", context_.min_dy_obs_rel_z_);
+                                 context_.cfg.limit_ground_lift);
+  node_->declare_parameter<double>("maxGroundLift", context_.cfg.max_ground_lift);
+  node_->declare_parameter<bool>("clearDyObs", context_.cfg.clear_dy_obs);
+  node_->declare_parameter<double>("minDyObsDis", context_.cfg.min_dy_obs_dis);
+  node_->declare_parameter<double>("minDyObsAngle", context_.cfg.min_dy_obs_angle);
+  node_->declare_parameter<double>("minDyObsRelZ", context_.cfg.min_dy_obs_rel_z);
   node_->declare_parameter<double>("absDyObsRelZThre",
-                                   context_.abs_dy_obs_rel_z_thre_);
-  node_->declare_parameter<double>("minDyObsVFOV", context_.min_dy_obs_vfov_);
-  node_->declare_parameter<double>("maxDyObsVFOV", context_.max_dy_obs_vfov_);
+                                   context_.cfg.abs_dy_obs_rel_z_thre);
+  node_->declare_parameter<double>("minDyObsVFOV", context_.cfg.min_dy_obs_vfov);
+  node_->declare_parameter<double>("maxDyObsVFOV", context_.cfg.max_dy_obs_vfov);
   node_->declare_parameter<int>("minDyObsPointNum",
-                                context_.min_dy_obs_point_num_);
-  node_->declare_parameter<bool>("noDataObstacle", context_.no_data_obstacle_);
+                                context_.cfg.min_dy_obs_point_num);
+  node_->declare_parameter<bool>("noDataObstacle", context_.cfg.no_data_obstacle);
   node_->declare_parameter<int>("noDataBlockSkipNum",
-                                context_.no_data_block_skip_num_);
+                                context_.cfg.no_data_block_skip_num);
   node_->declare_parameter<int>("minBlockPointNum",
-                                context_.min_block_point_num_);
-  node_->declare_parameter<double>("vehicleHeight", context_.vehicle_height_);
+                                context_.cfg.min_block_point_num);
+  node_->declare_parameter<double>("vehicleHeight", context_.cfg.vehicle_height);
   node_->declare_parameter<int>("voxelPointUpdateThre",
-                                context_.voxel_point_update_thre_);
+                                context_.cfg.voxel_point_update_thre);
   node_->declare_parameter<double>("voxelTimeUpdateThre",
-                                   context_.voxel_time_update_thre_);
-  node_->declare_parameter<double>("minRelZ", context_.min_rel_z_);
-  node_->declare_parameter<double>("maxRelZ", context_.max_rel_z_);
-  node_->declare_parameter<double>("disRatioZ", context_.dis_ratio_z_);
+                                   context_.cfg.voxel_time_update_thre);
+  node_->declare_parameter<double>("minRelZ", context_.cfg.min_rel_z);
+  node_->declare_parameter<double>("maxRelZ", context_.cfg.max_rel_z);
+  node_->declare_parameter<double>("disRatioZ", context_.cfg.dis_ratio_z);
 
-  node_->get_parameter("scanVoxelSize", context_.scan_voxel_size_);
-  node_->get_parameter("decayTime", context_.decay_time_);
-  node_->get_parameter("noDecayDis", context_.no_decay_dis_);
-  node_->get_parameter("clearingDis", context_.clearing_dis_);
-  node_->get_parameter("useSorting", context_.use_sorting_);
-  node_->get_parameter("quantileZ", context_.quantile_z_);
-  node_->get_parameter("considerDrop", context_.consider_drop_);
-  node_->get_parameter("limitGroundLift", context_.limit_ground_lift_);
-  node_->get_parameter("maxGroundLift", context_.max_ground_lift_);
-  node_->get_parameter("clearDyObs", context_.clear_dy_obs_);
-  node_->get_parameter("minDyObsDis", context_.min_dy_obs_dis_);
-  node_->get_parameter("minDyObsAngle", context_.min_dy_obs_angle_);
-  node_->get_parameter("minDyObsRelZ", context_.min_dy_obs_rel_z_);
-  node_->get_parameter("absDyObsRelZThre", context_.abs_dy_obs_rel_z_thre_);
-  node_->get_parameter("minDyObsVFOV", context_.min_dy_obs_vfov_);
-  node_->get_parameter("maxDyObsVFOV", context_.max_dy_obs_vfov_);
-  node_->get_parameter("minDyObsPointNum", context_.min_dy_obs_point_num_);
-  node_->get_parameter("noDataObstacle", context_.no_data_obstacle_);
-  node_->get_parameter("noDataBlockSkipNum", context_.no_data_block_skip_num_);
-  node_->get_parameter("minBlockPointNum", context_.min_block_point_num_);
-  node_->get_parameter("vehicleHeight", context_.vehicle_height_);
+  node_->get_parameter("scanVoxelSize", context_.cfg.scan_voxel_size);
+  node_->get_parameter("decayTime", context_.cfg.decay_time);
+  node_->get_parameter("noDecayDis", context_.cfg.no_decay_dis);
+  node_->get_parameter("clearingDis", context_.cfg.clearing_dis);
+  node_->get_parameter("useSorting", context_.cfg.use_sorting);
+  node_->get_parameter("quantileZ", context_.cfg.quantile_z);
+  node_->get_parameter("considerDrop", context_.cfg.consider_drop);
+  node_->get_parameter("limitGroundLift", context_.cfg.limit_ground_lift);
+  node_->get_parameter("maxGroundLift", context_.cfg.max_ground_lift);
+  node_->get_parameter("clearDyObs", context_.cfg.clear_dy_obs);
+  node_->get_parameter("minDyObsDis", context_.cfg.min_dy_obs_dis);
+  node_->get_parameter("minDyObsAngle", context_.cfg.min_dy_obs_angle);
+  node_->get_parameter("minDyObsRelZ", context_.cfg.min_dy_obs_rel_z);
+  node_->get_parameter("absDyObsRelZThre", context_.cfg.abs_dy_obs_rel_z_thre);
+  node_->get_parameter("minDyObsVFOV", context_.cfg.min_dy_obs_vfov);
+  node_->get_parameter("maxDyObsVFOV", context_.cfg.max_dy_obs_vfov);
+  node_->get_parameter("minDyObsPointNum", context_.cfg.min_dy_obs_point_num);
+  node_->get_parameter("noDataObstacle", context_.cfg.no_data_obstacle);
+  node_->get_parameter("noDataBlockSkipNum", context_.cfg.no_data_block_skip_num);
+  node_->get_parameter("minBlockPointNum", context_.cfg.min_block_point_num);
+  node_->get_parameter("vehicleHeight", context_.cfg.vehicle_height);
   node_->get_parameter("voxelPointUpdateThre",
-                       context_.voxel_point_update_thre_);
-  node_->get_parameter("voxelTimeUpdateThre", context_.voxel_time_update_thre_);
-  node_->get_parameter("minRelZ", context_.min_rel_z_);
-  node_->get_parameter("maxRelZ", context_.max_rel_z_);
-  node_->get_parameter("disRatioZ", context_.dis_ratio_z_);
+                       context_.cfg.voxel_point_update_thre);
+  node_->get_parameter("voxelTimeUpdateThre", context_.cfg.voxel_time_update_thre);
+  node_->get_parameter("minRelZ", context_.cfg.min_rel_z);
+  node_->get_parameter("maxRelZ", context_.cfg.max_rel_z);
+  node_->get_parameter("disRatioZ", context_.cfg.dis_ratio_z);
 
   sub_odometry_ = node_->create_subscription<nav_msgs::msg::Odometry>(
       "lidar_odometry", 5, [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
@@ -115,27 +115,27 @@ void TerrainAnalysis::initialize() {
   pub_terrain_map_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
       "terrain_map", 2);
 
-  context_.down_size_filter_.setLeafSize(context_.scan_voxel_size_,
-                                         context_.scan_voxel_size_,
-                                         context_.scan_voxel_size_);
+  context_.state.down_size_filter.setLeafSize(context_.cfg.scan_voxel_size,
+                                         context_.cfg.scan_voxel_size,
+                                         context_.cfg.scan_voxel_size);
 }
 
 bool TerrainAnalysis::processOnce() {
   rclcpp::spin_some(node_->get_node_base_interface());
-  if (!context_.new_laser_cloud_) {
+  if (!context_.state.hasNewCloud()) {
     return rclcpp::ok();
   }
-  TerrainAlgorithm::run(context_);
+  TerrainAlgorithm::run(context_.cfg, context_.state);
   publishPointCloud();
   return rclcpp::ok();
 }
 
 void TerrainAnalysis::publishPointCloud() {
   sensor_msgs::msg::PointCloud2 terraincloud2;
-  pcl::toROSMsg(context_.terrainCloudElev(), terraincloud2);
+  pcl::toROSMsg(context_.state.terrainCloudElev(), terraincloud2);
 
   terraincloud2.header.stamp = rclcpp::Time(
-      static_cast<int64_t>(context_.laser_cloud_time_ * 1e9));
+      static_cast<int64_t>(context_.state.laser_cloud_time * 1e9));
   terraincloud2.header.frame_id = "odom";
 
   pub_terrain_map_->publish(terraincloud2);

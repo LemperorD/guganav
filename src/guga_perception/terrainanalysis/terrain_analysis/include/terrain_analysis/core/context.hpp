@@ -1,6 +1,5 @@
 #pragma once
 
-#include <gtest/internal/gtest-internal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -8,16 +7,124 @@
 #include <cmath>
 #include <vector>
 
-class TerrainAnalysisContext {
-  friend class TerrainAnalysisTest;
+// ═══════════════════════════════════════════════
+// Compile-time constants + runtime parameters
+// ═══════════════════════════════════════════════
 
-public:
+struct TerrainConfig {
+  static constexpr int TERRAIN_VOXEL_WIDTH = 21;
+  static constexpr int TERRAIN_VOXEL_HALF_WIDTH = (TERRAIN_VOXEL_WIDTH - 1) / 2;
+  static constexpr int TERRAIN_VOXEL_NUM = TERRAIN_VOXEL_WIDTH
+                                         * TERRAIN_VOXEL_WIDTH;
+
+  static constexpr int PLANAR_VOXEL_WIDTH = 51;
+  static constexpr int PLANAR_VOXEL_HALF_WIDTH = (PLANAR_VOXEL_WIDTH - 1) / 2;
+  static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH
+                                        * PLANAR_VOXEL_WIDTH;
+
+  float scan_voxel_size = 0.05;
+  float decay_time = 2.0;
+  float no_decay_dis = 4.0;
+  float clearing_dis = 8.0;
+  bool use_sorting = true;
+  double quantile_z = 0.25;
+  bool consider_drop = false;
+  bool limit_ground_lift = false;
+  double max_ground_lift = 0.15;
+  bool clear_dy_obs = false;
+  double min_dy_obs_dis = 0.3;
+  double min_dy_obs_angle = 0.0;
+  double min_dy_obs_rel_z = -0.5;
+  double abs_dy_obs_rel_z_thre = 0.2;
+  double min_dy_obs_vfov = -16.0;
+  double max_dy_obs_vfov = 16.0;
+  int min_dy_obs_point_num = 1;
+  bool no_data_obstacle = false;
+  int no_data_block_skip_num = 0;
+  int min_block_point_num = 10;
+  double vehicle_height = 1.5;
+  int voxel_point_update_thre = 100;
+  double voxel_time_update_thre = 2.0;
+  double min_rel_z = -1.5;
+  double max_rel_z = 0.2;
+  double dis_ratio_z = 0.2;
+
+  float terrain_voxel_size = 1.0F;
+  float planar_voxel_size = 0.2F;
+};
+
+// ═══════════════════════════════════════════════
+// Mutable run-time state
+// ═══════════════════════════════════════════════
+
+struct TerrainState {
   enum class NoDataState : uint8_t {
-    kUninitialized = 0,
-    kRecording = 1,
-    kActive = 2
+    UNINITIALIZED = 0,
+    RECORDING = 1,
+    ACTIVE = 2
   };
 
+  // Vehicle pose
+  double vehicle_x = 0.0, vehicle_y = 0.0, vehicle_z = 0.0;
+  double vehicle_x_rec = 0.0, vehicle_y_rec = 0.0;
+  double sin_vehicle_roll = 0.0, cos_vehicle_roll = 0.0;
+  double sin_vehicle_pitch = 0.0, cos_vehicle_pitch = 0.0;
+  double sin_vehicle_yaw = 0.0, cos_vehicle_yaw = 0.0;
+
+  // Point clouds
+  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_crop;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_dwz;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr
+      terrain_voxel_cloud[TerrainConfig::TERRAIN_VOXEL_NUM]{};
+
+  int terrain_voxel_update_num[TerrainConfig::TERRAIN_VOXEL_NUM]{};
+  float terrain_voxel_update_time[TerrainConfig::TERRAIN_VOXEL_NUM]{};
+  float planar_voxel_elev[TerrainConfig::PLANAR_VOXEL_NUM]{};
+  int planar_voxel_edge[TerrainConfig::PLANAR_VOXEL_NUM]{};
+  int planar_voxel_dy_obs[TerrainConfig::PLANAR_VOXEL_NUM]{};
+  std::vector<float> planar_point_elev[TerrainConfig::PLANAR_VOXEL_NUM];
+
+  pcl::VoxelGrid<pcl::PointXYZI> down_size_filter;
+
+  // Terrain voxel offsets
+  int terrain_voxel_shift_x = 0;
+  int terrain_voxel_shift_y = 0;
+
+  // Laser cloud state
+  double laser_cloud_time = 0.0;
+  bool new_laser_cloud = false;
+
+  // System state
+  double system_init_time = 0.0;
+  bool system_inited = false;
+  NoDataState no_data_inited = NoDataState::UNINITIALIZED;
+
+  // Mutated by callbacks
+  bool clearing_cloud = false;
+  float clearing_dis = 8.0;
+
+  [[nodiscard]] double horizontalDistanceTo(double px, double py) const {
+    return sqrt(((px - vehicle_x) * (px - vehicle_x))
+                + ((py - vehicle_y) * (py - vehicle_y)));
+  }
+
+  [[nodiscard]] bool hasNewCloud() const {
+    return new_laser_cloud;
+  }
+  [[nodiscard]] const auto& terrainCloudElev() const {
+    return *terrain_cloud_elev;
+  }
+};
+
+// ═══════════════════════════════════════════════
+// Context — owns config + state, receives callbacks
+// ═══════════════════════════════════════════════
+
+class TerrainAnalysisContext {
+public:
   TerrainAnalysisContext();
   ~TerrainAnalysisContext();
 
@@ -26,7 +133,6 @@ public:
   TerrainAnalysisContext(TerrainAnalysisContext&&) = delete;
   TerrainAnalysisContext& operator=(TerrainAnalysisContext&&) = delete;
 
-  // Callbacks (domain types only, no ROS2)
   void onOdometry(double x, double y, double z, double roll, double pitch,
                   double yaw);
   void onLaserCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
@@ -34,93 +140,6 @@ public:
   void onJoystick(bool button5);
   void onClearing(float dis);
 
-  double horizontalDistanceTo(double px, double py) const {
-    return sqrt((px - vehicle_x_) * (px - vehicle_x_)
-                + (py - vehicle_y_) * (py - vehicle_y_));
-  }
-
-  const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev() const {
-    return *terrain_cloud_elev_;
-  }
-
-  // ── public data access for node pipeline ──
-  // (temporary until processTerrainData moves into Context)
-
-  static constexpr int kTerrainVoxelWidth = 21;
-  static constexpr int kTerrainVoxelHalfWidth = (kTerrainVoxelWidth - 1) / 2;
-  static constexpr int kTerrainVoxelNum = kTerrainVoxelWidth
-                                        * kTerrainVoxelWidth;
-
-  static constexpr int kPlanarVoxelWidth = 51;
-  static constexpr int kPlanarVoxelHalfWidth = (kPlanarVoxelWidth - 1) / 2;
-  static constexpr int kPlanarVoxelNum = kPlanarVoxelWidth * kPlanarVoxelWidth;
-
-  // Parameters
-  float scan_voxel_size_ = 0.05;
-  float decay_time_ = 2.0;
-  float no_decay_dis_ = 4.0;
-  float clearing_dis_ = 8.0;
-  bool clearing_cloud_ = false;
-  bool use_sorting_ = true;
-  double quantile_z_ = 0.25;
-  bool consider_drop_ = false;
-  bool limit_ground_lift_ = false;
-  double max_ground_lift_ = 0.15;
-  bool clear_dy_obs_ = false;
-  double min_dy_obs_dis_ = 0.3;
-  double min_dy_obs_angle_ = 0.0;
-  double min_dy_obs_rel_z_ = -0.5;
-  double abs_dy_obs_rel_z_thre_ = 0.2;
-  double min_dy_obs_vfov_ = -16.0;
-  double max_dy_obs_vfov_ = 16.0;
-  int min_dy_obs_point_num_ = 1;
-  bool no_data_obstacle_ = false;
-  int no_data_block_skip_num_ = 0;
-  int min_block_point_num_ = 10;
-  double vehicle_height_ = 1.5;
-  int voxel_point_update_thre_ = 100;
-  double voxel_time_update_thre_ = 2.0;
-  double min_rel_z_ = -1.5;
-  double max_rel_z_ = 0.2;
-  double dis_ratio_z_ = 0.2;
-
-  // Terrain voxel
-  float terrain_voxel_size_ = 1.0f;
-  int terrain_voxel_shift_x_ = 0;
-  int terrain_voxel_shift_y_ = 0;
-
-  // Planar voxel
-  float planar_voxel_size_ = 0.2f;
-
-  // Point clouds
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_crop_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_dwz_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_voxel_cloud_[kTerrainVoxelNum]{};
-
-  int terrain_voxel_update_num_[kTerrainVoxelNum]{};
-  float terrain_voxel_update_time_[kTerrainVoxelNum]{};
-  float planar_voxel_elev_[kPlanarVoxelNum]{};
-  int planar_voxel_edge_[kPlanarVoxelNum]{};
-  int planar_voxel_dy_obs_[kPlanarVoxelNum]{};
-  std::vector<float> planar_point_elev_[kPlanarVoxelNum];
-
-  double laser_cloud_time_ = 0.0;
-  bool new_laser_cloud_ = false;
-
-  double system_init_time_ = 0.0;
-  bool system_inited_ = false;
-  NoDataState no_data_inited_ = NoDataState::kUninitialized;
-
-  // Vehicle pose
-  double vehicle_x_ = 0.0, vehicle_y_ = 0.0, vehicle_z_ = 0.0;
-  double vehicle_x_rec_ = 0.0, vehicle_y_rec_ = 0.0;
-
-  double sin_vehicle_roll_ = 0.0, cos_vehicle_roll_ = 0.0;
-  double sin_vehicle_pitch_ = 0.0, cos_vehicle_pitch_ = 0.0;
-  double sin_vehicle_yaw_ = 0.0, cos_vehicle_yaw_ = 0.0;
-
-  pcl::VoxelGrid<pcl::PointXYZI> down_size_filter_;
+  TerrainConfig cfg;
+  TerrainState state;
 };

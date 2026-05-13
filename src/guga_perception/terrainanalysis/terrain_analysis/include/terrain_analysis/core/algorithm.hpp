@@ -1,22 +1,22 @@
 #pragma once
 
-class TerrainAnalysisContext;
+struct TerrainConfig;
+struct TerrainState;
 
-namespace TerrainAlgorithm {
+class TerrainAlgorithm {
+public:
+  static void run(const TerrainConfig& cfg, TerrainState& st);
 
-// ── Pipeline ──
-void run(TerrainAnalysisContext& ctx);
-
-// ── Stages (exposed for testing) ──
-void rolloverTerrainVoxels(TerrainAnalysisContext& ctx);
-void stackLaserScans(TerrainAnalysisContext& ctx);
-void updateVoxels(TerrainAnalysisContext& ctx);
-void extractTerrainCloud(TerrainAnalysisContext& ctx);
-void estimateGround(TerrainAnalysisContext& ctx);
-void detectDynamicObstacles(TerrainAnalysisContext& ctx);
-void filterDynamicObstaclePoints(TerrainAnalysisContext& ctx, int laser_cloud_crop_size);
-void computeElevation(TerrainAnalysisContext& ctx);
-void computeHeightMap(TerrainAnalysisContext& ctx, int terrain_cloud_size);
-void addNoDataObstacles(TerrainAnalysisContext& ctx);
-
-}  // namespace TerrainAlgorithm
+  static void rolloverTerrainVoxels(const TerrainConfig& cfg, TerrainState& st);
+  static void stackLaserScans(const TerrainConfig& cfg, TerrainState& st);
+  static void updateVoxels(const TerrainConfig& cfg, TerrainState& st);
+  static void extractTerrainCloud(const TerrainConfig& cfg, TerrainState& st);
+  static void estimateGround(const TerrainConfig& cfg, TerrainState& st);
+  static void detectDynamicObstacles(const TerrainConfig& cfg, TerrainState& st);
+  static void filterDynamicObstaclePoints(const TerrainConfig& cfg, TerrainState& st,
+                                          int laser_cloud_crop_size);
+  static void computeElevation(const TerrainConfig& cfg, TerrainState& st);
+  static void computeHeightMap(const TerrainConfig& cfg, TerrainState& st,
+                               int terrain_cloud_size);
+  static void addNoDataObstacles(const TerrainConfig& cfg, TerrainState& st);
+};
