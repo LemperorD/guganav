@@ -125,12 +125,12 @@ bool TerrainAnalysis::processOnce() {
   }
   TerrainAlgorithm::run(context_);
 
-  sensor_msgs::msg::PointCloud2 terrainCloud2;
-  pcl::toROSMsg(context_.terrainCloudElev(), terrainCloud2);
-  terrainCloud2.header.stamp = rclcpp::Time(
+  sensor_msgs::msg::PointCloud2 terraincloud2;
+  pcl::toROSMsg(context_.terrainCloudElev(), terraincloud2);
+  terraincloud2.header.stamp = rclcpp::Time(
       static_cast<uint64_t>(context_.laser_cloud_time_ * 1e9));
-  terrainCloud2.header.frame_id = "odom";
-  pub_terrain_map_->publish(terrainCloud2);
+  terraincloud2.header.frame_id = "odom";
+  pub_terrain_map_->publish(terraincloud2);
 
   return rclcpp::ok();
 }
