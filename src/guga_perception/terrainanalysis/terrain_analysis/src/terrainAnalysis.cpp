@@ -4,6 +4,7 @@
 // ...
 
 #include "terrain_analysis/terrain_analysis.hpp"
+#include "terrain_analysis/core/algorithm.hpp"
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -114,7 +115,7 @@ bool TerrainAnalysis::processOnce() {
   if (!ctx_.new_laser_cloud_) {
     return rclcpp::ok();
   }
-  ctx_.processTerrainData();
+  TerrainAlgorithm::run(ctx_);
 
   sensor_msgs::msg::PointCloud2 terrainCloud2;
   pcl::toROSMsg(ctx_.terrainCloudElev(), terrainCloud2);

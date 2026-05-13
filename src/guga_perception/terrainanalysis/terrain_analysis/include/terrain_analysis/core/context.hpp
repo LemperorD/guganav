@@ -26,9 +26,6 @@ public:
   void onJoystick(bool button5);
   void onClearing(float dis);
 
-  // Pipeline
-  void processTerrainData();
-
   const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev() const {
     return *terrain_cloud_elev_;
   }

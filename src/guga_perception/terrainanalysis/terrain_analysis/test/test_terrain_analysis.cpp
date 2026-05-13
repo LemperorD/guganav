@@ -1,4 +1,5 @@
 #include "terrain_analysis/terrain_analysis.hpp"
+#include "terrain_analysis/core/algorithm.hpp"
 
 #include <gtest/gtest.h>
 
@@ -152,7 +153,7 @@ TEST_F(TerrainAnalysisTest, FlatGround_DetectsGround_ZNearZero) {
     cloud->push_back(p);
   }
   SendCloud(cloud, 100.0);
-  terrain_->ctx_.processTerrainData();
+  TerrainAlgorithm::run(terrain_->ctx_);
 
   EXPECT_GT(terrain_->terrainCloudElev().points.size(), 0u)
       << "terrainCloudElev should contain output points";
@@ -184,7 +185,7 @@ TEST_F(TerrainAnalysisTest, Obstacle_DetectedAboveGround) {
   }
 
   SendCloud(cloud, 100.0);
-  terrain_->ctx_.processTerrainData();
+  TerrainAlgorithm::run(terrain_->ctx_);
 
   EXPECT_GT(terrain_->terrainCloudElev().points.size(), 0u);
 
@@ -220,7 +221,7 @@ TEST_F(TerrainAnalysisTest, IsolatedObstacle_RejectedWhenVoxelSparse) {
   cloud->push_back(obs);
 
   SendCloud(cloud, 100.0);
-  terrain_->ctx_.processTerrainData();
+  TerrainAlgorithm::run(terrain_->ctx_);
 
   // The isolated obstacle point is in a voxel with < minBlockPointNum (10)
   // ground points, so it should be excluded from output

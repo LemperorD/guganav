@@ -32,7 +32,7 @@ find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 
 # Library
-add_library(terrain_analysis_lib src/terrainAnalysis.cpp src/core/context.cpp)
+add_library(terrain_analysis_lib src/terrainAnalysis.cpp src/core/context.cpp src/core/algorithm.cpp)
 target_include_directories(terrain_analysis_lib PUBLIC include)
 ament_target_dependencies(
   terrain_analysis_lib
