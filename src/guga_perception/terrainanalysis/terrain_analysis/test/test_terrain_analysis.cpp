@@ -235,3 +235,154 @@ TEST_F(TerrainAnalysisTest, IsolatedObstacle_RejectedWhenVoxelSparse) {
   EXPECT_FALSE(found_isolated)
       << "Isolated obstacle in sparse voxel should be excluded";
 }
+
+// ═══════════════════════════════════════════════
+// Algorithm stage tests
+// ═══════════════════════════════════════════════
+
+TEST_F(TerrainAnalysisTest, Rollover_NoShiftWhenStationary) {
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  int sx = terrain_->ctx_.terrain_voxel_shift_x_;
+  int sy = terrain_->ctx_.terrain_voxel_shift_y_;
+
+  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->ctx_);
+
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_shift_x_, sx);
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_shift_y_, sy);
+}
+
+TEST_F(TerrainAnalysisTest, Rollover_ShiftX_Negative) {
+  terrain_->ctx_.vehicle_x_ = -2.0f;  // beyond voxel_size=1.0 to the left
+  int sx = terrain_->ctx_.terrain_voxel_shift_x_;
+
+  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->ctx_);
+
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_shift_x_, sx - 1);
+}
+
+TEST_F(TerrainAnalysisTest, Rollover_ShiftX_Positive) {
+  terrain_->ctx_.vehicle_x_ = 2.0f;
+  int sx = terrain_->ctx_.terrain_voxel_shift_x_;
+
+  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->ctx_);
+
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_shift_x_, sx + 1);
+}
+
+TEST_F(TerrainAnalysisTest, Rollover_ShiftY_Negative) {
+  terrain_->ctx_.vehicle_y_ = -2.0f;
+  int sy = terrain_->ctx_.terrain_voxel_shift_y_;
+
+  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->ctx_);
+
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_shift_y_, sy - 1);
+}
+
+TEST_F(TerrainAnalysisTest, Rollover_ShiftY_Positive) {
+  terrain_->ctx_.vehicle_y_ = 2.0f;
+  int sy = terrain_->ctx_.terrain_voxel_shift_y_;
+
+  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->ctx_);
+
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_shift_y_, sy + 1);
+}
+
+TEST_F(TerrainAnalysisTest, Rollover_PreservesVoxelData) {
+  terrain_->ctx_.vehicle_x_ = -2.0f;
+  // Place a point in voxel(0,0) before shift
+  terrain_->ctx_.terrain_voxel_cloud_[0]->clear();
+  pcl::PointXYZI p{0, 0, 0, 0};
+  terrain_->ctx_.terrain_voxel_cloud_[0]->push_back(p);
+
+  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->ctx_);
+
+  // After shift-left, voxel(0,0) should be empty (cleared), old data moved
+  EXPECT_TRUE(terrain_->ctx_.terrain_voxel_cloud_[0]->points.empty());
+}
+
+TEST_F(TerrainAnalysisTest, StackLaserScans_BinsPointsToCenter) {
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  for (int i = 0; i < TerrainAnalysisContext::kTerrainVoxelNum; i++) {
+    terrain_->ctx_.terrain_voxel_cloud_[i]->clear();
+    terrain_->ctx_.terrain_voxel_update_num_[i] = 0;
+  }
+  terrain_->ctx_.laser_cloud_crop_->clear();
+  pcl::PointXYZI p{0, 0, 0, 0};
+  terrain_->ctx_.laser_cloud_crop_->push_back(p);
+
+  TerrainAlgorithm::stackLaserScans(terrain_->ctx_);
+
+  int c = TerrainAnalysisContext::kTerrainVoxelWidth * TerrainAnalysisContext::kTerrainVoxelHalfWidth +
+          TerrainAnalysisContext::kTerrainVoxelHalfWidth;
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_cloud_[c]->points.size(), 1u);
+  EXPECT_EQ(terrain_->ctx_.terrain_voxel_update_num_[c], 1);
+}
+
+TEST_F(TerrainAnalysisTest, StackLaserScans_EmptyCloud_NoOp) {
+  terrain_->ctx_.laser_cloud_crop_->clear();
+  for (int i = 0; i < TerrainAnalysisContext::kTerrainVoxelNum; i++) {
+    terrain_->ctx_.terrain_voxel_update_num_[i] = 0;
+  }
+
+  TerrainAlgorithm::stackLaserScans(terrain_->ctx_);
+
+  for (int i = 0; i < TerrainAnalysisContext::kTerrainVoxelNum; i++) {
+    EXPECT_EQ(terrain_->ctx_.terrain_voxel_update_num_[i], 0);
+  }
+}
+
+TEST_F(TerrainAnalysisTest, ComputeElevation_SortingMode_UsesQuantile) {
+  terrain_->ctx_.use_sorting_ = true;
+  terrain_->ctx_.quantile_z_ = 0.5;
+  terrain_->ctx_.limit_ground_lift_ = false;
+  int idx = TerrainAnalysisContext::kPlanarVoxelWidth * TerrainAnalysisContext::kPlanarVoxelHalfWidth +
+            TerrainAnalysisContext::kPlanarVoxelHalfWidth;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_voxel_elev_[i] = 999;
+    terrain_->ctx_.planar_point_elev_[i].clear();
+  }
+  terrain_->ctx_.planar_point_elev_[idx] = {0.1f, 0.5f, 0.3f, 0.2f, 0.4f};
+
+  TerrainAlgorithm::computeElevation(terrain_->ctx_);
+
+  // sorted: 0.1, 0.2, 0.3, 0.4, 0.5. quantile 0.5 * 5 = 2 → idx=2 → 0.3
+  EXPECT_FLOAT_EQ(terrain_->ctx_.planar_voxel_elev_[idx], 0.3f);
+}
+
+TEST_F(TerrainAnalysisTest, ComputeElevation_MinMode_UsesMinimum) {
+  terrain_->ctx_.use_sorting_ = false;
+  terrain_->ctx_.limit_ground_lift_ = false;
+  int idx = TerrainAnalysisContext::kPlanarVoxelWidth * TerrainAnalysisContext::kPlanarVoxelHalfWidth +
+            TerrainAnalysisContext::kPlanarVoxelHalfWidth;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_voxel_elev_[i] = 999;
+    terrain_->ctx_.planar_point_elev_[i].clear();
+  }
+  terrain_->ctx_.planar_point_elev_[idx] = {1.5f, 0.5f, 1.0f};
+
+  TerrainAlgorithm::computeElevation(terrain_->ctx_);
+
+  EXPECT_FLOAT_EQ(terrain_->ctx_.planar_voxel_elev_[idx], 0.5f);
+}
+
+TEST_F(TerrainAnalysisTest, ComputeElevation_GroundLiftLimited) {
+  terrain_->ctx_.use_sorting_ = true;
+  terrain_->ctx_.quantile_z_ = 0.5;
+  terrain_->ctx_.limit_ground_lift_ = true;
+  terrain_->ctx_.max_ground_lift_ = 0.3;
+  int idx = TerrainAnalysisContext::kPlanarVoxelWidth * TerrainAnalysisContext::kPlanarVoxelHalfWidth +
+            TerrainAnalysisContext::kPlanarVoxelHalfWidth;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_voxel_elev_[i] = 999;
+    terrain_->ctx_.planar_point_elev_[i].clear();
+  }
+  terrain_->ctx_.planar_point_elev_[idx] = {0.5f, 2.0f, 1.0f};
+  // sorted: 0.5, 1.0, 2.0. quantile 0.5*3=1 → 1.0. diff=1.0-0.5=0.5 > 0.3 → limit
+  // → 0.5 + 0.3 = 0.8
+
+  TerrainAlgorithm::computeElevation(terrain_->ctx_);
+
+  EXPECT_FLOAT_EQ(terrain_->ctx_.planar_voxel_elev_[idx], 0.8f);
+}
