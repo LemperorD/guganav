@@ -5,6 +5,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+#include <cmath>
 #include <vector>
 
 class TerrainAnalysisContext {
@@ -26,6 +27,11 @@ public:
                     double timestamp_sec);
   void onJoystick(bool button5);
   void onClearing(float dis);
+
+  double horizontalDistanceTo(double px, double py) const {
+    return sqrt((px - vehicle_x_) * (px - vehicle_x_)
+                + (py - vehicle_y_) * (py - vehicle_y_));
+  }
 
   const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev() const {
     return *terrain_cloud_elev_;
@@ -103,13 +109,13 @@ public:
   int no_data_inited_ = 0;
 
   // Vehicle pose
-  float vehicle_roll_ = 0.0f, vehicle_pitch_ = 0.0f, vehicle_yaw_ = 0.0f;
-  float vehicle_x_ = 0.0f, vehicle_y_ = 0.0f, vehicle_z_ = 0.0f;
-  float vehicle_x_rec_ = 0.0f, vehicle_y_rec_ = 0.0f;
+  double vehicle_roll_ = 0.0, vehicle_pitch_ = 0.0, vehicle_yaw_ = 0.0;
+  double vehicle_x_ = 0.0, vehicle_y_ = 0.0, vehicle_z_ = 0.0;
+  double vehicle_x_rec_ = 0.0, vehicle_y_rec_ = 0.0;
 
-  float sin_vehicle_roll_ = 0.0f, cos_vehicle_roll_ = 0.0f;
-  float sin_vehicle_pitch_ = 0.0f, cos_vehicle_pitch_ = 0.0f;
-  float sin_vehicle_yaw_ = 0.0f, cos_vehicle_yaw_ = 0.0f;
+  double sin_vehicle_roll_ = 0.0, cos_vehicle_roll_ = 0.0;
+  double sin_vehicle_pitch_ = 0.0, cos_vehicle_pitch_ = 0.0;
+  double sin_vehicle_yaw_ = 0.0, cos_vehicle_yaw_ = 0.0;
 
   pcl::VoxelGrid<pcl::PointXYZI> down_size_filter_;
 };

@@ -43,12 +43,12 @@ protected:
 TEST_F(TerrainAnalysisTest, OnOdometry_UpdatesVehiclePose) {
   terrain_->context_.onOdometry(1.0, 2.0, 3.0, 0.1, 0.2, 0.3);
 
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_x_, 1.0f);
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_y_, 2.0f);
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_z_, 3.0f);
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_roll_, 0.1f);
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_pitch_, 0.2f);
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_yaw_, 0.3f);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_x_, 1.0);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_y_, 2.0);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_z_, 3.0);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_roll_, 0.1);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_pitch_, 0.2);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_yaw_, 0.3);
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_ComputesSinCos) {
@@ -63,7 +63,7 @@ TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_ZeroToOne) {
   terrain_->context_.onOdometry(1.0, 2.0, 0, 0, 0, 0);
 
   EXPECT_EQ(terrain_->context_.no_data_inited_, 1);
-  EXPECT_FLOAT_EQ(terrain_->context_.vehicle_x_rec_, 1.0f);
+  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_x_rec_, 1.0);
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_OneToTwo_WhenFarEnough) {
@@ -253,7 +253,7 @@ TEST_F(TerrainAnalysisTest, Rollover_NoShiftWhenStationary) {
 }
 
 TEST_F(TerrainAnalysisTest, Rollover_ShiftX_Negative) {
-  terrain_->context_.vehicle_x_ = -2.0f;  // beyond voxel_size=1.0 to the left
+  terrain_->context_.vehicle_x_ = -2.0;  // beyond voxel_size=1.0 to the left
   int sx = terrain_->context_.terrain_voxel_shift_x_;
 
   TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_);
@@ -271,7 +271,7 @@ TEST_F(TerrainAnalysisTest, Rollover_ShiftX_Positive) {
 }
 
 TEST_F(TerrainAnalysisTest, Rollover_ShiftY_Negative) {
-  terrain_->context_.vehicle_y_ = -2.0f;
+  terrain_->context_.vehicle_y_ = -2.0;
   int sy = terrain_->context_.terrain_voxel_shift_y_;
 
   TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_);
@@ -289,7 +289,7 @@ TEST_F(TerrainAnalysisTest, Rollover_ShiftY_Positive) {
 }
 
 TEST_F(TerrainAnalysisTest, Rollover_PreservesVoxelData) {
-  terrain_->context_.vehicle_x_ = -2.0f;
+  terrain_->context_.vehicle_x_ = -2.0;
   // Place a point in voxel(0,0) before shift
   terrain_->context_.terrain_voxel_cloud_[0]->clear();
   pcl::PointXYZI p{0, 0, 0, 0};

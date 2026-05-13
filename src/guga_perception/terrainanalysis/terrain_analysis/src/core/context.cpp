@@ -43,9 +43,7 @@ void TerrainAnalysisContext::onOdometry(double x, double y, double z,
     no_data_inited_ = 1;
   }
   if (no_data_inited_ == 1) {
-    float dis = sqrt(
-        (vehicle_x_ - vehicle_x_rec_) * (vehicle_x_ - vehicle_x_rec_)
-        + (vehicle_y_ - vehicle_y_rec_) * (vehicle_y_ - vehicle_y_rec_));
+    double dis = horizontalDistanceTo(vehicle_x_rec_, vehicle_y_rec_);
     if (dis >= no_decay_dis_) {
       no_data_inited_ = 2;
     }
@@ -65,23 +63,23 @@ void TerrainAnalysisContext::onLaserCloud(
 
   pcl::PointXYZI point;
   laser_cloud_crop_->clear();
-  int laserCloudSize = laser_cloud_->points.size();
-  for (int i = 0; i < laserCloudSize; i++) {
+  int laser_cloud_size = static_cast<int>(laser_cloud_->points.size());
+  for (int i = 0; i < laser_cloud_size; i++) {
     point = laser_cloud_->points[i];
 
-    float pointX = point.x;
-    float pointY = point.y;
-    float pointZ = point.z;
+    float point_x = point.x;
+    float point_y = point.y;
+    float point_z = point.z;
 
-    float dis = sqrt((pointX - vehicle_x_) * (pointX - vehicle_x_)
-                     + (pointY - vehicle_y_) * (pointY - vehicle_y_));
-    if (pointZ - vehicle_z_ > min_rel_z_ - dis_ratio_z_ * dis
-        && pointZ - vehicle_z_ < max_rel_z_ + dis_ratio_z_ * dis
+    double dis = horizontalDistanceTo(point_x, point_y);
+    if (point_z - vehicle_z_ > min_rel_z_ - (dis_ratio_z_ * dis)
+        && point_z - vehicle_z_ < max_rel_z_ + (dis_ratio_z_ * dis)
         && dis < terrain_voxel_size_ * (kTerrainVoxelHalfWidth + 1)) {
-      point.x = pointX;
-      point.y = pointY;
-      point.z = pointZ;
-      point.intensity = laser_cloud_time_ - system_init_time_;
+      point.x = point_x;
+      point.y = point_y;
+      point.z = point_z;
+      point.intensity = static_cast<float>(laser_cloud_time_
+                                           - system_init_time_);
       laser_cloud_crop_->push_back(point);
     }
   }

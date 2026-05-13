@@ -130,8 +130,7 @@ void updateVoxels(TerrainAnalysisContext& ctx) {
       int cloud_size = ctx.laser_cloud_dwz_->points.size();
       for (int i = 0; i < cloud_size; i++) {
         point = ctx.laser_cloud_dwz_->points[i];
-        float dis = sqrt((point.x - ctx.vehicle_x_) * (point.x - ctx.vehicle_x_) +
-                         (point.y - ctx.vehicle_y_) * (point.y - ctx.vehicle_y_));
+        float dis = ctx.horizontalDistanceTo(point.x, point.y);
         if (point.z - ctx.vehicle_z_ > ctx.min_rel_z_ - ctx.dis_ratio_z_ * dis &&
             point.z - ctx.vehicle_z_ < ctx.max_rel_z_ + ctx.dis_ratio_z_ * dis &&
             (ctx.laser_cloud_time_ - ctx.system_init_time_ - point.intensity < ctx.decay_time_ ||
