@@ -22,16 +22,17 @@ public:
   bool processOnce();
 
   const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev() const {
-    return ctx_.terrainCloudElev();
+    return context_.terrainCloudElev();
   }
 
-  TerrainAnalysisContext ctx_;
+  TerrainAnalysisContext context_;
 
 private:
   rclcpp::Node* node_;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
-  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_laser_cloud_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
+      sub_laser_cloud_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_joystick_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_clearing_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_terrain_map_;
