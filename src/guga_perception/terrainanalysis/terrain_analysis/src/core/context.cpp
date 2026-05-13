@@ -26,26 +26,24 @@ void TerrainAnalysisContext::onOdometry(double x, double y, double z,
   vehicle_x_ = x;
   vehicle_y_ = y;
   vehicle_z_ = z;
-  vehicle_roll_ = roll;
-  vehicle_pitch_ = pitch;
-  vehicle_yaw_ = yaw;
 
-  sin_vehicle_roll_ = sin(vehicle_roll_);
-  cos_vehicle_roll_ = cos(vehicle_roll_);
-  sin_vehicle_pitch_ = sin(vehicle_pitch_);
-  cos_vehicle_pitch_ = cos(vehicle_pitch_);
-  sin_vehicle_yaw_ = sin(vehicle_yaw_);
-  cos_vehicle_yaw_ = cos(vehicle_yaw_);
+  sin_vehicle_roll_ = sin(roll);
+  cos_vehicle_roll_ = cos(roll);
+  sin_vehicle_pitch_ = sin(pitch);
+  cos_vehicle_pitch_ = cos(pitch);
+  sin_vehicle_yaw_ = sin(yaw);
+  cos_vehicle_yaw_ = cos(yaw);
 
-  if (no_data_inited_ == 0) {
+  using NoDataState = TerrainAnalysisContext::NoDataState;
+  if (no_data_inited_ == NoDataState::kUninitialized) {
     vehicle_x_rec_ = vehicle_x_;
     vehicle_y_rec_ = vehicle_y_;
-    no_data_inited_ = 1;
+    no_data_inited_ = NoDataState::kRecording;
   }
-  if (no_data_inited_ == 1) {
+  if (no_data_inited_ == NoDataState::kRecording) {
     double dis = horizontalDistanceTo(vehicle_x_rec_, vehicle_y_rec_);
     if (dis >= no_decay_dis_) {
-      no_data_inited_ = 2;
+      no_data_inited_ = NoDataState::kActive;
     }
   }
 }
@@ -89,13 +87,13 @@ void TerrainAnalysisContext::onLaserCloud(
 
 void TerrainAnalysisContext::onJoystick(bool button5) {
   if (button5) {
-    no_data_inited_ = 0;
+    no_data_inited_ = NoDataState::kUninitialized;
     clearing_cloud_ = true;
   }
 }
 
 void TerrainAnalysisContext::onClearing(float dis) {
-  no_data_inited_ = 0;
+  no_data_inited_ = NoDataState::kUninitialized;
   clearing_dis_ = dis;
   clearing_cloud_ = true;
 }

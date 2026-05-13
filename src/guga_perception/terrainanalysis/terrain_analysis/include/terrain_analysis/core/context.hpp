@@ -12,6 +12,12 @@ class TerrainAnalysisContext {
   friend class TerrainAnalysisTest;
 
 public:
+  enum class NoDataState : uint8_t {
+    kUninitialized = 0,
+    kRecording = 1,
+    kActive = 2
+  };
+
   TerrainAnalysisContext();
   ~TerrainAnalysisContext();
 
@@ -106,10 +112,9 @@ public:
 
   double system_init_time_ = 0.0;
   bool system_inited_ = false;
-  int no_data_inited_ = 0;
+  NoDataState no_data_inited_ = NoDataState::kUninitialized;
 
   // Vehicle pose
-  double vehicle_roll_ = 0.0, vehicle_pitch_ = 0.0, vehicle_yaw_ = 0.0;
   double vehicle_x_ = 0.0, vehicle_y_ = 0.0, vehicle_z_ = 0.0;
   double vehicle_x_rec_ = 0.0, vehicle_y_rec_ = 0.0;
 

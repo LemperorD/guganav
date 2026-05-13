@@ -433,7 +433,7 @@ void run(TerrainAnalysisContext& ctx) {
   computeElevation(ctx);
   computeHeightMap(ctx, ctx.terrain_cloud_->points.size());
 
-  if (ctx.no_data_obstacle_ && ctx.no_data_inited_ == 2) {
+  if (ctx.no_data_obstacle_ && ctx.no_data_inited_ == TerrainAnalysisContext::NoDataState::kActive) {
     addNoDataObstacles(ctx);
   }
 

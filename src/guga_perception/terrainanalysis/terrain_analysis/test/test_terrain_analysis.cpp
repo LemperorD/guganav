@@ -46,9 +46,9 @@ TEST_F(TerrainAnalysisTest, OnOdometry_UpdatesVehiclePose) {
   EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_x_, 1.0);
   EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_y_, 2.0);
   EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_z_, 3.0);
-  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_roll_, 0.1);
-  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_pitch_, 0.2);
-  EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_yaw_, 0.3);
+  EXPECT_DOUBLE_EQ(terrain_->context_.sin_vehicle_roll_, sin(0.1));
+  EXPECT_DOUBLE_EQ(terrain_->context_.sin_vehicle_pitch_, sin(0.2));
+  EXPECT_DOUBLE_EQ(terrain_->context_.cos_vehicle_yaw_, cos(0.3));
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_ComputesSinCos) {
@@ -59,33 +59,33 @@ TEST_F(TerrainAnalysisTest, OnOdometry_ComputesSinCos) {
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_ZeroToOne) {
-  EXPECT_EQ(terrain_->context_.no_data_inited_, 0);
+  EXPECT_EQ(terrain_->context_.no_data_inited_, TerrainAnalysisContext::NoDataState::kUninitialized);
   terrain_->context_.onOdometry(1.0, 2.0, 0, 0, 0, 0);
 
-  EXPECT_EQ(terrain_->context_.no_data_inited_, 1);
+  EXPECT_EQ(terrain_->context_.no_data_inited_, TerrainAnalysisContext::NoDataState::kRecording);
   EXPECT_DOUBLE_EQ(terrain_->context_.vehicle_x_rec_, 1.0);
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_OneToTwo_WhenFarEnough) {
-  terrain_->context_.no_data_inited_ = 1;
+  terrain_->context_.no_data_inited_ = TerrainAnalysisContext::NoDataState::kRecording;
   terrain_->context_.vehicle_x_rec_ = 0;
   terrain_->context_.vehicle_y_rec_ = 0;
   terrain_->context_.no_decay_dis_ = 4.0;
 
   terrain_->context_.onOdometry(3.0, 4.0, 0, 0, 0, 0);  // distance 5.0
 
-  EXPECT_EQ(terrain_->context_.no_data_inited_, 2);
+  EXPECT_EQ(terrain_->context_.no_data_inited_, TerrainAnalysisContext::NoDataState::kActive);
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_StaysOne_WhenClose) {
-  terrain_->context_.no_data_inited_ = 1;
+  terrain_->context_.no_data_inited_ = TerrainAnalysisContext::NoDataState::kRecording;
   terrain_->context_.vehicle_x_rec_ = 0;
   terrain_->context_.vehicle_y_rec_ = 0;
   terrain_->context_.no_decay_dis_ = 4.0;
 
   terrain_->context_.onOdometry(2.0, 2.0, 0, 0, 0, 0);  // distance 2.8
 
-  EXPECT_EQ(terrain_->context_.no_data_inited_, 1);
+  EXPECT_EQ(terrain_->context_.no_data_inited_, TerrainAnalysisContext::NoDataState::kRecording);
 }
 
 TEST_F(TerrainAnalysisTest, OnLaserCloud_SetsSystemInitTime) {
@@ -117,7 +117,7 @@ TEST_F(TerrainAnalysisTest, OnLaserCloud_CropsFarPoints) {
 TEST_F(TerrainAnalysisTest, OnJoystick_Button5_TriggersClearing) {
   terrain_->context_.onJoystick(true);
 
-  EXPECT_EQ(terrain_->context_.no_data_inited_, 0);
+  EXPECT_EQ(terrain_->context_.no_data_inited_, TerrainAnalysisContext::NoDataState::kUninitialized);
   EXPECT_TRUE(terrain_->context_.clearing_cloud_);
 }
 
@@ -133,7 +133,7 @@ TEST_F(TerrainAnalysisTest, OnClearing_SetsDisAndFlag) {
 
   EXPECT_DOUBLE_EQ(terrain_->context_.clearing_dis_, 10.5);
   EXPECT_TRUE(terrain_->context_.clearing_cloud_);
-  EXPECT_EQ(terrain_->context_.no_data_inited_, 0);
+  EXPECT_EQ(terrain_->context_.no_data_inited_, TerrainAnalysisContext::NoDataState::kUninitialized);
 }
 
 // ═══════════════════════════════════════════════
