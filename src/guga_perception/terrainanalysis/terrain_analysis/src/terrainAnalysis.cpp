@@ -126,13 +126,15 @@ bool TerrainAnalysis::processOnce() {
     return rclcpp::ok();
   }
   TerrainAlgorithm::run(context_);
+  publishPointCloud();
+  return rclcpp::ok();
+}
 
+void TerrainAnalysis::publishPointCloud() {
   sensor_msgs::msg::PointCloud2 terraincloud2;
   pcl::toROSMsg(context_.terrainCloudElev(), terraincloud2);
   terraincloud2.header.stamp = rclcpp::Time(
       static_cast<int64_t>(context_.laser_cloud_time_ * 1e9));
   terraincloud2.header.frame_id = "odom";
   pub_terrain_map_->publish(terraincloud2);
-
-  return rclcpp::ok();
 }

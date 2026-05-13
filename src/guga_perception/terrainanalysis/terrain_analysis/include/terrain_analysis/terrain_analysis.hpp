@@ -28,6 +28,8 @@ public:
   TerrainAnalysisContext context_;
 
 private:
+  void publishPointCloud();
+
   rclcpp::Node* node_;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
