@@ -8,14 +8,14 @@
 #include <cmath>
 
 TerrainAnalysisContext::TerrainAnalysisContext() {
-  laser_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-  laser_cloud_crop_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-  laser_cloud_dwz_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-  terrain_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-  terrain_cloud_elev_.reset(new pcl::PointCloud<pcl::PointXYZI>());
+  laser_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  laser_cloud_crop_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  laser_cloud_dwz_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  terrain_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  terrain_cloud_elev_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
 
-  for (int i = 0; i < kTerrainVoxelNum; i++) {
-    terrain_voxel_cloud_[i].reset(new pcl::PointCloud<pcl::PointXYZI>());
+  for (auto& cloud_ptr : terrain_voxel_cloud_) {
+    cloud_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   }
 }
 
