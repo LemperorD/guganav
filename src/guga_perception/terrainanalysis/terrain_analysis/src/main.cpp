@@ -2,9 +2,9 @@
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  auto nh = rclcpp::Node::make_shared("terrainAnalysis");
+  auto nodeptr = rclcpp::Node::make_shared("terrainAnalysis");
 
-  TerrainAnalysis terrain(nh.get());
+  TerrainAnalysis terrain(nodeptr.get());
   terrain.initialize();
 
   rclcpp::Rate rate(100);
