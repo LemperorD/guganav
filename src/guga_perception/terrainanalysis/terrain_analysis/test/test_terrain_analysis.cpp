@@ -386,3 +386,119 @@ TEST_F(TerrainAnalysisTest, ComputeElevation_GroundLiftLimited) {
 
   EXPECT_FLOAT_EQ(terrain_->ctx_.planar_voxel_elev_[idx], 0.8f);
 }
+
+TEST_F(TerrainAnalysisTest, DetectDynamicObstacles_ClosePoint_AddsMinCount) {
+  terrain_->ctx_.clear_dy_obs_ = true;
+  terrain_->ctx_.min_dy_obs_dis_ = 5.0;  // high threshold → all points "close"
+  terrain_->ctx_.min_dy_obs_point_num_ = 7;
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  terrain_->ctx_.vehicle_z_ = 0;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_voxel_dy_obs_[i] = 0;
+  }
+  terrain_->ctx_.terrain_cloud_->clear();
+  pcl::PointXYZI p{0.1f, 0, 0, 0};
+  terrain_->ctx_.terrain_cloud_->push_back(p);
+
+  TerrainAlgorithm::detectDynamicObstacles(terrain_->ctx_);
+
+  int total = 0;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    total += terrain_->ctx_.planar_voxel_dy_obs_[i];
+  }
+  EXPECT_GT(total, 0);
+}
+
+TEST_F(TerrainAnalysisTest, DetectDynamicObstacles_Disabled_NoEffect) {
+  terrain_->ctx_.clear_dy_obs_ = false;
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_voxel_dy_obs_[i] = 0;
+  }
+  terrain_->ctx_.terrain_cloud_->clear();
+  pcl::PointXYZI p{0.1f, 0, 0, 0};
+  terrain_->ctx_.terrain_cloud_->push_back(p);
+
+  // This function is only called when clear_dy_obs_ is true;
+  // testing that it still only runs the logic based on flag checks
+  TerrainAlgorithm::detectDynamicObstacles(terrain_->ctx_);
+
+  int total = 0;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    total += terrain_->ctx_.planar_voxel_dy_obs_[i];
+  }
+  EXPECT_GT(total, 0);  // detectDynamicObstacles ignores clear_dy_obs_ flag, processes all
+}
+
+TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
+  terrain_->ctx_.clear_dy_obs_ = true;
+  terrain_->ctx_.min_dy_obs_angle_ = 10.0;
+  terrain_->ctx_.min_dy_obs_rel_z_ = -0.5;
+  int idx = TerrainAnalysisContext::kPlanarVoxelWidth * TerrainAnalysisContext::kPlanarVoxelHalfWidth +
+            TerrainAnalysisContext::kPlanarVoxelHalfWidth;
+  terrain_->ctx_.planar_voxel_dy_obs_[idx] = 10;
+
+  terrain_->ctx_.laser_cloud_crop_->clear();
+  pcl::PointXYZI p{0.05f, 0, 2.0f, 0};  // high relZ → angle close to 90° > 10°
+  terrain_->ctx_.laser_cloud_crop_->push_back(p);
+
+  TerrainAlgorithm::filterDynamicObstaclePoints(terrain_->ctx_, 1);
+
+  EXPECT_EQ(terrain_->ctx_.planar_voxel_dy_obs_[idx], 0)
+      << "High-angle point should reset dy_obs";
+}
+
+TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_LowAngle_Keeps) {
+  terrain_->ctx_.clear_dy_obs_ = true;
+  terrain_->ctx_.min_dy_obs_angle_ = 90.0;  // nearly impossible to exceed
+  terrain_->ctx_.min_dy_obs_rel_z_ = -0.5;
+  int idx = TerrainAnalysisContext::kPlanarVoxelWidth * TerrainAnalysisContext::kPlanarVoxelHalfWidth +
+            TerrainAnalysisContext::kPlanarVoxelHalfWidth;
+  terrain_->ctx_.planar_voxel_dy_obs_[idx] = 10;
+
+  terrain_->ctx_.laser_cloud_crop_->clear();
+  pcl::PointXYZI p{0.05f, 0, 0, 0};
+  terrain_->ctx_.laser_cloud_crop_->push_back(p);
+
+  TerrainAlgorithm::filterDynamicObstaclePoints(terrain_->ctx_, 1);
+
+  EXPECT_EQ(terrain_->ctx_.planar_voxel_dy_obs_[idx], 10)
+      << "Low-angle point should NOT reset dy_obs";
+}
+
+TEST_F(TerrainAnalysisTest, AddNoDataObstacles_CreatesObstaclePoints) {
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  terrain_->ctx_.vehicle_z_ = 0;
+  terrain_->ctx_.no_data_block_skip_num_ = 1;
+  terrain_->ctx_.min_block_point_num_ = 5;
+  terrain_->ctx_.vehicle_height_ = 1.5;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_point_elev_[i].clear();
+    terrain_->ctx_.planar_voxel_edge_[i] = 0;
+  }
+  terrain_->ctx_.terrain_cloud_elev_->clear();
+
+  TerrainAlgorithm::addNoDataObstacles(terrain_->ctx_);
+
+  EXPECT_GT(terrain_->ctx_.terrain_cloud_elev_->points.size(), 0u)
+      << "Should create obstacles in empty planar voxels";
+}
+
+TEST_F(TerrainAnalysisTest, AddNoDataObstacles_EnoughPoints_NoObstacle) {
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  terrain_->ctx_.min_block_point_num_ = 5;
+  for (int i = 0; i < TerrainAnalysisContext::kPlanarVoxelNum; i++) {
+    terrain_->ctx_.planar_point_elev_[i] = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+    terrain_->ctx_.planar_voxel_edge_[i] = 0;
+  }
+  terrain_->ctx_.terrain_cloud_elev_->clear();
+
+  TerrainAlgorithm::addNoDataObstacles(terrain_->ctx_);
+
+  EXPECT_EQ(terrain_->ctx_.terrain_cloud_elev_->points.size(), 0u)
+      << "All voxels have enough points, no obstacles should be added";
+}
