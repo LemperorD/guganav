@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 
 struct TerrainConfig;
 struct TerrainState;
@@ -18,11 +19,11 @@ public:
                                      TerrainState& state);
   static void filterDynamicObstaclePoints(const TerrainConfig& config,
                                           TerrainState& state,
-                                          int laser_cloud_crop_size);
+                                          size_t laser_cloud_crop_size);
   static void computeElevation(const TerrainConfig& config,
                                TerrainState& state);
   static void computeHeightMap(const TerrainConfig& config, TerrainState& state,
-                               int terrain_cloud_size);
+                               size_t terrain_cloud_size);
   static void addNoDataObstacles(const TerrainConfig& config,
                                  TerrainState& state);
 };

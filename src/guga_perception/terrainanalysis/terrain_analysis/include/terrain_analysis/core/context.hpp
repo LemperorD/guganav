@@ -28,10 +28,10 @@ struct TerrainConfig {
     return static_cast<size_t>(PLANAR_VOXEL_WIDTH * row + col);
   }
 
-  float scan_voxel_size = 0.05;
-  float decay_time = 2.0;
-  float no_decay_dis = 4.0;
-  float clearing_dis = 8.0;
+  double scan_voxel_size = 0.05;
+  double decay_time = 2.0;
+  double no_decay_dis = 4.0;
+  double clearing_dis = 8.0;
   bool use_sorting = true;
   double quantile_z = 0.25;
   bool consider_drop = false;
@@ -55,8 +55,8 @@ struct TerrainConfig {
   double max_rel_z = 0.2;
   double dis_ratio_z = 0.2;
 
-  float terrain_voxel_size = 1.0F;
-  float planar_voxel_size = 0.2F;
+  double terrain_voxel_size = 1.0;
+  double planar_voxel_size = 0.2;
 };
 
 // ═══════════════════════════════════════════════
@@ -87,8 +87,8 @@ struct TerrainState {
              TerrainConfig::TERRAIN_VOXEL_NUM>
       terrain_voxel_cloud;
   std::array<int, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_num;
-  std::array<float, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_time;
-  std::array<float, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_elev;
+  std::array<double, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_time;
+  std::array<double, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_elev;
   std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_edge;
   std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_dy_obs;
   std::array<std::vector<float>, TerrainConfig::PLANAR_VOXEL_NUM>
@@ -111,7 +111,7 @@ struct TerrainState {
 
   // Mutated by callbacks
   bool clearing_cloud = false;
-  float clearing_dis = 8.0;
+  double clearing_dis = 8.0;
 
   [[nodiscard]] double horizontalDistanceTo(double px, double py) const {
     return sqrt(((px - vehicle_x) * (px - vehicle_x))
