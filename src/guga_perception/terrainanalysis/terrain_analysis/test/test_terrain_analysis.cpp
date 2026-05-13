@@ -35,6 +35,110 @@ class TerrainAnalysisTest : public ::testing::Test {
   std::unique_ptr<TerrainAnalysis> terrain_;
 };
 
+// ═══════════════════════════════════════════════
+// Callback tests
+// ═══════════════════════════════════════════════
+
+TEST_F(TerrainAnalysisTest, OnOdometry_UpdatesVehiclePose) {
+  terrain_->ctx_.onOdometry(1.0, 2.0, 3.0, 0.1, 0.2, 0.3);
+
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_x_, 1.0f);
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_y_, 2.0f);
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_z_, 3.0f);
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_roll_, 0.1f);
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_pitch_, 0.2f);
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_yaw_, 0.3f);
+}
+
+TEST_F(TerrainAnalysisTest, OnOdometry_ComputesSinCos) {
+  terrain_->ctx_.onOdometry(0, 0, 0, 0, 0, M_PI / 4.0);
+
+  EXPECT_NEAR(terrain_->ctx_.sin_vehicle_yaw_, sin(M_PI / 4.0), 1e-5);
+  EXPECT_NEAR(terrain_->ctx_.cos_vehicle_yaw_, cos(M_PI / 4.0), 1e-5);
+}
+
+TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_ZeroToOne) {
+  EXPECT_EQ(terrain_->ctx_.no_data_inited_, 0);
+  terrain_->ctx_.onOdometry(1.0, 2.0, 0, 0, 0, 0);
+
+  EXPECT_EQ(terrain_->ctx_.no_data_inited_, 1);
+  EXPECT_FLOAT_EQ(terrain_->ctx_.vehicle_x_rec_, 1.0f);
+}
+
+TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_OneToTwo_WhenFarEnough) {
+  terrain_->ctx_.no_data_inited_ = 1;
+  terrain_->ctx_.vehicle_x_rec_ = 0;
+  terrain_->ctx_.vehicle_y_rec_ = 0;
+  terrain_->ctx_.no_decay_dis_ = 4.0;
+
+  terrain_->ctx_.onOdometry(3.0, 4.0, 0, 0, 0, 0);  // distance 5.0
+
+  EXPECT_EQ(terrain_->ctx_.no_data_inited_, 2);
+}
+
+TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_StaysOne_WhenClose) {
+  terrain_->ctx_.no_data_inited_ = 1;
+  terrain_->ctx_.vehicle_x_rec_ = 0;
+  terrain_->ctx_.vehicle_y_rec_ = 0;
+  terrain_->ctx_.no_decay_dis_ = 4.0;
+
+  terrain_->ctx_.onOdometry(2.0, 2.0, 0, 0, 0, 0);  // distance 2.8
+
+  EXPECT_EQ(terrain_->ctx_.no_data_inited_, 1);
+}
+
+TEST_F(TerrainAnalysisTest, OnLaserCloud_SetsSystemInitTime) {
+  EXPECT_FALSE(terrain_->ctx_.system_inited_);
+  auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  cloud->push_back({0, 0, 0, 0});
+
+  terrain_->ctx_.onLaserCloud(cloud, 100.0);
+
+  EXPECT_TRUE(terrain_->ctx_.system_inited_);
+  EXPECT_DOUBLE_EQ(terrain_->ctx_.system_init_time_, 100.0);
+}
+
+TEST_F(TerrainAnalysisTest, OnLaserCloud_CropsFarPoints) {
+  terrain_->ctx_.vehicle_x_ = 0;
+  terrain_->ctx_.vehicle_y_ = 0;
+  terrain_->ctx_.vehicle_z_ = 0;
+  auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  pcl::PointXYZI near_pt{0, 0, 0, 0};
+  pcl::PointXYZI far_pt{50, 50, 0, 0};
+  cloud->push_back(near_pt);
+  cloud->push_back(far_pt);
+
+  terrain_->ctx_.onLaserCloud(cloud, 100.0);
+
+  EXPECT_EQ(terrain_->ctx_.laser_cloud_crop_->points.size(), 1u);
+}
+
+TEST_F(TerrainAnalysisTest, OnJoystick_Button5_TriggersClearing) {
+  terrain_->ctx_.onJoystick(true);
+
+  EXPECT_EQ(terrain_->ctx_.no_data_inited_, 0);
+  EXPECT_TRUE(terrain_->ctx_.clearing_cloud_);
+}
+
+TEST_F(TerrainAnalysisTest, OnJoystick_Button5Low_NoTrigger) {
+  terrain_->ctx_.clearing_cloud_ = false;
+  terrain_->ctx_.onJoystick(false);
+
+  EXPECT_FALSE(terrain_->ctx_.clearing_cloud_);
+}
+
+TEST_F(TerrainAnalysisTest, OnClearing_SetsDisAndFlag) {
+  terrain_->ctx_.onClearing(10.5);
+
+  EXPECT_DOUBLE_EQ(terrain_->ctx_.clearing_dis_, 10.5);
+  EXPECT_TRUE(terrain_->ctx_.clearing_cloud_);
+  EXPECT_EQ(terrain_->ctx_.no_data_inited_, 0);
+}
+
+// ═══════════════════════════════════════════════
+// Pipeline tests
+// ═══════════════════════════════════════════════
+
 TEST_F(TerrainAnalysisTest, FlatGround_DetectsGround_ZNearZero) {
   SendOdom(0, 0, 0, 0);
 
