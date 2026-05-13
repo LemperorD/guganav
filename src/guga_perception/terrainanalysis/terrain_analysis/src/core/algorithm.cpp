@@ -70,59 +70,56 @@ namespace {
 
 void TerrainAlgorithm::rolloverTerrainVoxels(const TerrainConfig& config,
                                              TerrainState& state) {
-  const double vs = config.terrain_voxel_size;
-  double cen_x = vs * state.terrain_voxel_shift_x;
-  double cen_y = vs * state.terrain_voxel_shift_y;
+  const double voxel_size = config.terrain_voxel_size;
+  double cen_x = voxel_size * state.terrain_voxel_shift_x;
+  double cen_y = voxel_size * state.terrain_voxel_shift_y;
 
-  while (state.vehicle_x - cen_x < -vs) {
+  while (state.vehicle_x - cen_x < -voxel_size) {
     shiftGrid(state, Axis::X, false);
-    cen_x = vs * --state.terrain_voxel_shift_x;
+    cen_x = voxel_size * --state.terrain_voxel_shift_x;
   }
-  while (state.vehicle_x - cen_x > vs) {
+  while (state.vehicle_x - cen_x > voxel_size) {
     shiftGrid(state, Axis::X, true);
-    cen_x = vs * ++state.terrain_voxel_shift_x;
+    cen_x = voxel_size * ++state.terrain_voxel_shift_x;
   }
-  while (state.vehicle_y - cen_y < -vs) {
+  while (state.vehicle_y - cen_y < -voxel_size) {
     shiftGrid(state, Axis::Y, false);
-    cen_y = vs * --state.terrain_voxel_shift_y;
+    cen_y = voxel_size * --state.terrain_voxel_shift_y;
   }
-  while (state.vehicle_y - cen_y > vs) {
+  while (state.vehicle_y - cen_y > voxel_size) {
     shiftGrid(state, Axis::Y, true);
-    cen_y = vs * ++state.terrain_voxel_shift_y;
+    cen_y = voxel_size * ++state.terrain_voxel_shift_y;
   }
 }
+
+namespace {
+  int toVoxelIndex(float pc, double vc, double vs, int hw) {
+    int idx = static_cast<int>((pc - vc + vs / 2) / vs) + hw;
+    if (pc - vc + vs / 2 < 0) {
+      idx--;
+    }
+    return idx;
+  }
+}  // namespace
 
 void TerrainAlgorithm::stackLaserScans(const TerrainConfig& config,
                                        TerrainState& state) {
   pcl::PointXYZI point;
-  size_t laser_cloud_crop_size = state.laser_cloud_crop->points.size();
-  for (size_t i = 0; i < laser_cloud_crop_size; i++) {
+  const double vs = config.terrain_voxel_size;
+  constexpr int HW = TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
+  constexpr int W = TerrainConfig::TERRAIN_VOXEL_WIDTH;
+
+  size_t sz = state.laser_cloud_crop->points.size();
+  for (size_t i = 0; i < sz; i++) {
     point = state.laser_cloud_crop->points[i];
-
-    int ind_x = static_cast<int>((point.x - state.vehicle_x
-                                  + (config.terrain_voxel_size / 2))
-                                 / config.terrain_voxel_size)
-              + TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
-    int ind_y = static_cast<int>((point.y - state.vehicle_y
-                                  + (config.terrain_voxel_size / 2))
-                                 / config.terrain_voxel_size)
-              + TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
-
-    if (point.x - state.vehicle_x + (config.terrain_voxel_size / 2) < 0) {
-      ind_x--;
+    int ix = toVoxelIndex(point.x, state.vehicle_x, vs, HW);
+    int iy = toVoxelIndex(point.y, state.vehicle_y, vs, HW);
+    if (ix < 0 || ix >= W || iy < 0 || iy >= W) {
+      continue;
     }
-    if (point.y - state.vehicle_y + (config.terrain_voxel_size / 2) < 0) {
-      ind_y--;
-    }
-
-    if (ind_x >= 0 && ind_x < TerrainConfig::TERRAIN_VOXEL_WIDTH && ind_y >= 0
-        && ind_y < TerrainConfig::TERRAIN_VOXEL_WIDTH) {
-      state
-          .terrain_voxel_cloud[TerrainConfig::terrain_voxel_index(ind_x, ind_y)]
-          ->push_back(point);
-      state.terrain_voxel_update_num[TerrainConfig::terrain_voxel_index(
-          ind_x, ind_y)]++;
-    }
+    auto idx = TerrainConfig::terrain_voxel_index(ix, iy);
+    state.terrain_voxel_cloud[idx]->push_back(point);
+    state.terrain_voxel_update_num[idx]++;
   }
 }
 
@@ -189,40 +186,25 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
     state.planar_voxel_dy_obs[i] = 0;
     state.planar_point_elev[i].clear();
   }
-
+  const double vs = config.planar_voxel_size;
+  constexpr int HW = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
   pcl::PointXYZI point;
-  size_t terrain_cloud_size = state.terrain_cloud->points.size();
-  for (size_t i = 0; i < terrain_cloud_size; i++) {
+  size_t sz = state.terrain_cloud->points.size();
+  for (size_t i = 0; i < sz; i++) {
     point = state.terrain_cloud->points[i];
-
-    int ind_x = static_cast<int>(
-                    (point.x - state.vehicle_x + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-    int ind_y = static_cast<int>(
-                    (point.y - state.vehicle_y + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-
-    if (point.x - state.vehicle_x + config.planar_voxel_size / 2 < 0) {
-      ind_x--;
+    int ix = toVoxelIndex(point.x, state.vehicle_x, vs, HW);
+    int iy = toVoxelIndex(point.y, state.vehicle_y, vs, HW);
+    if (point.z - state.vehicle_z <= config.min_rel_z
+        || point.z - state.vehicle_z >= config.max_rel_z) {
+      continue;
     }
-    if (point.y - state.vehicle_y + config.planar_voxel_size / 2 < 0) {
-      ind_y--;
-    }
-
-    if (point.z - state.vehicle_z > config.min_rel_z
-        && point.z - state.vehicle_z < config.max_rel_z) {
-      for (int dX = -1; dX <= 1; dX++) {
-        for (int dY = -1; dY <= 1; dY++) {
-          if (ind_x + dX >= 0 && ind_x + dX < TerrainConfig::PLANAR_VOXEL_WIDTH
-              && ind_y + dY >= 0
-              && ind_y + dY < TerrainConfig::PLANAR_VOXEL_WIDTH) {
-            state
-                .planar_point_elev[TerrainConfig::planar_voxel_index(
-                    ind_x + dX, ind_y + dY)]
-                .push_back(point.z);
-          }
+    for (int dx = -1; dx <= 1; dx++) {
+      for (int dy = -1; dy <= 1; dy++) {
+        int nx = ix + dx, ny = iy + dy;
+        if (nx >= 0 && nx < W && ny >= 0 && ny < W) {
+          state.planar_point_elev[TerrainConfig::planar_voxel_index(nx, ny)]
+              .push_back(point.z);
         }
       }
     }
@@ -231,29 +213,16 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
 
 void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
                                               TerrainState& state) {
+  const double vs = config.planar_voxel_size;
+  constexpr int HW = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
   pcl::PointXYZI point;
-  size_t terrain_cloud_size = state.terrain_cloud->points.size();
-  for (size_t i = 0; i < terrain_cloud_size; i++) {
+  size_t sz = state.terrain_cloud->points.size();
+  for (size_t i = 0; i < sz; i++) {
     point = state.terrain_cloud->points[i];
-
-    int ind_x = static_cast<int>(
-                    (point.x - state.vehicle_x + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-    int ind_y = static_cast<int>(
-                    (point.y - state.vehicle_y + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-
-    if (point.x - state.vehicle_x + config.planar_voxel_size / 2 < 0) {
-      ind_x--;
-    }
-    if (point.y - state.vehicle_y + config.planar_voxel_size / 2 < 0) {
-      ind_y--;
-    }
-
-    if (ind_x < 0 || ind_x >= TerrainConfig::PLANAR_VOXEL_WIDTH || ind_y < 0
-        || ind_y >= TerrainConfig::PLANAR_VOXEL_WIDTH) {
+    int ix = toVoxelIndex(point.x, state.vehicle_x, vs, HW);
+    int iy = toVoxelIndex(point.y, state.vehicle_y, vs, HW);
+    if (ix < 0 || ix >= W || iy < 0 || iy >= W) {
       continue;
     }
 
@@ -263,8 +232,8 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
     float dis1 = sqrt(pointX1 * pointX1 + pointY1 * pointY1);
 
     if (dis1 <= config.min_dy_obs_dis) {
-      state.planar_voxel_dy_obs[TerrainConfig::planar_voxel_index(
-          ind_x, ind_y)] += config.min_dy_obs_point_num;
+      state.planar_voxel_dy_obs[TerrainConfig::planar_voxel_index(ix, iy)] +=
+          config.min_dy_obs_point_num;
       continue;
     }
 
@@ -296,8 +265,7 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
     float angle4 = atan2(pointZ4, dis4) * 180.0 / M_PI;
     if ((angle4 > config.min_dy_obs_vfov && angle4 < config.max_dy_obs_vfov)
         || fabs(pointZ4) < config.abs_dy_obs_rel_z_thre) {
-      state.planar_voxel_dy_obs[TerrainConfig::planar_voxel_index(ind_x,
-                                                                  ind_y)]++;
+      state.planar_voxel_dy_obs[TerrainConfig::planar_voxel_index(ix, iy)]++;
     }
   }
 }
@@ -305,28 +273,15 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
 void TerrainAlgorithm::filterDynamicObstaclePoints(
     const TerrainConfig& config, TerrainState& state,
     size_t laser_cloud_crop_size) {
+  const double vs = config.planar_voxel_size;
+  constexpr int HW = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
   pcl::PointXYZI point;
   for (size_t i = 0; i < laser_cloud_crop_size; i++) {
     point = state.laser_cloud_crop->points[i];
-
-    int ind_x = static_cast<int>(
-                    (point.x - state.vehicle_x + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-    int ind_y = static_cast<int>(
-                    (point.y - state.vehicle_y + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-
-    if (point.x - state.vehicle_x + config.planar_voxel_size / 2 < 0) {
-      ind_x--;
-    }
-    if (point.y - state.vehicle_y + config.planar_voxel_size / 2 < 0) {
-      ind_y--;
-    }
-
-    if (ind_x < 0 || ind_x >= TerrainConfig::PLANAR_VOXEL_WIDTH || ind_y < 0
-        || ind_y >= TerrainConfig::PLANAR_VOXEL_WIDTH) {
+    int ix = toVoxelIndex(point.x, state.vehicle_x, vs, HW);
+    int iy = toVoxelIndex(point.y, state.vehicle_y, vs, HW);
+    if (ix < 0 || ix >= W || iy < 0 || iy >= W) {
       continue;
     }
 
@@ -337,8 +292,7 @@ void TerrainAlgorithm::filterDynamicObstaclePoints(
     float angle1 = atan2(pointZ1 - config.min_dy_obs_rel_z, dis1) * 180.0
                  / M_PI;
     if (angle1 > config.min_dy_obs_angle) {
-      state.planar_voxel_dy_obs[TerrainConfig::planar_voxel_index(ind_x,
-                                                                  ind_y)] = 0;
+      state.planar_voxel_dy_obs[TerrainConfig::planar_voxel_index(ix, iy)] = 0;
     }
   }
 }
@@ -394,6 +348,9 @@ void TerrainAlgorithm::computeElevation(const TerrainConfig& config,
 void TerrainAlgorithm::computeHeightMap(const TerrainConfig& config,
                                         TerrainState& state,
                                         size_t terrain_cloud_size) {
+  const double vs = config.planar_voxel_size;
+  constexpr int HW = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
   state.terrain_cloud_elev->clear();
   size_t terrain_cloud_elev_size = 0;
   pcl::PointXYZI point;
@@ -404,29 +361,12 @@ void TerrainAlgorithm::computeHeightMap(const TerrainConfig& config,
           && point.z - state.vehicle_z < config.max_rel_z)) {
       continue;
     }
-
-    int ind_x = static_cast<int>(
-                    (point.x - state.vehicle_x + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-    int ind_y = static_cast<int>(
-                    (point.y - state.vehicle_y + config.planar_voxel_size / 2)
-                    / config.planar_voxel_size)
-              + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-
-    if (point.x - state.vehicle_x + config.planar_voxel_size / 2 < 0) {
-      ind_x--;
-    }
-    if (point.y - state.vehicle_y + config.planar_voxel_size / 2 < 0) {
-      ind_y--;
-    }
-
-    if (ind_x < 0 || ind_x >= TerrainConfig::PLANAR_VOXEL_WIDTH || ind_y < 0
-        || ind_y >= TerrainConfig::PLANAR_VOXEL_WIDTH) {
+    int ix = toVoxelIndex(point.x, state.vehicle_x, vs, HW);
+    int iy = toVoxelIndex(point.y, state.vehicle_y, vs, HW);
+    if (ix < 0 || ix >= W || iy < 0 || iy >= W) {
       continue;
     }
-
-    int idx = TerrainConfig::planar_voxel_index(ind_x, ind_y);
+    int idx = TerrainConfig::planar_voxel_index(ix, iy);
     if (state.planar_voxel_dy_obs[idx] >= config.min_dy_obs_point_num
         && config.clear_dy_obs) {
       continue;
