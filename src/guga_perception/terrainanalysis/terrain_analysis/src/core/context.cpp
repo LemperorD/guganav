@@ -21,8 +21,8 @@ TerrainAnalysisContext::TerrainAnalysisContext() {
 
 TerrainAnalysisContext::~TerrainAnalysisContext() = default;
 
-void TerrainAnalysisContext::onOdometry(float x, float y, float z,
-                                       float roll, float pitch, float yaw) {
+void TerrainAnalysisContext::onOdometry(double x, double y, double z,
+                                        double roll, double pitch, double yaw) {
   vehicle_x_ = x;
   vehicle_y_ = y;
   vehicle_z_ = z;
@@ -43,10 +43,12 @@ void TerrainAnalysisContext::onOdometry(float x, float y, float z,
     no_data_inited_ = 1;
   }
   if (no_data_inited_ == 1) {
-    float dis =
-        sqrt((vehicle_x_ - vehicle_x_rec_) * (vehicle_x_ - vehicle_x_rec_) +
-             (vehicle_y_ - vehicle_y_rec_) * (vehicle_y_ - vehicle_y_rec_));
-    if (dis >= no_decay_dis_) no_data_inited_ = 2;
+    float dis = sqrt(
+        (vehicle_x_ - vehicle_x_rec_) * (vehicle_x_ - vehicle_x_rec_)
+        + (vehicle_y_ - vehicle_y_rec_) * (vehicle_y_ - vehicle_y_rec_));
+    if (dis >= no_decay_dis_) {
+      no_data_inited_ = 2;
+    }
   }
 }
 
@@ -71,11 +73,11 @@ void TerrainAnalysisContext::onLaserCloud(
     float pointY = point.y;
     float pointZ = point.z;
 
-    float dis = sqrt((pointX - vehicle_x_) * (pointX - vehicle_x_) +
-                     (pointY - vehicle_y_) * (pointY - vehicle_y_));
-    if (pointZ - vehicle_z_ > min_rel_z_ - dis_ratio_z_ * dis &&
-        pointZ - vehicle_z_ < max_rel_z_ + dis_ratio_z_ * dis &&
-        dis < terrain_voxel_size_ * (kTerrainVoxelHalfWidth + 1)) {
+    float dis = sqrt((pointX - vehicle_x_) * (pointX - vehicle_x_)
+                     + (pointY - vehicle_y_) * (pointY - vehicle_y_));
+    if (pointZ - vehicle_z_ > min_rel_z_ - dis_ratio_z_ * dis
+        && pointZ - vehicle_z_ < max_rel_z_ + dis_ratio_z_ * dis
+        && dis < terrain_voxel_size_ * (kTerrainVoxelHalfWidth + 1)) {
       point.x = pointX;
       point.y = pointY;
       point.z = pointZ;

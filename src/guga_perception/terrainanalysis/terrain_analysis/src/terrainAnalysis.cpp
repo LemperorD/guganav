@@ -82,8 +82,10 @@ void TerrainAnalysis::initialize() {
 
   sub_odometry_ = node_->create_subscription<nav_msgs::msg::Odometry>(
       "lidar_odometry", 5, [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
-        double roll, pitch, yaw;
-        auto& q = msg->pose.pose.orientation;
+        double roll{};
+        double pitch{};
+        double yaw{};
+        const auto& q = msg->pose.pose.orientation;
         tf2::Matrix3x3(tf2::Quaternion(q.x, q.y, q.z, q.w))
             .getRPY(roll, pitch, yaw);
         context_.onOdometry(msg->pose.pose.position.x,
@@ -128,7 +130,7 @@ bool TerrainAnalysis::processOnce() {
   sensor_msgs::msg::PointCloud2 terraincloud2;
   pcl::toROSMsg(context_.terrainCloudElev(), terraincloud2);
   terraincloud2.header.stamp = rclcpp::Time(
-      static_cast<uint64_t>(context_.laser_cloud_time_ * 1e9));
+      static_cast<int64_t>(context_.laser_cloud_time_ * 1e9));
   terraincloud2.header.frame_id = "odom";
   pub_terrain_map_->publish(terraincloud2);
 

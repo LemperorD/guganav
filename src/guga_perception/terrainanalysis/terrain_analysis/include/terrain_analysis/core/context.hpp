@@ -1,5 +1,6 @@
 #pragma once
 
+#include <gtest/internal/gtest-internal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -19,8 +20,8 @@ public:
   TerrainAnalysisContext& operator=(TerrainAnalysisContext&&) = delete;
 
   // Callbacks (domain types only, no ROS2)
-  void onOdometry(float x, float y, float z,
-                  float roll, float pitch, float yaw);
+  void onOdometry(double x, double y, double z, double roll, double pitch,
+                  double yaw);
   void onLaserCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
                     double timestamp_sec);
   void onJoystick(bool button5);
@@ -35,17 +36,18 @@ public:
 
   static constexpr int kTerrainVoxelWidth = 21;
   static constexpr int kTerrainVoxelHalfWidth = (kTerrainVoxelWidth - 1) / 2;
-  static constexpr int kTerrainVoxelNum = kTerrainVoxelWidth * kTerrainVoxelWidth;
+  static constexpr int kTerrainVoxelNum = kTerrainVoxelWidth
+                                        * kTerrainVoxelWidth;
 
   static constexpr int kPlanarVoxelWidth = 51;
   static constexpr int kPlanarVoxelHalfWidth = (kPlanarVoxelWidth - 1) / 2;
   static constexpr int kPlanarVoxelNum = kPlanarVoxelWidth * kPlanarVoxelWidth;
 
   // Parameters
-  double scan_voxel_size_ = 0.05;
-  double decay_time_ = 2.0;
-  double no_decay_dis_ = 4.0;
-  double clearing_dis_ = 8.0;
+  float scan_voxel_size_ = 0.05;
+  float decay_time_ = 2.0;
+  float no_decay_dis_ = 4.0;
+  float clearing_dis_ = 8.0;
   bool clearing_cloud_ = false;
   bool use_sorting_ = true;
   double quantile_z_ = 0.25;
