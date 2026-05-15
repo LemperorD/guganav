@@ -107,22 +107,19 @@ namespace {
 
 void TerrainAlgorithm::stackLaserScans(const TerrainConfig& config,
                                        TerrainState& state) {
-  pcl::PointXYZI point;
   const double voxel_size = config.terrain_voxel_size;
   constexpr int voxel_half_width = TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
   constexpr int voxel_width = TerrainConfig::TERRAIN_VOXEL_WIDTH;
+  const double v_x = state.vehicle_x;
+  const double v_y = state.vehicle_y;
 
-  size_t size = state.laser_cloud_crop->points.size();
-  for (size_t i = 0; i < size; i++) {
-    point = state.laser_cloud_crop->points[i];
-    int row = toVoxelIndex(point.x, state.vehicle_x, voxel_size,
-                           voxel_half_width);
-    int column = toVoxelIndex(point.y, state.vehicle_y, voxel_size,
-                              voxel_half_width);
+  for (const auto& point : state.laser_cloud_crop->points) {
+    int row = toVoxelIndex(point.x, v_x, voxel_size, voxel_half_width);
+    int column = toVoxelIndex(point.y, v_y, voxel_size, voxel_half_width);
     if (row < 0 || row >= voxel_width || column < 0 || column >= voxel_width) {
       continue;
     }
-    auto cell = TerrainConfig::terrain_voxel_index(row, column);
+    size_t cell = TerrainConfig::terrain_voxel_index(row, column);
     state.terrain_voxel_cloud[cell]->push_back(point);
     state.terrain_voxel_update_num[cell]++;
   }
