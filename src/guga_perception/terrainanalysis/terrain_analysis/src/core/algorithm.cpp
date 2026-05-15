@@ -47,12 +47,12 @@ namespace {
   enum class Axis : uint8_t { X, Y };
 
   void shiftGrid(TerrainState& st, Axis axis, bool positive) {
-    static constexpr int width = TerrainConfig::TERRAIN_VOXEL_WIDTH;
-    const int src = positive ? 0 : width - 1;
-    const int dst = positive ? width - 1 : 0;
+    static constexpr int WIDTH = TerrainConfig::TERRAIN_VOXEL_WIDTH;
+    const int src = positive ? 0 : WIDTH - 1;
+    const int dst = positive ? WIDTH - 1 : 0;
     const int step = positive ? 1 : -1;
 
-    for (int fixed = 0; fixed < width; fixed++) {
+    for (int fixed = 0; fixed < WIDTH; fixed++) {
       auto cell = [&](int m) {
         return axis == Axis::X ? TerrainConfig::terrain_voxel_index(m, fixed)
                                : TerrainConfig::terrain_voxel_index(fixed, m);
@@ -96,12 +96,10 @@ void TerrainAlgorithm::rolloverTerrainVoxels(const TerrainConfig& config,
 namespace {
   int toVoxelIndex(float point_coord, double vehicle_coord, double voxel_size,
                    int half_width) {
-    int cell = static_cast<int>((point_coord - vehicle_coord + (voxel_size / 2))
-                                / voxel_size)
+    const double half = voxel_size / 2;
+    int cell = static_cast<int>(
+        std::floor((point_coord - vehicle_coord + half) / voxel_size))
              + half_width;
-    if (point_coord - vehicle_coord + (voxel_size / 2) < 0) {
-      cell--;
-    }
     return cell;
   }
 }  // namespace
@@ -113,8 +111,8 @@ void TerrainAlgorithm::stackLaserScans(const TerrainConfig& config,
   constexpr int voxel_half_width = TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
   constexpr int voxel_width = TerrainConfig::TERRAIN_VOXEL_WIDTH;
 
-  size_t sz = state.laser_cloud_crop->points.size();
-  for (size_t i = 0; i < sz; i++) {
+  size_t size = state.laser_cloud_crop->points.size();
+  for (size_t i = 0; i < size; i++) {
     point = state.laser_cloud_crop->points[i];
     int row = toVoxelIndex(point.x, state.vehicle_x, voxel_size,
                            voxel_half_width);
@@ -196,8 +194,8 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
   constexpr int half_width = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
   constexpr int width = TerrainConfig::PLANAR_VOXEL_WIDTH;
   pcl::PointXYZI point;
-  size_t sz = state.terrain_cloud->points.size();
-  for (size_t i = 0; i < sz; i++) {
+  size_t size = state.terrain_cloud->points.size();
+  for (size_t i = 0; i < size; i++) {
     point = state.terrain_cloud->points[i];
     int ix = toVoxelIndex(point.x, state.vehicle_x, voxel_size, half_width);
     int iy = toVoxelIndex(point.y, state.vehicle_y, voxel_size, half_width);
@@ -208,7 +206,7 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
     for (int dx = -1; dx <= 1; dx++) {
       for (int dy = -1; dy <= 1; dy++) {
         int nx = ix + dx, ny = iy + dy;
-                if (nx >= 0 && nx < width && ny >= 0 && ny < width) {
+        if (nx >= 0 && nx < width && ny >= 0 && ny < width) {
           state.planar_point_elev[TerrainConfig::planar_voxel_index(nx, ny)]
               .push_back(point.z);
         }
