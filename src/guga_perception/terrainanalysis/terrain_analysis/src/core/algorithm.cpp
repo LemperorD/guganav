@@ -257,56 +257,57 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
   const double voxel_size = config.planar_voxel_size;
   constexpr int half_width = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
   constexpr int width = TerrainConfig::PLANAR_VOXEL_WIDTH;
-  pcl::PointXYZI point;
-  size_t sz = state.terrain_cloud->points.size();
-  for (size_t i = 0; i < sz; i++) {
-    point = state.terrain_cloud->points[i];
-    int col = toVoxelIndex(point.x, state.vehicle_x, voxel_size, half_width);
-    int row = toVoxelIndex(point.y, state.vehicle_y, voxel_size, half_width);
+  const double vehicle_x = state.vehicle_x;
+  const double vehicle_y = state.vehicle_y;
+  const double vehicle_z = state.vehicle_z;
+
+  for (const auto& point : state.terrain_cloud->points) {
+    int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
+    int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
     if (col < 0 || col >= width || row < 0 || row >= width) {
       continue;
     }
+    size_t cell = TerrainConfig::planarVoxelIndex(row, col);
 
-    float pointX1 = point.x - state.vehicle_x;
-    float pointY1 = point.y - state.vehicle_y;
-    float pointZ1 = point.z - state.vehicle_z;
-    float dis1 = sqrt(pointX1 * pointX1 + pointY1 * pointY1);
+    auto relative_x = static_cast<float>(point.x - vehicle_x);
+    auto relative_y = static_cast<float>(point.y - vehicle_y);
+    auto relative_z = static_cast<float>(point.z - vehicle_z);
+    float distance = sqrt((relative_x * relative_x) + (relative_y * relative_y));
 
-    if (dis1 <= config.min_dy_obs_dis) {
-      state.planar_voxel_dy_obs[TerrainConfig::planarVoxelIndex(row, col)] +=
-          config.min_dy_obs_point_num;
+    if (distance <= config.min_dy_obs_dis) {
+      state.planar_voxel_dy_obs[cell] += config.min_dy_obs_point_num;
       continue;
     }
 
-    float angle1 = atan2(pointZ1 - config.min_dy_obs_rel_z, dis1) * 180.0
-                 / M_PI;
-    if (angle1 <= config.min_dy_obs_angle) {
+    float scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance)
+                     * 180.0 / M_PI;
+    if (scan_angle <= config.min_dy_obs_angle) {
       continue;
     }
 
-    float pointX2 = pointX1 * state.cos_vehicle_yaw
-                  + pointY1 * state.sin_vehicle_yaw;
-    float pointY2 = -pointX1 * state.sin_vehicle_yaw
-                  + pointY1 * state.cos_vehicle_yaw;
-    float pointZ2 = pointZ1;
+    // TODO: extract yaw→pitch→roll rotation chain to a named function
+    float rotated_x = relative_x * state.cos_vehicle_yaw
+                    + relative_y * state.sin_vehicle_yaw;
+    float rotated_y = -relative_x * state.sin_vehicle_yaw
+                    + relative_y * state.cos_vehicle_yaw;
+    float rotated_z = relative_z;
 
-    float pointX3 = pointX2 * state.cos_vehicle_pitch
-                  - pointZ2 * state.sin_vehicle_pitch;
-    float pointY3 = pointY2;
-    float pointZ3 = pointX2 * state.sin_vehicle_pitch
-                  + pointZ2 * state.cos_vehicle_pitch;
+    float pitched_x = rotated_x * state.cos_vehicle_pitch
+                    - rotated_z * state.sin_vehicle_pitch;
+    float pitched_z = rotated_x * state.sin_vehicle_pitch
+                    + rotated_z * state.cos_vehicle_pitch;
 
-    float pointX4 = pointX3;
-    float pointY4 = pointY3 * state.cos_vehicle_roll
-                  + pointZ3 * state.sin_vehicle_roll;
-    float pointZ4 = -pointY3 * state.sin_vehicle_roll
-                  + pointZ3 * state.cos_vehicle_roll;
+    float rolled_y = rotated_y * state.cos_vehicle_roll
+                   + pitched_z * state.sin_vehicle_roll;
+    float rolled_z = -rotated_y * state.sin_vehicle_roll
+                   + pitched_z * state.cos_vehicle_roll;
 
-    float dis4 = sqrt(pointX4 * pointX4 + pointY4 * pointY4);
-    float angle4 = atan2(pointZ4, dis4) * 180.0 / M_PI;
-    if ((angle4 > config.min_dy_obs_vfov && angle4 < config.max_dy_obs_vfov)
-        || fabs(pointZ4) < config.abs_dy_obs_rel_z_thre) {
-      state.planar_voxel_dy_obs[TerrainConfig::planarVoxelIndex(row, col)]++;
+    float sensor_distance = sqrt(pitched_x * pitched_x + rolled_y * rolled_y);
+    float sensor_angle = atan2(rolled_z, sensor_distance) * 180.0 / M_PI;
+    if ((sensor_angle > config.min_dy_obs_vfov
+         && sensor_angle < config.max_dy_obs_vfov)
+        || fabs(rolled_z) < config.abs_dy_obs_rel_z_thre) {
+      state.planar_voxel_dy_obs[cell]++;
     }
   }
 }
