@@ -355,39 +355,39 @@ TEST_F(TerrainAnalysisTest, ComputeElevation_SortingMode_UsesQuantile) {
   terrain_->context_.cfg.use_sorting = true;
   terrain_->context_.cfg.quantile_z = 0.5;
   terrain_->context_.cfg.limit_ground_lift = false;
-  int idx = TerrainConfig::PLANAR_VOXEL_WIDTH
-              * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
-          + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
+               * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
+           + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
   for (int i = 0; i < TerrainConfig::PLANAR_VOXEL_NUM; i++) {
     terrain_->context_.state.planar_voxel_elev[i] = 999;
     terrain_->context_.state.planar_point_elev[i].clear();
   }
-  terrain_->context_.state.planar_point_elev[idx] = {0.1f, 0.5f, 0.3f, 0.2f,
-                                                     0.4f};
+  terrain_->context_.state.planar_point_elev[cell] = {0.1f, 0.5f, 0.3f, 0.2f,
+                                                      0.4f};
 
   TerrainAlgorithm::computeElevation(terrain_->context_.cfg,
                                      terrain_->context_.state);
 
-  // sorted: 0.1, 0.2, 0.3, 0.4, 0.5. quantile 0.5 * 5 = 2 → idx=2 → 0.3
-  EXPECT_FLOAT_EQ(terrain_->context_.state.planar_voxel_elev[idx], 0.3f);
+  // sorted: 0.1, 0.2, 0.3, 0.4, 0.5. quantile 0.5 * 5 = 2 → cell=2 → 0.3
+  EXPECT_FLOAT_EQ(terrain_->context_.state.planar_voxel_elev[cell], 0.3f);
 }
 
 TEST_F(TerrainAnalysisTest, ComputeElevation_MinMode_UsesMinimum) {
   terrain_->context_.cfg.use_sorting = false;
   terrain_->context_.cfg.limit_ground_lift = false;
-  int idx = TerrainConfig::PLANAR_VOXEL_WIDTH
-              * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
-          + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
+               * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
+           + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
   for (int i = 0; i < TerrainConfig::PLANAR_VOXEL_NUM; i++) {
     terrain_->context_.state.planar_voxel_elev[i] = 999;
     terrain_->context_.state.planar_point_elev[i].clear();
   }
-  terrain_->context_.state.planar_point_elev[idx] = {1.5f, 0.5f, 1.0f};
+  terrain_->context_.state.planar_point_elev[cell] = {1.5f, 0.5f, 1.0f};
 
   TerrainAlgorithm::computeElevation(terrain_->context_.cfg,
                                      terrain_->context_.state);
 
-  EXPECT_FLOAT_EQ(terrain_->context_.state.planar_voxel_elev[idx], 0.5f);
+  EXPECT_FLOAT_EQ(terrain_->context_.state.planar_voxel_elev[cell], 0.5f);
 }
 
 TEST_F(TerrainAnalysisTest, ComputeElevation_GroundLiftLimited) {
@@ -395,21 +395,21 @@ TEST_F(TerrainAnalysisTest, ComputeElevation_GroundLiftLimited) {
   terrain_->context_.cfg.quantile_z = 0.5;
   terrain_->context_.cfg.limit_ground_lift = true;
   terrain_->context_.cfg.max_ground_lift = 0.3;
-  int idx = TerrainConfig::PLANAR_VOXEL_WIDTH
-              * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
-          + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
+               * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
+           + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
   for (int i = 0; i < TerrainConfig::PLANAR_VOXEL_NUM; i++) {
     terrain_->context_.state.planar_voxel_elev[i] = 999;
     terrain_->context_.state.planar_point_elev[i].clear();
   }
-  terrain_->context_.state.planar_point_elev[idx] = {0.5f, 2.0f, 1.0f};
+  terrain_->context_.state.planar_point_elev[cell] = {0.5f, 2.0f, 1.0f};
   // sorted: 0.5, 1.0, 2.0. quantile 0.5*3=1 → 1.0. diff=1.0-0.5=0.5 > 0.3 →
   // limit → 0.5 + 0.3 = 0.8
 
   TerrainAlgorithm::computeElevation(terrain_->context_.cfg,
                                      terrain_->context_.state);
 
-  EXPECT_FLOAT_EQ(terrain_->context_.state.planar_voxel_elev[idx], 0.8f);
+  EXPECT_FLOAT_EQ(terrain_->context_.state.planar_voxel_elev[cell], 0.8f);
 }
 
 TEST_F(TerrainAnalysisTest, DetectDynamicObstacles_ClosePoint_AddsMinCount) {
@@ -466,10 +466,10 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
   terrain_->context_.cfg.clear_dy_obs = true;
   terrain_->context_.cfg.min_dy_obs_angle = 10.0;
   terrain_->context_.cfg.min_dy_obs_rel_z = -0.5;
-  int idx = TerrainConfig::PLANAR_VOXEL_WIDTH
-              * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
-          + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-  terrain_->context_.state.planar_voxel_dy_obs[idx] = 10;
+  int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
+               * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
+           + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  terrain_->context_.state.planar_voxel_dy_obs[cell] = 10;
 
   terrain_->context_.state.laser_cloud_crop->clear();
   pcl::PointXYZI p{0.05f, 0, 2.0f, 0};  // high relZ → angle close to 90° > 10°
@@ -478,7 +478,7 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
   TerrainAlgorithm::filterDynamicObstaclePoints(terrain_->context_.cfg,
                                                 terrain_->context_.state, 1);
 
-  EXPECT_EQ(terrain_->context_.state.planar_voxel_dy_obs[idx], 0)
+  EXPECT_EQ(terrain_->context_.state.planar_voxel_dy_obs[cell], 0)
       << "High-angle point should reset dy_obs";
 }
 
@@ -487,10 +487,10 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_LowAngle_Keeps) {
   terrain_->context_.cfg.min_dy_obs_angle =
       90.0;  // nearly impossible to exceed
   terrain_->context_.cfg.min_dy_obs_rel_z = -0.5;
-  int idx = TerrainConfig::PLANAR_VOXEL_WIDTH
-              * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
-          + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
-  terrain_->context_.state.planar_voxel_dy_obs[idx] = 10;
+  int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
+               * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
+           + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
+  terrain_->context_.state.planar_voxel_dy_obs[cell] = 10;
 
   terrain_->context_.state.laser_cloud_crop->clear();
   pcl::PointXYZI p{0.05f, 0, 0, 0};
@@ -499,7 +499,7 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_LowAngle_Keeps) {
   TerrainAlgorithm::filterDynamicObstaclePoints(terrain_->context_.cfg,
                                                 terrain_->context_.state, 1);
 
-  EXPECT_EQ(terrain_->context_.state.planar_voxel_dy_obs[idx], 10)
+  EXPECT_EQ(terrain_->context_.state.planar_voxel_dy_obs[cell], 10)
       << "Low-angle point should NOT reset dy_obs";
 }
 

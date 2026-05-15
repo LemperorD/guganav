@@ -19,7 +19,8 @@ struct TerrainConfig {
 
   static constexpr int PLANAR_VOXEL_WIDTH = 51;
   static constexpr int PLANAR_VOXEL_HALF_WIDTH = (PLANAR_VOXEL_WIDTH - 1) / 2;
-  static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH * PLANAR_VOXEL_WIDTH;
+  static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH
+                                        * PLANAR_VOXEL_WIDTH;
 
   static constexpr size_t terrain_voxel_index(int row, int col) {
     return static_cast<size_t>(TERRAIN_VOXEL_WIDTH * row + col);
@@ -28,9 +29,9 @@ struct TerrainConfig {
     return static_cast<size_t>(PLANAR_VOXEL_WIDTH * row + col);
   }
 
-  double scan_voxel_size = 0.05;
-  double decay_time = 2.0;
-  double no_decay_dis = 4.0;
+  float scan_voxel_size = 0.05;
+  float decay_time = 2.0;
+  float no_decay_dis = 4.0;
   double clearing_dis = 8.0;
   bool use_sorting = true;
   double quantile_z = 0.25;
@@ -87,7 +88,8 @@ struct TerrainState {
              TerrainConfig::TERRAIN_VOXEL_NUM>
       terrain_voxel_cloud;
   std::array<int, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_num;
-  std::array<double, TerrainConfig::TERRAIN_VOXEL_NUM> terrain_voxel_update_time;
+  std::array<double, TerrainConfig::TERRAIN_VOXEL_NUM>
+      terrain_voxel_update_time;
   std::array<double, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_elev;
   std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_edge;
   std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_dy_obs;
