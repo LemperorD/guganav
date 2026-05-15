@@ -94,11 +94,12 @@ void TerrainAlgorithm::rolloverTerrainVoxels(const TerrainConfig& config,
 }
 
 namespace {
-  int toVoxelIndex(float point_coord, double vehicle_coord, double voxel_size,
+  int toVoxelIndex(float point_cloud, double vehicle_cloud, double voxel_size,
                    int half_width) {
-    const double half = voxel_size / 2;
+    const double half_voxel_size = voxel_size / 2;
     int cell = static_cast<int>(
-        std::floor((point_coord - vehicle_coord + half) / voxel_size))
+                   std::floor((point_cloud - vehicle_cloud + half_voxel_size)
+                              / voxel_size))
              + half_width;
     return cell;
   }
