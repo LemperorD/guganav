@@ -10,7 +10,8 @@
 TerrainAnalysisContext::TerrainAnalysisContext() {
   state.laser_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   state.laser_cloud_crop = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  state.laser_cloud_dwz = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  state.laser_cloud_downsampled =
+      std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   state.terrain_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   state.terrain_cloud_elev =
       std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();

@@ -254,8 +254,8 @@ TEST_F(TerrainAnalysisTest, Rollover_NoShiftWhenStationary) {
   int sx = terrain_->context_.state.terrain_voxel_shift_x;
   int sy = terrain_->context_.state.terrain_voxel_shift_y;
 
-  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_.cfg,
-                                          terrain_->context_.state);
+  TerrainAlgorithm::rolloverVoxels(terrain_->context_.cfg,
+                                   terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_shift_x, sx);
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_shift_y, sy);
@@ -266,8 +266,8 @@ TEST_F(TerrainAnalysisTest, Rollover_ShiftX_Negative) {
       -2.0;  // beyond voxel_size=1.0 to the left
   int sx = terrain_->context_.state.terrain_voxel_shift_x;
 
-  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_.cfg,
-                                          terrain_->context_.state);
+  TerrainAlgorithm::rolloverVoxels(terrain_->context_.cfg,
+                                   terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_shift_x, sx - 1);
 }
@@ -276,8 +276,8 @@ TEST_F(TerrainAnalysisTest, Rollover_ShiftX_Positive) {
   terrain_->context_.state.vehicle_x = 2.0f;
   int sx = terrain_->context_.state.terrain_voxel_shift_x;
 
-  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_.cfg,
-                                          terrain_->context_.state);
+  TerrainAlgorithm::rolloverVoxels(terrain_->context_.cfg,
+                                   terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_shift_x, sx + 1);
 }
@@ -286,8 +286,8 @@ TEST_F(TerrainAnalysisTest, Rollover_ShiftY_Negative) {
   terrain_->context_.state.vehicle_y = -2.0;
   int sy = terrain_->context_.state.terrain_voxel_shift_y;
 
-  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_.cfg,
-                                          terrain_->context_.state);
+  TerrainAlgorithm::rolloverVoxels(terrain_->context_.cfg,
+                                   terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_shift_y, sy - 1);
 }
@@ -296,8 +296,8 @@ TEST_F(TerrainAnalysisTest, Rollover_ShiftY_Positive) {
   terrain_->context_.state.vehicle_y = 2.0f;
   int sy = terrain_->context_.state.terrain_voxel_shift_y;
 
-  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_.cfg,
-                                          terrain_->context_.state);
+  TerrainAlgorithm::rolloverVoxels(terrain_->context_.cfg,
+                                   terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_shift_y, sy + 1);
 }
@@ -309,8 +309,8 @@ TEST_F(TerrainAnalysisTest, Rollover_PreservesVoxelData) {
   pcl::PointXYZI p{0, 0, 0, 0};
   terrain_->context_.state.terrain_voxel_cloud[0]->push_back(p);
 
-  TerrainAlgorithm::rolloverTerrainVoxels(terrain_->context_.cfg,
-                                          terrain_->context_.state);
+  TerrainAlgorithm::rolloverVoxels(terrain_->context_.cfg,
+                                   terrain_->context_.state);
 
   // After shift-left, voxel(0,0) should be empty (cleared), old data moved
   EXPECT_TRUE(terrain_->context_.state.terrain_voxel_cloud[0]->points.empty());
@@ -327,11 +327,10 @@ TEST_F(TerrainAnalysisTest, StackLaserScans_BinsPointsToCenter) {
   pcl::PointXYZI p{0, 0, 0, 0};
   terrain_->context_.state.laser_cloud_crop->push_back(p);
 
-  TerrainAlgorithm::stackLaserScans(terrain_->context_.cfg,
-                                    terrain_->context_.state);
+  TerrainAlgorithm::voxelize(terrain_->context_.cfg, terrain_->context_.state);
 
-  int c = TerrainConfig::TERRAIN_VOXEL_WIDTH
-            * TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH
+  int c = (TerrainConfig::TERRAIN_VOXEL_WIDTH
+           * TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH)
         + TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_cloud[c]->points.size(), 1u);
   EXPECT_EQ(terrain_->context_.state.terrain_voxel_update_num[c], 1);
@@ -343,8 +342,7 @@ TEST_F(TerrainAnalysisTest, StackLaserScans_EmptyCloud_NoOp) {
     terrain_->context_.state.terrain_voxel_update_num[i] = 0;
   }
 
-  TerrainAlgorithm::stackLaserScans(terrain_->context_.cfg,
-                                    terrain_->context_.state);
+  TerrainAlgorithm::voxelize(terrain_->context_.cfg, terrain_->context_.state);
 
   for (int i = 0; i < TerrainConfig::TERRAIN_VOXEL_NUM; i++) {
     EXPECT_EQ(terrain_->context_.state.terrain_voxel_update_num[i], 0);

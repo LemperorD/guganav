@@ -17,8 +17,8 @@
 void TerrainAlgorithm::run(const TerrainConfig& config, TerrainState& state) {
   state.new_laser_cloud = false;
 
-  rolloverTerrainVoxels(config, state);
-  stackLaserScans(config, state);
+  rolloverVoxels(config, state);
+  voxelize(config, state);
   updateVoxels(config, state);
   extractTerrainCloud(config, state);
 
@@ -46,7 +46,7 @@ namespace {
   // positive=True: shift toward +X (right), positive=False: toward -X (left).
   enum class Axis : uint8_t { X, Y };
 
-  void shiftGrid(TerrainState& st, Axis axis, bool positive) {
+  void shiftGrid(TerrainState& state, Axis axis, bool positive) {
     static constexpr int WIDTH = TerrainConfig::TERRAIN_VOXEL_WIDTH;
     const int src = positive ? 0 : WIDTH - 1;
     const int dst = positive ? WIDTH - 1 : 0;
@@ -57,20 +57,20 @@ namespace {
         return axis == Axis::X ? TerrainConfig::terrainVoxelIndex(m, fixed)
                                : TerrainConfig::terrainVoxelIndex(fixed, m);
       };
-      auto ptr = st.terrain_voxel_cloud[cell(src)];
+      auto ptr = state.terrain_voxel_cloud[cell(src)];
       for (int m = src; m != dst; m += step) {
-        st.terrain_voxel_cloud[cell(m)] =
-            st.terrain_voxel_cloud[cell(m + step)];
+        state.terrain_voxel_cloud[cell(m)] =
+            state.terrain_voxel_cloud[cell(m + step)];
       }
-      auto& dst_cell = st.terrain_voxel_cloud[cell(dst)];
+      auto& dst_cell = state.terrain_voxel_cloud[cell(dst)];
       dst_cell = ptr;
       dst_cell->clear();
     }
   }
 }  // namespace
 
-void TerrainAlgorithm::rolloverTerrainVoxels(const TerrainConfig& config,
-                                             TerrainState& state) {
+void TerrainAlgorithm::rolloverVoxels(const TerrainConfig& config,
+                                      TerrainState& state) {
   const double voxel_size = config.terrain_voxel_size;
   double cen_x = voxel_size * state.terrain_voxel_shift_x;
   double cen_y = voxel_size * state.terrain_voxel_shift_y;
@@ -103,10 +103,45 @@ namespace {
              + half_width;
     return cell;
   }
+
+  bool shouldPruneVoxel(const TerrainConfig& config, const TerrainState& state,
+                        int ind) {
+    if (state.clearing_cloud) {
+      return true;
+    }
+    if (state.terrain_voxel_update_num[ind] >= config.voxel_point_update_thre) {
+      return true;
+    }
+    double elapsed = state.laser_cloud_time - state.system_init_time
+                   - state.terrain_voxel_update_time[ind];
+    return elapsed >= config.voxel_time_update_thre;
+  }
+
+  bool keepVoxelPoint(double rel_z, double dis, double point_time,
+                      const TerrainConfig& config, const TerrainState& state) {
+    const double z_margin = config.dis_ratio_z * dis;
+    if (rel_z <= config.min_rel_z - z_margin) {
+      return false;
+    }
+    if (rel_z >= config.max_rel_z + z_margin) {
+      return false;
+    }
+    bool near = dis < config.no_decay_dis;
+    bool decayed = (state.laser_cloud_time - state.system_init_time
+                    - point_time)
+                >= config.decay_time;
+    if (decayed && !near) {
+      return false;
+    }
+    if (dis < state.clearing_dis && state.clearing_cloud) {
+      return false;
+    }
+    return true;
+  }
 }  // namespace
 
-void TerrainAlgorithm::stackLaserScans(const TerrainConfig& config,
-                                       TerrainState& state) {
+void TerrainAlgorithm::voxelize(const TerrainConfig& config,
+                                TerrainState& state) {
   const double voxel_size = config.terrain_voxel_size;
   constexpr int voxel_half_width = TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH;
   constexpr int voxel_width = TerrainConfig::TERRAIN_VOXEL_WIDTH;
@@ -127,41 +162,31 @@ void TerrainAlgorithm::stackLaserScans(const TerrainConfig& config,
 
 void TerrainAlgorithm::updateVoxels(const TerrainConfig& config,
                                     TerrainState& state) {
-  pcl::PointXYZI point;
+  const double laser_time = state.laser_cloud_time;
+  const double init_time = state.system_init_time;
+  const double vehicle_z = state.vehicle_z;
+
   for (int ind = 0; ind < TerrainConfig::TERRAIN_VOXEL_NUM; ind++) {
-    if (state.terrain_voxel_update_num[ind] >= config.voxel_point_update_thre
-        || state.laser_cloud_time - state.system_init_time
-                   - state.terrain_voxel_update_time[ind]
-               >= config.voxel_time_update_thre
-        || state.clearing_cloud) {
-      auto voxel_cloud_ptr = state.terrain_voxel_cloud[ind];
-
-      state.laser_cloud_dwz->clear();
-      state.down_size_filter.setInputCloud(voxel_cloud_ptr);
-      state.down_size_filter.filter(*state.laser_cloud_dwz);
-
-      voxel_cloud_ptr->clear();
-      size_t cloud_size = state.laser_cloud_dwz->points.size();
-      for (size_t i = 0; i < cloud_size; i++) {
-        point = state.laser_cloud_dwz->points[i];
-        double dis = state.horizontalDistanceTo(point.x, point.y);
-        if (point.z - state.vehicle_z
-                > config.min_rel_z - (config.dis_ratio_z * dis)
-            && point.z - state.vehicle_z
-                   < config.max_rel_z + (config.dis_ratio_z * dis)
-            && (state.laser_cloud_time - state.system_init_time
-                        - point.intensity
-                    < config.decay_time
-                || dis < config.no_decay_dis)
-            && (dis >= state.clearing_dis || !state.clearing_cloud)) {
-          voxel_cloud_ptr->push_back(point);
-        }
-      }
-
-      state.terrain_voxel_update_num[ind] = 0;
-      state.terrain_voxel_update_time[ind] = state.laser_cloud_time
-                                           - state.system_init_time;
+    if (!shouldPruneVoxel(config, state, ind)) {
+      continue;
     }
+    auto voxel_cloud_ptr = state.terrain_voxel_cloud[ind];
+
+    state.laser_cloud_downsampled->clear();
+    state.down_size_filter.setInputCloud(voxel_cloud_ptr);
+    state.down_size_filter.filter(*state.laser_cloud_downsampled);
+
+    voxel_cloud_ptr->clear();
+    for (const auto& point : state.laser_cloud_downsampled->points) {
+      double dis = state.horizontalDistanceTo(point.x, point.y);
+      if (keepVoxelPoint(point.z - vehicle_z, dis, point.intensity, config,
+                         state)) {
+        voxel_cloud_ptr->push_back(point);
+      }
+    }
+
+    state.terrain_voxel_update_num[ind] = 0;
+    state.terrain_voxel_update_time[ind] = laser_time - init_time;
   }
 }
 

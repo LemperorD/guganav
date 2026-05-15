@@ -81,7 +81,7 @@ struct TerrainState {
   // Point clouds
   pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud;
   pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_crop;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_dwz;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_downsampled;
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud;
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev;
   std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,

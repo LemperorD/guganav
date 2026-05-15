@@ -8,9 +8,8 @@ class TerrainAlgorithm {
 public:
   static void run(const TerrainConfig& config, TerrainState& state);
 
-  static void rolloverTerrainVoxels(const TerrainConfig& config,
-                                    TerrainState& state);
-  static void stackLaserScans(const TerrainConfig& config, TerrainState& state);
+  static void rolloverVoxels(const TerrainConfig& config, TerrainState& state);
+  static void voxelize(const TerrainConfig& config, TerrainState& state);
   static void updateVoxels(const TerrainConfig& config, TerrainState& state);
   static void extractTerrainCloud(const TerrainConfig& config,
                                   TerrainState& state);
