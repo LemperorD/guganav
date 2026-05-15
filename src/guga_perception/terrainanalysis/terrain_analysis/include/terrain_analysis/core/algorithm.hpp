@@ -11,8 +11,7 @@ public:
   static void rolloverVoxels(const TerrainConfig& config, TerrainState& state);
   static void voxelize(const TerrainConfig& config, TerrainState& state);
   static void updateVoxels(const TerrainConfig& config, TerrainState& state);
-  static void extractTerrainCloud(const TerrainConfig& config,
-                                  TerrainState& state);
+  static void extractTerrainCloud(TerrainState& state);
   static void estimateGround(const TerrainConfig& config, TerrainState& state);
   static void detectDynamicObstacles(const TerrainConfig& config,
                                      TerrainState& state);
