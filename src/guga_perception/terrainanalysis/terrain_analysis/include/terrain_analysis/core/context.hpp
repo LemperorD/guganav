@@ -22,11 +22,11 @@ struct TerrainConfig {
   static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH
                                         * PLANAR_VOXEL_WIDTH;
 
-  static constexpr size_t terrain_voxel_index(int row, int col) {
-    return static_cast<size_t>(TERRAIN_VOXEL_WIDTH * row + col);
+  static constexpr size_t terrainVoxelIndex(int row, int col) {
+    return (TERRAIN_VOXEL_WIDTH * row) + col;
   }
-  static constexpr size_t planar_voxel_index(int row, int col) {
-    return static_cast<size_t>(PLANAR_VOXEL_WIDTH * row + col);
+  static constexpr size_t planarVoxelIndex(int row, int col) {
+    return (PLANAR_VOXEL_WIDTH * row) + col;
   }
 
   float scan_voxel_size = 0.05;
