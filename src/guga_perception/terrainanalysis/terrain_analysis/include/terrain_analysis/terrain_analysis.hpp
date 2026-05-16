@@ -18,7 +18,7 @@ public:
   TerrainAnalysis(TerrainAnalysis&&) = delete;
   TerrainAnalysis& operator=(TerrainAnalysis&&) = delete;
 
-  void initialize();
+  void initialize(const std::string& output_topic = "terrain_map");
   bool processOnce();
 
   [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev()

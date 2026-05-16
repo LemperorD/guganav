@@ -101,6 +101,7 @@ struct TerrainState {
   std::array<double, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_elev;
   std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_edge;
   std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_dy_obs;
+  std::array<int, TerrainConfig::PLANAR_VOXEL_NUM> planar_voxel_connectivity;
   std::array<std::vector<double>, TerrainConfig::PLANAR_VOXEL_NUM>
       planar_point_elev;
 

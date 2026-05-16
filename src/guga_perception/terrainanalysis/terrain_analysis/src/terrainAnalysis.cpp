@@ -17,7 +17,7 @@ TerrainAnalysis::TerrainAnalysis(rclcpp::Node* node) : node_(node) {
 
 TerrainAnalysis::~TerrainAnalysis() = default;
 
-void TerrainAnalysis::initialize() {
+void TerrainAnalysis::initialize(const std::string& output_topic) {
   node_->declare_parameter<double>("scanVoxelSize", context_.cfg.scan_voxel_size);
   node_->declare_parameter<double>("decayTime", context_.cfg.decay_time);
   node_->declare_parameter<double>("noDecayDis", context_.cfg.no_decay_distance);
@@ -116,7 +116,7 @@ void TerrainAnalysis::initialize() {
       });
 
   pub_terrain_map_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
-      "terrain_map", 2);
+      output_topic, 2);
 
   context_.state.down_size_filter.setLeafSize(context_.cfg.scan_voxel_size,
                                          context_.cfg.scan_voxel_size,

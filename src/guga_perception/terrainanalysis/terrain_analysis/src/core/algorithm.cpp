@@ -511,6 +511,10 @@ void TerrainAlgorithm::computeHeightMap(const TerrainConfig& config,
         && config.clear_dy_obs) {
       continue;
     }
+    if (config.check_terrain_connectivity
+        && state.planar_voxel_connectivity[cell] != 2) {
+      continue;
+    }
 
     double height_above_ground = point.z - state.planar_voxel_elev[cell];
     if (config.consider_drop) {
@@ -535,12 +539,66 @@ void TerrainAlgorithm::addNoDataObstacles(const TerrainConfig& config,
 
 void TerrainAlgorithm::checkTerrainConnectivity(const TerrainConfig& config,
                                                 TerrainState& state) {
-  (void)config;
-  (void)state;
+  state.planar_voxel_connectivity.fill(0);
+
+  size_t center = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  if (state.planar_point_elev[center].empty()) {
+    state.planar_voxel_elev[center] =
+        state.vehicle_z + config.terrain_under_vehicle;
+  }
+
+  std::queue<size_t> cell_queue;
+  cell_queue.push(center);
+  state.planar_voxel_connectivity[center] = 1;
+
+  static constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
+  static constexpr int SEARCH_HALF = 10;
+
+  while (!cell_queue.empty()) {
+    size_t current = cell_queue.front();
+    state.planar_voxel_connectivity[current] = 2;
+    cell_queue.pop();
+
+    int current_row = static_cast<int>(current / W);
+    int current_col = static_cast<int>(current % W);
+
+    for (int delta_row = -SEARCH_HALF; delta_row <= SEARCH_HALF;
+         delta_row++) {
+      for (int delta_col = -SEARCH_HALF; delta_col <= SEARCH_HALF;
+           delta_col++) {
+        int neighbor_row = current_row + delta_row;
+        int neighbor_col = current_col + delta_col;
+        if (neighbor_row >= 0 && neighbor_row < W && neighbor_col >= 0
+            && neighbor_col < W) {
+          size_t neighbor_index =
+              TerrainConfig::planarVoxelIndex(neighbor_row, neighbor_col);
+          if (state.planar_voxel_connectivity[neighbor_index] == 0
+              && !state.planar_point_elev[neighbor_index].empty()) {
+            double height_diff =
+                std::abs(state.planar_voxel_elev[current]
+                         - state.planar_voxel_elev[neighbor_index]);
+            if (height_diff < config.terrain_connectivity_threshold) {
+              cell_queue.push(neighbor_index);
+              state.planar_voxel_connectivity[neighbor_index] = 1;
+            } else if (height_diff > config.ceiling_filter_threshold) {
+              state.planar_voxel_connectivity[neighbor_index] = -1;
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 void TerrainAlgorithm::mergeLocalTerrain(const TerrainConfig& config,
                                           TerrainState& state) {
-  (void)config;
-  (void)state;
+  double radius = config.local_terrain_map_radius;
+  for (const auto& point : state.terrain_cloud_local->points) {
+    double distance = state.horizontalDistanceTo(point.x, point.y);
+    if (distance <= radius) {
+      state.terrain_cloud_elev->push_back(point);
+    }
+  }
 }

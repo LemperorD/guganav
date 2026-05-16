@@ -42,7 +42,8 @@ protected:
 
 // ── checkTerrainConnectivity ──
 
-// 车辆正下方 cell 无数据时，用 vehicleZ + terrain_under_vehicle 作为地面高度
+// 车辆正下方 cell 无数据时，用 vehicleZ + terrain_under_vehicle 作为地面高度，
+// 且被标记为已连通
 TEST_F(ConnectivityTest, CheckTerrainConnectivity_SeedsVehicleCell) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
@@ -52,7 +53,12 @@ TEST_F(ConnectivityTest, CheckTerrainConnectivity_SeedsVehicleCell) {
 
   TerrainAlgorithm::checkTerrainConnectivity(cfg_, state_);
 
-  // stub — no assertion yet
+  size_t center = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  EXPECT_EQ(state_.planar_voxel_connectivity[center], 2);
+  EXPECT_DOUBLE_EQ(state_.planar_voxel_elev[center],
+                   state_.vehicle_z + cfg_.terrain_under_vehicle);
 }
 
 // 高度差在 connectivity_threshold 内的相邻 cell 标记为连通
@@ -62,51 +68,59 @@ TEST_F(ConnectivityTest,
   state_.vehicle_y = 0;
   state_.vehicle_z = 0;
   state_.planar_voxel_elev.fill(0);
-  state_.planar_point_elev.fill({0.0F});
 
-  int center = TerrainConfig::planarVoxelIndex(
+  size_t center = TerrainConfig::planarVoxelIndex(
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
-  state_.planar_point_elev[center] = {0.0F};
-  int neighbor = TerrainConfig::planarVoxelIndex(
+  state_.planar_point_elev[center] = {0.0};
+  state_.planar_voxel_elev[center] = 0.0;
+
+  size_t neighbor = TerrainConfig::planarVoxelIndex(
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH + 1,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
-  state_.planar_point_elev[neighbor] = {0.3F};  // diff 0.3 < 0.5 threshold
+  state_.planar_point_elev[neighbor] = {0.3};
+  state_.planar_voxel_elev[neighbor] = 0.3;  // diff 0.3 < 0.5 threshold
 
   TerrainAlgorithm::checkTerrainConnectivity(cfg_, state_);
 
-  // stub
+  EXPECT_EQ(state_.planar_voxel_connectivity[center], 2);
+  EXPECT_EQ(state_.planar_voxel_connectivity[neighbor], 2);
 }
 
-// 高度差超过 ceiling_filter_threshold 的 cell 标记为天花板/噪声
+// 高度差超过 ceiling_filter_threshold 的 cell 标记为天花板
 TEST_F(ConnectivityTest,
-       CheckTerrainConnectivity_LargeHeightDiff_NotConnected) {
+       CheckTerrainConnectivity_LargeHeightDiff_Ceiling) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
   state_.vehicle_z = 0;
   state_.planar_voxel_elev.fill(0);
-  state_.planar_point_elev.fill({});
 
-  int center = TerrainConfig::planarVoxelIndex(
+  size_t center = TerrainConfig::planarVoxelIndex(
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
-  state_.planar_point_elev[center] = {0.0F};
-  int neighbor = TerrainConfig::planarVoxelIndex(
+  state_.planar_point_elev[center] = {0.0};
+  state_.planar_voxel_elev[center] = 0.0;
+
+  size_t neighbor = TerrainConfig::planarVoxelIndex(
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH + 1,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
-  state_.planar_point_elev[neighbor] = {5.0F};  // diff 5.0 > 2.0 ceiling
+  state_.planar_point_elev[neighbor] = {5.0};
+  state_.planar_voxel_elev[neighbor] = 5.0;  // diff 5.0 > 2.0 ceiling
 
   TerrainAlgorithm::checkTerrainConnectivity(cfg_, state_);
 
-  // stub
+  EXPECT_EQ(state_.planar_voxel_connectivity[center], 2);
+  EXPECT_EQ(state_.planar_voxel_connectivity[neighbor], -1);
 }
 
-// 关闭 connectivity 检查时不执行任何操作
+// 关闭 connectivity 检查时不执行连通性判断（网关在 run() 层面）
 TEST_F(ConnectivityTest,
-       CheckTerrainConnectivity_Disabled_NoEffect) {
+       CheckTerrainConnectivity_Disabled_InRunPipeline) {
+  // 直接调用仍会执行 BFS（无内部网关），栅栏在 run() 里检查 config flag
+  // 此处验证关闭时不崩溃
   cfg_.check_terrain_connectivity = false;
-  // No assertion needed — just ensures no crash
   TerrainAlgorithm::checkTerrainConnectivity(cfg_, state_);
+  // 无断言 — 仅保证不崩溃
 }
 
 // ── mergeLocalTerrain ──
@@ -124,7 +138,7 @@ TEST_F(ConnectivityTest,
 
   TerrainAlgorithm::mergeLocalTerrain(cfg_, state_);
 
-  // stub
+  EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 1U);
 }
 
 // 超出半径的点不合并
@@ -141,10 +155,10 @@ TEST_F(ConnectivityTest,
 
   TerrainAlgorithm::mergeLocalTerrain(cfg_, state_);
 
-  // stub — no points should be added
+  EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 0U);
 }
 
-// radius 为 0 时不合并任何点（默认禁用）
+// radius 为 0 时不合并任何点
 TEST_F(ConnectivityTest,
        MergeLocalTerrain_ZeroRadius_NoMerge) {
   cfg_.local_terrain_map_radius = 0.0;
@@ -154,5 +168,5 @@ TEST_F(ConnectivityTest,
 
   TerrainAlgorithm::mergeLocalTerrain(cfg_, state_);
 
-  // stub
+  EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 0U);
 }

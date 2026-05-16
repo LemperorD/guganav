@@ -53,6 +53,10 @@ add_executable(terrainAnalysis src/main.cpp)
 target_link_libraries(terrainAnalysis terrain_analysis_lib)
 install(TARGETS terrainAnalysis DESTINATION lib/${PROJECT_NAME})
 
+add_executable(terrainAnalysisExt src/main_ext.cpp)
+target_link_libraries(terrainAnalysisExt terrain_analysis_lib)
+install(TARGETS terrainAnalysisExt DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
