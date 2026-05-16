@@ -64,10 +64,13 @@ void TerrainAnalysis::initialize() {
   node_->get_parameter("clearDyObs", context_.cfg.clear_dy_obs);
   node_->get_parameter("minDyObsDis", context_.cfg.min_dy_obs_dis);
   node_->get_parameter("minDyObsAngle", context_.cfg.min_dy_obs_angle);
+  context_.cfg.min_dy_obs_angle *= M_PI / 180.0;
   node_->get_parameter("minDyObsRelZ", context_.cfg.min_dy_obs_rel_z);
   node_->get_parameter("absDyObsRelZThre", context_.cfg.abs_dy_obs_rel_z_thre);
   node_->get_parameter("minDyObsVFOV", context_.cfg.min_dy_obs_vfov);
+  context_.cfg.min_dy_obs_vfov *= M_PI / 180.0;
   node_->get_parameter("maxDyObsVFOV", context_.cfg.max_dy_obs_vfov);
+  context_.cfg.max_dy_obs_vfov *= M_PI / 180.0;
   node_->get_parameter("minDyObsPointNum", context_.cfg.min_dy_obs_point_num);
   node_->get_parameter("noDataObstacle", context_.cfg.no_data_obstacle);
   node_->get_parameter("noDataBlockSkipNum", context_.cfg.no_data_block_skip_num);

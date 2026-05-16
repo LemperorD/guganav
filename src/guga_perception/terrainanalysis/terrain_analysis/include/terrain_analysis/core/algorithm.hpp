@@ -16,8 +16,7 @@ public:
   static void detectDynamicObstacles(const TerrainConfig& config,
                                      TerrainState& state);
   static void filterDynamicObstaclePoints(const TerrainConfig& config,
-                                          TerrainState& state,
-                                          size_t laser_cloud_crop_size);
+                                          TerrainState& state);
   static void computeElevation(const TerrainConfig& config,
                                TerrainState& state);
   static void computeHeightMap(const TerrainConfig& config, TerrainState& state,

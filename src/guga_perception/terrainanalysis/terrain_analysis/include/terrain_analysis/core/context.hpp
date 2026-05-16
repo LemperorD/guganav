@@ -43,8 +43,8 @@ struct TerrainConfig {
   double min_dy_obs_angle = 0.0;
   double min_dy_obs_rel_z = -0.5;
   double abs_dy_obs_rel_z_thre = 0.2;
-  double min_dy_obs_vfov = -16.0;
-  double max_dy_obs_vfov = 16.0;
+  double min_dy_obs_vfov = -16.0 * M_PI / 180.0;
+  double max_dy_obs_vfov = 16.0 * M_PI / 180.0;
   int min_dy_obs_point_num = 1;
   bool no_data_obstacle = false;
   int no_data_block_skip_num = 0;

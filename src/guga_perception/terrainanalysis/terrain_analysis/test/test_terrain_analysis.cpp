@@ -462,7 +462,7 @@ TEST_F(TerrainAnalysisTest, DetectDynamicObstacles_Disabled_NoEffect) {
 
 TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
   terrain_->context_.cfg.clear_dy_obs = true;
-  terrain_->context_.cfg.min_dy_obs_angle = 10.0;
+  terrain_->context_.cfg.min_dy_obs_angle = 10.0 * M_PI / 180.0;
   terrain_->context_.cfg.min_dy_obs_rel_z = -0.5;
   int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
                * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
@@ -474,7 +474,7 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
   terrain_->context_.state.laser_cloud_crop->push_back(p);
 
   TerrainAlgorithm::filterDynamicObstaclePoints(terrain_->context_.cfg,
-                                                terrain_->context_.state, 1);
+                                                terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.planar_voxel_dy_obs[cell], 0)
       << "High-angle point should reset dy_obs";
@@ -483,7 +483,7 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
 TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_LowAngle_Keeps) {
   terrain_->context_.cfg.clear_dy_obs = true;
   terrain_->context_.cfg.min_dy_obs_angle =
-      90.0;  // nearly impossible to exceed
+      90.0 * M_PI / 180.0;  // nearly impossible to exceed
   terrain_->context_.cfg.min_dy_obs_rel_z = -0.5;
   int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
                * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
@@ -495,7 +495,7 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_LowAngle_Keeps) {
   terrain_->context_.state.laser_cloud_crop->push_back(p);
 
   TerrainAlgorithm::filterDynamicObstaclePoints(terrain_->context_.cfg,
-                                                terrain_->context_.state, 1);
+                                                terrain_->context_.state);
 
   EXPECT_EQ(terrain_->context_.state.planar_voxel_dy_obs[cell], 10)
       << "Low-angle point should NOT reset dy_obs";

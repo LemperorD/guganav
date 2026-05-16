@@ -26,8 +26,7 @@ void TerrainAlgorithm::run(const TerrainConfig& config, TerrainState& state) {
 
   if (config.clear_dy_obs) {
     detectDynamicObstacles(config, state);
-    filterDynamicObstaclePoints(config, state,
-                                state.laser_cloud_crop->points.size());
+    filterDynamicObstaclePoints(config, state);
   }
 
   computeElevation(config, state);
@@ -306,8 +305,7 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
       continue;
     }
 
-    double scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance)
-                      * 180.0 / M_PI;
+    double scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance);
     if (scan_angle <= config.min_dy_obs_angle) {
       continue;
     }
@@ -316,7 +314,7 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
                                          state);
     double sensor_distance = sqrt((sensor.x * sensor.x)
                                   + (sensor.y * sensor.y));
-    double sensor_angle = atan2(sensor.z, sensor_distance) * 180.0 / M_PI;
+    double sensor_angle = atan2(sensor.z, sensor_distance);
     if ((sensor_angle > config.min_dy_obs_vfov
          && sensor_angle < config.max_dy_obs_vfov)
         || std::abs(sensor.z) < config.abs_dy_obs_rel_z_thre) {
@@ -326,28 +324,30 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
 }
 
 void TerrainAlgorithm::filterDynamicObstaclePoints(
-    const TerrainConfig& config, TerrainState& state,
-    size_t laser_cloud_crop_size) {
+    const TerrainConfig& config, TerrainState& state) {
   const double voxel_size = config.planar_voxel_size;
   constexpr int half_width = TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
   constexpr int width = TerrainConfig::PLANAR_VOXEL_WIDTH;
-  pcl::PointXYZI point;
-  for (size_t i = 0; i < laser_cloud_crop_size; i++) {
-    point = state.laser_cloud_crop->points[i];
-    int col = toVoxelIndex(point.x, state.vehicle_x, voxel_size, half_width);
-    int row = toVoxelIndex(point.y, state.vehicle_y, voxel_size, half_width);
+  const double vehicle_x = state.vehicle_x;
+  const double vehicle_y = state.vehicle_y;
+  const double vehicle_z = state.vehicle_z;
+
+  for (const auto& point : state.laser_cloud_crop->points) {
+    int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
+    int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
     if (col < 0 || col >= width || row < 0 || row >= width) {
       continue;
     }
+    size_t cell = TerrainConfig::planarVoxelIndex(row, col);
 
-    float pointX1 = point.x - state.vehicle_x;
-    float pointY1 = point.y - state.vehicle_y;
-    float pointZ1 = point.z - state.vehicle_z;
-    float dis1 = sqrt(pointX1 * pointX1 + pointY1 * pointY1);
-    float angle1 = atan2(pointZ1 - config.min_dy_obs_rel_z, dis1) * 180.0
-                 / M_PI;
-    if (angle1 > config.min_dy_obs_angle) {
-      state.planar_voxel_dy_obs[TerrainConfig::planarVoxelIndex(row, col)] = 0;
+    double relative_x = point.x - vehicle_x;
+    double relative_y = point.y - vehicle_y;
+    double relative_z = point.z - vehicle_z;
+    double distance = sqrt((relative_x * relative_x)
+                         + (relative_y * relative_y));
+    double scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance);
+    if (scan_angle > config.min_dy_obs_angle) {
+      state.planar_voxel_dy_obs[cell] = 0;
     }
   }
 }
