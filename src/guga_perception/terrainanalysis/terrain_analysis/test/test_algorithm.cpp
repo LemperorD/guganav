@@ -22,7 +22,8 @@ protected:
     for (auto& ptr : state_.terrain_voxel_cloud) {
       ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     }
-    state_.laser_cloud_crop = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    state_.laser_cloud_crop =
+        std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     state_.terrain_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     state_.terrain_cloud_elev =
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -35,7 +36,7 @@ protected:
   TerrainState state_;
 };
 
-// ── rolloverVoxels ──
+// 车辆未移动时，体素网格不发生滚动
 TEST_F(AlgorithmTest, RolloverVoxels_Stationary_NoShift) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
@@ -48,6 +49,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_Stationary_NoShift) {
   EXPECT_EQ(state_.terrain_voxel_shift_y, sy);
 }
 
+// 车辆向左超出 voxel 范围时，沿 X 负向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxels_LeftOfCenter_ShiftsXNegative) {
   state_.vehicle_x = -2.0;
   int sx = state_.terrain_voxel_shift_x;
@@ -57,6 +59,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_LeftOfCenter_ShiftsXNegative) {
   EXPECT_EQ(state_.terrain_voxel_shift_x, sx - 1);
 }
 
+// 车辆向右超出 voxel 范围时，沿 X 正向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxels_RightOfCenter_ShiftsXPositive) {
   state_.vehicle_x = 2.0;
   int sx = state_.terrain_voxel_shift_x;
@@ -66,6 +69,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_RightOfCenter_ShiftsXPositive) {
   EXPECT_EQ(state_.terrain_voxel_shift_x, sx + 1);
 }
 
+// 车辆向下超出 voxel 范围时，沿 Y 负向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxels_BelowCenter_ShiftsYNegative) {
   state_.vehicle_y = -2.0;
   int sy = state_.terrain_voxel_shift_y;
@@ -75,6 +79,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_BelowCenter_ShiftsYNegative) {
   EXPECT_EQ(state_.terrain_voxel_shift_y, sy - 1);
 }
 
+// 车辆向上超出 voxel 范围时，沿 Y 正向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxels_AboveCenter_ShiftsYPositive) {
   state_.vehicle_y = 2.0;
   int sy = state_.terrain_voxel_shift_y;
@@ -84,6 +89,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_AboveCenter_ShiftsYPositive) {
   EXPECT_EQ(state_.terrain_voxel_shift_y, sy + 1);
 }
 
+// 滚动后目标 cell 被清空，原有数据随 shift 迁移
 TEST_F(AlgorithmTest, RolloverVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
   state_.vehicle_x = -2.0;
   state_.terrain_voxel_cloud[0]->clear();
@@ -97,6 +103,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
 }
 
 // ── voxelize ──
+// 原点处的单个点被分配到网格正中的 cell
 TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
@@ -112,6 +119,7 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
   EXPECT_EQ(state_.terrain_voxel_update_num[center], 1);
 }
 
+// 空点云不产生任何体素分配
 TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
   state_.laser_cloud_crop->clear();
 
@@ -123,6 +131,7 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 }
 
 // ── computeElevation ──
+// 排序模式下取指定分位数作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   cfg_.use_sorting = true;
   cfg_.quantile_z = 0.5;
@@ -138,6 +147,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   EXPECT_FLOAT_EQ(state_.planar_voxel_elev[cell], 0.3F);
 }
 
+// 最小值模式下取最低点作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   cfg_.use_sorting = false;
   size_t cell = TerrainConfig::planarVoxelIndex(
@@ -151,6 +161,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   EXPECT_FLOAT_EQ(state_.planar_voxel_elev[cell], 0.5F);
 }
 
+// 分位数与最小值差距过大时，限制地面高度不超过 min+max_ground_lift
 TEST_F(AlgorithmTest,
        ComputeElevation_LiftLimited_CapsAtMinimumPlusMaxGroundLift) {
   cfg_.use_sorting = true;
@@ -171,8 +182,7 @@ TEST_F(AlgorithmTest,
 }
 
 // ── detectDynamicObstacles ──
-TEST_F(AlgorithmTest,
-       DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
+TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
   cfg_.clear_dy_obs = true;
   cfg_.min_dy_obs_distance = 5.0;  // high → all points "close"
   cfg_.min_dy_obs_point_num = 7;
@@ -192,6 +202,7 @@ TEST_F(AlgorithmTest,
   EXPECT_GT(total, 0);
 }
 
+// clear_dy_obs 标志为 true 时仍然处理点云
 TEST_F(AlgorithmTest,
        DetectDynamicObstacles_ClearInitEnabled_StillProcessesPoints) {
   cfg_.clear_dy_obs = true;
@@ -212,6 +223,7 @@ TEST_F(AlgorithmTest,
 }
 
 // ── filterDynamicObstaclePoints ──
+// 高角度点（头顶悬挂物）清零对应 cell 的动态障碍计数
 TEST_F(AlgorithmTest,
        FilterDynamicObstaclePoints_HighAnglePoint_ResetsCellCounter) {
   cfg_.clear_dy_obs = true;
@@ -230,6 +242,7 @@ TEST_F(AlgorithmTest,
   EXPECT_EQ(state_.planar_voxel_dy_obs[cell], 0);
 }
 
+// 低角度点（地面/低障碍）保持 cell 计数不变
 TEST_F(AlgorithmTest,
        FilterDynamicObstaclePoints_LowAnglePoint_KeepsCellCounter) {
   cfg_.clear_dy_obs = true;
@@ -248,6 +261,7 @@ TEST_F(AlgorithmTest,
 }
 
 // ── addNoDataObstacles ──
+// 数据稀疏区域生成虚拟障碍点，防止无数据区域的路径规划
 TEST_F(AlgorithmTest,
        AddNoDataObstacles_EmptyPlanarVoxels_CreatesObstaclePoints) {
   state_.vehicle_x = 0;
@@ -267,6 +281,7 @@ TEST_F(AlgorithmTest,
   EXPECT_GT(state_.terrain_cloud_elev->points.size(), 0U);
 }
 
+// 所有 voxel 点数充足时不生成任何虚拟障碍
 TEST_F(AlgorithmTest,
        AddNoDataObstacles_AllVoxelsHaveEnoughPoints_NoObstaclesCreated) {
   state_.vehicle_x = 0;

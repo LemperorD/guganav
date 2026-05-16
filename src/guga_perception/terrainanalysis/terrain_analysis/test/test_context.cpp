@@ -12,6 +12,7 @@ protected:
 };
 
 // ── Construction ──
+// 默认构造后 no_data_inited 未初始化，system_inited 为 false
 TEST_F(ContextTest, DefaultState_NoDataNotInited) {
   EXPECT_EQ(context_.state.no_data_inited,
             TerrainState::NoDataState::UNINITIALIZED);
@@ -19,6 +20,7 @@ TEST_F(ContextTest, DefaultState_NoDataNotInited) {
 }
 
 // ── onOdometry ──
+// 接收里程计消息后更新车辆位置和朝向三角函数
 TEST_F(ContextTest, OnOdometry_StoresVehiclePose) {
   context_.onOdometry(1.0, 2.0, 3.0, 0.1, 0.2, 0.3);
 
@@ -27,6 +29,7 @@ TEST_F(ContextTest, OnOdometry_StoresVehiclePose) {
   EXPECT_DOUBLE_EQ(context_.state.vehicle_z, 3.0);
 }
 
+// 接收里程计后正确计算 roll/pitch/yaw 的正余弦
 TEST_F(ContextTest, OnOdometry_ComputesSinCos) {
   context_.onOdometry(0, 0, 0, 0, 0, M_PI / 4.0);
 
@@ -36,6 +39,7 @@ TEST_F(ContextTest, OnOdometry_ComputesSinCos) {
   EXPECT_NEAR(context_.state.cos_vehicle_pitch, cos(0), 1e-9);
 }
 
+// 首次调用 odom 后进入 RECORDING 状态，记录初始位置
 TEST_F(ContextTest, OnOdometry_FirstCall_TransitionsToRecording) {
   context_.onOdometry(1.0, 2.0, 0, 0, 0, 0);
 
@@ -45,6 +49,7 @@ TEST_F(ContextTest, OnOdometry_FirstCall_TransitionsToRecording) {
   EXPECT_DOUBLE_EQ(context_.state.vehicle_y_initial, 2.0);
 }
 
+// 移动距离超过 no_decay_distance 后转为 ACTIVE 状态
 TEST_F(ContextTest, OnOdometry_MovedFarEnough_TransitionsToActive) {
   context_.state.no_data_inited = TerrainState::NoDataState::RECORDING;
   context_.state.vehicle_x_initial = 0;
@@ -56,6 +61,7 @@ TEST_F(ContextTest, OnOdometry_MovedFarEnough_TransitionsToActive) {
   EXPECT_EQ(context_.state.no_data_inited, TerrainState::NoDataState::ACTIVE);
 }
 
+// 移动距离不足时保持 RECORDING 状态不变
 TEST_F(ContextTest, OnOdometry_NotFarEnough_StaysRecording) {
   context_.state.no_data_inited = TerrainState::NoDataState::RECORDING;
   context_.state.vehicle_x_initial = 0;
@@ -69,6 +75,7 @@ TEST_F(ContextTest, OnOdometry_NotFarEnough_StaysRecording) {
 }
 
 // ── onLaserCloud ──
+// 首次接收点云时记录 system_init_time
 TEST_F(ContextTest, OnLaserCloud_FirstCall_SetsInitTime) {
   context_.onLaserCloud(MakeCloud(0, 0, 0), 100.0);
 
@@ -76,6 +83,7 @@ TEST_F(ContextTest, OnLaserCloud_FirstCall_SetsInitTime) {
   EXPECT_DOUBLE_EQ(context_.state.system_init_time, 100.0);
 }
 
+// 超出体素网格范围的点被裁剪掉
 TEST_F(ContextTest, OnLaserCloud_FiltersPointsBeyondVoxelRange) {
   context_.state.vehicle_x = 0;
   context_.state.vehicle_y = 0;
@@ -90,6 +98,7 @@ TEST_F(ContextTest, OnLaserCloud_FiltersPointsBeyondVoxelRange) {
 }
 
 // ── onJoystick ──
+// joystick 按钮按下时触发清除模式，重置 no_data 状态
 TEST_F(ContextTest, OnJoystick_ButtonPressed_TriggersClearing) {
   context_.onJoystick(true);
 
@@ -98,6 +107,7 @@ TEST_F(ContextTest, OnJoystick_ButtonPressed_TriggersClearing) {
   EXPECT_TRUE(context_.state.clearing_cloud);
 }
 
+// 按钮松开时 clearing_cloud 状态不变
 TEST_F(ContextTest, OnJoystick_ButtonReleased_NoChange) {
   context_.state.clearing_cloud = false;
   context_.onJoystick(false);
@@ -106,6 +116,7 @@ TEST_F(ContextTest, OnJoystick_ButtonReleased_NoChange) {
 }
 
 // ── onClearing ──
+// 接收清除距离后更新 clearing_distance 并触发清除标志
 TEST_F(ContextTest, OnClearing_SetsDistanceAndTriggersClearing) {
   context_.onClearing(10.5);
 

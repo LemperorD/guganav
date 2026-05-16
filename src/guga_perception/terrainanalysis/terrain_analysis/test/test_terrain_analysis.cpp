@@ -37,11 +37,11 @@ protected:
   std::unique_ptr<TerrainAnalysis> terrain_;
 };
 
-// ── Pipeline ──
+// 平面地面点云经过全管线后，输出的 intensity（离地高度）都接近零
 TEST_F(TerrainAnalysisTest, Run_FlatGround_OutputsLowIntensity) {
   sendOdom(0, 0, 0, 0);
 
-  std::mt19937 rng{42};  // fixed seed for reproducibility
+  std::mt19937 rng{42};
   std::uniform_real_distribution<float> dist(-1.0F, 1.0F);
   auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   for (int i = 0; i < 500; i++) {
@@ -59,6 +59,7 @@ TEST_F(TerrainAnalysisTest, Run_FlatGround_OutputsLowIntensity) {
   EXPECT_LT(max_intensity, 0.5F) << "Flat ground should produce small heights";
 }
 
+// 地面上方有障碍点时，输出点云包含非零离地高度
 TEST_F(TerrainAnalysisTest, Run_ObstacleAboveGround_OutputsNonZeroIntensity) {
   sendOdom(0, 0, 0, 0);
 
@@ -76,18 +77,17 @@ TEST_F(TerrainAnalysisTest, Run_ObstacleAboveGround_OutputsNonZeroIntensity) {
       << "Elevated points should produce non-zero height";
 }
 
+// 孤立障碍点所在 voxel 点数不足时被过滤，不出现在输出中
 TEST_F(TerrainAnalysisTest,
        Run_IsolatedObstacleInSparseVoxel_ExcludedFromOutput) {
   sendOdom(0, 0, 0, 0);
 
-  // ground cluster near origin, obstacle far away in isolated voxel
   auto cloud = MakeGroundCloud(11, 0.1, 0.0);
   pcl::PointXYZI obs{3.0F, 3.0F, 0.3F, 0};
   cloud->push_back(obs);
   sendCloud(cloud, 100.0);
   TerrainAlgorithm::run(terrain_->context_.cfg, terrain_->context_.state);
 
-  // isolated point has sparse voxel (< min_block_point_num), excluded
   bool found_isolated = false;
   for (const auto& p : terrain_->context_.state.terrainCloudElev().points) {
     if (p.x > 2.5F && p.intensity > 0.1F) {
