@@ -112,6 +112,32 @@ namespace {
     return true;
   }
 
+  struct SensorPoint {
+    double x;
+    double y;
+    double z;
+  };
+
+  SensorPoint transformToSensorFrame(double x, double y, double z,
+                                     const TerrainState& state) {
+    double rotated_x = (x * state.cos_vehicle_yaw)
+                     + (y * state.sin_vehicle_yaw);
+    double rotated_y = -(x * state.sin_vehicle_yaw)
+                     + (y * state.cos_vehicle_yaw);
+
+    double pitched_x = (rotated_x * state.cos_vehicle_pitch)
+                     - (z * state.sin_vehicle_pitch);
+    double pitched_z = (rotated_x * state.sin_vehicle_pitch)
+                     + (z * state.cos_vehicle_pitch);
+
+    double rolled_y = (rotated_y * state.cos_vehicle_roll)
+                    + (pitched_z * state.sin_vehicle_roll);
+    double rolled_z = -(rotated_y * state.sin_vehicle_roll)
+                    + (pitched_z * state.cos_vehicle_roll);
+
+    return {pitched_x, rolled_y, rolled_z};
+  }
+
   void resetPlanarVoxels(TerrainState& state) {
     state.planar_voxel_elev.fill(0);
     state.planar_voxel_edge.fill(0);
@@ -269,44 +295,31 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
     }
     size_t cell = TerrainConfig::planarVoxelIndex(row, col);
 
-    auto relative_x = static_cast<float>(point.x - vehicle_x);
-    auto relative_y = static_cast<float>(point.y - vehicle_y);
-    auto relative_z = static_cast<float>(point.z - vehicle_z);
-    float distance = sqrt((relative_x * relative_x) + (relative_y * relative_y));
+    double relative_x = point.x - vehicle_x;
+    double relative_y = point.y - vehicle_y;
+    double relative_z = point.z - vehicle_z;
+    double distance = sqrt((relative_x * relative_x)
+                           + (relative_y * relative_y));
 
     if (distance <= config.min_dy_obs_dis) {
       state.planar_voxel_dy_obs[cell] += config.min_dy_obs_point_num;
       continue;
     }
 
-    float scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance)
-                     * 180.0 / M_PI;
+    double scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance)
+                      * 180.0 / M_PI;
     if (scan_angle <= config.min_dy_obs_angle) {
       continue;
     }
 
-    // TODO: extract yaw→pitch→roll rotation chain to a named function
-    float rotated_x = relative_x * state.cos_vehicle_yaw
-                    + relative_y * state.sin_vehicle_yaw;
-    float rotated_y = -relative_x * state.sin_vehicle_yaw
-                    + relative_y * state.cos_vehicle_yaw;
-    float rotated_z = relative_z;
-
-    float pitched_x = rotated_x * state.cos_vehicle_pitch
-                    - rotated_z * state.sin_vehicle_pitch;
-    float pitched_z = rotated_x * state.sin_vehicle_pitch
-                    + rotated_z * state.cos_vehicle_pitch;
-
-    float rolled_y = rotated_y * state.cos_vehicle_roll
-                   + pitched_z * state.sin_vehicle_roll;
-    float rolled_z = -rotated_y * state.sin_vehicle_roll
-                   + pitched_z * state.cos_vehicle_roll;
-
-    float sensor_distance = sqrt(pitched_x * pitched_x + rolled_y * rolled_y);
-    float sensor_angle = atan2(rolled_z, sensor_distance) * 180.0 / M_PI;
+    auto sensor = transformToSensorFrame(relative_x, relative_y, relative_z,
+                                         state);
+    double sensor_distance = sqrt((sensor.x * sensor.x)
+                                  + (sensor.y * sensor.y));
+    double sensor_angle = atan2(sensor.z, sensor_distance) * 180.0 / M_PI;
     if ((sensor_angle > config.min_dy_obs_vfov
          && sensor_angle < config.max_dy_obs_vfov)
-        || fabs(rolled_z) < config.abs_dy_obs_rel_z_thre) {
+        || std::abs(sensor.z) < config.abs_dy_obs_rel_z_thre) {
       state.planar_voxel_dy_obs[cell]++;
     }
   }
