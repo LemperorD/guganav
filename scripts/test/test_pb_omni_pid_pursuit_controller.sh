@@ -1,14 +1,24 @@
 #!/bin/bash
 set -e
 source /opt/ros/humble/setup.bash
+source /home/rog/nav2_ws/install/setup.bash
 cd ~/guganav
 
 RESULT_FILE=~/guganav/test_result.ans
 rm -f "$RESULT_FILE"
 
-echo "=== Build pb_omni_pid_pursuit_controller ===" | tee -a "$RESULT_FILE"
+echo "=== Clean previous build data ===" | tee -a "$RESULT_FILE"
+rm -rf build/pb_omni_pid_pursuit_controller
+
+echo "=== Build pb_omni_pid_pursuit_controller with coverage flags ===" | tee -a "$RESULT_FILE"
 colcon build --packages-select pb_omni_pid_pursuit_controller \
   --event-handlers console_direct+ \
+  --cmake-args \
+    -DBUILD_TESTING=ON \
+    -DCMAKE_CXX_FLAGS="--coverage -O0" \
+    -DCMAKE_C_FLAGS="--coverage -O0" \
+    -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+    -DCMAKE_SHARED_LINKER_FLAGS="--coverage" \
   2>&1 | tee -a "$RESULT_FILE"
 
 . ~/guganav/install/setup.bash
@@ -21,4 +31,42 @@ for test_bin in test_pid test_geometry_utils; do
 done
 
 echo "" | tee -a "$RESULT_FILE"
+echo "=== Generate coverage report ===" | tee -a "$RESULT_FILE"
+cd ~/guganav
+FILTER_BASE='src/guga_controller/pb_omni_pid_pursuit_controller'
+gcovr \
+  --root . \
+  --object-directory build/pb_omni_pid_pursuit_controller \
+  --filter "${FILTER_BASE}/src/.*\\.cpp" \
+  --filter "${FILTER_BASE}/include/.*\\.hpp" \
+  --exclude '.*test.*' \
+  --gcov-ignore-errors=source_not_found \
+  --html --html-details \
+  -o build/pb_omni_pid_pursuit_controller/coverage.html 2>&1 | tee -a "$RESULT_FILE"
+
+echo "" | tee -a "$RESULT_FILE"
+echo "=== Generate lcov info ===" | tee -a "$RESULT_FILE"
+gcovr \
+  --root . \
+  --object-directory build/pb_omni_pid_pursuit_controller \
+  --filter "${FILTER_BASE}/src/.*\\.cpp" \
+  --filter "${FILTER_BASE}/include/.*\\.hpp" \
+  --exclude '.*test.*' \
+  --gcov-ignore-errors=source_not_found \
+  --lcov \
+  -o lcov.info 2>&1 | tee -a "$RESULT_FILE"
+
+echo "" | tee -a "$RESULT_FILE"
+echo "=== Coverage Summary ===" | tee -a "$RESULT_FILE"
+gcovr \
+  --root . \
+  --object-directory build/pb_omni_pid_pursuit_controller \
+  --filter "${FILTER_BASE}/src/.*\\.cpp" \
+  --filter "${FILTER_BASE}/include/.*\\.hpp" \
+  --exclude '.*test.*' \
+  --gcov-ignore-errors=source_not_found 2>&1 | tee -a "$RESULT_FILE"
+
+echo "" | tee -a "$RESULT_FILE"
 echo "=== Done ===" | tee -a "$RESULT_FILE"
+echo "lcov info:    lcov.info" | tee -a "$RESULT_FILE"
+echo "coverage html: build/pb_omni_pid_pursuit_controller/coverage.html" | tee -a "$RESULT_FILE"
