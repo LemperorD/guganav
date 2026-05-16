@@ -60,6 +60,15 @@ if(BUILD_TESTING)
   ament_add_gtest(test_terrain_analysis test/test_terrain_analysis.cpp)
   target_include_directories(test_terrain_analysis PRIVATE test)
   target_link_libraries(test_terrain_analysis terrain_analysis_lib)
+
+  ament_add_gtest(test_context test/test_context.cpp)
+  target_include_directories(test_context PRIVATE test)
+  target_link_libraries(test_context terrain_analysis_lib)
+
+  ament_add_gtest(test_algorithm test/test_algorithm.cpp)
+  target_include_directories(test_algorithm PRIVATE test)
+  target_link_libraries(test_algorithm terrain_analysis_lib)
+
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
