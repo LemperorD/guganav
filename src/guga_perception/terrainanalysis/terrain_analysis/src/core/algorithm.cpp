@@ -10,10 +10,6 @@
 #include <cstdint>
 #include <queue>
 
-// TerrainAlgorithm static methods
-
-// ── Voxel grid shift helpers ──
-
 void TerrainAlgorithm::run(const TerrainConfig& config, TerrainState& state) {
   state.new_laser_cloud = false;
 
@@ -89,23 +85,23 @@ namespace {
     return elapsed >= config.voxel_time_update_thre;
   }
 
-  bool keepVoxelPoint(double rel_z, double dis, double point_time,
+  bool keepVoxelPoint(double relative_z, double distance, double point_time,
                       const TerrainConfig& config, const TerrainState& state) {
-    const double z_margin = config.dis_ratio_z * dis;
-    if (rel_z <= config.min_rel_z - z_margin) {
+    const double z_margin = config.dis_ratio_z * distance;
+    if (relative_z <= config.min_rel_z - z_margin) {
       return false;
     }
-    if (rel_z >= config.max_rel_z + z_margin) {
+    if (relative_z >= config.max_rel_z + z_margin) {
       return false;
     }
-    bool near = dis < config.no_decay_dis;
+    bool near = distance < config.no_decay_dis;
     bool decayed = (state.laser_cloud_time - state.system_init_time
                     - point_time)
                 >= config.decay_time;
     if (decayed && !near) {
       return false;
     }
-    if (dis < state.clearing_dis && state.clearing_cloud) {
+    if (distance < state.clearing_dis && state.clearing_cloud) {
       return false;
     }
     return true;
@@ -179,13 +175,16 @@ namespace {
   }
 
   bool hasLowerNeighbor(const TerrainState& state, int i, int row, int column) {
-    static constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
-    for (int dr = -1; dr <= 1; dr++) {
-      for (int dc = -1; dc <= 1; dc++) {
-        int nr = row + dr;
-        int nc = column + dc;
-        if (nr >= 0 && nr < W && nc >= 0 && nc < W) {
-          if (state.planar_voxel_edge[TerrainConfig::planarVoxelIndex(nr, nc)]
+    static constexpr int WIDTH = TerrainConfig::PLANAR_VOXEL_WIDTH;
+    for (int delta_row = -1; delta_row <= 1; delta_row++) {
+      for (int delta_col = -1; delta_col <= 1; delta_col++) {
+        int neighbor_row = row + delta_row;
+        int neighbor_col = column + delta_col;
+        if (neighbor_row >= 0 && neighbor_row < WIDTH && neighbor_col >= 0
+            && neighbor_col < WIDTH) {
+          size_t neighbor_index = TerrainConfig::planarVoxelIndex(
+              neighbor_row, neighbor_col);
+          if (state.planar_voxel_edge[neighbor_index]
               < state.planar_voxel_edge[i]) {
             return true;
           }
@@ -196,15 +195,15 @@ namespace {
   }
 
   void expandEdgeLabels(const TerrainConfig& config, TerrainState& state) {
-    static constexpr int W = TerrainConfig::PLANAR_VOXEL_WIDTH;
+    static constexpr int WIDTH = TerrainConfig::PLANAR_VOXEL_WIDTH;
     for (int iteration = 0; iteration < config.no_data_block_skip_num;
          iteration++) {
       for (int i = 0; i < TerrainConfig::PLANAR_VOXEL_NUM; i++) {
         if (state.planar_voxel_edge[i] < 1) {
           continue;
         }
-        int row = i / W;
-        int column = i % W;
+        int row = i / WIDTH;
+        int column = i % WIDTH;
         if (!hasLowerNeighbor(state, i, row, column)) {
           state.planar_voxel_edge[i]++;
         }
@@ -263,24 +262,24 @@ namespace {
 void TerrainAlgorithm::rolloverVoxels(const TerrainConfig& config,
                                       TerrainState& state) {
   const double voxel_size = config.terrain_voxel_size;
-  double cen_x = voxel_size * state.terrain_voxel_shift_x;
-  double cen_y = voxel_size * state.terrain_voxel_shift_y;
+  double center_x = voxel_size * state.terrain_voxel_shift_x;
+  double center_y = voxel_size * state.terrain_voxel_shift_y;
 
-  while (state.vehicle_x - cen_x < -voxel_size) {
+  while (state.vehicle_x - center_x < -voxel_size) {
     shiftGrid(state, Axis::X, false);
-    cen_x = voxel_size * --state.terrain_voxel_shift_x;
+    center_x = voxel_size * --state.terrain_voxel_shift_x;
   }
-  while (state.vehicle_x - cen_x > voxel_size) {
+  while (state.vehicle_x - center_x > voxel_size) {
     shiftGrid(state, Axis::X, true);
-    cen_x = voxel_size * ++state.terrain_voxel_shift_x;
+    center_x = voxel_size * ++state.terrain_voxel_shift_x;
   }
-  while (state.vehicle_y - cen_y < -voxel_size) {
+  while (state.vehicle_y - center_y < -voxel_size) {
     shiftGrid(state, Axis::Y, false);
-    cen_y = voxel_size * --state.terrain_voxel_shift_y;
+    center_y = voxel_size * --state.terrain_voxel_shift_y;
   }
-  while (state.vehicle_y - cen_y > voxel_size) {
+  while (state.vehicle_y - center_y > voxel_size) {
     shiftGrid(state, Axis::Y, true);
-    cen_y = voxel_size * ++state.terrain_voxel_shift_y;
+    center_y = voxel_size * ++state.terrain_voxel_shift_y;
   }
 }
 
@@ -322,8 +321,8 @@ void TerrainAlgorithm::updateVoxels(const TerrainConfig& config,
 
     cell_cloud.clear();
     for (const auto& point : state.laser_cloud_downsampled->points) {
-      double dis = state.horizontalDistanceTo(point.x, point.y);
-      if (keepVoxelPoint(point.z - vehicle_z, dis, point.intensity, config,
+      double distance = state.horizontalDistanceTo(point.x, point.y);
+      if (keepVoxelPoint(point.z - vehicle_z, distance, point.intensity, config,
                          state)) {
         cell_cloud.push_back(point);
       }
