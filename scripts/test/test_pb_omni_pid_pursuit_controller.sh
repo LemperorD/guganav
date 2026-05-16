@@ -25,7 +25,7 @@ colcon build --packages-select pb_omni_pid_pursuit_controller \
 
 echo "=== Run tests ===" | tee -a "$RESULT_FILE"
 cd ~/guganav/build/pb_omni_pid_pursuit_controller
-for test_bin in test_pid test_geometry_utils; do
+for test_bin in test_pid test_geometry_utils test_visualise; do
   echo "--- $test_bin ---" | tee -a "$RESULT_FILE"
   GTEST_COLOR=yes ./$test_bin 2>&1 | tee -a "$RESULT_FILE"
 done
