@@ -58,6 +58,13 @@ struct TerrainConfig {
 
   double terrain_voxel_size = 1.0;
   double planar_voxel_size = 0.2;
+
+  // terrain connectivity (from terrain_analysis_ext)
+  bool check_terrain_connectivity = false;
+  double terrain_under_vehicle = -0.75;
+  double terrain_connectivity_threshold = 0.5;
+  double ceiling_filter_threshold = 2.0;
+  double local_terrain_map_radius = 0.0;
 };
 
 // ═══════════════════════════════════════════════
@@ -84,6 +91,7 @@ struct TerrainState {
   pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_downsampled;
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud;
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_local;
   std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,
              TerrainConfig::TERRAIN_VOXEL_NUM>
       terrain_voxel_cloud;
@@ -148,6 +156,7 @@ public:
                     double timestamp_sec);
   void onJoystick(bool button5);
   void onClearing(double distance_clearing);
+  void onLocalTerrainCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud);
 
   TerrainConfig cfg;
   TerrainState state;

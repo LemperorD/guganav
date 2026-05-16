@@ -23,4 +23,8 @@ public:
                                TerrainState& state);
   static void addNoDataObstacles(const TerrainConfig& config,
                                  TerrainState& state);
+  static void checkTerrainConnectivity(const TerrainConfig& config,
+                                       TerrainState& state);
+  static void mergeLocalTerrain(const TerrainConfig& config,
+                                TerrainState& state);
 };

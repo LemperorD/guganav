@@ -15,6 +15,8 @@ TerrainAnalysisContext::TerrainAnalysisContext() {
   state.terrain_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   state.terrain_cloud_elev =
       std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+  state.terrain_cloud_local =
+      std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
 
   for (auto& ptr : state.terrain_voxel_cloud) {
     ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -93,4 +95,10 @@ void TerrainAnalysisContext::onClearing(double distance_clearing) {
   state.no_data_inited = TerrainState::NoDataState::UNINITIALIZED;
   state.clearing_distance = distance_clearing;
   state.clearing_cloud = true;
+}
+
+void TerrainAnalysisContext::onLocalTerrainCloud(
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) {
+  state.terrain_cloud_local->clear();
+  *state.terrain_cloud_local = *cloud;
 }

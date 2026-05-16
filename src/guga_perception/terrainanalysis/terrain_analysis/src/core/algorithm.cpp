@@ -33,6 +33,14 @@ void TerrainAlgorithm::run(const TerrainConfig& config, TerrainState& state) {
     addNoDataObstacles(config, state);
   }
 
+  if (config.check_terrain_connectivity) {
+    checkTerrainConnectivity(config, state);
+  }
+
+  if (config.local_terrain_map_radius > 0.0) {
+    mergeLocalTerrain(config, state);
+  }
+
   state.clearing_cloud = false;
 }
 
@@ -523,4 +531,16 @@ void TerrainAlgorithm::addNoDataObstacles(const TerrainConfig& config,
   markDataGapCells(config, state);
   expandEdgeLabels(config, state);
   emitObstacleCloud(config, state);
+}
+
+void TerrainAlgorithm::checkTerrainConnectivity(const TerrainConfig& config,
+                                                TerrainState& state) {
+  (void)config;
+  (void)state;
+}
+
+void TerrainAlgorithm::mergeLocalTerrain(const TerrainConfig& config,
+                                          TerrainState& state) {
+  (void)config;
+  (void)state;
 }

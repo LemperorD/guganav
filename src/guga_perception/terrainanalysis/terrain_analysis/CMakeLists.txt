@@ -69,6 +69,10 @@ if(BUILD_TESTING)
   target_include_directories(test_algorithm PRIVATE test)
   target_link_libraries(test_algorithm terrain_analysis_lib)
 
+  ament_add_gtest(test_connectivity test/test_connectivity.cpp)
+  target_include_directories(test_connectivity PRIVATE test)
+  target_link_libraries(test_connectivity terrain_analysis_lib)
+
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
