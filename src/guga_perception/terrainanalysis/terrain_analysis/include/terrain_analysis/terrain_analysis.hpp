@@ -21,7 +21,8 @@ public:
   void initialize();
   bool processOnce();
 
-  const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev() const {
+  [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev()
+      const {
     return context_.state.terrainCloudElev();
   }
 

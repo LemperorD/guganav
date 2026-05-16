@@ -65,15 +65,15 @@ TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_ZeroToOne) {
 
   EXPECT_EQ(terrain_->context_.state.no_data_inited,
             TerrainState::NoDataState::RECORDING);
-  EXPECT_DOUBLE_EQ(terrain_->context_.state.vehicle_x_rec, 1.0);
+  EXPECT_DOUBLE_EQ(terrain_->context_.state.vehicle_x_initial, 1.0);
 }
 
 TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_OneToTwo_WhenFarEnough) {
   terrain_->context_.state.no_data_inited =
       TerrainState::NoDataState::RECORDING;
-  terrain_->context_.state.vehicle_x_rec = 0;
-  terrain_->context_.state.vehicle_y_rec = 0;
-  terrain_->context_.cfg.no_decay_dis = 4.0;
+  terrain_->context_.state.vehicle_x_initial = 0;
+  terrain_->context_.state.vehicle_y_initial = 0;
+  terrain_->context_.cfg.no_decay_distance = 4.0;
 
   terrain_->context_.onOdometry(3.0, 4.0, 0, 0, 0, 0);  // distance 5.0
 
@@ -84,9 +84,9 @@ TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_OneToTwo_WhenFarEnough) {
 TEST_F(TerrainAnalysisTest, OnOdometry_NoDataInited_StaysOne_WhenClose) {
   terrain_->context_.state.no_data_inited =
       TerrainState::NoDataState::RECORDING;
-  terrain_->context_.state.vehicle_x_rec = 0;
-  terrain_->context_.state.vehicle_y_rec = 0;
-  terrain_->context_.cfg.no_decay_dis = 4.0;
+  terrain_->context_.state.vehicle_x_initial = 0;
+  terrain_->context_.state.vehicle_y_initial = 0;
+  terrain_->context_.cfg.no_decay_distance = 4.0;
 
   terrain_->context_.onOdometry(2.0, 2.0, 0, 0, 0, 0);  // distance 2.8
 
@@ -138,7 +138,7 @@ TEST_F(TerrainAnalysisTest, OnJoystick_Button5Low_NoTrigger) {
 TEST_F(TerrainAnalysisTest, OnClearing_SetsDisAndFlag) {
   terrain_->context_.onClearing(10.5);
 
-  EXPECT_DOUBLE_EQ(terrain_->context_.state.clearing_dis, 10.5);
+  EXPECT_DOUBLE_EQ(terrain_->context_.state.clearing_distance, 10.5);
   EXPECT_TRUE(terrain_->context_.state.clearing_cloud);
   EXPECT_EQ(terrain_->context_.state.no_data_inited,
             TerrainState::NoDataState::UNINITIALIZED);
@@ -412,7 +412,7 @@ TEST_F(TerrainAnalysisTest, ComputeElevation_GroundLiftLimited) {
 
 TEST_F(TerrainAnalysisTest, DetectDynamicObstacles_ClosePoint_AddsMinCount) {
   terrain_->context_.cfg.clear_dy_obs = true;
-  terrain_->context_.cfg.min_dy_obs_dis =
+  terrain_->context_.cfg.min_dy_obs_distance =
       5.0;  // high threshold → all points "close"
   terrain_->context_.cfg.min_dy_obs_point_num = 7;
   terrain_->context_.state.vehicle_x = 0;
@@ -463,7 +463,7 @@ TEST_F(TerrainAnalysisTest, DetectDynamicObstacles_Disabled_NoEffect) {
 TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_ResetsHighAngle) {
   terrain_->context_.cfg.clear_dy_obs = true;
   terrain_->context_.cfg.min_dy_obs_angle = 10.0 * M_PI / 180.0;
-  terrain_->context_.cfg.min_dy_obs_rel_z = -0.5;
+  terrain_->context_.cfg.min_dy_obs_relative_z = -0.5;
   int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
                * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
            + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;
@@ -484,7 +484,7 @@ TEST_F(TerrainAnalysisTest, FilterDynamicObstaclePoints_LowAngle_Keeps) {
   terrain_->context_.cfg.clear_dy_obs = true;
   terrain_->context_.cfg.min_dy_obs_angle =
       90.0 * M_PI / 180.0;  // nearly impossible to exceed
-  terrain_->context_.cfg.min_dy_obs_rel_z = -0.5;
+  terrain_->context_.cfg.min_dy_obs_relative_z = -0.5;
   int cell = TerrainConfig::PLANAR_VOXEL_WIDTH
                * TerrainConfig::PLANAR_VOXEL_HALF_WIDTH
            + TerrainConfig::PLANAR_VOXEL_HALF_WIDTH;

@@ -87,21 +87,21 @@ namespace {
 
   bool keepVoxelPoint(double relative_z, double distance, double point_time,
                       const TerrainConfig& config, const TerrainState& state) {
-    const double z_margin = config.dis_ratio_z * distance;
-    if (relative_z <= config.min_rel_z - z_margin) {
+    const double z_margin = config.distance_ratio_z * distance;
+    if (relative_z <= config.min_relative_z - z_margin) {
       return false;
     }
-    if (relative_z >= config.max_rel_z + z_margin) {
+    if (relative_z >= config.max_relative_z + z_margin) {
       return false;
     }
-    bool near = distance < config.no_decay_dis;
+    bool near = distance < config.no_decay_distance;
     bool decayed = (state.laser_cloud_time - state.system_init_time
                     - point_time)
                 >= config.decay_time;
     if (decayed && !near) {
       return false;
     }
-    if (distance < state.clearing_dis && state.clearing_cloud) {
+    if (distance < state.clearing_distance && state.clearing_cloud) {
       return false;
     }
     return true;
@@ -366,7 +366,7 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
     int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
     int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
     double relative_z = point.z - vehicle_z;
-    if (relative_z <= config.min_rel_z || relative_z >= config.max_rel_z) {
+    if (relative_z <= config.min_relative_z || relative_z >= config.max_relative_z) {
       continue;
     }
     size_t base = TerrainConfig::planarVoxelIndex(row, col);
@@ -412,12 +412,12 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
     double distance = sqrt((relative_x * relative_x)
                            + (relative_y * relative_y));
 
-    if (distance <= config.min_dy_obs_dis) {
+    if (distance <= config.min_dy_obs_distance) {
       state.planar_voxel_dy_obs[cell] += config.min_dy_obs_point_num;
       continue;
     }
 
-    double scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance);
+    double scan_angle = atan2(relative_z - config.min_dy_obs_relative_z, distance);
     if (scan_angle <= config.min_dy_obs_angle) {
       continue;
     }
@@ -429,7 +429,7 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
     double sensor_angle = atan2(sensor.z, sensor_distance);
     if ((sensor_angle > config.min_dy_obs_vfov
          && sensor_angle < config.max_dy_obs_vfov)
-        || std::abs(sensor.z) < config.abs_dy_obs_rel_z_thre) {
+        || std::abs(sensor.z) < config.abs_dy_obs_relative_z_threshold) {
       state.planar_voxel_dy_obs[cell]++;
     }
   }
@@ -457,7 +457,7 @@ void TerrainAlgorithm::filterDynamicObstaclePoints(const TerrainConfig& config,
     double relative_z = point.z - vehicle_z;
     double distance = sqrt((relative_x * relative_x)
                            + (relative_y * relative_y));
-    double scan_angle = atan2(relative_z - config.min_dy_obs_rel_z, distance);
+    double scan_angle = atan2(relative_z - config.min_dy_obs_relative_z, distance);
     if (scan_angle > config.min_dy_obs_angle) {
       state.planar_voxel_dy_obs[cell] = 0;
     }
@@ -490,7 +490,7 @@ void TerrainAlgorithm::computeHeightMap(const TerrainConfig& config,
 
   for (const auto& point : state.terrain_cloud->points) {
     double relative_z = point.z - vehicle_z;
-    if (relative_z <= config.min_rel_z || relative_z >= config.max_rel_z) {
+    if (relative_z <= config.min_relative_z || relative_z >= config.max_relative_z) {
       continue;
     }
     int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);

@@ -36,17 +36,16 @@ void TerrainAnalysisContext::onOdometry(double x, double y, double z,
   state.sin_vehicle_yaw = sin(yaw);
   state.cos_vehicle_yaw = cos(yaw);
 
-  using NoDataState = TerrainState::NoDataState;
-  if (state.no_data_inited == NoDataState::UNINITIALIZED) {
-    state.vehicle_x_rec = state.vehicle_x;
-    state.vehicle_y_rec = state.vehicle_y;
-    state.no_data_inited = NoDataState::RECORDING;
+  if (state.no_data_inited == TerrainState::NoDataState::UNINITIALIZED) {
+    state.vehicle_x_initial = state.vehicle_x;
+    state.vehicle_y_initial = state.vehicle_y;
+    state.no_data_inited = TerrainState::NoDataState::RECORDING;
   }
-  if (state.no_data_inited == NoDataState::RECORDING) {
-    double dis = state.horizontalDistanceTo(state.vehicle_x_rec,
-                                            state.vehicle_y_rec);
-    if (dis >= cfg.no_decay_dis) {
-      state.no_data_inited = NoDataState::ACTIVE;
+  if (state.no_data_inited == TerrainState::NoDataState::RECORDING) {
+    double distance = state.horizontalDistanceTo(state.vehicle_x_initial,
+                                                  state.vehicle_y_initial);
+    if (distance >= cfg.no_decay_distance) {
+      state.no_data_inited = TerrainState::NoDataState::ACTIVE;
     }
   }
 }
@@ -62,27 +61,21 @@ void TerrainAnalysisContext::onLaserCloud(
   state.laser_cloud->clear();
   *state.laser_cloud = *cloud;
 
-  pcl::PointXYZI point;
+  const double vehicle_z = state.vehicle_z;
+  const double max_range = cfg.terrain_voxel_size
+                         * (TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH + 1);
   state.laser_cloud_crop->clear();
-  int sz = static_cast<int>(state.laser_cloud->points.size());
-  for (int i = 0; i < sz; i++) {
-    point = state.laser_cloud->points[i];
-
-    float px = point.x;
-    float py = point.y;
-    float pz = point.z;
-
-    double dis = state.horizontalDistanceTo(px, py);
-    if (pz - state.vehicle_z > cfg.min_rel_z - (cfg.dis_ratio_z * dis)
-        && pz - state.vehicle_z < cfg.max_rel_z + (cfg.dis_ratio_z * dis)
-        && dis < cfg.terrain_voxel_size
-                     * (TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH + 1)) {
-      point.x = px;
-      point.y = py;
-      point.z = pz;
-      point.intensity = static_cast<float>(state.laser_cloud_time
+  for (const auto& point : state.laser_cloud->points) {
+    double relative_z = point.z - vehicle_z;
+    double distance = state.horizontalDistanceTo(point.x, point.y);
+    const double z_margin = cfg.distance_ratio_z * distance;
+    if (relative_z > cfg.min_relative_z - z_margin
+        && relative_z < cfg.max_relative_z + z_margin
+        && distance < max_range) {
+      pcl::PointXYZI cropped = point;
+      cropped.intensity = static_cast<float>(state.laser_cloud_time
                                            - state.system_init_time);
-      state.laser_cloud_crop->push_back(point);
+      state.laser_cloud_crop->push_back(cropped);
     }
   }
 
@@ -96,8 +89,8 @@ void TerrainAnalysisContext::onJoystick(bool button5) {
   }
 }
 
-void TerrainAnalysisContext::onClearing(float dis) {
+void TerrainAnalysisContext::onClearing(double distance_clearing) {
   state.no_data_inited = TerrainState::NoDataState::UNINITIALIZED;
-  state.clearing_dis = dis;
+  state.clearing_distance = distance_clearing;
   state.clearing_cloud = true;
 }
