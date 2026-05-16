@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <random>
 
 class TerrainAnalysisTest : public testing::Test {
 protected:
@@ -41,12 +40,7 @@ protected:
 TEST_F(TerrainAnalysisTest, Run_FlatGround_OutputsLowIntensity) {
   sendOdom(0, 0, 0, 0);
 
-  std::mt19937 rng{42};
-  std::uniform_real_distribution<float> dist(-1.0F, 1.0F);
-  auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  for (int i = 0; i < 500; i++) {
-    cloud->push_back({dist(rng), dist(rng), 0.01F, 0});
-  }
+  auto cloud = MakeGroundCloud(21, 0.1, 0.01);
   sendCloud(cloud, 100.0);
   TerrainAlgorithm::run(terrain_->context_.cfg, terrain_->context_.state);
 
