@@ -19,8 +19,8 @@ public:
                                           TerrainState& state);
   static void computeElevation(const TerrainConfig& config,
                                TerrainState& state);
-  static void computeHeightMap(const TerrainConfig& config, TerrainState& state,
-                               size_t terrain_cloud_size);
+  static void computeHeightMap(const TerrainConfig& config,
+                               TerrainState& state);
   static void addNoDataObstacles(const TerrainConfig& config,
                                  TerrainState& state);
 };
