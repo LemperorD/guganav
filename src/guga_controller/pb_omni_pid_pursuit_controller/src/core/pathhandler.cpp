@@ -1,5 +1,24 @@
 #include "pb_omni_pid_pursuit_controller/core/pathhandler.hpp"
 using nav2_util::geometry_utils::euclidean_distance;
+
+void PathHandler::initialize(
+    const std::shared_ptr<tf2_ros::Buffer>& tf,
+    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>& costmap_ros,
+    const rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr& pub) {
+  tf_ = tf;
+  costmap_ros_ = costmap_ros;
+  local_path_pub_ = pub;
+  transform_tolerance_ = tf2::durationFromSec(1.0);
+  max_robot_pose_search_dist_ = getCostmapMaxExtent();
+}
+
+double PathHandler::getCostmapMaxExtent() const {
+  const double max_costmap_dim_meters = std::max(
+      costmap_ros_->getCostmap()->getSizeInMetersX(),
+      costmap_ros_->getCostmap()->getSizeInMetersY());
+  return max_costmap_dim_meters / 2.0;
+}
+
 nav_msgs::msg::Path PathHandler::transformGlobalPlan(
     const geometry_msgs::msg::PoseStamped& pose,
     nav_msgs::msg::Path& global_plan) {
