@@ -1,0 +1,4 @@
+calibration:
+  board_width: 11        # 内角点列数
+  board_height: 8       # 内角点行数
+  square_size_mm: 30.0  # 每格边长（毫米）

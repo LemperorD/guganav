@@ -1,0 +1,12 @@
+Diagnostics:
+  Suppress:
+    - misc-non-private-member-variables-in-classes
+    - cppcoreguidelines-non-private-member-variables-in-classes
+  ClangTidy:
+    Remove:
+      - cppcoreguidelines-avoid-non-const-global-variables
+      - cert-err58-cpp
+      - readability-identifier-naming
+      - misc-use-internal-linkage
+      - misc-non-private-member-variables-in-classes
+      - cppcoreguidelines-non-private-member-variables-in-classes
