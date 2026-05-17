@@ -34,24 +34,11 @@ typedef enum
 
 namespace pb_omni_pid_pursuit_controller
 {
-
-/**
- * @class pb_omni_pid_pursuit_controller::OmniPidPursuitController
- * @brief Regulated pure pursuit controller plugin
- */
 class OmniPidPursuitController : public nav2_core::Controller
 {
 public:
-  /**
-   * @brief Constructor for
-   * pb_omni_pid_pursuit_controller::OmniPidPursuitController
-   */
   OmniPidPursuitController() = default;
 
-  /**
-   * @brief Destructor for
-   * pb_omni_pid_pursuit_controller::OmniPidPursuitController
-   */
   ~OmniPidPursuitController() override = default;
 
   /**
@@ -66,19 +53,11 @@ public:
     std::shared_ptr<tf2_ros::Buffer> tf,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
-  /**
-   * @brief Cleanup controller state machine
-   */
+  
   void cleanup() override;
 
-  /**
-   * @brief Activate controller state machine
-   */
   void activate() override;
 
-  /**
-   * @brief Deactivate controller state machine
-   */
   void deactivate() override;
 
   /**
@@ -159,15 +138,7 @@ protected:
   geometry_msgs::msg::PoseStamped getLookAheadPoint(
     const double & lookahead_dist, const nav_msgs::msg::Path & transformed_plan);
 
-  /**
-   * @brief Calculates the intersection point of a circle and a line segment
-   * @param p1 Start point of the line segment
-   * @param p2 End point of the line segment
-   * @param r Radius of the circle
-   * @return Intersection point (geometry_msgs::msg::Point)
-   */
-  geometry_msgs::msg::Point circleSegmentIntersection(
-    const geometry_msgs::msg::Point & p1, const geometry_msgs::msg::Point & p2, double r);
+ 
 
   /**
    * @brief Callback function for dynamic parameter updates
@@ -234,16 +205,6 @@ private:
     const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose,
     double forward_dist, double backward_dist) const;
 
-  /**
-   * @brief Calculates the radius of curvature using three points
-   * @param near_point Pose before the current point
-   * @param current_point Current pose (lookahead pose)
-   * @param far_point Pose after the current point
-   * @return Radius of curvature
-   */
-  double calculateCurvatureRadius(
-    const geometry_msgs::msg::Point & near_point, const geometry_msgs::msg::Point & current_point,
-    const geometry_msgs::msg::Point & far_point) const;
 
   /**
    * @brief Visualizes near and far points used for curvature calculation

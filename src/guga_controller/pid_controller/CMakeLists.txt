@@ -3,10 +3,11 @@ project(guga_omni_pid_pursuit_controller)
 
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
-
+include_directories(include/guga_omni_pid_pursuit_controller)
 ament_auto_add_library(${PROJECT_NAME} SHARED
   src/omni_pid_pursuit_controller.cpp
   src/pid.cpp
+  src/geometry_utils.cpp
 )
 
 if(BUILD_TESTING)
