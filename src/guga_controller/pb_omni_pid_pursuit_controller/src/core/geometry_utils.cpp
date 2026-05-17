@@ -1,4 +1,4 @@
-#include "pb_omni_pid_pursuit_controller/geometry_utils.hpp"
+#include "pb_omni_pid_pursuit_controller/core/geometry_utils.hpp"
 geometry_msgs::msg::Point geometry_utils::circleSegmentIntersection(
   const geometry_msgs::msg::Point & p1, const geometry_msgs::msg::Point & p2, double r)
 {

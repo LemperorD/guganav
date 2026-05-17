@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pb_omni_pid_pursuit_controller/pid.hpp"
+#include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 
 PID::PID(double dt, double max, double min, double kp, double kd, double ki)
 : dt_(dt), max_(max), min_(min), kp_(kp), kd_(kd), ki_(ki), pre_error_(0), integral_(0)

@@ -35,7 +35,7 @@ private:
 
   tf2::Duration transform_tolerance_;
 
-  rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitController")};
+  rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitControllerNode")};
 
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
     local_path_pub_;

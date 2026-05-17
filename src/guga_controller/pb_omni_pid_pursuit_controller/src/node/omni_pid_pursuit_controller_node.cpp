@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pb_omni_pid_pursuit_controller/omni_pid_pursuit_controller.hpp"
-#include "pb_omni_pid_pursuit_controller/visualise.hpp"
-#include "pb_omni_pid_pursuit_controller/geometry_utils.hpp"
-#include "pb_omni_pid_pursuit_controller/pathhandler.hpp"
+#include "pb_omni_pid_pursuit_controller/node/omni_pid_pursuit_controller_node.hpp"
+#include "pb_omni_pid_pursuit_controller/core/visualise.hpp"
+#include "pb_omni_pid_pursuit_controller/core/geometry_utils.hpp"
+#include "pb_omni_pid_pursuit_controller/core/pathhandler.hpp"
 
 #include "nav2_core/exceptions.hpp"
 #include "nav2_util/geometry_utils.hpp"
@@ -32,7 +32,7 @@ using rcl_interfaces::msg::ParameterType;
 
 namespace pb_omni_pid_pursuit_controller {
 
-  void OmniPidPursuitController::configure(
+  void OmniPidPursuitControllerNode::configure(
       const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent, std::string name,
       std::shared_ptr<tf2_ros::Buffer> tf,
       std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) {
@@ -197,7 +197,7 @@ namespace pb_omni_pid_pursuit_controller {
 
     chassis_mode_sub_ = node->create_subscription<std_msgs::msg::UInt8>(
         "chassis_mode", 1,
-        std::bind(&OmniPidPursuitController::chassisModeCallback, this,
+        std::bind(&OmniPidPursuitControllerNode::chassisModeCallback, this,
                   std::placeholders::_1));
 
     move_pid_ = std::make_shared<PID>(control_duration_, v_linear_max_,
@@ -208,20 +208,20 @@ namespace pb_omni_pid_pursuit_controller {
                                          rotation_kd_, rotation_ki_);
   }
 
-  void OmniPidPursuitController::cleanup() {
+  void OmniPidPursuitControllerNode::cleanup() {
     RCLCPP_INFO(logger_,
                 "Cleaning up controller: %s of type"
-                " pb_omni_pid_pursuit_controller::OmniPidPursuitController",
+                " pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode",
                 plugin_name_.c_str());
     local_path_pub_.reset();
     carrot_pub_.reset();
     curvature_points_pub_.reset();
   }
 
-  void OmniPidPursuitController::activate() {
+  void OmniPidPursuitControllerNode::activate() {
     RCLCPP_INFO(logger_,
                 "Activating controller: %s of type "
-                "regulated_pure_pursuit_controller::OmniPidPursuitController",
+                "regulated_pure_pursuit_controller::OmniPidPursuitControllerNode",
                 plugin_name_.c_str());
     local_path_pub_->on_activate();
     carrot_pub_->on_activate();
@@ -229,14 +229,14 @@ namespace pb_omni_pid_pursuit_controller {
     // Add callback for dynamic parameters
     auto node = node_.lock();
     // dyn_params_handler_ = node->add_on_set_parameters_callback(
-    //   std::bind(&OmniPidPursuitController::dynamicParametersCallback, this,
+    //   std::bind(&OmniPidPursuitControllerNode::dynamicParametersCallback, this,
     //   std::placeholders::_1));
   }
 
-  void OmniPidPursuitController::deactivate() {
+  void OmniPidPursuitControllerNode::deactivate() {
     RCLCPP_INFO(logger_,
                 "Deactivating controller: %s of type "
-                "regulated_pure_pursuit_controller::OmniPidPursuitController",
+                "regulated_pure_pursuit_controller::OmniPidPursuitControllerNode",
                 plugin_name_.c_str());
     local_path_pub_->on_deactivate();
     carrot_pub_->on_deactivate();
@@ -245,7 +245,7 @@ namespace pb_omni_pid_pursuit_controller {
   }
 
   geometry_msgs::msg::TwistStamped
-  OmniPidPursuitController::computeVelocityCommands(
+  OmniPidPursuitControllerNode::computeVelocityCommands(
       const geometry_msgs::msg::PoseStamped& pose,
       const geometry_msgs::msg::Twist& velocity,
       nav2_core::GoalChecker* /*goal_checker*/) {
@@ -332,16 +332,16 @@ namespace pb_omni_pid_pursuit_controller {
     return cmd_vel;
   }
 
-  void OmniPidPursuitController::setPlan(const nav_msgs::msg::Path& path) {
+  void OmniPidPursuitControllerNode::setPlan(const nav_msgs::msg::Path& path) {
     global_plan_ = path;
   }
 
-  void OmniPidPursuitController::setSpeedLimit(const double& /*speed_limit*/,
+  void OmniPidPursuitControllerNode::setSpeedLimit(const double& /*speed_limit*/,
                                                const bool& /*percentage*/) {
     RCLCPP_WARN(logger_, "Speed limit is not implemented in this controller.");
   }
 
-  geometry_msgs::msg::PoseStamped OmniPidPursuitController::getLookAheadPoint(
+  geometry_msgs::msg::PoseStamped OmniPidPursuitControllerNode::getLookAheadPoint(
       const double& lookahead_dist,
       const nav_msgs::msg::Path& transformed_plan) {
     // Find the first pose which is at a distance greater than the lookahead
@@ -378,12 +378,12 @@ namespace pb_omni_pid_pursuit_controller {
     return *goal_pose_it;
   }
 
-  double OmniPidPursuitController::getCostmapMaxExtent() const {
+  double OmniPidPursuitControllerNode::getCostmapMaxExtent() const {
     const double max_costmap_dim_meters = std::max(
         costmap_->getSizeInMetersX(), costmap_->getSizeInMetersY());
     return max_costmap_dim_meters / 2.0;
   }
-  bool OmniPidPursuitController::transformPose(
+  bool OmniPidPursuitControllerNode::transformPose(
       const std::string frame, const geometry_msgs::msg::PoseStamped& in_pose,
       geometry_msgs::msg::PoseStamped& out_pose) const {
     if (in_pose.header.frame_id == frame) {
@@ -400,7 +400,7 @@ namespace pb_omni_pid_pursuit_controller {
     return false;
   }
 
-  bool OmniPidPursuitController::isCollisionDetected(
+  bool OmniPidPursuitControllerNode::isCollisionDetected(
       const nav_msgs::msg::Path& path) {
     auto costmap = costmap_ros_->getCostmap();
     for (const auto& pose_stamped : path.poses) {
@@ -423,7 +423,7 @@ namespace pb_omni_pid_pursuit_controller {
     return false;
   }
 
-  double OmniPidPursuitController::getLookAheadDistance(
+  double OmniPidPursuitControllerNode::getLookAheadDistance(
       const geometry_msgs::msg::Twist& speed) {
     // If using velocity-scaled look ahead distances, find and clamp the dist
     // Else, use the static look ahead distance
@@ -438,7 +438,7 @@ namespace pb_omni_pid_pursuit_controller {
     return lookahead_dist;
   }
 
-  double OmniPidPursuitController::approachVelocityScalingFactor(
+  double OmniPidPursuitControllerNode::approachVelocityScalingFactor(
       const nav_msgs::msg::Path& transformed_path) const {
     // Waiting to apply the threshold based on integrated distance ensures we
     // don't erroneously apply approach scaling on curvy paths that are
@@ -457,7 +457,7 @@ namespace pb_omni_pid_pursuit_controller {
     }
   }
 
-  void OmniPidPursuitController::applyApproachVelocityScaling(
+  void OmniPidPursuitControllerNode::applyApproachVelocityScaling(
       const nav_msgs::msg::Path& path, double& linear_vel) const {
     double approach_vel = linear_vel;
     double velocity_scaling = approachVelocityScalingFactor(path);
@@ -473,7 +473,7 @@ namespace pb_omni_pid_pursuit_controller {
     linear_vel = std::min(linear_vel, approach_vel);
   }
 
-  void OmniPidPursuitController::applyCurvatureLimitation(
+  void OmniPidPursuitControllerNode::applyCurvatureLimitation(
       const nav_msgs::msg::Path& path,
       const geometry_msgs::msg::PoseStamped& lookahead_pose,
       double& linear_vel) {
@@ -507,7 +507,7 @@ namespace pb_omni_pid_pursuit_controller {
     last_velocity_scaling_factor_ = linear_vel;
   }
 
-  double OmniPidPursuitController::calculateCurvature(
+  double OmniPidPursuitControllerNode::calculateCurvature(
       const nav_msgs::msg::Path& path,
       const geometry_msgs::msg::PoseStamped& lookahead_pose,
       double forward_dist, double backward_dist) const {
@@ -539,7 +539,7 @@ namespace pb_omni_pid_pursuit_controller {
     return curvature;
   }
 
-  void OmniPidPursuitController::chassisModeCallback(
+  void OmniPidPursuitControllerNode::chassisModeCallback(
       const std_msgs::msg::UInt8::SharedPtr msg) {
     if (msg->data == chassisFollowed) {
       enable_rotation_ = true;
@@ -549,7 +549,7 @@ namespace pb_omni_pid_pursuit_controller {
   }
 
   rcl_interfaces::msg::SetParametersResult
-  OmniPidPursuitController::dynamicParametersCallback(
+  OmniPidPursuitControllerNode::dynamicParametersCallback(
       std::vector<rclcpp::Parameter> parameters) {
     rcl_interfaces::msg::SetParametersResult result;
     std::lock_guard<std::mutex> lock_reinit(mutex_);
@@ -629,5 +629,5 @@ namespace pb_omni_pid_pursuit_controller {
 };  // namespace pb_omni_pid_pursuit_controller
 // Register this controller as a nav2_core plugin
 #include "pluginlib/class_list_macros.hpp"
-PLUGINLIB_EXPORT_CLASS(pb_omni_pid_pursuit_controller::OmniPidPursuitController,
+PLUGINLIB_EXPORT_CLASS(pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode,
                        nav2_core::Controller)

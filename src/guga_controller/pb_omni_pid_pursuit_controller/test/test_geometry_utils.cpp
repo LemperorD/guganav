@@ -1,4 +1,4 @@
-#include "pb_omni_pid_pursuit_controller/geometry_utils.hpp"
+#include "pb_omni_pid_pursuit_controller/core/geometry_utils.hpp"
 #include "gtest/gtest.h"
 
 #include <geometry_msgs/msg/pose_stamped.hpp>

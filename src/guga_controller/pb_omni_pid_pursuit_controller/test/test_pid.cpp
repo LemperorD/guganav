@@ -1,4 +1,4 @@
-#include "pb_omni_pid_pursuit_controller/pid.hpp"
+#include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 #include "gtest/gtest.h"
 
 // 纯比例响应：P_out = kp * error

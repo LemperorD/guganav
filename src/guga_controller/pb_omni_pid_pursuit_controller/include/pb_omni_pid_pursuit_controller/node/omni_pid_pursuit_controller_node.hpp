@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PB_OMNI_PID_PURSUIT_CONTROLLER__OMNI_PID_PURSUIT_CONTROLLER_HPP_
-#define PB_OMNI_PID_PURSUIT_CONTROLLER__OMNI_PID_PURSUIT_CONTROLLER_HPP_
+#ifndef PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_
+#define PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_
 
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "nav2_core/controller.hpp"
-#include "pb_omni_pid_pursuit_controller/pid.hpp"
+#include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 
 #include "std_msgs/msg/u_int8.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -36,23 +36,23 @@ namespace pb_omni_pid_pursuit_controller
 {
 
 /**
- * @class pb_omni_pid_pursuit_controller::OmniPidPursuitController
+ * @class pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode
  * @brief Regulated pure pursuit controller plugin
  */
-class OmniPidPursuitController : public nav2_core::Controller
+class OmniPidPursuitControllerNode : public nav2_core::Controller
 {
 public:
   /**
    * @brief Constructor for
-   * pb_omni_pid_pursuit_controller::OmniPidPursuitController
+   * pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode
    */
-  OmniPidPursuitController() = default;
+  OmniPidPursuitControllerNode() = default;
 
   /**
    * @brief Destructor for
-   * pb_omni_pid_pursuit_controller::OmniPidPursuitController
+   * pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode
    */
-  ~OmniPidPursuitController() override = default;
+  ~OmniPidPursuitControllerNode() override = default;
 
   /**
    * @brief Configure controller state machine
@@ -275,7 +275,7 @@ private:
   std::string plugin_name_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   nav2_costmap_2d::Costmap2D * costmap_;
-  rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitController")};
+  rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitControllerNode")};
   rclcpp::Clock::SharedPtr clock_;
   double last_velocity_scaling_factor_;
 
@@ -326,4 +326,4 @@ private:
 
 }  // namespace pb_omni_pid_pursuit_controller
 
-#endif  // PB_OMNI_PID_PURSUIT_CONTROLLER__OMNI_PID_PURSUIT_CONTROLLER_HPP_
+#endif  // PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_

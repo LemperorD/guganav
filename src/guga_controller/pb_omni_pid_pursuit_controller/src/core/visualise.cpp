@@ -1,4 +1,4 @@
-#include "pb_omni_pid_pursuit_controller/visualise.hpp"
+#include "pb_omni_pid_pursuit_controller/core/visualise.hpp"
 namespace visualization_helper
 {
 void visualizeCurvaturePoints(

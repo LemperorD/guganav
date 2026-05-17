@@ -5,11 +5,11 @@ find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 include_directories(include/pb_omni_pid_pursuit_controller)
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/omni_pid_pursuit_controller.cpp
-  src/pid.cpp
-  src/geometry_utils.cpp
-  src/visualise.cpp
-  src/pathhandler.cpp
+  src/node/omni_pid_pursuit_controller_node.cpp
+  src/core/pid.cpp
+  src/core/geometry_utils.cpp
+  src/core/visualise.cpp
+  src/core/pathhandler.cpp
 )
 
 if(BUILD_TESTING)
@@ -20,14 +20,14 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_pid test/test_pid.cpp src/pid.cpp)
+  ament_add_gtest(test_pid test/test_pid.cpp src/core/pid.cpp)
   target_include_directories(test_pid PRIVATE include)
 
-  ament_add_gtest(test_geometry_utils test/test_geometry_utils.cpp src/geometry_utils.cpp)
+  ament_add_gtest(test_geometry_utils test/test_geometry_utils.cpp src/core/geometry_utils.cpp)
   ament_target_dependencies(test_geometry_utils geometry_msgs nav_msgs)
   target_include_directories(test_geometry_utils PRIVATE include)
 
-  ament_add_gtest(test_visualise test/test_visualise.cpp src/visualise.cpp)
+  ament_add_gtest(test_visualise test/test_visualise.cpp src/core/visualise.cpp)
   ament_target_dependencies(test_visualise geometry_msgs rclcpp_lifecycle visualization_msgs)
   target_include_directories(test_visualise PRIVATE include)
 endif()
