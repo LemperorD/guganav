@@ -63,6 +63,16 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ## 输出
 
-- **Topic**: `/terrain_map` (`sensor_msgs/PointCloud2`)
-- **坐标系**: odom
-- **Intensity 字段**: 点离地高度（米）
+| 节点 | Topic | 类型 | 坐标系 | 说明 |
+|------|-------|------|--------|------|
+| `terrainAnalysis` | `terrain_map` | `sensor_msgs/PointCloud2` | `odom` | Intensity = 点离地高度（米） |
+| `terrainAnalysisExt` | `terrain_map_ext` | `sensor_msgs/PointCloud2` | `odom` | 仅依赖 lidar_odometry + terrain_map，不订阅传感器，参数独立 |
+
+## 两个节点
+
+| | `terrainAnalysis` (`main.cpp`) | `terrainAnalysisExt` (`main_ext.cpp`) |
+|---|---|---|
+| 传感器订阅 | `registered_scan` + `lidar_odometry` | 无（仅接收处理后的 terrain_map） |
+| 输入 | 原始激光点云 + 里程计 | `lidar_odometry` + `terrain_map` |
+| 参数默认 | Nav2 参数文件统一配置 | 代码内置默认值（`main_ext.cpp:14-22`） |
+| 用途 | 主 terrain 节点 | 扩展节点，不同参数的地形分析 |

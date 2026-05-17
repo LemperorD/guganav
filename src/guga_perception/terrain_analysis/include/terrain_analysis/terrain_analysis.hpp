@@ -20,6 +20,8 @@ public:
 
   void initialize(const std::string& output_topic = "terrain_map",
                   bool skip_sensor_subs = false);
+  void initialize(const std::string& output_topic, bool skip_sensor_subs,
+                  const TerrainConfig& defaults);
   bool processOnce();
 
   [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev()
@@ -31,12 +33,15 @@ public:
 
 private:
   void publishPointCloud();
+  void initExtSubscriptions();
 
   rclcpp::Node* node_;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
       sub_laser_cloud_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
+      sub_local_terrain_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_joystick_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_clearing_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_terrain_map_;

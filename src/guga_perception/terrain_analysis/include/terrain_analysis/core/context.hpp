@@ -65,6 +65,19 @@ struct TerrainConfig {
   double terrain_connectivity_threshold = 0.5;
   double ceiling_filter_threshold = 2.0;
   double local_terrain_map_radius = 0.0;
+
+  static TerrainConfig extDefaults() {
+    TerrainConfig c;
+    c.terrain_voxel_size = 2.0;
+    c.planar_voxel_size = 0.4;
+    c.scan_voxel_size = 0.1;
+    c.decay_time = 10.0;
+    c.no_decay_distance = 0.0;
+    c.use_sorting = false;
+    c.max_relative_z = 1.0;
+    c.local_terrain_map_radius = 4.0;
+    return c;
+  }
 };
 
 // ═══════════════════════════════════════════════

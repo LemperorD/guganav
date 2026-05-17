@@ -18,6 +18,16 @@ TerrainAnalysis::TerrainAnalysis(rclcpp::Node* node) : node_(node) {
 TerrainAnalysis::~TerrainAnalysis() = default;
 
 void TerrainAnalysis::initialize(const std::string& output_topic,
+                                bool skip_sensor_subs,
+                                const TerrainConfig& defaults) {
+  context_.cfg = defaults;
+  initialize(output_topic, skip_sensor_subs);
+  if (skip_sensor_subs) {
+    initExtSubscriptions();
+  }
+}
+
+void TerrainAnalysis::initialize(const std::string& output_topic,
                                 bool skip_sensor_subs) {
   node_->declare_parameter<double>("scanVoxelSize", context_.cfg.scan_voxel_size);
   node_->declare_parameter<double>("decayTime", context_.cfg.decay_time);
@@ -142,6 +152,29 @@ void TerrainAnalysis::initialize(const std::string& output_topic,
                                            context_.cfg.scan_voxel_size,
                                            context_.cfg.scan_voxel_size);
   }
+}
+
+void TerrainAnalysis::initExtSubscriptions() {
+  sub_odometry_ = node_->create_subscription<nav_msgs::msg::Odometry>(
+      "lidar_odometry", 5, [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
+        double roll{}, pitch{}, yaw{};
+        const auto& q = msg->pose.pose.orientation;
+        tf2::Matrix3x3(tf2::Quaternion(q.x, q.y, q.z, q.w))
+            .getRPY(roll, pitch, yaw);
+        context_.onOdometry(msg->pose.pose.position.x,
+                            msg->pose.pose.position.y,
+                            msg->pose.pose.position.z, roll, pitch, yaw);
+      });
+
+  sub_local_terrain_ =
+      node_->create_subscription<sensor_msgs::msg::PointCloud2>(
+          "terrain_map", 2,
+          [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
+            auto cloud =
+                std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+            pcl::fromROSMsg(*msg, *cloud);
+            context_.onLocalTerrainCloud(cloud);
+          });
 }
 
 bool TerrainAnalysis::processOnce() {
