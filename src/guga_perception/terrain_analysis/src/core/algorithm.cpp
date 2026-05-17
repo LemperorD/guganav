@@ -45,6 +45,18 @@ void TerrainAlgorithm::run(const TerrainConfig& config, TerrainState& state) {
   state.clearing_cloud = false;
 }
 
+void TerrainAlgorithm::runExt(const TerrainConfig& config,
+                              TerrainState& state) {
+  state.new_laser_cloud = false;
+  state.terrain_cloud_elev->clear();
+
+  if (config.local_terrain_map_radius > 0.0) {
+    mergeLocalTerrain(config, state);
+  }
+
+  state.clearing_cloud = false;
+}
+
 namespace {
   enum class Axis : uint8_t { X, Y };
 
@@ -70,7 +82,7 @@ namespace {
     }
   }
 
-  int toVoxelIndex(float point_cloud, double vehicle_cloud, double voxel_size,
+  int toVoxelIndex(double point_cloud, double vehicle_cloud, double voxel_size,
                    int half_width) {
     const double half_voxel_size = voxel_size / 2;
     int cell = static_cast<int>(
@@ -191,8 +203,8 @@ namespace {
         int neighbor_col = column + delta_col;
         if (neighbor_row >= 0 && neighbor_row < WIDTH && neighbor_col >= 0
             && neighbor_col < WIDTH) {
-          size_t neighbor_index = TerrainConfig::planarVoxelIndex(
-              neighbor_row, neighbor_col);
+          size_t neighbor_index = TerrainConfig::planarVoxelIndex(neighbor_row,
+                                                                  neighbor_col);
           if (state.planar_voxel_edge[neighbor_index]
               < state.planar_voxel_edge[i]) {
             return true;
@@ -375,7 +387,8 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
     int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
     int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
     double relative_z = point.z - vehicle_z;
-    if (relative_z <= config.min_relative_z || relative_z >= config.max_relative_z) {
+    if (relative_z <= config.min_relative_z
+        || relative_z >= config.max_relative_z) {
       continue;
     }
     size_t base = TerrainConfig::planarVoxelIndex(row, col);
@@ -426,7 +439,8 @@ void TerrainAlgorithm::detectDynamicObstacles(const TerrainConfig& config,
       continue;
     }
 
-    double scan_angle = atan2(relative_z - config.min_dy_obs_relative_z, distance);
+    double scan_angle = atan2(relative_z - config.min_dy_obs_relative_z,
+                              distance);
     if (scan_angle <= config.min_dy_obs_angle) {
       continue;
     }
@@ -466,7 +480,8 @@ void TerrainAlgorithm::filterDynamicObstaclePoints(const TerrainConfig& config,
     double relative_z = point.z - vehicle_z;
     double distance = sqrt((relative_x * relative_x)
                            + (relative_y * relative_y));
-    double scan_angle = atan2(relative_z - config.min_dy_obs_relative_z, distance);
+    double scan_angle = atan2(relative_z - config.min_dy_obs_relative_z,
+                              distance);
     if (scan_angle > config.min_dy_obs_angle) {
       state.planar_voxel_dy_obs[cell] = 0;
     }
@@ -499,7 +514,8 @@ void TerrainAlgorithm::computeHeightMap(const TerrainConfig& config,
 
   for (const auto& point : state.terrain_cloud->points) {
     double relative_z = point.z - vehicle_z;
-    if (relative_z <= config.min_relative_z || relative_z >= config.max_relative_z) {
+    if (relative_z <= config.min_relative_z
+        || relative_z >= config.max_relative_z) {
       continue;
     }
     int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
@@ -546,8 +562,8 @@ void TerrainAlgorithm::checkTerrainConnectivity(const TerrainConfig& config,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
   if (state.planar_point_elev[center].empty()) {
-    state.planar_voxel_elev[center] =
-        state.vehicle_z + config.terrain_under_vehicle;
+    state.planar_voxel_elev[center] = state.vehicle_z
+                                    + config.terrain_under_vehicle;
   }
 
   std::queue<size_t> cell_queue;
@@ -565,25 +581,24 @@ void TerrainAlgorithm::checkTerrainConnectivity(const TerrainConfig& config,
     int current_row = static_cast<int>(current / W);
     int current_col = static_cast<int>(current % W);
 
-    for (int delta_row = -SEARCH_HALF; delta_row <= SEARCH_HALF;
-         delta_row++) {
+    for (int delta_row = -SEARCH_HALF; delta_row <= SEARCH_HALF; delta_row++) {
       for (int delta_col = -SEARCH_HALF; delta_col <= SEARCH_HALF;
            delta_col++) {
         int neighbor_row = current_row + delta_row;
         int neighbor_col = current_col + delta_col;
         if (neighbor_row >= 0 && neighbor_row < W && neighbor_col >= 0
             && neighbor_col < W) {
-          size_t neighbor_index =
-              TerrainConfig::planarVoxelIndex(neighbor_row, neighbor_col);
+          size_t neighbor_index = TerrainConfig::planarVoxelIndex(neighbor_row,
+                                                                  neighbor_col);
           if (state.planar_voxel_connectivity[neighbor_index] == 0
               && !state.planar_point_elev[neighbor_index].empty()) {
-            double height_diff =
-                std::abs(state.planar_voxel_elev[current]
-                         - state.planar_voxel_elev[neighbor_index]);
+            double height_diff = std::abs(
+                state.planar_voxel_elev[current]
+                - state.planar_voxel_elev[neighbor_index]);
             if (height_diff < config.terrain_connectivity_threshold) {
               cell_queue.push(neighbor_index);
               state.planar_voxel_connectivity[neighbor_index] = 1;
-            } else if (height_diff > config.ceiling_filter_threshold) {
+            } else if (height_diff >= config.ceiling_filter_threshold) {
               state.planar_voxel_connectivity[neighbor_index] = -1;
             }
           }
@@ -594,7 +609,7 @@ void TerrainAlgorithm::checkTerrainConnectivity(const TerrainConfig& config,
 }
 
 void TerrainAlgorithm::mergeLocalTerrain(const TerrainConfig& config,
-                                          TerrainState& state) {
+                                         TerrainState& state) {
   double radius = config.local_terrain_map_radius;
   for (const auto& point : state.terrain_cloud_local->points) {
     double distance = state.horizontalDistanceTo(point.x, point.y);

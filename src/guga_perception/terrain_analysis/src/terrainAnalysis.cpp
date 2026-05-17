@@ -23,6 +23,7 @@ void TerrainAnalysis::initialize(const std::string& output_topic,
   context_.cfg = defaults;
   initialize(output_topic, skip_sensor_subs);
   if (skip_sensor_subs) {
+    is_ext_ = true;
     initExtSubscriptions();
   }
 }
@@ -165,9 +166,10 @@ void TerrainAnalysis::initialize(const std::string& output_topic,
       output_topic, 2);
 
   if (!skip_sensor_subs) {
-    context_.state.down_size_filter.setLeafSize(context_.cfg.scan_voxel_size,
-                                                context_.cfg.scan_voxel_size,
-                                                context_.cfg.scan_voxel_size);
+    context_.state.down_size_filter.setLeafSize(
+        static_cast<float>(context_.cfg.scan_voxel_size),
+        static_cast<float>(context_.cfg.scan_voxel_size),
+        static_cast<float>(context_.cfg.scan_voxel_size));
   }
 }
 
@@ -200,7 +202,11 @@ bool TerrainAnalysis::processOnce() {
   if (!context_.state.hasNewCloud()) {
     return rclcpp::ok();
   }
-  TerrainAlgorithm::run(context_.cfg, context_.state);
+  if (is_ext_) {
+    TerrainAlgorithm::runExt(context_.cfg, context_.state);
+  } else {
+    TerrainAlgorithm::run(context_.cfg, context_.state);
+  }
   publishPointCloud();
   return rclcpp::ok();
 }

@@ -36,6 +36,7 @@ private:
   void initExtSubscriptions();
 
   rclcpp::Node* node_;
+  bool is_ext_ = false;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
