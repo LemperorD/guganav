@@ -101,4 +101,5 @@ void TerrainAnalysisContext::onLocalTerrainCloud(
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) {
   state.terrain_cloud_local->clear();
   *state.terrain_cloud_local = *cloud;
+  state.new_laser_cloud = true;
 }

@@ -26,15 +26,16 @@ void TerrainAlgorithm::run(const TerrainConfig& config, TerrainState& state) {
   }
 
   computeElevation(config, state);
+
+  if (config.check_terrain_connectivity) {
+    checkTerrainConnectivity(config, state);
+  }
+
   computeHeightMap(config, state);
 
   if (config.no_data_obstacle
       && state.no_data_inited == TerrainState::NoDataState::ACTIVE) {
     addNoDataObstacles(config, state);
-  }
-
-  if (config.check_terrain_connectivity) {
-    checkTerrainConnectivity(config, state);
   }
 
   if (config.local_terrain_map_radius > 0.0) {

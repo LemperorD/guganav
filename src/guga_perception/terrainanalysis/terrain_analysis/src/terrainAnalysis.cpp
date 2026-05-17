@@ -17,7 +17,8 @@ TerrainAnalysis::TerrainAnalysis(rclcpp::Node* node) : node_(node) {
 
 TerrainAnalysis::~TerrainAnalysis() = default;
 
-void TerrainAnalysis::initialize(const std::string& output_topic) {
+void TerrainAnalysis::initialize(const std::string& output_topic,
+                                bool skip_sensor_subs) {
   node_->declare_parameter<double>("scanVoxelSize", context_.cfg.scan_voxel_size);
   node_->declare_parameter<double>("decayTime", context_.cfg.decay_time);
   node_->declare_parameter<double>("noDecayDis", context_.cfg.no_decay_distance);
@@ -51,6 +52,14 @@ void TerrainAnalysis::initialize(const std::string& output_topic) {
   node_->declare_parameter<double>("minRelZ", context_.cfg.min_relative_z);
   node_->declare_parameter<double>("maxRelZ", context_.cfg.max_relative_z);
   node_->declare_parameter<double>("disRatioZ", context_.cfg.distance_ratio_z);
+  node_->declare_parameter<bool>("checkTerrainConnectivity",
+                                  context_.cfg.check_terrain_connectivity);
+  node_->declare_parameter<double>("terrainUnderVehicle",
+                                    context_.cfg.terrain_under_vehicle);
+  node_->declare_parameter<double>("terrainConnectivityThreshold",
+                                    context_.cfg.terrain_connectivity_threshold);
+  node_->declare_parameter<double>("ceilingFilterThreshold",
+                                    context_.cfg.ceiling_filter_threshold);
 
   node_->get_parameter("scanVoxelSize", context_.cfg.scan_voxel_size);
   node_->get_parameter("decayTime", context_.cfg.decay_time);
@@ -82,8 +91,17 @@ void TerrainAnalysis::initialize(const std::string& output_topic) {
   node_->get_parameter("minRelZ", context_.cfg.min_relative_z);
   node_->get_parameter("maxRelZ", context_.cfg.max_relative_z);
   node_->get_parameter("disRatioZ", context_.cfg.distance_ratio_z);
+  node_->get_parameter("checkTerrainConnectivity",
+                       context_.cfg.check_terrain_connectivity);
+  node_->get_parameter("terrainUnderVehicle",
+                       context_.cfg.terrain_under_vehicle);
+  node_->get_parameter("terrainConnectivityThreshold",
+                       context_.cfg.terrain_connectivity_threshold);
+  node_->get_parameter("ceilingFilterThreshold",
+                       context_.cfg.ceiling_filter_threshold);
 
-  sub_odometry_ = node_->create_subscription<nav_msgs::msg::Odometry>(
+  if (!skip_sensor_subs) {
+    sub_odometry_ = node_->create_subscription<nav_msgs::msg::Odometry>(
       "lidar_odometry", 5, [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
         double roll{};
         double pitch{};
@@ -110,17 +128,20 @@ void TerrainAnalysis::initialize(const std::string& output_topic) {
         context_.onJoystick(msg->buttons[5] > 0.5);
       });
 
-  sub_clearing_ = node_->create_subscription<std_msgs::msg::Float32>(
-      "map_clearing", 5, [this](std_msgs::msg::Float32::ConstSharedPtr msg) {
-        context_.onClearing(msg->data);
-      });
+    sub_clearing_ = node_->create_subscription<std_msgs::msg::Float32>(
+        "map_clearing", 5, [this](std_msgs::msg::Float32::ConstSharedPtr msg) {
+          context_.onClearing(msg->data);
+        });
+  }
 
   pub_terrain_map_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
       output_topic, 2);
 
-  context_.state.down_size_filter.setLeafSize(context_.cfg.scan_voxel_size,
-                                         context_.cfg.scan_voxel_size,
-                                         context_.cfg.scan_voxel_size);
+  if (!skip_sensor_subs) {
+    context_.state.down_size_filter.setLeafSize(context_.cfg.scan_voxel_size,
+                                           context_.cfg.scan_voxel_size,
+                                           context_.cfg.scan_voxel_size);
+  }
 }
 
 bool TerrainAnalysis::processOnce() {

@@ -30,6 +30,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_visualise test/test_visualise.cpp src/core/visualise.cpp)
   ament_target_dependencies(test_visualise geometry_msgs rclcpp_lifecycle visualization_msgs)
   target_include_directories(test_visualise PRIVATE include)
+
+  ament_add_gtest(test_types test/test_types.cpp)
+  target_include_directories(test_types PRIVATE include)
 endif()
 
 pluginlib_export_plugin_description_file(nav2_core pb_omni_pid_pursuit_controller.xml)

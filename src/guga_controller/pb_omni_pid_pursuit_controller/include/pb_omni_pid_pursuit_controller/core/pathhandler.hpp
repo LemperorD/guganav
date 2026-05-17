@@ -20,15 +20,11 @@ public:
     const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros,
     const rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr & pub);
 
-  void setPlan(const nav_msgs::msg::Path & path);
-
   nav_msgs::msg::Path transformGlobalPlan(
-    const geometry_msgs::msg::PoseStamped & pose);
+    const geometry_msgs::msg::PoseStamped& pose,
+    nav_msgs::msg::Path& global_plan);
 
 private:
-
-  nav_msgs::msg::Path global_plan_;
-
   std::shared_ptr<tf2_ros::Buffer> tf_;
 
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;

@@ -1,7 +1,9 @@
 #include "terrain_analysis/terrain_analysis.hpp"
 
+#include <nav_msgs/msg/odometry.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
@@ -9,7 +11,6 @@ int main(int argc, char** argv) {
 
   TerrainAnalysis ext(nodeptr.get());
 
-  // ext-specific defaults (overridden by ROS params if declared)
   auto& cfg = ext.context_.cfg;
   cfg.terrain_voxel_size = 2.0;
   cfg.planar_voxel_size = 0.4;
@@ -18,15 +19,24 @@ int main(int argc, char** argv) {
   cfg.no_decay_distance = 0.0;
   cfg.use_sorting = false;
   cfg.max_relative_z = 1.0;
-  cfg.check_terrain_connectivity = true;
-  cfg.ceiling_filter_threshold = 2.0;
-  cfg.terrain_connectivity_threshold = 0.5;
-  cfg.terrain_under_vehicle = -0.75;
   cfg.local_terrain_map_radius = 4.0;
 
-  ext.initialize("terrain_map_ext");
+  ext.initialize("terrain_map_ext", true);
 
-  // subscribe to terrain_map (from terrain_analysis) for local merge
+  auto sub_odometry = nodeptr->create_subscription<nav_msgs::msg::Odometry>(
+      "lidar_odometry", 5,
+      [&ext](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
+        double roll{};
+        double pitch{};
+        double yaw{};
+        const auto& q = msg->pose.pose.orientation;
+        tf2::Matrix3x3(tf2::Quaternion(q.x, q.y, q.z, q.w))
+            .getRPY(roll, pitch, yaw);
+        ext.context_.onOdometry(msg->pose.pose.position.x,
+                                msg->pose.pose.position.y,
+                                msg->pose.pose.position.z, roll, pitch, yaw);
+      });
+
   auto sub_local_terrain =
       nodeptr->create_subscription<sensor_msgs::msg::PointCloud2>(
           "terrain_map", 2,
