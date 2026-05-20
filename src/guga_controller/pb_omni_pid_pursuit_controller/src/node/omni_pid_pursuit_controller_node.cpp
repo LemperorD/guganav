@@ -221,7 +221,7 @@ namespace pb_omni_pid_pursuit_controller {
         });
 
     path_handler_ = std::make_unique<PathHandler>(tf_, costmap_ros_,
-                                                     local_path_pub_);
+                                                  local_path_pub_);
 
     move_pid_ = std::make_shared<PID>(
         config_.control_duration, config_.v_linear_max, config_.v_linear_min,
@@ -254,11 +254,10 @@ namespace pb_omni_pid_pursuit_controller {
   }
 
   void OmniPidPursuitControllerNode::deactivate() {
-    RCLCPP_INFO(
-        logger_,
-        "Deactivating controller: %s of type "
-        "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode",
-        plugin_name_.c_str());
+    RCLCPP_INFO(logger_,
+                "Deactivating controller: %s of type "
+                "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode",
+                plugin_name_.c_str());
     local_path_pub_->on_deactivate();
     carrot_pub_->on_deactivate();
     curvature_points_pub_->on_deactivate();
