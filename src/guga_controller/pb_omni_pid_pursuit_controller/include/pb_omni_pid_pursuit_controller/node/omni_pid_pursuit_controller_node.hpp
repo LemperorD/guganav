@@ -16,6 +16,7 @@
 #define PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -63,6 +64,9 @@ private:
 
   void computeVelocity(double lin_dist, double angle_to_goal, double& lin_vel,
                        double& angular_vel);
+  geometry_msgs::msg::TwistStamped assembleCmdVel(
+      const geometry_msgs::msg::PoseStamped& pose, double lin_vel,
+      double angular_vel, double theta_dist, double path_yaw) const;
 
   void applyVelocityLimits(const nav_msgs::msg::Path& transformed_plan,
                            const geometry_msgs::msg::PoseStamped& carrot_pose,
@@ -79,9 +83,9 @@ private:
       const nav_msgs::msg::Path& transformed_plan);
   double getCostmapMaxExtent() const;
 
-  bool transformPose(const std::string frame,
-                     const geometry_msgs::msg::PoseStamped& in_pose,
-                     geometry_msgs::msg::PoseStamped& out_pose) const;
+  [[nodiscard]] std::optional<geometry_msgs::msg::PoseStamped> transformPose(
+      const std::string& frame,
+      const geometry_msgs::msg::PoseStamped& in_pose) const;
 
   double approachVelocityScalingFactor(
       const nav_msgs::msg::Path& transformed_path) const;

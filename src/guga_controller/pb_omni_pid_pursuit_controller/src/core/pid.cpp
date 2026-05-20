@@ -14,13 +14,20 @@
 
 #include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 
-PID::PID(double dt, double max, double min, double kp, double kd, double ki)
-: dt_(dt), max_(max), min_(min), kp_(kp), kd_(kd), ki_(ki), pre_error_(0), integral_(0)
-{
+PID::PID(double dt, double max, double min, double kp, double kd, double ki,
+         double min_max_sum_error)
+    : dt_(dt),
+      max_(max),
+      min_(min),
+      kp_(kp),
+      kd_(kd),
+      ki_(ki),
+      pre_error_(0),
+      integral_(0),
+      min_max_sum_error_(min_max_sum_error) {
 }
 
-double PID::calculate(double set_point, double pv)
-{
+double PID::calculate(double set_point, double pv) {
   // Calculate error
   double error = set_point - pv;
 
@@ -31,10 +38,10 @@ double PID::calculate(double set_point, double pv)
   integral_ += error * dt_;
   double i_out = ki_ * integral_;
 
-  if (integral_ > 1) {
-    integral_ = 1;
-  } else if (integral_ < -1) {
-    integral_ = -1;
+  if (integral_ > min_max_sum_error_) {
+    integral_ = min_max_sum_error_;
+  } else if (integral_ < -min_max_sum_error_) {
+    integral_ = -min_max_sum_error_;
   }
 
   // Derivative term
@@ -45,10 +52,11 @@ double PID::calculate(double set_point, double pv)
   double output = p_out + i_out + d_out;
 
   // Restrict to max/min
-  if (output > max_)
+  if (output > max_) {
     output = max_;
-  else if (output < min_)
+  } else if (output < min_) {
     output = min_;
+  }
 
   // Save error to previous error
   pre_error_ = error;
@@ -56,6 +64,6 @@ double PID::calculate(double set_point, double pv)
   return output;
 }
 
-void PID::setSumError(double sum_error) { integral_ = sum_error; }
-
-PID::~PID() {}
+void PID::setSumError(double sum_error) {
+  integral_ = sum_error;
+}

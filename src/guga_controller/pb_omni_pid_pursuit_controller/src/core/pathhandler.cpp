@@ -1,15 +1,15 @@
 #include "pb_omni_pid_pursuit_controller/core/pathhandler.hpp"
 using nav2_util::geometry_utils::euclidean_distance;
 
-void PathHandler::initialize(
-    const std::shared_ptr<tf2_ros::Buffer>& tf,
-    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>& costmap_ros,
-    const rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr& pub) {
-  tf_ = tf;
-  costmap_ros_ = costmap_ros;
-  local_path_pub_ = pub;
-  transform_tolerance_ = tf2::durationFromSec(1.0);
-  max_robot_pose_search_dist_ = getCostmapMaxExtent();
+PathHandler::PathHandler(
+    std::shared_ptr<tf2_ros::Buffer> tf,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
+    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub)
+    : tf_(std::move(tf)),
+      costmap_ros_(std::move(costmap_ros)),
+      local_path_pub_(std::move(pub)),
+      transform_tolerance_(tf2::durationFromSec(1.0)),
+      max_robot_pose_search_dist_(getCostmapMaxExtent()) {
 }
 
 double PathHandler::getCostmapMaxExtent() const {
@@ -19,6 +19,23 @@ double PathHandler::getCostmapMaxExtent() const {
   return max_costmap_dim_meters / 2.0;
 }
 
+std::optional<geometry_msgs::msg::PoseStamped> PathHandler::transformPose(
+    const std::string& frame,
+    const geometry_msgs::msg::PoseStamped& in_pose) const {
+  if (in_pose.header.frame_id == frame) {
+    return in_pose;
+  }
+
+  try {
+    geometry_msgs::msg::PoseStamped out_pose;
+    tf_->transform(in_pose, out_pose, frame, transform_tolerance_);
+    return out_pose;
+  } catch (tf2::TransformException& ex) {
+    RCLCPP_ERROR(logger_, "Exception in transformPose: %s", ex.what());
+  }
+  return std::nullopt;
+}
+
 nav_msgs::msg::Path PathHandler::transformGlobalPlan(
     const geometry_msgs::msg::PoseStamped& pose,
     nav_msgs::msg::Path& global_plan) {
@@ -26,8 +43,9 @@ nav_msgs::msg::Path PathHandler::transformGlobalPlan(
     throw nav2_core::PlannerException("Received plan with zero length");
   }
 
-  geometry_msgs::msg::PoseStamped robot_pose;
-  if (!transformPose(global_plan.header.frame_id, pose, robot_pose)) {
+  auto robot_pose =
+      transformPose(global_plan.header.frame_id, pose);
+  if (!robot_pose) {
     throw nav2_core::PlannerException(
         "Unable to transform robot pose into global plan's frame");
   }
@@ -42,23 +60,28 @@ nav_msgs::msg::Path PathHandler::transformGlobalPlan(
   auto transformation_begin = nav2_util::geometry_utils::min_by(
       global_plan.poses.begin(), closest_pose_upper_bound,
       [&robot_pose](const geometry_msgs::msg::PoseStamped& ps) {
-        return euclidean_distance(robot_pose, ps);
+        return euclidean_distance(*robot_pose, ps);
       });
 
   auto transformation_end = std::find_if(
       transformation_begin, global_plan.poses.end(), [&](const auto& pose) {
-        return euclidean_distance(pose, robot_pose) > max_costmap_extent;
+        return euclidean_distance(pose, *robot_pose) > max_costmap_extent;
       });
 
   auto transform_global_pose_to_local = [&](const auto& global_plan_pose) {
-    geometry_msgs::msg::PoseStamped stamped_pose, transformed_pose;
+    geometry_msgs::msg::PoseStamped stamped_pose;
     stamped_pose.header.frame_id = global_plan.header.frame_id;
-    stamped_pose.header.stamp = robot_pose.header.stamp;
+    stamped_pose.header.stamp = robot_pose->header.stamp;
     stamped_pose.pose = global_plan_pose.pose;
-    transformPose(costmap_ros_->getBaseFrameID(), stamped_pose,
-                  transformed_pose);
-    transformed_pose.pose.position.z = 0.0;
-    return transformed_pose;
+    auto transformed_pose =
+        transformPose(costmap_ros_->getBaseFrameID(), stamped_pose);
+    if (transformed_pose) {
+      transformed_pose->pose.position.z = 0.0;
+      return *transformed_pose;
+    }
+    geometry_msgs::msg::PoseStamped empty;
+    empty.pose.position.z = 0.0;
+    return empty;
   };
 
   nav_msgs::msg::Path transformed_plan;
@@ -66,7 +89,7 @@ nav_msgs::msg::Path PathHandler::transformGlobalPlan(
                  std::back_inserter(transformed_plan.poses),
                  transform_global_pose_to_local);
   transformed_plan.header.frame_id = costmap_ros_->getBaseFrameID();
-  transformed_plan.header.stamp = robot_pose.header.stamp;
+  transformed_plan.header.stamp = robot_pose->header.stamp;
 
   global_plan.poses.erase(begin(global_plan.poses), transformation_begin);
   local_path_pub_->publish(transformed_plan);
@@ -76,22 +99,4 @@ nav_msgs::msg::Path PathHandler::transformGlobalPlan(
   }
 
   return transformed_plan;
-}
-
-bool PathHandler::transformPose(
-  const std::string frame, const geometry_msgs::msg::PoseStamped & in_pose,
-  geometry_msgs::msg::PoseStamped & out_pose) const
-{
-  if (in_pose.header.frame_id == frame) {
-    out_pose = in_pose;
-    return true;
-  }
-
-  try {
-    tf_->transform(in_pose, out_pose, frame, transform_tolerance_);
-    return true;
-  } catch (tf2::TransformException & ex) {
-    RCLCPP_ERROR(logger_, "Exception in transformPose: %s", ex.what());
-  }
-  return false;
 }

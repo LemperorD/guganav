@@ -18,18 +18,13 @@
 class PID
 {
 public:
-  // kp -  proportional gain
-  // ki -  Integral gain
-  // kd -  derivative gain
-  // dt -  loop interval time
-  // max - maximum value of manipulated variable
-  // min - minimum value of manipulated variable
-  PID(double dt, double max, double min, double kp, double kd, double ki);
+  PID(double dt, double max, double min, double kp, double kd, double ki,
+      double min_max_sum_error = 1.0);
 
   // Returns the manipulated variable given a set_point and current process value
-  double calculate(double set_point, double pv);
+  [[nodiscard]] double calculate(double set_point, double pv);
   void setSumError(double sum_error);
-  ~PID();
+  ~PID() = default;
 
 private:
   double dt_;
@@ -40,6 +35,7 @@ private:
   double ki_;
   double pre_error_;
   double integral_;
+  double min_max_sum_error_;
 };
 
 #endif  // PB_OMNI_PID_PURSUIT_CONTROLLER__PID_HPP_

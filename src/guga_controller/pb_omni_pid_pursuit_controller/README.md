@@ -1,96 +1,122 @@
-# PolarBear Omni PID Pursuit Controller
+# pb_omni_pid_pursuit_controller
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Build](https://github.com/LihanChen2004/pb_omni_pid_pursuit_controller/actions/workflows/ci.yml/badge.svg)](https://github.com/LihanChen2004/pb_omni_pid_pursuit_controller/actions/workflows/ci.yml)
+全向 PID 纯追踪控制器，Nav2 Controller 插件。接收全局路径，输出 `cmd_vel`（`vx, vy, wz`），支持 holonomic 全向底盘。
 
-## Configuration
+## 架构
 
-| Parameter | Description |
-|-----|----|
-| `translation_kp` | The proportional gain for the translation PID controller. Controls how strongly the robot reacts to translation errors. |
-| `translation_ki` | The integral gain for the translation PID controller. Helps eliminate steady-state errors over time. |
-| `translation_kd` | The derivative gain for the translation PID controller. Damps oscillations by reacting to the rate of change of translation errors. |
-| `enable_rotation` | Whether to enable the rotation PID controller. If disabled, the robot will not rotate to face the path's direction. `twist.angular.z` always remains zero. |
-| `rotation_kp` | The proportional gain for the rotation PID controller. Controls how strongly the robot reacts to rotational errors. |
-| `rotation_ki` | The integral gain for the rotation PID controller. Helps eliminate steady-state rotational errors. |
-| `rotation_kd` | The derivative gain for the rotation PID controller. Damps oscillations by reacting to the rate of change of rotational errors. |
-| `transform_tolerance` | The tolerance for transforming between frames. A higher value may allow for more flexibility in handling small delays in the transformation. |
-| `min_max_sum_error` | The minimum threshold for the maximum sum of errors used to limit the accumulated error in the PID controller to prevent windup. |
-| `lookahead_dist` | The fixed lookahead distance used to find the lookahead point for path following. |
-| `use_velocity_scaled_lookahead_dist` | Whether to scale the lookahead distance based on the current velocity, instead of using a constant distance. |
-| `min_lookahead_dist` | The minimum allowable lookahead distance when using velocity scaling for the lookahead point. |
-| `max_lookahead_dist` | The maximum allowable lookahead distance when using velocity scaling for the lookahead point. |
-| `lookahead_time` | The time used to project the robot's velocity to calculate the velocity-scaled lookahead distance. |
-| `use_interpolation` | Enables interpolation between poses along the path when selecting the lookahead point, improving smoothness but potentially increasing computational cost. |
-| `use_rotate_to_heading` | Whether to rotate the robot to face the path's direction before moving forward, useful in holonomic robots. |
-| `use_rotate_to_heading_treshold` | The angular threshold at which the robot should rotate in place to align with the desired heading. |
-| `min_approach_linear_velocity` | The minimum linear velocity when approaching the goal to ensure the robot moves slowly when close to its target. |
-| `approach_velocity_scaling_dist` | The distance from the goal where velocity scaling starts when approaching, slowing the robot down as it nears the target. |
-| `v_linear_min` | The minimum translation speed the robot can command, allowing for reverse or slow-forward movement. |
-| `v_linear_max` | The maximum translation speed the robot can command, setting the upper limit for forward movement. |
-| `v_angular_min` | The minimum rotation speed the robot can command, allowing for counter-clockwise rotation. |
-| `v_angular_max` | The maximum rotation speed the robot can command, setting the upper limit for clockwise rotation. |
-| `curvature_min` | The minimum curvature threshold below which no speed reduction is applied. |
-| `curvature_max` | The maximum curvature threshold above which significant speed reduction is applied. |
-| `reduction_ratio_at_high_curvature` | The speed reduction ratio at high curvature. 0.5 means a 50% reduction. |
-| `curvature_forward_dist` | The forward distance used for curvature calculation. |
-| `curvature_backward_dist` | The backward distance used for curvature calculation. |
-| `max_velocity_scaling_factor_rate` | The maximum rate of change for the velocity scaling factor. |
-| `max_robot_pose_search_dist` | The maximum distance along the path to search for the robot's closest pose, used to keep the robot on the planned path. |
+```
+OmniPidPursuitControllerNode (Nav2 插件入口)
+  ├─ PathHandler          — 路径 TF 变换 + 裁切
+  ├─ PID (move_pid_)      — 平移距离 PID
+  ├─ PID (heading_pid_)   — 旋转角度 PID
+  ├─ geometry_utils       — 圆-线段交点、曲率半径、累积距离、路径插值
+  └─ visualization_helper — carrot 点、曲率标记可视化
+```
 
-Example fully-described XML with default parameter values:
+## 管道
+
+```
+computeVelocityCommands (20Hz)
+  │
+  ├─ transformPath        — global_plan → TF → 裁切已走过 → local_plan
+  ├─ computeLookahead     — 速度缩放前视距离 → 找 carrot 点
+  ├─ computeVelocity      — PID(lin_dist, 0) → lin_vel, PID(angle, 0) → angular_vel
+  ├─ applyVelocityLimits  — 曲率减速 + 接近减速
+  ├─ checkCollision       — 采样 N 点转全局坐标 → costmap 查代价
+  └─ assembleCmdVel       — 组装 vx/vy/wz
+```
+
+## ChassisMode
+
+| 值 | 模式 | enable_rotation | 行为 |
+|----|------|-----------------|------|
+| 1 | CHASSIS_FOLLOWED | true | vx/vy 沿路径方向分解 + wz 旋转跟踪 |
+| 2 | LITTLE_TES | false | vx/vy 沿 carrot 方向分解 + wz=0，纯平移 |
+| 3 | GO_HOME | — | 已定义，暂未处理 |
+
+## 参数
+
+### PID
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `translation_kp/ki/kd` | 3.0/0.1/0.3 | 平移 PID |
+| `rotation_kp/ki/kd` | 3.0/0.1/0.3 | 旋转 PID |
+| `min_max_sum_error` | 1.0 | 积分限幅（当前未生效，已知 bug） |
+
+### 前视
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `lookahead_dist` | 0.3 | 固定前视距离 (m) |
+| `use_velocity_scaled_lookahead_dist` | true | 速度缩放前视 |
+| `min_lookahead_dist` | 0.2 | 最小前视 (m) |
+| `max_lookahead_dist` | 1.0 | 最大前视 (m) |
+| `lookahead_time` | 1.0 | 前视时间 (s) |
+| `use_interpolation` | true | 圆-线段交点插值 carrot |
+| `use_rotate_to_heading` | true | 终点原地旋转对齐朝向 |
+| `use_rotate_to_heading_treshold` | 0.1 | 旋转阈值 (rad) |
+
+### 限速
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `v_linear_min/max` | -3.0/3.0 | 线速度范围 (m/s) |
+| `v_angular_min/max` | -3.0/3.0 | 角速度范围 (rad/s) |
+| `min_approach_linear_velocity` | 0.05 | 接近终点最低速 (m/s) |
+| `approach_velocity_scaling_dist` | 0.6 | 接近减速距离 (m) |
+
+### 曲率
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `curvature_min` | 0.4 | 低曲率阈值，低于此不减速 |
+| `curvature_max` | 0.7 | 高曲率阈值，高于此大幅减速 |
+| `reduction_ratio_at_high_curvature` | 0.5 | 高曲率速度降比 |
+| `curvature_forward_dist` | 0.7 | 曲率前向采样距离 (m) |
+| `curvature_backward_dist` | 0.3 | 曲率后向采样距离 (m) |
+| `max_velocity_scaling_factor_rate` | 0.9 | 曲率减速率限制 |
+
+### 其他
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `transform_tolerance` | 0.1 | TF 变换超时 (s) |
+| `collision_sample_points` | 10 | 碰撞检测采样点数 |
+| `max_robot_pose_search_dist` | — | 路径搜索范围（自动 = costmap 半宽） |
+
+## 注册
+
+```xml
+<class type="pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode"
+       base_class_type="nav2_core::Controller">
+```
+
+Nav2 YAML 配置：
 
 ```yaml
 controller_server:
   ros__parameters:
-    odom_topic: odometry
-    controller_frequency: 20.0
-    min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
-    min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
-    progress_checker_plugins: ["progress_checker"]
-    goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["FollowPath"]
-
-    progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
-    general_goal_checker:
-      stateful: True
-      plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
     FollowPath:
-      plugin: "pb_omni_pid_pursuit_controller::OmniPidPursuitController"
-      translation_kp: 3.0
-      translation_ki: 0.1
-      translation_kd: 0.3
-      enable_rotation: true
-      rotation_kp: 3.0
-      rotation_ki: 0.1
-      rotation_kd: 0.3
-      transform_tolerance: 0.1
-      min_max_sum_error: 1.0
-      lookahead_dist: 2.0
-      use_velocity_scaled_lookahead_dist: true
-      lookahead_time: 1.0
-      min_lookahead_dist: 0.5
-      max_lookahead_dist: 1.0
-      use_interpolation: false
-      use_rotate_to_heading: false
-      use_rotate_to_heading_treshold: 0.1
-      min_approach_linear_velocity: 0.5
-      approach_velocity_scaling_dist: 1.0
-      v_linear_min: -2.5
-      v_linear_max: 2.5
-      v_angular_min: -3.0
-      v_angular_max: 3.0
-      curvature_min: 0.4
-      curvature_max: 0.7
-      reduction_ratio_at_high_curvature: 0.5
-      curvature_forward_dist: 0.7
-      curvature_backward_dist: 0.3
-      max_velocity_scaling_factor_rate: 0.9
+      plugin: "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode"
 ```
+
+## 测试
+
+```bash
+colcon test --packages-select pb_omni_pid_pursuit_controller
+```
+
+## 发布的话题
+
+| Topic | 类型 | 说明 |
+|-------|------|------|
+| `local_plan` | `nav_msgs/Path` | 变换后的局部路径（采样 10 点） |
+| `lookahead_point` | `geometry_msgs/PointStamped` | carrot 前视点 |
+| `curvature_points_marker_array` | `visualization_msgs/MarkerArray` | 曲率计算点 |
+
+## 订阅的话题
+
+| Topic | 类型 | 说明 |
+|-------|------|------|
+| `chassis_mode` | `std_msgs/UInt8` | 底盘模式切换 |

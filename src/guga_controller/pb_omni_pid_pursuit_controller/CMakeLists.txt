@@ -31,6 +31,10 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_visualise geometry_msgs rclcpp_lifecycle visualization_msgs)
   target_include_directories(test_visualise PRIVATE include)
 
+  ament_add_gtest(test_pathhandler test/test_pathhandler.cpp src/core/pathhandler.cpp)
+  ament_target_dependencies(test_pathhandler nav2_costmap_2d nav_msgs tf2_ros)
+  target_include_directories(test_pathhandler PRIVATE include)
+
   ament_add_gtest(test_types test/test_types.cpp)
   target_include_directories(test_types PRIVATE include)
 endif()
