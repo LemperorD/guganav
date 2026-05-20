@@ -1,6 +1,13 @@
 /**:
   ros__parameters:
     world_name: "default"
+    use_odometry: true
+    odometry_publisher:
+      frame_id: "odom"
+      child_frame_id: "base_footprint"
+      publish_tf: true
+      use_footprint: true
+      rate: 30
     chassis_controller:
       follow_yaw: true
       follow_yaw_pid:
