@@ -26,6 +26,11 @@ public:
   void setSumError(double sum_error);
   ~PID() = default;
 
+  PID(const PID&) = delete;
+  PID& operator=(const PID&) = delete;
+  PID(PID&&) = delete;
+  PID& operator=(PID&&) = delete;
+
 private:
   double dt_;
   double max_;
