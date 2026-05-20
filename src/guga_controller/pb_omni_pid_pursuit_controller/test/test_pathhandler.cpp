@@ -1,6 +1,8 @@
 #include "pb_omni_pid_pursuit_controller/core/pathhandler.hpp"
 
 #include "tf2_ros/buffer.h"
+
+using pb_omni_pid_pursuit_controller::PathHandler;
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 #include "gtest/gtest.h"

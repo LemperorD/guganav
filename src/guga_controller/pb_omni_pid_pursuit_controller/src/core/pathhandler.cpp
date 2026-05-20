@@ -1,6 +1,8 @@
 #include "pb_omni_pid_pursuit_controller/core/pathhandler.hpp"
 using nav2_util::geometry_utils::euclidean_distance;
 
+namespace pb_omni_pid_pursuit_controller {
+
 PathHandler::PathHandler(
     std::shared_ptr<tf2_ros::Buffer> tf,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
@@ -100,3 +102,5 @@ nav_msgs::msg::Path PathHandler::transformGlobalPlan(
 
   return transformed_plan;
 }
+
+}  // namespace pb_omni_pid_pursuit_controller

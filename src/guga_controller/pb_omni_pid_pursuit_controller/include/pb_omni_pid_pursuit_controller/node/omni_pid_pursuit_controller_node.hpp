@@ -29,9 +29,9 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-class PathHandler;
-
 namespace pb_omni_pid_pursuit_controller {
+
+class PathHandler;
 
   class OmniPidPursuitControllerNode : public nav2_core::Controller {
   public:

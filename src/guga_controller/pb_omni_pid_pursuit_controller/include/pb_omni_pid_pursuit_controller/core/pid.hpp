@@ -14,6 +14,8 @@
 
 #pragma once
 
+namespace pb_omni_pid_pursuit_controller {
+
 class PID
 {
 public:
@@ -41,3 +43,5 @@ private:
   double integral_;
   double min_max_sum_error_;
 };
+
+}  // namespace pb_omni_pid_pursuit_controller

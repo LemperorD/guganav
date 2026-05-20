@@ -14,6 +14,8 @@
 
 #include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 
+namespace pb_omni_pid_pursuit_controller {
+
 PID::PID(double dt, double max, double min, double kp, double kd, double ki,
          double min_max_sum_error)
     : dt_(dt),
@@ -67,3 +69,5 @@ double PID::calculate(double set_point, double pv) {
 void PID::setSumError(double sum_error) {
   integral_ = sum_error;
 }
+
+}  // namespace pb_omni_pid_pursuit_controller

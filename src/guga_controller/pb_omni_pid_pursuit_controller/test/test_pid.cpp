@@ -1,6 +1,8 @@
 #include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 #include "gtest/gtest.h"
 
+using pb_omni_pid_pursuit_controller::PID;
+
 // 纯比例响应：P_out = kp * error
 TEST(PidTest, ProportionalResponse) {
   PID pid(1.0, 10.0, -10.0, 2.0, 0.0, 0.0);

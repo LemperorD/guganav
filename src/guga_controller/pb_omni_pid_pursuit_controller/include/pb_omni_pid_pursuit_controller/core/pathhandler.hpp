@@ -13,6 +13,8 @@
 #include <iterator>
 #include <optional>
 
+namespace pb_omni_pid_pursuit_controller {
+
 class PathHandler {
 public:
   PathHandler(
@@ -39,3 +41,5 @@ private:
       local_path_pub_;
   double max_robot_pose_search_dist_;
 };
+
+}  // namespace pb_omni_pid_pursuit_controller
