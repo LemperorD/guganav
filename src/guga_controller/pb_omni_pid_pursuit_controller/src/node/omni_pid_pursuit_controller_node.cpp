@@ -22,6 +22,7 @@
 #include "nav2_util/node_utils.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 using nav2_util::declare_parameter_if_not_declared;
@@ -268,13 +269,19 @@ namespace pb_omni_pid_pursuit_controller {
       const geometry_msgs::msg::PoseStamped& pose,
       const geometry_msgs::msg::Twist& velocity,
       nav2_core::GoalChecker* /*goal_checker*/) {
+    using namespace std::chrono;
+    auto t0 = high_resolution_clock::now();
+
     std::lock_guard<std::mutex> lock_reinit(mutex_);
 
     auto* costmap = costmap_ros_->getCostmap();
     std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(
         *(costmap->getMutex()));
+    auto t_lock = high_resolution_clock::now();
 
     auto transformed_plan = transformPath(pose);
+    auto t_xform = high_resolution_clock::now();
+
     double linear_distance{};
     double theta_distance{};
     double path_yaw{};
@@ -283,12 +290,17 @@ namespace pb_omni_pid_pursuit_controller {
     auto carrot_pose = computeLookahead(velocity, transformed_plan,
                                         linear_distance, theta_distance,
                                         path_yaw, angle_to_goal);
+    auto t_lookahead = high_resolution_clock::now();
+
     carrot_pub_->publish(visualization_helper::createCarrotMsg(carrot_pose));
 
     double lin_vel{};
     double angular_vel{};
     computeVelocity(linear_distance, angle_to_goal, lin_vel, angular_vel);
+    auto t_pid = high_resolution_clock::now();
+
     applyVelocityLimits(transformed_plan, carrot_pose, lin_vel);
+    auto t_limits = high_resolution_clock::now();
 
     geometry_msgs::msg::TwistStamped cmd_vel;
     cmd_vel.header = pose.header;
@@ -299,6 +311,18 @@ namespace pb_omni_pid_pursuit_controller {
       throw nav2_core::PlannerException(
           "Collision detected in the trajectory. Stopping the robot!");
     }
+    auto t_end = high_resolution_clock::now();
+
+    RCLCPP_INFO_THROTTLE(logger_, *clock_, 5000,
+        "timing: lock=%ldus xform=%ldus lookahead=%ldus pid=%ldus limits=%ldus "
+        "check+assemble=%ldus total=%ldus",
+        duration_cast<microseconds>(t_lock - t0).count(),
+        duration_cast<microseconds>(t_xform - t_lock).count(),
+        duration_cast<microseconds>(t_lookahead - t_xform).count(),
+        duration_cast<microseconds>(t_pid - t_lookahead).count(),
+        duration_cast<microseconds>(t_limits - t_pid).count(),
+        duration_cast<microseconds>(t_end - t_limits).count(),
+        duration_cast<microseconds>(t_end - t0).count());
 
     return cmd_vel;
   }
