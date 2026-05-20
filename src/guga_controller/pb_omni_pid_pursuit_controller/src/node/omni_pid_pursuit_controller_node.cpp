@@ -45,9 +45,7 @@ namespace pb_omni_pid_pursuit_controller {
     logger_ = node->get_logger();
     clock_ = node->get_clock();
 
-    double transform_tolerance{1.0};
     double control_frequency{20.0};
-    config_.max_robot_pose_search_dist = getCostmapMaxExtent();
 
     declare_parameter_if_not_declared(
         node, plugin_name_ + ".translation_kp",
@@ -221,7 +219,9 @@ namespace pb_omni_pid_pursuit_controller {
         });
 
     path_handler_ = std::make_unique<PathHandler>(tf_, costmap_ros_,
-                                                  local_path_pub_);
+                                                  local_path_pub_,
+                                                  config_.transform_tolerance);
+    config_.max_robot_pose_search_dist = path_handler_->getCostmapMaxExtent();
 
     move_pid_ = std::make_shared<PID>(
         config_.control_duration, config_.v_linear_max, config_.v_linear_min,
@@ -429,31 +429,6 @@ namespace pb_omni_pid_pursuit_controller {
     return *goal_pose_it;
   }
 
-  double OmniPidPursuitControllerNode::getCostmapMaxExtent() const {
-    const double max_costmap_dim_meters = std::max(
-        costmap_->getSizeInMetersX(), costmap_->getSizeInMetersY());
-    return max_costmap_dim_meters / 2.0;
-  }
-
-  std::optional<geometry_msgs::msg::PoseStamped>
-  OmniPidPursuitControllerNode::transformPose(
-      const std::string& frame,
-      const geometry_msgs::msg::PoseStamped& in_pose) const {
-    if (in_pose.header.frame_id == frame) {
-      return in_pose;
-    }
-
-    try {
-      geometry_msgs::msg::PoseStamped out_pose;
-      tf_->transform(in_pose, out_pose, frame,
-                     tf2::durationFromSec(config_.transform_tolerance));
-      return out_pose;
-    } catch (tf2::TransformException& ex) {
-      RCLCPP_ERROR(logger_, "Exception in transformPose: %s", ex.what());
-    }
-    return std::nullopt;
-  }
-
   double OmniPidPursuitControllerNode::approachVelocityScalingFactor(
       const nav_msgs::msg::Path& transformed_path) const {
     double remaining_distance =
@@ -547,7 +522,7 @@ namespace pb_omni_pid_pursuit_controller {
     auto plan_size = static_cast<int>(transformed_plan.poses.size());
     for (int i = 0; i < sample_points; ++i) {
       int index = std::min((i * plan_size) / sample_points, plan_size - 1);
-      auto map_pose = transformPose(
+      auto map_pose = path_handler_->transformPose(
           costmap_ros_->getGlobalFrameID(),
           transformed_plan.poses[static_cast<size_t>(index)]);
       if (map_pose) {

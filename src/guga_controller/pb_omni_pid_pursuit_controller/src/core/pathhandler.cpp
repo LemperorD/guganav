@@ -6,11 +6,12 @@ namespace pb_omni_pid_pursuit_controller {
 PathHandler::PathHandler(
     std::shared_ptr<tf2_ros::Buffer> tf,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
-    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub)
+    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub,
+    double transform_tolerance)
     : tf_(std::move(tf)),
       costmap_ros_(std::move(costmap_ros)),
       local_path_pub_(std::move(pub)),
-      transform_tolerance_(tf2::durationFromSec(1.0)),
+      transform_tolerance_(tf2::durationFromSec(transform_tolerance)),
       max_robot_pose_search_dist_(getCostmapMaxExtent()) {
 }
 

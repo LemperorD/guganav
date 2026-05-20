@@ -18,7 +18,8 @@ public:
   PathHandler(
       std::shared_ptr<tf2_ros::Buffer> tf,
       std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
-      rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub);
+      rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub,
+      double transform_tolerance = 1.0);
 
   nav_msgs::msg::Path transformGlobalPlan(
       const geometry_msgs::msg::PoseStamped& pose,
@@ -26,10 +27,11 @@ public:
 
   [[nodiscard]] double getCostmapMaxExtent() const;
 
-private:
   [[nodiscard]] std::optional<geometry_msgs::msg::PoseStamped> transformPose(
       const std::string& frame,
       const geometry_msgs::msg::PoseStamped& in_pose) const;
+
+private:
 
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;

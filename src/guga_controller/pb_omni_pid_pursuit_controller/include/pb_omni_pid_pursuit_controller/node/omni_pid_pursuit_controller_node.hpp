@@ -96,12 +96,6 @@ class PathHandler;
     geometry_msgs::msg::PoseStamped getLookAheadPoint(
         const double& lookahead_dist,
         const nav_msgs::msg::Path& transformed_plan) const;
-    [[nodiscard]] double getCostmapMaxExtent() const;
-
-    [[nodiscard]] std::optional<geometry_msgs::msg::PoseStamped> transformPose(
-        const std::string& frame,
-        const geometry_msgs::msg::PoseStamped& in_pose) const;
-
     [[nodiscard]] double approachVelocityScalingFactor(
         const nav_msgs::msg::Path& transformed_path) const;
     void applyApproachVelocityScaling(const nav_msgs::msg::Path& path,
