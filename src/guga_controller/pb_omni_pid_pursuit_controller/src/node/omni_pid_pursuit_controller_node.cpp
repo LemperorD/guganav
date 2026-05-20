@@ -469,15 +469,9 @@ namespace pb_omni_pid_pursuit_controller {
 
   void OmniPidPursuitControllerNode::applyApproachVelocityScaling(
       const nav_msgs::msg::Path& path, double& linear_vel) const {
-    double approach_vel = linear_vel;
     double velocity_scaling = approachVelocityScalingFactor(path);
-    double unbounded_vel = approach_vel * velocity_scaling;
-    if (unbounded_vel < config_.min_approach_linear_velocity) {
-      approach_vel = config_.min_approach_linear_velocity;
-    } else {
-      approach_vel *= velocity_scaling;
-    }
-    linear_vel = std::min(linear_vel, approach_vel);
+    double scaled_vel = linear_vel * velocity_scaling;
+    linear_vel = std::max(scaled_vel, config_.min_approach_linear_velocity);
   }
 
   void OmniPidPursuitControllerNode::applyCurvatureLimitation(

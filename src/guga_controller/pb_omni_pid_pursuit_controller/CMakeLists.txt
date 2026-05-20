@@ -40,6 +40,17 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_types test/test_types.cpp)
   target_include_directories(test_types PRIVATE include)
+
+  ament_add_gtest(test_approach_scaling test/test_approach_scaling.cpp
+    src/node/omni_pid_pursuit_controller_node.cpp
+    src/core/pathhandler.cpp
+    src/core/pid.cpp
+    src/core/geometry_utils.cpp
+    src/core/visualise.cpp)
+  ament_target_dependencies(test_approach_scaling
+    nav2_costmap_2d nav_msgs tf2_ros rclcpp_lifecycle
+    geometry_msgs visualization_msgs std_msgs)
+  target_include_directories(test_approach_scaling PRIVATE include)
 endif()
 
 pluginlib_export_plugin_description_file(nav2_core pb_omni_pid_pursuit_controller.xml)

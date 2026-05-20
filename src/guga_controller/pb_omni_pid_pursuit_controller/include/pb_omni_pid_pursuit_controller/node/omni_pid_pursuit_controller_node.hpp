@@ -24,6 +24,8 @@
 #include "pb_omni_pid_pursuit_controller/core/pid.hpp"
 #include "pb_omni_pid_pursuit_controller/core/types.hpp"
 
+#include "gtest/gtest_prod.h"
+
 #include "std_msgs/msg/u_int8.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -34,6 +36,10 @@ namespace pb_omni_pid_pursuit_controller {
 
   class OmniPidPursuitControllerNode : public nav2_core::Controller {
   public:
+    FRIEND_TEST(ApproachScalingTest, ScalingFactorFarFromGoal);
+    FRIEND_TEST(ApproachScalingTest, ScalingFactorNearGoal);
+    FRIEND_TEST(ApproachScalingTest, FloorEnforcedWhenApproachReducesBelowMin);
+
     OmniPidPursuitControllerNode() = default;
     ~OmniPidPursuitControllerNode() override = default;
 
