@@ -28,12 +28,21 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "rclcpp/rclcpp.hpp"
 
+class PathHandler;
+
 namespace pb_omni_pid_pursuit_controller {
 
   class OmniPidPursuitControllerNode : public nav2_core::Controller {
   public:
     OmniPidPursuitControllerNode() = default;
     ~OmniPidPursuitControllerNode() override = default;
+
+    OmniPidPursuitControllerNode(const OmniPidPursuitControllerNode&) = delete;
+    OmniPidPursuitControllerNode& operator=(
+        const OmniPidPursuitControllerNode&) = delete;
+    OmniPidPursuitControllerNode(OmniPidPursuitControllerNode&&) = delete;
+    OmniPidPursuitControllerNode& operator=(OmniPidPursuitControllerNode&&) =
+        delete;
 
     void configure(
         const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
@@ -79,10 +88,10 @@ namespace pb_omni_pid_pursuit_controller {
 
     // ── helpers ──
 
-    double getLookAheadDistance(const geometry_msgs::msg::Twist& speed);
+    double getLookAheadDistance(const geometry_msgs::msg::Twist& speed) const;
     geometry_msgs::msg::PoseStamped getLookAheadPoint(
         const double& lookahead_dist,
-        const nav_msgs::msg::Path& transformed_plan);
+        const nav_msgs::msg::Path& transformed_plan) const;
     [[nodiscard]] double getCostmapMaxExtent() const;
 
     [[nodiscard]] std::optional<geometry_msgs::msg::PoseStamped> transformPose(
@@ -105,8 +114,6 @@ namespace pb_omni_pid_pursuit_controller {
     bool isCollisionDetected(const nav_msgs::msg::Path& path);
 
     void chassisModeCallback(std_msgs::msg::UInt8::SharedPtr msg);
-    rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
-        std::vector<rclcpp::Parameter> parameters);
 
     // ── infrastructure ──
 
@@ -134,8 +141,7 @@ namespace pb_omni_pid_pursuit_controller {
     rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr chassis_mode_sub_;
 
     std::mutex mutex_;
-    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
-        dyn_params_handler_;
+    std::unique_ptr<PathHandler> path_handler_;
   };
 
 }  // namespace pb_omni_pid_pursuit_controller

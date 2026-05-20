@@ -98,7 +98,7 @@ namespace pb_omni_pid_pursuit_controller {
         node, plugin_name_ + ".use_rotate_to_heading",
         rclcpp::ParameterValue(config_.use_rotate_to_heading));
     declare_parameter_if_not_declared(
-        node, plugin_name_ + ".use_rotate_to_heading_treshold",
+        node, plugin_name_ + ".use_rotate_to_heading_threshold",
         rclcpp::ParameterValue(config_.use_rotate_to_heading_threshold));
     declare_parameter_if_not_declared(
         node, plugin_name_ + ".min_approach_linear_velocity",
@@ -172,7 +172,7 @@ namespace pb_omni_pid_pursuit_controller {
                         config_.use_interpolation);
     node->get_parameter(plugin_name_ + ".use_rotate_to_heading",
                         config_.use_rotate_to_heading);
-    node->get_parameter(plugin_name_ + ".use_rotate_to_heading_treshold",
+    node->get_parameter(plugin_name_ + ".use_rotate_to_heading_threshold",
                         config_.use_rotate_to_heading_threshold);
     node->get_parameter(plugin_name_ + ".min_approach_linear_velocity",
                         config_.min_approach_linear_velocity);
@@ -216,9 +216,12 @@ namespace pb_omni_pid_pursuit_controller {
             "curvature_points_marker_array", rclcpp::QoS(10));
 
     chassis_mode_sub_ = node->create_subscription<std_msgs::msg::UInt8>(
-        "chassis_mode", 1,
-        std::bind(&OmniPidPursuitControllerNode::chassisModeCallback, this,
-                  std::placeholders::_1));
+        "chassis_mode", 1, [this](std_msgs::msg::UInt8::SharedPtr msg) {
+          chassisModeCallback(msg);
+        });
+
+    path_handler_ = std::make_unique<PathHandler>(tf_, costmap_ros_,
+                                                     local_path_pub_);
 
     move_pid_ = std::make_shared<PID>(
         config_.control_duration, config_.v_linear_max, config_.v_linear_min,
@@ -241,11 +244,10 @@ namespace pb_omni_pid_pursuit_controller {
   }
 
   void OmniPidPursuitControllerNode::activate() {
-    RCLCPP_INFO(
-        logger_,
-        "Activating controller: %s of type "
-        "regulated_pure_pursuit_controller::OmniPidPursuitControllerNode",
-        plugin_name_.c_str());
+    RCLCPP_INFO(logger_,
+                "Activating controller: %s of type "
+                "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode",
+                plugin_name_.c_str());
     local_path_pub_->on_activate();
     carrot_pub_->on_activate();
     curvature_points_pub_->on_activate();
@@ -255,7 +257,7 @@ namespace pb_omni_pid_pursuit_controller {
     RCLCPP_INFO(
         logger_,
         "Deactivating controller: %s of type "
-        "regulated_pure_pursuit_controller::OmniPidPursuitControllerNode",
+        "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode",
         plugin_name_.c_str());
     local_path_pub_->on_deactivate();
     carrot_pub_->on_deactivate();
@@ -331,8 +333,7 @@ namespace pb_omni_pid_pursuit_controller {
 
   nav_msgs::msg::Path OmniPidPursuitControllerNode::transformPath(
       const geometry_msgs::msg::PoseStamped& pose) {
-    PathHandler path_handler(tf_, costmap_ros_, local_path_pub_);
-    return path_handler.transformGlobalPlan(pose, global_plan_);
+    return path_handler_->transformGlobalPlan(pose, global_plan_);
   }
 
   geometry_msgs::msg::PoseStamped
@@ -389,7 +390,7 @@ namespace pb_omni_pid_pursuit_controller {
   // ── helpers ──
 
   double OmniPidPursuitControllerNode::getLookAheadDistance(
-      const geometry_msgs::msg::Twist& speed) {
+      const geometry_msgs::msg::Twist& speed) const {
     double lookahead_dist = config_.lookahead_dist;
     if (config_.use_velocity_scaled_lookahead_dist) {
       lookahead_dist = std::hypot(speed.linear.x, speed.linear.y)
@@ -403,7 +404,7 @@ namespace pb_omni_pid_pursuit_controller {
   geometry_msgs::msg::PoseStamped
   OmniPidPursuitControllerNode::getLookAheadPoint(
       const double& lookahead_dist,
-      const nav_msgs::msg::Path& transformed_plan) {
+      const nav_msgs::msg::Path& transformed_plan) const {
     auto goal_pose_it = std::find_if(
         transformed_plan.poses.begin(), transformed_plan.poses.end(),
         [&](const auto& ps) {
@@ -459,7 +460,7 @@ namespace pb_omni_pid_pursuit_controller {
     double remaining_distance =
         nav2_util::geometry_utils::calculate_path_length(transformed_path);
     if (remaining_distance < config_.approach_velocity_scaling_dist) {
-      auto& last = transformed_path.poses.back();
+      const auto& last = transformed_path.poses.back();
       double distance_to_last_pose = std::hypot(last.pose.position.x,
                                                 last.pose.position.y);
       return distance_to_last_pose / config_.approach_velocity_scaling_dist;
@@ -568,7 +569,8 @@ namespace pb_omni_pid_pursuit_controller {
     auto* costmap = costmap_ros_->getCostmap();
     for (const auto& pose_stamped : path.poses) {
       const auto& pose = pose_stamped.pose;
-      unsigned int mx, my;
+      unsigned int mx{};
+      unsigned int my{};
       if (costmap->worldToMap(pose.position.x, pose.position.y, mx, my)) {
         if (costmap->getCost(mx, my)
             >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
@@ -586,88 +588,6 @@ namespace pb_omni_pid_pursuit_controller {
     } else if (msg->data == static_cast<uint8_t>(ChassisMode::LITTLE_TES)) {
       config_.enable_rotation = false;
     }
-  }
-
-  rcl_interfaces::msg::SetParametersResult
-  OmniPidPursuitControllerNode::dynamicParametersCallback(
-      std::vector<rclcpp::Parameter> parameters) {
-    rcl_interfaces::msg::SetParametersResult result;
-    std::lock_guard<std::mutex> lock_reinit(mutex_);
-
-    for (const auto& parameter : parameters) {
-      const auto& type = parameter.get_type();
-      const auto& name = parameter.get_name();
-
-      if (type == rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE) {
-        if (name == plugin_name_ + ".translation_kp") {
-          config_.translation_kp = parameter.as_double();
-        } else if (name == plugin_name_ + ".translation_ki") {
-          config_.translation_ki = parameter.as_double();
-        } else if (name == plugin_name_ + ".translation_kd") {
-          config_.translation_kd = parameter.as_double();
-        } else if (name == plugin_name_ + ".rotation_kp") {
-          config_.rotation_kp = parameter.as_double();
-        } else if (name == plugin_name_ + ".rotation_ki") {
-          config_.rotation_ki = parameter.as_double();
-        } else if (name == plugin_name_ + ".rotation_kd") {
-          config_.rotation_kd = parameter.as_double();
-        } else if (name == plugin_name_ + ".transform_tolerance") {
-          config_.transform_tolerance = parameter.as_double();
-        } else if (name == plugin_name_ + ".min_max_sum_error") {
-          config_.min_max_sum_error = parameter.as_double();
-        } else if (name == plugin_name_ + ".lookahead_dist") {
-          config_.lookahead_dist = parameter.as_double();
-        } else if (name == plugin_name_ + ".min_lookahead_dist") {
-          config_.min_lookahead_dist = parameter.as_double();
-        } else if (name == plugin_name_ + ".max_lookahead_dist") {
-          config_.max_lookahead_dist = parameter.as_double();
-        } else if (name == plugin_name_ + ".lookahead_time") {
-          config_.lookahead_time = parameter.as_double();
-        } else if (name == plugin_name_ + ".use_rotate_to_heading_treshold") {
-          config_.use_rotate_to_heading_threshold = parameter.as_double();
-        } else if (name == plugin_name_ + ".min_approach_linear_velocity") {
-          config_.min_approach_linear_velocity = parameter.as_double();
-        } else if (name == plugin_name_ + ".approach_velocity_scaling_dist") {
-          config_.approach_velocity_scaling_dist = parameter.as_double();
-        } else if (name == plugin_name_ + ".v_linear_max") {
-          config_.v_linear_max = parameter.as_double();
-        } else if (name == plugin_name_ + ".v_linear_min") {
-          config_.v_linear_min = parameter.as_double();
-        } else if (name == plugin_name_ + ".v_angular_max") {
-          config_.v_angular_max = parameter.as_double();
-        } else if (name == plugin_name_ + ".v_angular_min") {
-          config_.v_angular_min = parameter.as_double();
-        } else if (name == plugin_name_ + ".curvature_min") {
-          config_.curvature_min = parameter.as_double();
-        } else if (name == plugin_name_ + ".curvature_max") {
-          config_.curvature_max = parameter.as_double();
-        } else if (name
-                   == plugin_name_ + ".reduction_ratio_at_high_curvature") {
-          config_.reduction_ratio_at_high_curvature = parameter.as_double();
-        } else if (name == plugin_name_ + ".curvature_forward_dist") {
-          config_.curvature_forward_dist = parameter.as_double();
-        } else if (name == plugin_name_ + ".curvature_backward_dist") {
-          config_.curvature_backward_dist = parameter.as_double();
-        } else if (name == plugin_name_ + ".max_velocity_scaling_factor_rate") {
-          config_.max_velocity_scaling_factor_rate = parameter.as_double();
-        }
-      } else if (type
-                 == rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER) {
-        if (name == plugin_name_ + ".collision_sample_points") {
-          config_.collision_sample_points = parameter.as_int();
-        }
-      } else if (type == rcl_interfaces::msg::ParameterType::PARAMETER_BOOL) {
-        if (name == plugin_name_ + ".use_velocity_scaled_lookahead_dist") {
-          config_.use_velocity_scaled_lookahead_dist = parameter.as_bool();
-        } else if (name == plugin_name_ + ".use_interpolation") {
-          config_.use_interpolation = parameter.as_bool();
-        } else if (name == plugin_name_ + ".use_rotate_to_heading") {
-          config_.use_rotate_to_heading = parameter.as_bool();
-        }
-      }
-    }
-    result.successful = true;
-    return result;
   }
 
 }  // namespace pb_omni_pid_pursuit_controller
