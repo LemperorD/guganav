@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cmath>
 #include "std_msgs/msg/u_int8.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"

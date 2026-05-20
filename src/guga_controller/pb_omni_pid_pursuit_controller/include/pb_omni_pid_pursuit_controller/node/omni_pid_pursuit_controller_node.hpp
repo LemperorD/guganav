@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_
-#define PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_
+#pragma once
 
 #include <memory>
 #include <optional>
@@ -89,8 +88,7 @@ namespace pb_omni_pid_pursuit_controller {
                              const geometry_msgs::msg::PoseStamped& carrot_pose,
                              double& lin_vel);
 
-    bool checkCollision(const nav_msgs::msg::Path& transformed_plan,
-                        const geometry_msgs::msg::PoseStamped& pose);
+    bool checkCollision(const nav_msgs::msg::Path& transformed_plan);
 
     // ── helpers ──
 
@@ -151,5 +149,3 @@ namespace pb_omni_pid_pursuit_controller {
   };
 
 }  // namespace pb_omni_pid_pursuit_controller
-
-#endif  // PB_OMNI_PID_PURSUIT_CONTROLLER__NODE__OMNI_PID_PURSUIT_CONTROLLER_NODE_HPP_

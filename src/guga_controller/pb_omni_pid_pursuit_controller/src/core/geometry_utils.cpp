@@ -1,4 +1,5 @@
 #include "pb_omni_pid_pursuit_controller/core/geometry_utils.hpp"
+
 geometry_msgs::msg::Point geometry_utils::circleSegmentIntersection(
     const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2,
     double r) {
@@ -26,9 +27,9 @@ geometry_msgs::msg::Point geometry_utils::circleSegmentIntersection(
   double dd = d2 - d1;
 
   geometry_msgs::msg::Point p;
-  double sqrt_term = std::sqrt(r * r * dr2 - d * d);
-  p.x = (d * dy + std::copysign(1.0, dd) * dx * sqrt_term) / dr2;
-  p.y = (-d * dx + std::copysign(1.0, dd) * dy * sqrt_term) / dr2;
+  double sqrt_term = std::sqrt((r * r * dr2) - (d * d));
+  p.x = ((d * dy) + (std::copysign(1.0, dd) * dx * sqrt_term)) / dr2;
+  p.y = ((-d * dx) + (std::copysign(1.0, dd) * dy * sqrt_term)) / dr2;
   return p;
 }
 
@@ -36,12 +37,12 @@ double geometry_utils::calculateCurvatureRadius(
     const geometry_msgs::msg::Point& near_point,
     const geometry_msgs::msg::Point& current_point,
     const geometry_msgs::msg::Point& far_point) {
-  double x1 = near_point.x;
-  double y1 = near_point.y;
-  double x2 = current_point.x;
-  double y2 = current_point.y;
-  double x3 = far_point.x;
-  double y3 = far_point.y;
+  const double x1 = near_point.x;
+  const double y1 = near_point.y;
+  const double x2 = current_point.x;
+  const double y2 = current_point.y;
+  const double x3 = far_point.x;
+  const double y3 = far_point.y;
 
   double center_x =
       ((((x1 * x1) + (y1 * y1)) * (y2 - y3))
@@ -68,8 +69,8 @@ std::vector<double> geometry_utils::calculateCumulativeDistances(
   for (size_t i = 1; i < path.poses.size(); ++i) {
     const auto& prev_pose = path.poses[i - 1].pose.position;
     const auto& curr_pose = path.poses[i].pose.position;
-    double distance = hypot(curr_pose.x - prev_pose.x,
-                            curr_pose.y - prev_pose.y);
+    double distance = std::hypot(curr_pose.x - prev_pose.x,
+                                 curr_pose.y - prev_pose.y);
     cumulative_distances.push_back(cumulative_distances.back() + distance);
   }
   return cumulative_distances;
@@ -105,13 +106,13 @@ geometry_msgs::msg::PoseStamped geometry_utils::findPoseAtDistance(
   interpolated_pose.header = pose2.header;
   interpolated_pose.pose.position.x =
       pose1.pose.position.x
-      + ratio * (pose2.pose.position.x - pose1.pose.position.x);
+      + (ratio * (pose2.pose.position.x - pose1.pose.position.x));
   interpolated_pose.pose.position.y =
       pose1.pose.position.y
-      + ratio * (pose2.pose.position.y - pose1.pose.position.y);
+      + (ratio * (pose2.pose.position.y - pose1.pose.position.y));
   interpolated_pose.pose.position.z =
       pose1.pose.position.z
-      + ratio * (pose2.pose.position.z - pose1.pose.position.z);
+      + (ratio * (pose2.pose.position.z - pose1.pose.position.z));
   interpolated_pose.pose.orientation = pose2.pose.orientation;
 
   return interpolated_pose;

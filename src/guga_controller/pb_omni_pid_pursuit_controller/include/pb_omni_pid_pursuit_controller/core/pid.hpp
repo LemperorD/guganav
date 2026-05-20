@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PB_OMNI_PID_PURSUIT_CONTROLLER__PID_HPP_
-#define PB_OMNI_PID_PURSUIT_CONTROLLER__PID_HPP_
+#pragma once
 
 class PID
 {
@@ -42,5 +41,3 @@ private:
   double integral_;
   double min_max_sum_error_;
 };
-
-#endif  // PB_OMNI_PID_PURSUIT_CONTROLLER__PID_HPP_

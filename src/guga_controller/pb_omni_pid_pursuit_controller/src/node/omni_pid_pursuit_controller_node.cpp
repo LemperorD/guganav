@@ -292,7 +292,7 @@ namespace pb_omni_pid_pursuit_controller {
 
     geometry_msgs::msg::TwistStamped cmd_vel;
     cmd_vel.header = pose.header;
-    if (!checkCollision(transformed_plan, pose)) {
+    if (!checkCollision(transformed_plan)) {
       cmd_vel = assembleCmdVel(pose, lin_vel, angular_vel, theta_distance,
                                path_yaw);
     } else {
@@ -540,8 +540,7 @@ namespace pb_omni_pid_pursuit_controller {
   }
 
   bool OmniPidPursuitControllerNode::checkCollision(
-      const nav_msgs::msg::Path& transformed_plan,
-      const geometry_msgs::msg::PoseStamped& pose) {
+      const nav_msgs::msg::Path& transformed_plan) {
     nav_msgs::msg::Path costmap_frame_local_plan;
     int sample_points = static_cast<int>(config_.collision_sample_points);
     auto plan_size = static_cast<int>(transformed_plan.poses.size());
