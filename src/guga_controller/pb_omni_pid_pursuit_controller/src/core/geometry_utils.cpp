@@ -36,18 +36,23 @@ double geometry_utils::calculateCurvatureRadius(
     const geometry_msgs::msg::Point& near_point,
     const geometry_msgs::msg::Point& current_point,
     const geometry_msgs::msg::Point& far_point) {
-  double x1 = near_point.x, y1 = near_point.y;
-  double x2 = current_point.x, y2 = current_point.y;
-  double x3 = far_point.x, y3 = far_point.y;
+  double x1 = near_point.x;
+  double y1 = near_point.y;
+  double x2 = current_point.x;
+  double y2 = current_point.y;
+  double x3 = far_point.x;
+  double y3 = far_point.y;
 
-  double center_x = ((x1 * x1 + y1 * y1) * (y2 - y3)
-                     + (x2 * x2 + y2 * y2) * (y3 - y1)
-                     + (x3 * x3 + y3 * y3) * (y1 - y2))
-                  / (2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)));
-  double center_y = ((x1 * x1 + y1 * y1) * (x3 - x2)
-                     + (x2 * x2 + y2 * y2) * (x1 - x3)
-                     + (x3 * x3 + y3 * y3) * (x2 - x1))
-                  / (2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)));
+  double center_x =
+      ((((x1 * x1) + (y1 * y1)) * (y2 - y3))
+       + (((x2 * x2) + (y2 * y2)) * (y3 - y1))
+       + (((x3 * x3) + (y3 * y3)) * (y1 - y2)))
+      / (2 * ((x1 * (y2 - y3)) + (x2 * (y3 - y1)) + (x3 * (y1 - y2))));
+  double center_y =
+      ((((x1 * x1) + (y1 * y1)) * (x3 - x2))
+       + (((x2 * x2) + (y2 * y2)) * (x1 - x3))
+       + (((x3 * x3) + (y3 * y3)) * (x2 - x1)))
+      / (2 * ((x1 * (y2 - y3)) + (x2 * (y3 - y1)) + (x3 * (y1 - y2))));
   double radius = std::hypot(x2 - center_x, y2 - center_y);
   if (std::isnan(radius) || std::isinf(radius) || radius < 1e-9) {
     return 1e9;
