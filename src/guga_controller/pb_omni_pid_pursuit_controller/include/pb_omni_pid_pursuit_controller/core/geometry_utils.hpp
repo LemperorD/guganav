@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cmath>
-#include "std_msgs/msg/u_int8.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 namespace geometry_utils

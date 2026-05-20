@@ -5,10 +5,8 @@
 #include "tf2_ros/buffer.h"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include <memory>
-#include "nav2_core/controller.hpp"
 #include "nav2_core/exceptions.hpp"
 #include "nav2_util/geometry_utils.hpp"
-#include "nav2_util/node_utils.hpp"
 #include <vector>
 #include <iterator>
 #include <optional>
