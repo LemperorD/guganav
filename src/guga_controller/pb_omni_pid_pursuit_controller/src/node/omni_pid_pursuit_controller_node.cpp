@@ -513,7 +513,7 @@ namespace pb_omni_pid_pursuit_controller {
                                  2.0 * config_.min_approach_linear_velocity);
 
     linear_vel = std::min(linear_vel, scaled_linear_vel);
-    state_.last_velocity_scaling_factor = linear_vel;
+    state_.last_velocity_scaling_factor = scaled_linear_vel;
   }
 
   double OmniPidPursuitControllerNode::calculateCurvature(
