@@ -534,8 +534,9 @@ namespace pb_omni_pid_pursuit_controller {
         backward_pose.pose.position, lookahead_pose.pose.position,
         forward_pose.pose.position);
     double curvature = 1.0 / curvature_radius;
-    visualization_helper::visualizeCurvaturePoints(backward_pose, forward_pose,
-                                                   curvature_points_pub_);
+    auto markers = visualization_helper::visualizeCurvaturePoints(
+        backward_pose, forward_pose);
+    curvature_points_pub_->publish(markers);
     return curvature;
   }
 

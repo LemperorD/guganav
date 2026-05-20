@@ -1,12 +1,9 @@
 #include "pb_omni_pid_pursuit_controller/core/visualise.hpp"
 namespace visualization_helper
 {
-void visualizeCurvaturePoints(
-  const geometry_msgs::msg::PoseStamped & backward_pose,
-  const geometry_msgs::msg::PoseStamped & forward_pose,
-  const rclcpp_lifecycle::LifecyclePublisher<
-  visualization_msgs::msg::MarkerArray>::SharedPtr & pub)
-{
+visualization_msgs::msg::MarkerArray visualizeCurvaturePoints(
+    const geometry_msgs::msg::PoseStamped& backward_pose,
+    const geometry_msgs::msg::PoseStamped& forward_pose) {
   visualization_msgs::msg::MarkerArray marker_array;
 
   visualization_msgs::msg::Marker near_marker;
@@ -34,7 +31,7 @@ void visualizeCurvaturePoints(
   marker_array.markers.push_back(near_marker);
   marker_array.markers.push_back(far_marker);
 
-  pub->publish(marker_array);
+  return marker_array;
 }
 
 std::unique_ptr<geometry_msgs::msg::PointStamped> createCarrotMsg(
