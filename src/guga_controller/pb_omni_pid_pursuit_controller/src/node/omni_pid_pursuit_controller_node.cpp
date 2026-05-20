@@ -274,24 +274,25 @@ namespace pb_omni_pid_pursuit_controller {
         *(costmap->getMutex()));
 
     auto transformed_plan = transformPath(pose);
-    double lin_dist{};
-    double theta_dist{};
+    double linear_distance{};
+    double theta_distance{};
     double path_yaw{};
     double angle_to_goal{};
 
-    auto carrot_pose = computeLookahead(velocity, transformed_plan, lin_dist,
-                                        theta_dist, path_yaw, angle_to_goal);
+    auto carrot_pose = computeLookahead(velocity, transformed_plan,
+                                        linear_distance, theta_distance,
+                                        path_yaw, angle_to_goal);
     carrot_pub_->publish(visualization_helper::createCarrotMsg(carrot_pose));
 
     double lin_vel{};
     double angular_vel{};
-    computeVelocity(lin_dist, angle_to_goal, lin_vel, angular_vel);
+    computeVelocity(linear_distance, angle_to_goal, lin_vel, angular_vel);
     applyVelocityLimits(transformed_plan, carrot_pose, lin_vel);
 
     geometry_msgs::msg::TwistStamped cmd_vel;
     cmd_vel.header = pose.header;
     if (!checkCollision(transformed_plan, pose)) {
-      cmd_vel = assembleCmdVel(pose, lin_vel, angular_vel, theta_dist,
+      cmd_vel = assembleCmdVel(pose, lin_vel, angular_vel, theta_distance,
                                path_yaw);
     } else {
       throw nav2_core::PlannerException(
@@ -368,11 +369,11 @@ namespace pb_omni_pid_pursuit_controller {
     return carrot_pose;
   }
 
-  void OmniPidPursuitControllerNode::computeVelocity(double lin_dist,
+  void OmniPidPursuitControllerNode::computeVelocity(double linear_distance,
                                                      double angle_to_goal,
-                                                     double& lin_vel,
+                                                     double& linear_vel,
                                                      double& angular_vel) {
-    lin_vel = move_pid_->calculate(lin_dist, 0);
+    linear_vel = move_pid_->calculate(linear_distance, 0);
     angular_vel = config_.enable_rotation
                     ? heading_pid_->calculate(angle_to_goal, 0)
                     : 0.0;
@@ -494,10 +495,9 @@ namespace pb_omni_pid_pursuit_controller {
         reduction_ratio = config_.reduction_ratio_at_high_curvature;
       } else {
         reduction_ratio = 1.0
-                        - (curvature - config_.curvature_min)
-                              / (config_.curvature_max - config_.curvature_min)
-                              * (1.0
-                                 - config_.reduction_ratio_at_high_curvature);
+                        - ((curvature - config_.curvature_min)
+                           / (config_.curvature_max - config_.curvature_min)
+                           * (1.0 - config_.reduction_ratio_at_high_curvature));
       }
 
       double target_scaled_vel = linear_vel * reduction_ratio;

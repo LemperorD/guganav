@@ -30,110 +30,113 @@
 
 namespace pb_omni_pid_pursuit_controller {
 
-class OmniPidPursuitControllerNode : public nav2_core::Controller {
-public:
-  OmniPidPursuitControllerNode() = default;
-  ~OmniPidPursuitControllerNode() override = default;
+  class OmniPidPursuitControllerNode : public nav2_core::Controller {
+  public:
+    OmniPidPursuitControllerNode() = default;
+    ~OmniPidPursuitControllerNode() override = default;
 
-  void configure(
-      const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent, std::string name,
-      std::shared_ptr<tf2_ros::Buffer> tf,
-      std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
+    void configure(
+        const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
+        std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+        std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
-  void cleanup() override;
-  void activate() override;
-  void deactivate() override;
+    void cleanup() override;
+    void activate() override;
+    void deactivate() override;
 
-  geometry_msgs::msg::TwistStamped computeVelocityCommands(
-      const geometry_msgs::msg::PoseStamped& pose,
-      const geometry_msgs::msg::Twist& velocity,
-      nav2_core::GoalChecker* goal_checker) override;
+    geometry_msgs::msg::TwistStamped computeVelocityCommands(
+        const geometry_msgs::msg::PoseStamped& pose,
+        const geometry_msgs::msg::Twist& velocity,
+        nav2_core::GoalChecker* goal_checker) override;
 
-  void setPlan(const nav_msgs::msg::Path& path) override;
-  void setSpeedLimit(const double& speed_limit, const bool& percentage) override;
+    void setPlan(const nav_msgs::msg::Path& path) override;
+    void setSpeedLimit(const double& speed_limit,
+                       const bool& percentage) override;
 
-private:
-  // ── pipeline steps ──
+  private:
+    // ── pipeline steps ──
 
-  nav_msgs::msg::Path transformPath(const geometry_msgs::msg::PoseStamped& pose);
+    nav_msgs::msg::Path transformPath(
+        const geometry_msgs::msg::PoseStamped& pose);
 
-  geometry_msgs::msg::PoseStamped computeLookahead(
-      const geometry_msgs::msg::Twist& velocity,
-      const nav_msgs::msg::Path& transformed_plan, double& lin_dist,
-      double& theta_dist, double& path_yaw, double& angle_to_goal);
+    geometry_msgs::msg::PoseStamped computeLookahead(
+        const geometry_msgs::msg::Twist& velocity,
+        const nav_msgs::msg::Path& transformed_plan, double& lin_dist,
+        double& theta_dist, double& path_yaw, double& angle_to_goal);
 
-  void computeVelocity(double lin_dist, double angle_to_goal, double& lin_vel,
-                       double& angular_vel);
-  geometry_msgs::msg::TwistStamped assembleCmdVel(
-      const geometry_msgs::msg::PoseStamped& pose, double lin_vel,
-      double angular_vel, double theta_dist, double path_yaw) const;
+    void computeVelocity(double linear_distance, double angle_to_goal,
+                         double& linear_vel, double& angular_vel);
+    [[nodiscard]] geometry_msgs::msg::TwistStamped assembleCmdVel(
+        const geometry_msgs::msg::PoseStamped& pose, double lin_vel,
+        double angular_vel, double theta_dist, double path_yaw) const;
 
-  void applyVelocityLimits(const nav_msgs::msg::Path& transformed_plan,
-                           const geometry_msgs::msg::PoseStamped& carrot_pose,
-                           double& lin_vel);
+    void applyVelocityLimits(const nav_msgs::msg::Path& transformed_plan,
+                             const geometry_msgs::msg::PoseStamped& carrot_pose,
+                             double& lin_vel);
 
-  bool checkCollision(const nav_msgs::msg::Path& transformed_plan,
-                      const geometry_msgs::msg::PoseStamped& pose);
+    bool checkCollision(const nav_msgs::msg::Path& transformed_plan,
+                        const geometry_msgs::msg::PoseStamped& pose);
 
-  // ── helpers ──
+    // ── helpers ──
 
-  double getLookAheadDistance(const geometry_msgs::msg::Twist& speed);
-  geometry_msgs::msg::PoseStamped getLookAheadPoint(
-      const double& lookahead_dist,
-      const nav_msgs::msg::Path& transformed_plan);
-  double getCostmapMaxExtent() const;
+    double getLookAheadDistance(const geometry_msgs::msg::Twist& speed);
+    geometry_msgs::msg::PoseStamped getLookAheadPoint(
+        const double& lookahead_dist,
+        const nav_msgs::msg::Path& transformed_plan);
+    [[nodiscard]] double getCostmapMaxExtent() const;
 
-  [[nodiscard]] std::optional<geometry_msgs::msg::PoseStamped> transformPose(
-      const std::string& frame,
-      const geometry_msgs::msg::PoseStamped& in_pose) const;
+    [[nodiscard]] std::optional<geometry_msgs::msg::PoseStamped> transformPose(
+        const std::string& frame,
+        const geometry_msgs::msg::PoseStamped& in_pose) const;
 
-  double approachVelocityScalingFactor(
-      const nav_msgs::msg::Path& transformed_path) const;
-  void applyApproachVelocityScaling(const nav_msgs::msg::Path& path,
-                                    double& linear_vel) const;
-  void applyCurvatureLimitation(
-      const nav_msgs::msg::Path& path,
-      const geometry_msgs::msg::PoseStamped& lookahead_pose, double& linear_vel);
-  double calculateCurvature(
-      const nav_msgs::msg::Path& path,
-      const geometry_msgs::msg::PoseStamped& lookahead_pose, double forward_dist,
-      double backward_dist) const;
+    [[nodiscard]] double approachVelocityScalingFactor(
+        const nav_msgs::msg::Path& transformed_path) const;
+    void applyApproachVelocityScaling(const nav_msgs::msg::Path& path,
+                                      double& linear_vel) const;
+    void applyCurvatureLimitation(
+        const nav_msgs::msg::Path& path,
+        const geometry_msgs::msg::PoseStamped& lookahead_pose,
+        double& linear_vel);
+    [[nodiscard]] double calculateCurvature(
+        const nav_msgs::msg::Path& path,
+        const geometry_msgs::msg::PoseStamped& lookahead_pose,
+        double forward_dist, double backward_dist) const;
 
-  bool isCollisionDetected(const nav_msgs::msg::Path& path);
+    bool isCollisionDetected(const nav_msgs::msg::Path& path);
 
-  void chassisModeCallback(const std_msgs::msg::UInt8::SharedPtr msg);
-  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
-      std::vector<rclcpp::Parameter> parameters);
+    void chassisModeCallback(std_msgs::msg::UInt8::SharedPtr msg);
+    rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
+        std::vector<rclcpp::Parameter> parameters);
 
-  // ── infrastructure ──
+    // ── infrastructure ──
 
-  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
-  std::shared_ptr<tf2_ros::Buffer> tf_;
-  std::string plugin_name_;
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-  nav2_costmap_2d::Costmap2D* costmap_{};
-  rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitControllerNode")};
-  rclcpp::Clock::SharedPtr clock_;
+    rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+    std::shared_ptr<tf2_ros::Buffer> tf_;
+    std::string plugin_name_;
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
+    nav2_costmap_2d::Costmap2D* costmap_{};
+    rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitControllerNode")};
+    rclcpp::Clock::SharedPtr clock_;
 
-  ControllerConfig config_;
-  ControllerState state_;
-  nav_msgs::msg::Path global_plan_;
+    ControllerConfig config_;
+    ControllerState state_;
+    nav_msgs::msg::Path global_plan_;
 
-  std::shared_ptr<PID> move_pid_;
-  std::shared_ptr<PID> heading_pid_;
+    std::shared_ptr<PID> move_pid_;
+    std::shared_ptr<PID> heading_pid_;
 
-  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
-      local_path_pub_;
-  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PointStamped>::SharedPtr
-      carrot_pub_;
-  rclcpp_lifecycle::LifecyclePublisher<
-      visualization_msgs::msg::MarkerArray>::SharedPtr curvature_points_pub_;
-  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr chassis_mode_sub_;
+    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
+        local_path_pub_;
+    rclcpp_lifecycle::LifecyclePublisher<
+        geometry_msgs::msg::PointStamped>::SharedPtr carrot_pub_;
+    rclcpp_lifecycle::LifecyclePublisher<
+        visualization_msgs::msg::MarkerArray>::SharedPtr curvature_points_pub_;
+    rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr chassis_mode_sub_;
 
-  std::mutex mutex_;
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
-      dyn_params_handler_;
-};
+    std::mutex mutex_;
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+        dyn_params_handler_;
+  };
 
 }  // namespace pb_omni_pid_pursuit_controller
 
