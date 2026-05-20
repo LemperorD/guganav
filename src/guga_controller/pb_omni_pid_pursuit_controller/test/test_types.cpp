@@ -41,7 +41,7 @@ TEST(ControllerConfigTest, DefaultValues) {
   EXPECT_DOUBLE_EQ(cfg.curvature_forward_dist, 0.7);
   EXPECT_DOUBLE_EQ(cfg.curvature_backward_dist, 0.3);
   EXPECT_DOUBLE_EQ(cfg.max_velocity_scaling_factor_rate, 0.9);
-  EXPECT_DOUBLE_EQ(cfg.transform_tolerance, 0.1);
+  EXPECT_DOUBLE_EQ(cfg.transform_tolerance, 0.5);
 }
 
 TEST(ControllerStateTest, DefaultState) {

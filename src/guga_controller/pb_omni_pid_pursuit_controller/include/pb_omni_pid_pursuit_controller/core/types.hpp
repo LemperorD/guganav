@@ -41,7 +41,7 @@ struct ControllerConfig {
   double curvature_forward_dist{0.7};
   double curvature_backward_dist{0.3};
   double max_velocity_scaling_factor_rate{0.9};
-  double transform_tolerance{0.1};
+  double transform_tolerance{0.5};
   int64_t collision_sample_points{10};
 };
 
