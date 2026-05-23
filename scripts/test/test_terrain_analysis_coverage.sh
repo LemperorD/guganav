@@ -4,7 +4,7 @@ source /opt/ros/humble/setup.bash
 source ~/guganav/install/setup.bash
 cd ~/guganav
 
-RESULT_FILE=~/guganav/test_result.ans
+RESULT_FILE=~/guganav/build/terrain_analysis/coverage_result.ans
 rm -f "$RESULT_FILE"
 
 echo "=== Clean previous build data ===" | tee -a "$RESULT_FILE"
