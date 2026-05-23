@@ -102,6 +102,19 @@ TEST_F(AlgorithmTest, RolloverVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
   EXPECT_TRUE(state_.terrain_voxel_cloud[0]->points.empty());
 }
 
+// 车辆同时向左下方移动，X 和 Y 各滚动一格
+TEST_F(AlgorithmTest, RolloverVoxels_LeftAndDown_ShiftsBothAxes) {
+  state_.vehicle_x = -2.0;
+  state_.vehicle_y = -2.0;
+  int sx = state_.terrain_voxel_shift_x;
+  int sy = state_.terrain_voxel_shift_y;
+
+  TerrainAlgorithm::rolloverVoxels(cfg_, state_);
+
+  EXPECT_EQ(state_.terrain_voxel_shift_x, sx - 1);
+  EXPECT_EQ(state_.terrain_voxel_shift_y, sy - 1);
+}
+
 // ── voxelize ──
 // 原点处的单个点被分配到网格正中的 cell
 TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
