@@ -1,6 +1,10 @@
 #!/bin/bash
-source /opt/ros/humble/setup.bash
-source ~/guganav/install/setup.bash
+if [ -z "$ROS_DISTRO" ]; then
+  test -f /opt/ros/humble/setup.bash && source /opt/ros/humble/setup.bash
+fi
+if [ -f ~/guganav/install/setup.bash ]; then
+  source ~/guganav/install/setup.bash
+fi
 cd ~/guganav
 
 RESULT_FILE=~/guganav/build/terrain_analysis/coverage_result.ans
