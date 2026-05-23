@@ -394,7 +394,7 @@ controller_server:
       wz_max: 1.9
       iteration_count: 1
       prune_distance: 1.7
-      transform_tolerance: 0.5
+      transform_tolerance: 0.1
       temperature: 0.3
       gamma: 0.015
       motion_model: "Ackermann"
@@ -640,7 +640,7 @@ behavior_server:
     local_frame: odom
     global_frame: map
     robot_base_frame: gimbal_yaw_fake
-    transform_tolerance: 0.5
+    transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4

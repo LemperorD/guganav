@@ -449,7 +449,7 @@ local_costmap:
           data_type: PointCloud2
           # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
           # It doesn't need to start with '/'
-          topic: terrain_map
+          topic: <robot_namespace>/terrain_map
           sensor_frame: front_mid360
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
@@ -496,7 +496,7 @@ global_costmap:
           data_type: PointCloud2
           # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
           # It doesn't need to start with '/'
-          topic: terrain_map_ext
+          topic: <robot_namespace>/terrain_map_ext
           sensor_frame: front_mid360
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
