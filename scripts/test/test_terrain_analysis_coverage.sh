@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 source /opt/ros/humble/setup.bash
-source /home/rog/nav2_ws/install/setup.bash
+source ~/guganav/install/setup.bash
 cd ~/guganav
 
 RESULT_FILE=~/guganav/test_result.ans
@@ -33,7 +33,7 @@ done
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Generate coverage report ===" | tee -a "$RESULT_FILE"
 cd ~/guganav
-FILTER_BASE='src/guga_perception/terrainanalysis/terrain_analysis'
+FILTER_BASE='src/guga_perception/terrain_analysis'
 gcovr \
   --root . \
   --object-directory build/terrain_analysis \
