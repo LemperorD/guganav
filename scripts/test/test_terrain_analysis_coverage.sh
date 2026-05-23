@@ -26,8 +26,7 @@ colcon build --symlink-install --packages-select terrain_analysis \
 echo "=== Run tests ===" | tee -a "$RESULT_FILE"
 cd ~/guganav/build/terrain_analysis
 for test_bin in test_terrain_analysis test_context test_algorithm test_connectivity; do
-  echo "--- $test_bin ---" | tee -a "$RESULT_FILE"
-  GTEST_COLOR=yes ./$test_bin 2>&1 | tee -a "$RESULT_FILE"
+  GTEST_COLOR=yes ./$test_bin 2>&1 | grep -E "FAILED|PASSED.*tests" | tee -a "$RESULT_FILE"
 done
 
 echo "" | tee -a "$RESULT_FILE"
