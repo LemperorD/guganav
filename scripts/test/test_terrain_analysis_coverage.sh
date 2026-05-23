@@ -40,6 +40,7 @@ gcovr \
   --filter "${FILTER_BASE}/src/.*\\.cpp" \
   --filter "${FILTER_BASE}/include/.*\\.hpp" \
   --exclude '.*test.*' \
+  --exclude '.*gtest.*' \
   --gcov-ignore-errors=source_not_found \
   --html --html-details \
   -o build/terrain_analysis/coverage.html 2>&1 | tee -a "$RESULT_FILE"
@@ -52,6 +53,7 @@ gcovr \
   --filter "${FILTER_BASE}/src/.*\\.cpp" \
   --filter "${FILTER_BASE}/include/.*\\.hpp" \
   --exclude '.*test.*' \
+  --exclude '.*gtest.*' \
   --gcov-ignore-errors=source_not_found \
   --lcov \
   -o lcov.info 2>&1 | tee -a "$RESULT_FILE"
@@ -64,6 +66,7 @@ gcovr \
   --filter "${FILTER_BASE}/src/.*\\.cpp" \
   --filter "${FILTER_BASE}/include/.*\\.hpp" \
   --exclude '.*test.*' \
+  --exclude '.*gtest.*' \
   --gcov-ignore-errors=source_not_found 2>&1 | tee -a "$RESULT_FILE"
 
 echo "" | tee -a "$RESULT_FILE"
