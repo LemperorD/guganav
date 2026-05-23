@@ -8,6 +8,7 @@ rm -f "$RESULT_FILE"
 
 echo "=== Clean previous build data ===" | tee -a "$RESULT_FILE"
 rm -rf build/terrain_analysis
+mkdir -p build/terrain_analysis
 
 echo "=== Build terrain_analysis with coverage flags ===" | tee -a "$RESULT_FILE"
 colcon build --symlink-install --packages-select terrain_analysis \
