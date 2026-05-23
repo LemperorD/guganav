@@ -11,7 +11,7 @@ echo "=== Clean previous build data ===" | tee -a "$RESULT_FILE"
 rm -rf build/terrain_analysis
 
 echo "=== Build terrain_analysis with coverage flags ===" | tee -a "$RESULT_FILE"
-colcon build --packages-select terrain_analysis \
+colcon build --symlink-install --packages-select terrain_analysis \
   --event-handlers console_direct+ \
   --cmake-args \
     -DBUILD_TESTING=ON \
