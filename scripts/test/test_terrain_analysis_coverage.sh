@@ -6,8 +6,8 @@ cd ~/guganav
 RESULT_FILE=~/guganav/build/terrain_analysis/coverage_result.ans
 rm -f "$RESULT_FILE"
 
-echo "=== Clean previous build data ===" | tee -a "$RESULT_FILE"
-rm -rf build/terrain_analysis
+echo "=== Clean previous coverage data ===" | tee -a "$RESULT_FILE"
+find build/terrain_analysis -name "*.gcda" -delete 2>/dev/null
 mkdir -p build/terrain_analysis
 
 echo "=== Build terrain_analysis with coverage flags ===" | tee -a "$RESULT_FILE"
