@@ -1,5 +1,5 @@
 #!/bin/bash
-WS=$(cd "$(dirname "$0")/../.." && pwd)
+WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)
 
 if [ -z "$ROS_DISTRO" ]; then
   test -f /opt/ros/humble/setup.bash && source /opt/ros/humble/setup.bash
