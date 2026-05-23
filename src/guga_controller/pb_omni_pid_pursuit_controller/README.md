@@ -28,63 +28,63 @@ computeVelocityCommands (目标 20Hz)
 
 ## ChassisMode
 
-| 值 | 模式 | enable_rotation | 行为 |
-|----|------|-----------------|------|
-| 1 | CHASSIS_FOLLOWED | true | vx/vy 沿路径方向分解 + wz 旋转跟踪 |
-| 2 | LITTLE_TES | false | vx/vy 沿 carrot 方向分解 + wz=0，纯平移 |
-| 3 | GO_HOME | — | 已定义，暂未处理 |
+| 值  | 模式             | enable_rotation | 行为                                    |
+| --- | ---------------- | --------------- | --------------------------------------- |
+| 1   | CHASSIS_FOLLOWED | true            | vx/vy 沿路径方向分解 + wz 旋转跟踪      |
+| 2   | LITTLE_TES       | false           | vx/vy 沿 carrot 方向分解 + wz=0，纯平移 |
+| 3   | GO_HOME          | —               | 已定义，暂未处理                        |
 
 ## 参数
 
 ### PID
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `translation_kp/ki/kd` | 3.0/0.1/0.3 | 平移 PID |
-| `rotation_kp/ki/kd` | 3.0/0.1/0.3 | 旋转 PID |
-| `enable_rotation` | true | 启用旋转跟踪（false 时 wz=0） |
-| `min_max_sum_error` | 1.0 | 积分限幅 |
+| 参数                   | 默认        | 说明                          |
+| ---------------------- | ----------- | ----------------------------- |
+| `translation_kp/ki/kd` | 3.0/0.1/0.3 | 平移 PID                      |
+| `rotation_kp/ki/kd`    | 3.0/0.1/0.3 | 旋转 PID                      |
+| `enable_rotation`      | true        | 启用旋转跟踪（false 时 wz=0） |
+| `min_max_sum_error`    | 1.0         | 积分限幅                      |
 
 ### 前视
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `lookahead_dist` | 0.3 | 固定前视距离 (m) |
-| `use_velocity_scaled_lookahead_dist` | true | 速度缩放前视 |
-| `min_lookahead_dist` | 0.2 | 最小前视 (m) |
-| `max_lookahead_dist` | 1.0 | 最大前视 (m) |
-| `lookahead_time` | 1.0 | 前视时间 (s) |
-| `use_interpolation` | true | 圆-线段交点插值 carrot |
-| `use_rotate_to_heading` | true | 终点原地旋转对齐朝向 |
-| `use_rotate_to_heading_threshold` | 0.1 | 旋转阈值 (rad) |
+| 参数                                 | 默认 | 说明                   |
+| ------------------------------------ | ---- | ---------------------- |
+| `lookahead_dist`                     | 0.3  | 固定前视距离 (m)       |
+| `use_velocity_scaled_lookahead_dist` | true | 速度缩放前视           |
+| `min_lookahead_dist`                 | 0.2  | 最小前视 (m)           |
+| `max_lookahead_dist`                 | 1.0  | 最大前视 (m)           |
+| `lookahead_time`                     | 1.0  | 前视时间 (s)           |
+| `use_interpolation`                  | true | 圆-线段交点插值 carrot |
+| `use_rotate_to_heading`              | true | 终点原地旋转对齐朝向   |
+| `use_rotate_to_heading_threshold`    | 0.1  | 旋转阈值 (rad)         |
 
 ### 限速
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `v_linear_min/max` | -3.0/3.0 | 线速度范围 (m/s) |
-| `v_angular_min/max` | -3.0/3.0 | 角速度范围 (rad/s) |
-| `min_approach_linear_velocity` | 0.05 | 接近终点保底速度 (m/s) |
-| `approach_velocity_scaling_dist` | 0.6 | 接近减速距离 (m) |
+| 参数                             | 默认     | 说明                   |
+| -------------------------------- | -------- | ---------------------- |
+| `v_linear_min/max`               | -3.0/3.0 | 线速度范围 (m/s)       |
+| `v_angular_min/max`              | -3.0/3.0 | 角速度范围 (rad/s)     |
+| `min_approach_linear_velocity`   | 0.05     | 接近终点保底速度 (m/s) |
+| `approach_velocity_scaling_dist` | 0.6      | 接近减速距离 (m)       |
 
 ### 曲率
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `curvature_min` | 0.4 | 低曲率阈值，低于此不减速 |
-| `curvature_max` | 0.7 | 高曲率阈值，高于此用最低比率 |
-| `reduction_ratio_at_high_curvature` | 0.5 | 高曲率速度降比 |
-| `curvature_forward_dist` | 0.7 | 曲率前向采样距离 (m) |
-| `curvature_backward_dist` | 0.3 | 曲率后向采样距离 (m) |
-| `max_velocity_scaling_factor_rate` | 0.9 | 曲率减速平滑率 (/s) |
+| 参数                                | 默认 | 说明                         |
+| ----------------------------------- | ---- | ---------------------------- |
+| `curvature_min`                     | 0.4  | 低曲率阈值，低于此不减速     |
+| `curvature_max`                     | 0.7  | 高曲率阈值，高于此用最低比率 |
+| `reduction_ratio_at_high_curvature` | 0.5  | 高曲率速度降比               |
+| `curvature_forward_dist`            | 0.7  | 曲率前向采样距离 (m)         |
+| `curvature_backward_dist`           | 0.3  | 曲率后向采样距离 (m)         |
+| `max_velocity_scaling_factor_rate`  | 0.9  | 曲率减速平滑率 (/s)          |
 
 ### 其他
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `transform_tolerance` | 0.1 | TF 变换超时 (s)，传递给 PathHandler |
-| `collision_sample_points` | 10 | 碰撞检测采样点数 |
-| `max_robot_pose_search_dist` | costmap 半宽 | 路径搜索范围，自动推算 |
+| 参数                         | 默认         | 说明                                |
+| ---------------------------- | ------------ | ----------------------------------- |
+| `transform_tolerance`        | 0.5          | TF 变换超时 (s)，传递给 PathHandler |
+| `collision_sample_points`    | 10           | 碰撞检测采样点数                    |
+| `max_robot_pose_search_dist` | costmap 半宽 | 路径搜索范围，自动推算              |
 
 ## 依赖
 
@@ -117,14 +117,14 @@ colcon build --packages-select pb_omni_pid_pursuit_controller
 
 ## 发布的话题
 
-| Topic | 类型 | 说明 |
-|-------|------|------|
-| `local_plan` | `nav_msgs/Path` | 变换后的局部路径 |
-| `lookahead_point` | `geometry_msgs/PointStamped` | carrot 前视点 |
-| `curvature_points_marker_array` | `visualization_msgs/MarkerArray` | 曲率计算点 |
+| Topic                           | 类型                             | 说明             |
+| ------------------------------- | -------------------------------- | ---------------- |
+| `local_plan`                    | `nav_msgs/Path`                  | 变换后的局部路径 |
+| `lookahead_point`               | `geometry_msgs/PointStamped`     | carrot 前视点    |
+| `curvature_points_marker_array` | `visualization_msgs/MarkerArray` | 曲率计算点       |
 
 ## 订阅的话题
 
-| Topic | 类型 | 说明 |
-|-------|------|------|
+| Topic          | 类型             | 说明         |
+| -------------- | ---------------- | ------------ |
 | `chassis_mode` | `std_msgs/UInt8` | 底盘模式切换 |
