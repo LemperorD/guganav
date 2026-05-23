@@ -57,7 +57,7 @@ gcovr \
   --exclude '.*gtest.*' \
   --gcov-ignore-errors=source_not_found \
   --lcov \
-  -o lcov.info 2>&1 | tee -a "$RESULT_FILE"
+  -o build/terrain_analysis/lcov.info 2>&1 | tee -a "$RESULT_FILE"
 
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Coverage Summary ===" | tee -a "$RESULT_FILE"
@@ -72,5 +72,5 @@ gcovr \
 
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Done ===" | tee -a "$RESULT_FILE"
-echo "lcov info:    lcov.info" | tee -a "$RESULT_FILE"
+echo "lcov info:    build/terrain_analysis/lcov.info" | tee -a "$RESULT_FILE"
 echo "coverage html: build/terrain_analysis/coverage.html" | tee -a "$RESULT_FILE"
