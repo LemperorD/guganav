@@ -194,6 +194,24 @@ TEST_F(AlgorithmTest,
   EXPECT_FLOAT_EQ(state_.planar_voxel_elev[cell], 0.8F);
 }
 
+// quantile_z=1.0 时 quantile_index 达到 point_count 边界，回退到最后一点
+TEST_F(AlgorithmTest,
+       ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
+  cfg_.use_sorting = true;
+  cfg_.quantile_z = 1.0;
+  cfg_.limit_ground_lift = false;
+  size_t cell = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  state_.planar_voxel_elev.fill(999);
+  // 3 points: sorted 0.1, 0.3, 0.9. quantile 1.0*3 = 3 >= 3 → clamp to 2 → 0.9
+  state_.planar_point_elev[cell] = {0.1, 0.9, 0.3};
+
+  TerrainAlgorithm::computeElevation(cfg_, state_);
+
+  EXPECT_FLOAT_EQ(state_.planar_voxel_elev[cell], 0.9F);
+}
+
 // ── detectDynamicObstacles ──
 TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
   cfg_.clear_dy_obs = true;
