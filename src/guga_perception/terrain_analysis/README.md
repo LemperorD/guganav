@@ -84,9 +84,27 @@ scripts/test/test_terrain_analysis_coverage.sh
 ## 数据流
 
 ```
-point_lio → loam_interface → lidar_odometry ──→ terrainAnalysis → terrain_map ──→ local_costmap
-                         → registered_scan ──→                                  → terrainAnalysisExt → terrain_map_ext ──→ global_costmap
-                                                                                                     → pointcloud_to_laserscan (SLAM)
+                         point_lio
+                            │
+                      loam_interface
+                     ╱               ╲
+            lidar_odometry       registered_scan
+                │                     │
+                └──────┬──────────────┘
+                       │
+                  terrainAnalysis
+                  (terrain_map)
+                  ╱           ╲
+                 │             │
+        terrainAnalysisExt    local_costmap
+        (terrain_map_ext)     (intensity_voxel_layer,
+         ╱           ╲         pb_nav2_plugins, 避障)
+        │             │
+   global_costmap  pointcloud_to_laserscan
+   (intensity_     → /obstacle_scan
+    voxel_layer,      → slam_toolbox → /map
+    pb_nav2_plugins,   (仅 SLAM 模式)
+    路径规划)
 ```
 
 ## 两个节点
