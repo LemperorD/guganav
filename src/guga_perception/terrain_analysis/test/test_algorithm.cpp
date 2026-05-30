@@ -195,8 +195,7 @@ TEST_F(AlgorithmTest,
 }
 
 // quantile_z=1.0 时 quantile_index 达到 point_count 边界，回退到最后一点
-TEST_F(AlgorithmTest,
-       ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
+TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
   cfg_.use_sorting = true;
   cfg_.quantile_z = 1.0;
   cfg_.limit_ground_lift = false;
@@ -272,9 +271,9 @@ TEST_F(AlgorithmTest,
 
   cfg_.min_dy_obs_distance = 0.0;
   cfg_.min_dy_obs_point_num = 3;
-  cfg_.min_dy_obs_angle = -1.0;      // below any realistic scan angle
+  cfg_.min_dy_obs_angle = -1.0;  // below any realistic scan angle
   cfg_.min_dy_obs_relative_z = -1.0;
-  cfg_.min_dy_obs_vfov = -0.5;       // radians, wide open
+  cfg_.min_dy_obs_vfov = -0.5;  // radians, wide open
   cfg_.max_dy_obs_vfov = 0.5;
   cfg_.abs_dy_obs_relative_z_threshold = 0.01;  // tiny → rely on VFOV
 
@@ -288,8 +287,7 @@ TEST_F(AlgorithmTest,
 }
 
 // 传感器视角外的点不触发动态障碍计数
-TEST_F(AlgorithmTest,
-       DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
+TEST_F(AlgorithmTest, DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
   state_.vehicle_z = 0;
@@ -308,7 +306,7 @@ TEST_F(AlgorithmTest,
   cfg_.min_dy_obs_point_num = 3;
   cfg_.min_dy_obs_angle = -1.0;
   cfg_.min_dy_obs_relative_z = -1.0;
-  cfg_.min_dy_obs_vfov = 0.1;        // narrow VFOV
+  cfg_.min_dy_obs_vfov = 0.1;  // narrow VFOV
   cfg_.max_dy_obs_vfov = 0.2;
   cfg_.abs_dy_obs_relative_z_threshold = 0.0;  // off
 
@@ -402,7 +400,6 @@ TEST_F(AlgorithmTest,
 // 栅格边缘点触发射线邻居越界检查，不崩溃
 TEST_F(AlgorithmTest, EstimateGround_EdgePoint_HandlesOobNeighbors) {
   constexpr double SZ = 0.2;
-  constexpr int HW = 25;  // PLANAR_VOXEL_HALF_WIDTH = (51-1)/2
   double edge = SZ * (25 - 1);  // ~4.8m, column=49, delta_col+1=50 in bounds
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
@@ -424,18 +421,26 @@ TEST_F(AlgorithmTest, EstimateGround_EdgePoint_HandlesOobNeighbors) {
 
 // Z 超出范围的点被过滤
 TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
-  state_.vehicle_x = 0; state_.vehicle_y = 0; state_.vehicle_z = 0;
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
   state_.terrain_cloud_elev->clear();
   state_.planar_voxel_elev.fill(0);
   state_.planar_voxel_dy_obs.fill(0);
-  for (auto& e : state_.planar_point_elev) e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  for (auto& e : state_.planar_point_elev) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
   cfg_.min_block_point_num = 5;
   cfg_.vehicle_height = 1.0;
   cfg_.consider_drop = false;
   cfg_.check_terrain_connectivity = false;
 
   // Point at z=2.0 exceeds max_relative_z (0.2)
-  pcl::PointXYZI pt; pt.x = 0.5F; pt.y = 0; pt.z = 2.0F; pt.intensity = 0;
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 2.0F;
+  pt.intensity = 0;
   state_.terrain_cloud->clear();
   state_.terrain_cloud->push_back(pt);
 
@@ -445,11 +450,15 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
 
 // consider_drop 开启时高度取绝对值，负高度也被接受
 TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
-  state_.vehicle_x = 0; state_.vehicle_y = 0; state_.vehicle_z = 0;
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
   state_.terrain_cloud_elev->clear();
   state_.planar_voxel_elev.fill(0.3);  // ground at +0.3, point at z=0 → -0.3m
   state_.planar_voxel_dy_obs.fill(0);
-  for (auto& e : state_.planar_point_elev) e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  for (auto& e : state_.planar_point_elev) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
   cfg_.min_block_point_num = 5;
   cfg_.vehicle_height = 1.0;
   cfg_.min_relative_z = -10.0;
@@ -458,7 +467,11 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   cfg_.check_terrain_connectivity = false;
   cfg_.clear_dy_obs = false;
 
-  pcl::PointXYZI pt; pt.x = 0.5F; pt.y = 0; pt.z = 0.0F; pt.intensity = 0;
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 0.0F;
+  pt.intensity = 0;
   state_.terrain_cloud->clear();
   state_.terrain_cloud->push_back(pt);
 
@@ -469,11 +482,15 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
 
 // 高度超过 vehicle_height 的点被过滤
 TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
-  state_.vehicle_x = 0; state_.vehicle_y = 0; state_.vehicle_z = 0;
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
   state_.terrain_cloud_elev->clear();
   state_.planar_voxel_elev.fill(0);
   state_.planar_voxel_dy_obs.fill(0);
-  for (auto& e : state_.planar_point_elev) e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  for (auto& e : state_.planar_point_elev) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
   cfg_.min_block_point_num = 5;
   cfg_.vehicle_height = 0.1;
   cfg_.min_relative_z = -10.0;
@@ -482,7 +499,11 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
   cfg_.check_terrain_connectivity = false;
   cfg_.clear_dy_obs = false;
 
-  pcl::PointXYZI pt; pt.x = 0.5F; pt.y = 0; pt.z = 0.5F; pt.intensity = 0;
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 0.5F;
+  pt.intensity = 0;
   state_.terrain_cloud->clear();
   state_.terrain_cloud->push_back(pt);
 
@@ -554,13 +575,14 @@ namespace {
     state.terrain_voxel_update_num[center_cell] = cfg.voxel_point_update_thre;
 
     TerrainAlgorithm::updateVoxels(cfg, state);
-    return static_cast<int>(state.terrain_voxel_cloud[center_cell]->points.size());
+    return static_cast<int>(
+        state.terrain_voxel_cloud[center_cell]->points.size());
   }
-}
+}  // namespace
 
 // 略高于下限边界的点被保留
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
-  double z_margin = cfg_.distance_ratio_z * 1.0;  // = 0.2
+  double z_margin = cfg_.distance_ratio_z * 1.0;     // = 0.2
   double boundary = cfg_.min_relative_z - z_margin;  // = -1.7
   int kept = updateSinglePoint(cfg_, state_, boundary + 0.01, 1.0);
   EXPECT_EQ(kept, 1);
@@ -726,7 +748,10 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_ClearingCloud_Pruned) {
   auto& cell = *state_.terrain_voxel_cloud[center_cell];
   cell.clear();
   pcl::PointXYZI point;
-  point.x = 0.1F; point.y = 0.0F; point.z = 0.0F; point.intensity = 1.0F;
+  point.x = 0.1F;
+  point.y = 0.0F;
+  point.z = 0.0F;
+  point.intensity = 1.0F;
   cell.push_back(point);
   state_.terrain_voxel_update_num[center_cell] = 5;
 
@@ -752,10 +777,84 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
   auto& cell = *state_.terrain_voxel_cloud[center_cell];
   cell.clear();
   pcl::PointXYZI point;
-  point.x = 0.1F; point.y = 0.0F; point.z = 0.0F; point.intensity = 1.0F;
+  point.x = 0.1F;
+  point.y = 0.0F;
+  point.z = 0.0F;
+  point.intensity = 1.0F;
   cell.push_back(point);
   state_.terrain_voxel_update_num[center_cell] = cfg_.voxel_point_update_thre;
 
   TerrainAlgorithm::updateVoxels(cfg_, state_);
   EXPECT_EQ(cell.points.size(), 1U);
+}
+
+// ── computeHeightMap 过滤分支 ──
+
+// dy_obs 计数达标 + clear_dy_obs → 该 cell 被过滤
+TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0);
+  for (auto& e : state_.planar_point_elev) {
+    e = {0., 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
+  cfg_.min_block_point_num = 5;
+  cfg_.vehicle_height = 1.0;
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.clear_dy_obs = true;
+  cfg_.min_dy_obs_point_num = 3;
+  cfg_.check_terrain_connectivity = false;
+
+  size_t cell = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  state_.planar_voxel_dy_obs[cell] = 5;
+
+  pcl::PointXYZI pt;
+  pt.x = 0.0F;
+  pt.y = 0;
+  pt.z = 0.1F;
+  pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  TerrainAlgorithm::computeHeightMap(cfg_, state_);
+  EXPECT_TRUE(state_.terrain_cloud_elev->points.empty());
+}
+
+// connectivity 检查开启 + cell 未标记为连通 → 跳过
+TEST_F(AlgorithmTest, ComputeHeightMap_DisconnectedCell_Filtered) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0);
+  for (auto& e : state_.planar_point_elev) {
+    e = {0., 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
+  cfg_.min_block_point_num = 5;
+  cfg_.vehicle_height = 1.0;
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.clear_dy_obs = false;
+  cfg_.check_terrain_connectivity = true;
+
+  size_t cell = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  state_.planar_voxel_connectivity[cell] = 1;  // ≠2 → filtered
+
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 0.1F;
+  pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  TerrainAlgorithm::computeHeightMap(cfg_, state_);
+  EXPECT_TRUE(state_.terrain_cloud_elev->points.empty());
 }
