@@ -61,18 +61,38 @@ scripts/test/test_terrain_analysis_coverage.sh
 | Terrain voxel | 1.0m | 21×21 | 滑动窗口，累积多帧地形点 |
 | Planar voxel | 0.2m | 51×51 | 固定窗口，估算地面高度 |
 
+## 输入
+
+| 节点 | Topic | 类型 | 来源包/节点 |
+|------|-------|------|-------------|
+| `terrainAnalysis` | `lidar_odometry` | `nav_msgs/Odometry` | `point_lio → loam_interface` |
+| `terrainAnalysis` | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
+| `terrainAnalysis` | `joy` | `sensor_msgs/Joy` | 调试用（手柄按钮） |
+| `terrainAnalysis` | `map_clearing` | `std_msgs/Float32` | 调试用（清除距离） |
+| `terrainAnalysisExt` | `lidar_odometry` | `nav_msgs/Odometry` | `point_lio → loam_interface` |
+| `terrainAnalysisExt` | `terrain_map` | `sensor_msgs/PointCloud2` | `terrainAnalysis` (本包) |
+
 ## 输出
 
-| 节点 | Topic | 类型 | 坐标系 | 说明 |
-|------|-------|------|--------|------|
-| `terrainAnalysis` | `terrain_map` | `sensor_msgs/PointCloud2` | `odom` | Intensity = 点离地高度（米） |
-| `terrainAnalysisExt` | `terrain_map_ext` | `sensor_msgs/PointCloud2` | `odom` | 仅依赖 lidar_odometry + terrain_map，不订阅传感器，参数独立 |
+| 节点 | Topic | 类型 | 坐标系 | 下游订阅者 |
+|------|-------|------|--------|-----------|
+| `terrainAnalysis` | `terrain_map` | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
+|  |  |  |  | `terrainAnalysisExt` (本包) |
+| `terrainAnalysisExt` | `terrain_map_ext` | `sensor_msgs/PointCloud2` | `odom` | `global_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
+|  |  |  |  | `pointcloud_to_laserscan` (`guga_thirdparty`, 仅 SLAM 模式) |
+
+## 数据流
+
+```
+point_lio → loam_interface → lidar_odometry ──→ terrainAnalysis → terrain_map ──→ local_costmap
+                         → registered_scan ──→                                  → terrainAnalysisExt → terrain_map_ext ──→ global_costmap
+                                                                                                     → pointcloud_to_laserscan (SLAM)
+```
 
 ## 两个节点
 
 | | `terrainAnalysis` (`main.cpp`) | `terrainAnalysisExt` (`main_ext.cpp`) |
 |---|---|---|
-| 传感器订阅 | `registered_scan` + `lidar_odometry` | 无（仅接收处理后的 terrain_map） |
 | 输入 | 原始激光点云 + 里程计 | `lidar_odometry` + `terrain_map` |
-| 参数默认 | Nav2 参数文件统一配置 | 代码内置默认值（`main_ext.cpp:14-22`） |
-| 用途 | 主 terrain 节点 | 扩展节点，不同参数的地形分析 |
+| 参数默认 | Nav2 参数文件统一配置 | Nav2 参数文件统一配置 |
+| 用途 | 主地形分析，局部 costmap | 扩展节点，全局 costmap + SLAM 建图 |
