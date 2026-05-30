@@ -451,3 +451,173 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_BelowUpperBoundary_Kept) {
   int kept = updateSinglePoint(cfg_, state_, boundary - 0.01, 1.0);
   EXPECT_EQ(kept, 1);
 }
+
+// 点的时间戳过期且离车辆较远 → 被清除
+TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.decay_time = 1.0;
+  cfg_.no_decay_distance = 0.0;
+  cfg_.voxel_point_update_thre = 1;
+
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0.0;
+  state_.laser_cloud_time = 10.0;
+  state_.system_init_time = 0.0;
+
+  int center_cell = TerrainConfig::terrainVoxelIndex(
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state_.terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI point;
+  point.x = 2.0F;
+  point.y = 0.0F;
+  point.z = 0.0F;
+  point.intensity = 0.0F;
+  cell.push_back(point);
+
+  state_.terrain_voxel_update_num[center_cell] = cfg_.voxel_point_update_thre;
+
+  TerrainAlgorithm::updateVoxels(cfg_, state_);
+  EXPECT_TRUE(state_.terrain_voxel_cloud[center_cell]->points.empty());
+}
+
+// 近点即使过期也保留（near 优先于 decay）
+TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.decay_time = 1.0;
+  cfg_.no_decay_distance = 3.0;
+  cfg_.voxel_point_update_thre = 1;
+
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0.0;
+  state_.laser_cloud_time = 10.0;
+  state_.system_init_time = 0.0;
+
+  int center_cell = TerrainConfig::terrainVoxelIndex(
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state_.terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI point;
+  point.x = 1.0F;
+  point.y = 0.0F;
+  point.z = 0.0F;
+  point.intensity = 0.0F;
+  cell.push_back(point);
+
+  state_.terrain_voxel_update_num[center_cell] = cfg_.voxel_point_update_thre;
+
+  TerrainAlgorithm::updateVoxels(cfg_, state_);
+  EXPECT_EQ(state_.terrain_voxel_cloud[center_cell]->points.size(), 1U);
+}
+
+// 清除模式下距离范围内的点被排除
+TEST_F(AlgorithmTest, KeepVoxelPoint_WithinClearingDistance_Excluded) {
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.decay_time = 999.0;
+  cfg_.no_decay_distance = 999.0;
+  cfg_.voxel_point_update_thre = 1;
+
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0.0;
+  state_.laser_cloud_time = 1.0;
+  state_.system_init_time = 0.0;
+  state_.clearing_cloud = true;
+  state_.clearing_distance = 2.0;
+
+  int center_cell = TerrainConfig::terrainVoxelIndex(
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state_.terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI point;
+  point.x = 1.0F;
+  point.y = 0.0F;
+  point.z = 0.0F;
+  point.intensity = 1.0F;
+  cell.push_back(point);
+
+  state_.terrain_voxel_update_num[center_cell] = cfg_.voxel_point_update_thre;
+
+  TerrainAlgorithm::updateVoxels(cfg_, state_);
+  EXPECT_TRUE(state_.terrain_voxel_cloud[center_cell]->points.empty());
+}
+
+// ── shouldPruneVoxel (via updateVoxels) ──
+
+// update_num 未达阈值且时间未到 → 不修剪
+TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
+  cfg_.voxel_point_update_thre = 100;
+  cfg_.voxel_time_update_thre = 10.0;
+  state_.laser_cloud_time = 1.0;
+  state_.system_init_time = 0.0;
+  state_.clearing_cloud = false;
+
+  int center_cell = TerrainConfig::terrainVoxelIndex(
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+  state_.terrain_voxel_update_num[center_cell] = 5;
+  state_.terrain_voxel_update_time[center_cell] = 0.0;
+
+  TerrainAlgorithm::updateVoxels(cfg_, state_);
+  EXPECT_NE(state_.terrain_voxel_cloud[center_cell], nullptr);
+}
+
+// clearing_cloud 模式触发强制修剪
+TEST_F(AlgorithmTest, ShouldPruneVoxel_ClearingCloud_Pruned) {
+  cfg_.voxel_point_update_thre = 100;
+  cfg_.voxel_time_update_thre = 10.0;
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.decay_time = 999.0;
+  cfg_.no_decay_distance = 999.0;
+  state_.laser_cloud_time = 1.0;
+  state_.system_init_time = 0.0;
+  state_.clearing_cloud = true;
+
+  int center_cell = TerrainConfig::terrainVoxelIndex(
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state_.terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI point;
+  point.x = 0.1F; point.y = 0.0F; point.z = 0.0F; point.intensity = 1.0F;
+  cell.push_back(point);
+  state_.terrain_voxel_update_num[center_cell] = 5;
+
+  TerrainAlgorithm::updateVoxels(cfg_, state_);
+  EXPECT_EQ(cell.points.size(), 0U);
+}
+
+// update_num 达到阈值 → 触发修剪
+TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
+  cfg_.voxel_point_update_thre = 10;
+  cfg_.voxel_time_update_thre = 999.0;
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.decay_time = 999.0;
+  cfg_.no_decay_distance = 999.0;
+  state_.laser_cloud_time = 1.0;
+  state_.system_init_time = 0.0;
+  state_.clearing_cloud = false;
+
+  int center_cell = TerrainConfig::terrainVoxelIndex(
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state_.terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI point;
+  point.x = 0.1F; point.y = 0.0F; point.z = 0.0F; point.intensity = 1.0F;
+  cell.push_back(point);
+  state_.terrain_voxel_update_num[center_cell] = cfg_.voxel_point_update_thre;
+
+  TerrainAlgorithm::updateVoxels(cfg_, state_);
+  EXPECT_EQ(cell.points.size(), 1U);
+}
