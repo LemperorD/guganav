@@ -235,6 +235,74 @@ TEST_F(AlgorithmTest,
   EXPECT_GT(total, 0);
 }
 
+// 传感器视角内的点触发动态障碍计数递增
+TEST_F(AlgorithmTest,
+       DetectDynamicObstacles_PointInVfov_IncrementsCellCounter) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.cos_vehicle_roll = 1;
+  state_.sin_vehicle_roll = 0;
+  state_.cos_vehicle_pitch = 1;
+  state_.sin_vehicle_pitch = 0;
+  state_.cos_vehicle_yaw = 1;
+  state_.sin_vehicle_yaw = 0;
+  state_.planar_voxel_dy_obs.fill(0);
+  state_.terrain_cloud->clear();
+  // Point at moderate distance, slightly elevated → within typical VFOV
+  state_.terrain_cloud->push_back({1.0F, 0.1F, 0.3F, 0});
+
+  cfg_.min_dy_obs_distance = 0.0;
+  cfg_.min_dy_obs_point_num = 3;
+  cfg_.min_dy_obs_angle = -1.0;      // below any realistic scan angle
+  cfg_.min_dy_obs_relative_z = -1.0;
+  cfg_.min_dy_obs_vfov = -0.5;       // radians, wide open
+  cfg_.max_dy_obs_vfov = 0.5;
+  cfg_.abs_dy_obs_relative_z_threshold = 0.01;  // tiny → rely on VFOV
+
+  TerrainAlgorithm::detectDynamicObstacles(cfg_, state_);
+
+  int total = 0;
+  for (int i = 0; i < TerrainConfig::PLANAR_VOXEL_NUM; i++) {
+    total += state_.planar_voxel_dy_obs[i];
+  }
+  EXPECT_GT(total, 0);
+}
+
+// 传感器视角外的点不触发动态障碍计数
+TEST_F(AlgorithmTest,
+       DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.cos_vehicle_roll = 1;
+  state_.sin_vehicle_roll = 0;
+  state_.cos_vehicle_pitch = 1;
+  state_.sin_vehicle_pitch = 0;
+  state_.cos_vehicle_yaw = 1;
+  state_.sin_vehicle_yaw = 0;
+  state_.planar_voxel_dy_obs.fill(0);
+  state_.terrain_cloud->clear();
+  // Point far away → scan angle will be very shallow, outside VFOV
+  state_.terrain_cloud->push_back({10.0F, 0.0F, 0.0F, 0});
+
+  cfg_.min_dy_obs_distance = 0.0;
+  cfg_.min_dy_obs_point_num = 3;
+  cfg_.min_dy_obs_angle = -1.0;
+  cfg_.min_dy_obs_relative_z = -1.0;
+  cfg_.min_dy_obs_vfov = 0.1;        // narrow VFOV
+  cfg_.max_dy_obs_vfov = 0.2;
+  cfg_.abs_dy_obs_relative_z_threshold = 0.0;  // off
+
+  TerrainAlgorithm::detectDynamicObstacles(cfg_, state_);
+
+  int total = 0;
+  for (int i = 0; i < TerrainConfig::PLANAR_VOXEL_NUM; i++) {
+    total += state_.planar_voxel_dy_obs[i];
+  }
+  EXPECT_EQ(total, 0);
+}
+
 // ── filterDynamicObstaclePoints ──
 // 高角度点（头顶悬挂物）清零对应 cell 的动态障碍计数
 TEST_F(AlgorithmTest,
