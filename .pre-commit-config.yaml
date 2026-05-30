@@ -1,0 +1,29 @@
+repos:
+  - repo: local
+    hooks:
+      - id: clang-format
+        name: clang-format
+        entry: clang-format --dry-run -Werror
+        language: system
+        types: [c, c++]
+        exclude: |
+          (?x)^(
+            src/guga_thirdparty/.*|
+            src/guga_sim/.*|
+            build/.*|
+            install/.*
+          )$
+
+      - id: test-terrain-analysis
+        name: test terrain_analysis
+        entry: scripts/test/test_terrain_analysis_coverage.sh
+        language: system
+        pass_filenames: false
+        files: ^src/guga_perception/terrain_analysis/.*$
+
+      - id: test-pid-controller
+        name: test pid controller
+        entry: scripts/pre-commit/run_pid_tests.sh
+        language: system
+        pass_filenames: false
+        files: ^src/guga_controller/pb_omni_pid_pursuit_controller/.*$
