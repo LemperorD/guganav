@@ -28,18 +28,18 @@ rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
                                             addNoDataObstacles
 ```
 
-| 阶段 | 职责 |
-|------|------|
-| `rolloverVoxels` | 车辆移动时滚动体素网格，维持以车辆为中心的滑动窗口 |
-| `voxelize` | 当前帧点云按空间位置分配到地形体素格子 |
-| `updateVoxels` | 逐个格子降采样 + 时间衰减 + 空间过滤 |
-| `extractTerrainCloud` | 提取车辆周边 11×11 格子的累积地形点 |
-| `estimateGround` | 点云膨胀到 planar voxel，为后续高度估算准备 |
-| `detectDynamicObstacles` | 用仰角 + 传感器 FOV 检测潜在动态障碍 |
-| `filterDynamicObstaclePoints` | 当前帧高角度点反向印证，清除头顶固定结构的误报 |
-| `computeElevation` | 对每个 planar voxel 估算地面高度（分位数或最小值） |
-| `computeHeightMap` | 计算每个点离地高度，生成输出点云 |
-| `addNoDataObstacles` | 为数据稀疏区域生成虚拟障碍物 |
+| 阶段                          | 职责                                               |
+| ----------------------------- | -------------------------------------------------- |
+| `rolloverVoxels`              | 车辆移动时滚动体素网格，维持以车辆为中心的滑动窗口 |
+| `voxelize`                    | 当前帧点云按空间位置分配到地形体素格子             |
+| `updateVoxels`                | 逐个格子降采样 + 时间衰减 + 空间过滤               |
+| `extractTerrainCloud`         | 提取车辆周边 11×11 格子的累积地形点                |
+| `estimateGround`              | 点云膨胀到 planar voxel，为后续高度估算准备        |
+| `detectDynamicObstacles`      | 用仰角 + 传感器 FOV 检测潜在动态障碍               |
+| `filterDynamicObstaclePoints` | 当前帧高角度点反向印证，清除头顶固定结构的误报     |
+| `computeElevation`            | 对每个 planar voxel 估算地面高度（分位数或最小值） |
+| `computeHeightMap`            | 计算每个点离地高度，生成输出点云                   |
+| `addNoDataObstacles`          | 为数据稀疏区域生成虚拟障碍物                       |
 
 ## 测试
 
@@ -48,60 +48,69 @@ rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
 scripts/test/test_terrain_analysis_coverage.sh
 ```
 
-| 输出 | 路径 |
-|------|------|
+| 输出            | 路径                                   |
+| --------------- | -------------------------------------- |
 | Html 覆盖率报告 | `build/terrain_analysis/coverage.html` |
-| lcov 信息 | `lcov.info` |
-| 测试日志 | `test_result.ans` |
+| lcov 信息       | `lcov.info`                            |
+| 测试日志        | `test_result.ans`                      |
 
 ## 网格参数
 
-| 网格 | 分辨率 | 尺寸 | 说明 |
-|------|--------|------|------|
-| Terrain voxel | 1.0m | 21×21 | 滑动窗口，累积多帧地形点 |
-| Planar voxel | 0.2m | 51×51 | 固定窗口，估算地面高度 |
+| 网格          | 分辨率 | 尺寸  | 说明                     |
+| ------------- | ------ | ----- | ------------------------ |
+| Terrain voxel | 1.0m   | 21×21 | 滑动窗口，累积多帧地形点 |
+| Planar voxel  | 0.2m   | 51×51 | 固定窗口，估算地面高度   |
 
 ## 输入
 
-| 节点 | Topic | 类型 | 来源包/节点 |
-|------|-------|------|-------------|
-| `terrainAnalysis` | `lidar_odometry` | `nav_msgs/Odometry` | `point_lio → loam_interface` |
-| `terrainAnalysis` | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
-| `terrainAnalysis` | `joy` | `sensor_msgs/Joy` | 调试用（手柄按钮） |
-| `terrainAnalysis` | `map_clearing` | `std_msgs/Float32` | 调试用（清除距离） |
-| `terrainAnalysisExt` | `lidar_odometry` | `nav_msgs/Odometry` | `point_lio → loam_interface` |
-| `terrainAnalysisExt` | `terrain_map` | `sensor_msgs/PointCloud2` | `terrainAnalysis` (本包) |
+| 节点                 | Topic             | 类型                      | 来源包/节点                  |
+| -------------------- | ----------------- | ------------------------- | ---------------------------- |
+| `terrainAnalysis`    | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
+| `terrainAnalysis`    | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
+| `terrainAnalysis`    | `joy`             | `sensor_msgs/Joy`         | 调试用（手柄按钮）           |
+| `terrainAnalysis`    | `map_clearing`    | `std_msgs/Float32`        | 调试用（清除距离）           |
+| `terrainAnalysisExt` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
+| `terrainAnalysisExt` | `terrain_map`     | `sensor_msgs/PointCloud2` | `terrainAnalysis` (本包)     |
 
 ## 输出
 
-| 节点 | Topic | 类型 | 坐标系 | 下游订阅者 |
-|------|-------|------|--------|-----------|
-| `terrainAnalysis` | `terrain_map` | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
-|  |  |  |  | `terrainAnalysisExt` (本包) |
+| 节点                 | Topic             | 类型                      | 坐标系 | 下游订阅者                                                  |
+| -------------------- | ----------------- | ------------------------- | ------ | ----------------------------------------------------------- |
+| `terrainAnalysis`    | `terrain_map`     | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` (intensity_voxel_layer, `pb_nav2_plugins`)  |
+|                      |                   |                           |        | `terrainAnalysisExt` (本包)                                 |
 | `terrainAnalysisExt` | `terrain_map_ext` | `sensor_msgs/PointCloud2` | `odom` | `global_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
-|  |  |  |  | `pointcloud_to_laserscan` (`guga_thirdparty`, 仅 SLAM 模式) |
+|                      |                   |                           |        | `pointcloud_to_laserscan` (`guga_thirdparty`, 仅 SLAM 模式) |
 
 ## 数据流
 
-### terrainAnalysis
-
 ```
-point_lio ──→ loam_interface ──→ (lidar_odometry)   ──→ terrainAnalysis ──→ (terrain_map) ──→ local_costmap
-                             ──→ (registered_scan)  ──→
-```
-
-### terrainAnalysisExt
-
-```
-point_lio ──→ loam_interface ──→ (lidar_odometry) ──→ terrainAnalysisExt ──→ (terrain_map_ext) ──→ global_costmap
-                                         (terrain_map) ──→                                     ──→ pointcloud_to_laserscan
-                                                                                                    ──→ (obstacle_scan) ──→ slam_toolbox (仅 SLAM)
+point_lio (cloud_registered, aft_mapped_to_init)
+  │
+loam_interface 
+  │
+  ├─(lidar_odometry)──── terrainAnalysisExt(terrain_map_ext)
+  │                                 │  
+  │                                 ├─── global_costmap
+  │                                 │    (intensity_voxel_layer, pb_nav2_plugins)
+  │                                 │
+  │                                 └─── pointcloud_to_laserscan
+  │                                      (obstacle_scan)
+  │                                             └─ slam_toolbox (map)
+  │                                                         (仅 SLAM 模式)
+  │
+  └─(lidar_odometry)──── terrainAnalysis(terrain_map)
+     (registered_scan)    │
+                          ├─── local_costmap
+                          │    (intensity_voxel_layer, pb_nav2_plugins)
+                          │
+                          └─── terrainAnalysisExt
+                               (terrain_map_ext)── (见上)
 ```
 
 ## 两个节点
 
-| | `terrainAnalysis` (`main.cpp`) | `terrainAnalysisExt` (`main_ext.cpp`) |
-|---|---|---|
-| 输入 | 原始激光点云 + 里程计 | `lidar_odometry` + `terrain_map` |
-| 参数默认 | Nav2 参数文件统一配置 | Nav2 参数文件统一配置 |
-| 用途 | 主地形分析，局部 costmap | 扩展节点，全局 costmap + SLAM 建图 |
+|          | `terrainAnalysis` (`main.cpp`) | `terrainAnalysisExt` (`main_ext.cpp`) |
+| -------- | ------------------------------ | ------------------------------------- |
+| 输入     | 原始激光点云 + 里程计          | `lidar_odometry` + `terrain_map`      |
+| 参数默认 | Nav2 参数文件统一配置          | Nav2 参数文件统一配置                 |
+| 用途     | 主地形分析，局部 costmap       | 扩展节点，全局 costmap + SLAM 建图    |
