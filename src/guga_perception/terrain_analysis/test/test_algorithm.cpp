@@ -310,3 +310,76 @@ TEST_F(AlgorithmTest,
 
   EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 0U);
 }
+
+// ── keepVoxelPoint boundary tests (via updateVoxels) ──
+
+namespace {
+  // Set up a single voxel cell with one point at the vehicle origin,
+  // then trigger update. Returns the point count retained in the cell.
+  int updateSinglePoint(TerrainConfig& cfg, TerrainState& state,
+                        double relative_z, double distance) {
+    cfg.min_relative_z = -1.5;
+    cfg.max_relative_z = 0.2;
+    cfg.distance_ratio_z = 0.2;
+    cfg.decay_time = 999.0;
+    cfg.no_decay_distance = 999.0;
+    cfg.voxel_point_update_thre = 1;
+
+    state.vehicle_x = 0;
+    state.vehicle_y = 0;
+    state.vehicle_z = 0.0;
+    state.clearing_cloud = false;
+    state.clearing_distance = 0.0;
+    state.laser_cloud_time = 1.0;
+    state.system_init_time = 0.0;
+
+    int center_cell = TerrainConfig::terrainVoxelIndex(
+        TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH,
+        TerrainConfig::TERRAIN_VOXEL_HALF_WIDTH);
+    auto& cell = *state.terrain_voxel_cloud[center_cell];
+    cell.clear();
+    pcl::PointXYZI point;
+    point.x = static_cast<float>(distance);
+    point.y = 0.0F;
+    point.z = static_cast<float>(relative_z);
+    point.intensity = 0.0F;
+    cell.push_back(point);
+
+    state.terrain_voxel_update_num[center_cell] = cfg.voxel_point_update_thre;
+
+    TerrainAlgorithm::updateVoxels(cfg, state);
+    return static_cast<int>(state.terrain_voxel_cloud[center_cell]->points.size());
+  }
+}
+
+// 略高于下限边界的点被保留
+TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
+  double z_margin = cfg_.distance_ratio_z * 1.0;  // = 0.2
+  double boundary = cfg_.min_relative_z - z_margin;  // = -1.7
+  int kept = updateSinglePoint(cfg_, state_, boundary + 0.01, 1.0);
+  EXPECT_EQ(kept, 1);
+}
+
+// 等于下限边界的点被排除
+TEST_F(AlgorithmTest, KeepVoxelPoint_AtLowerBoundary_Excluded) {
+  double z_margin = cfg_.distance_ratio_z * 1.0;
+  double boundary = cfg_.min_relative_z - z_margin;
+  int kept = updateSinglePoint(cfg_, state_, boundary, 1.0);
+  EXPECT_EQ(kept, 0);
+}
+
+// 等于上限边界的点被排除
+TEST_F(AlgorithmTest, KeepVoxelPoint_AtUpperBoundary_Excluded) {
+  double z_margin = cfg_.distance_ratio_z * 1.0;
+  double boundary = cfg_.max_relative_z + z_margin;  // = 0.4
+  int kept = updateSinglePoint(cfg_, state_, boundary, 1.0);
+  EXPECT_EQ(kept, 0);
+}
+
+// 略低于上限边界的点被保留
+TEST_F(AlgorithmTest, KeepVoxelPoint_BelowUpperBoundary_Kept) {
+  double z_margin = cfg_.distance_ratio_z * 1.0;
+  double boundary = cfg_.max_relative_z + z_margin;
+  int kept = updateSinglePoint(cfg_, state_, boundary - 0.01, 1.0);
+  EXPECT_EQ(kept, 1);
+}
