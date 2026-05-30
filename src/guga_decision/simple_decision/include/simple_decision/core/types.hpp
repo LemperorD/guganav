@@ -1,8 +1,7 @@
 #pragma once
 
-#include <chrono>
+#include <cmath>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -12,15 +11,15 @@ namespace simple_decision {
 
   /// Chassis movement mode
   enum class ChassisMode : uint8_t {
-    CHASSIS_FOLLOWED = 1,
-    LITTLE_TES = 2,
-    GO_HOME = 3,
+    CHASSIS_FOLLOWED,
+    LITTLE_TES,
+    GO_HOME,
   };
 
   enum class State : uint8_t {
-    DEFAULT = 1,
-    ATTACK = 2,
-    SUPPLY = 3,
+    DEFAULT,
+    ATTACK,
+    SUPPLY,
   };
 
   struct ContextConfig {
@@ -64,9 +63,9 @@ namespace simple_decision {
   };
 
   struct Pose2D {
-    double x;
-    double y;
-    double yaw;
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
   };
   struct Pose3D {
     Position position;
@@ -91,30 +90,44 @@ namespace simple_decision {
     uint16_t remaining_gold_coin = 0;
     bool is_hp_deduced = false;
 
-    static constexpr uint8_t ARMOR_HIT = 0u;
-    static constexpr uint8_t SYSTEM_OFFLINE = 1u;
-    static constexpr uint8_t OVER_SHOOT_SPEED = 2u;
-    static constexpr uint8_t OVER_HEAT = 3u;
-    static constexpr uint8_t OVER_POWER = 4u;
-    static constexpr uint8_t ARMOR_COLLISION = 5u;
+    static constexpr uint8_t ARMOR_HIT = 0U;
+    static constexpr uint8_t SYSTEM_OFFLINE = 1U;
+    static constexpr uint8_t OVER_SHOOT_SPEED = 2U;
+    static constexpr uint8_t OVER_HEAT = 3U;
+    static constexpr uint8_t OVER_POWER = 4U;
+    static constexpr uint8_t ARMOR_COLLISION = 5U;
   };
 
   struct GameStatus {
     uint8_t game_progress = 0;
     int32_t stage_remain_time = 0;
 
-    static constexpr uint8_t NOT_START = 0u;
-    static constexpr uint8_t PREPARATION = 1u;
-    static constexpr uint8_t SELF_CHECKING = 2u;
-    static constexpr uint8_t COUNT_DOWN = 3u;
-    static constexpr uint8_t RUNNING = 4u;
-    static constexpr uint8_t GAME_OVER = 5u;
+    static constexpr uint8_t NOT_START = 0U;
+    static constexpr uint8_t PREPARATION = 1U;
+    static constexpr uint8_t SELF_CHECKING = 2U;
+    static constexpr uint8_t COUNT_DOWN = 3U;
+    static constexpr uint8_t RUNNING = 4U;
+    static constexpr uint8_t GAME_OVER = 5U;
   };
 
   struct Stamp {
     int32_t sec;
     uint32_t nanosec;
   };
+
+  inline int64_t toFullNanos(int32_t sec, uint32_t nanosec) {
+    return (static_cast<int64_t>(sec) * 1'000'000'000LL) + nanosec;
+  }
+
+  inline Stamp toStamp(int64_t full_nanos) {
+    return {static_cast<int32_t>(full_nanos / 1'000'000'000LL),
+            static_cast<uint32_t>(full_nanos % 1'000'000'000LL)};
+  }
+
+  inline double distance3D(double x, double y, double z) {
+    return std::sqrt((x * x) + (y * y) + (z * z));
+  }
+
   struct Header {
     Stamp stamp;
     std::string frame_id;
@@ -139,26 +152,19 @@ namespace simple_decision {
   };
 
   struct Snapshot {
-    bool has_rs = false;
-    bool has_gs = false;
-    bool has_armors = false;
-    bool has_attack_goal{false};
     bool match_started = false;
     bool enemy_recent = false;
     bool attacked_recent = false;
     bool at_center{false};
     bool in_center_keep_spin{false};
     bool default_spin_latched{false};
+    bool needs_supply{false};
     bool enemy{false};
-    double last_attack_yaw{0.0};
-    RobotStatus rs;
-    Stamp match_start_time;
+    RobotStatus robotstatus;
+    Stamp match_start_time{0, 0};
     Armors armors;
     std::optional<Target> target_opt;
     State state{State::DEFAULT};
-    Stamp last_enemy_seen_{0, 0};
-    Stamp last_attacked_{0, 0};
-    Position last_attack_position{0.0, 0.0, 0.0};
   };
 
 }  // namespace simple_decision

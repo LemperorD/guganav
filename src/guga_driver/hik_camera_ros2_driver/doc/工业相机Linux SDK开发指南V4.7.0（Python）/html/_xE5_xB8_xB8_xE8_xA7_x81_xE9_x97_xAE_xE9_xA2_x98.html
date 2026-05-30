@@ -1,0 +1,363 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">常见问题</div> </div> </div><div> <ul>
+<li>
+<a href="#process">问题排查思路</a> </li>
+<li>
+<a href="#troubleshooting">常见问题及解决方法</a> <ul>
+<li>
+<a href="#Gige">GigE相机问题</a> </li>
+<li>
+<a href="#U3V">U3V相机问题</a> </li>
+</ul>
+</li>
+</ul>
+</div><div id="process"> <div class="mainparams"> <h2>一、问题排查思路</h2>
+</div></div><div id="process"><div class="mainparams"> </div> <div class="subparamswhite"> <ol>
+<li>
+基于SDK开发的程序异常，建议先运行客户端，查看相应功能是否正常。 </li>
+<li>
+如果客户端正常，但基于SDK开发的程序异常，需要重点排查二次开发的程序问题。 </li>
+<li>
+如果客户端也异常，请参考以下典型问题和解决方法。 </li>
+<li>
+若根据以上排查思路仍不能解决问题，请记录问题现象或图片、客户端版本号、库名称和库版本号，联系技术支持获取支持。 <dl class="section note"><dt>注解</dt><dd>客户端版本号、库名称和库版本号可从<b>客户端</b> &gt; <b>帮助</b> &gt; <b>关于</b>中获取。 </dd></dl>
+</li>
+</ol>
+</div> </div><div id="troubleshooting"> <div class="mainparams"> <h2>二、常见问题及解决方法</h2>
+</div></div><div id="troubleshooting"><div class="mainparams"> </div> <div class="subparamswhite" style="margin: 0 0 0 20px;"> <div class="mainparams" id="Gige"> <h3>1. GigE相机问题</h3>
+</div></div></div><div id="troubleshooting"><div class="subparamswhite" style="margin: 0 0 0 20px;"><div class="mainparams" id="Gige"> </div> <div class="subparamswhite" style="margin: 0 0 0 20px"> <ol>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>无法发现相机</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：防火墙可能阻断了设备通信数据，导致无法发现相机。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：关闭所有防火墙。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>打开相机失败</b></p>
+<ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机被其他进程连接。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：您可检查客户端内相机连接状态。若相机状态为被占用，关闭其他占用相机的程序，并确保相机处于无连接状态。<br />
+</p>
+<p class="interli"></p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机心跳时间过长，而程序上一次没有执行关闭设备或者销毁设备句柄接口，直接异常退出（在调试模式下常见），导致设备一直是占用状态。<br />
+</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：您需断电重启相机，或者等待相机心跳超时，从而释放权限。</p>
+<p class="interli"></p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机和工控机不在同一个网段，连接失败。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：您可修改相机IP，使相机IP和PC在同一个网段中。在客户端中，右键单击需修改IP的设备，单选<b>修改IP</b>，并修改至同一网段。</p>
+<dl class="section note"><dt>注解</dt><dd>查看和修改IP的详细操作步骤，请参见客户端用户手册。</dd></dl>
+</li>
+</ol>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>开始取流失败</b></p>
+<ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：工控机内存不足。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：在工控机中，检查系统内存和使用情况。若内存紧张， 在客户端中，进入<b>设置 -&gt; 缓存</b>，适当降低<b>取流缓存节点</b>的取值。<br />
+</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：Linux系统句柄资源不足。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：Linux下检查系统的句柄数量配置，扩大集成句柄数量限制，客户在终端中执行ulimit –n 65535。</p>
+<dl class="section attention"><dt>注意</dt><dd>此命令仅对当前终端生效； 若需要对所有终端生效，需要修改系统配置文件。</dd></dl>
+</li>
+</ol>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>调用SDK执行软触发命令时，软触发命令执行失败</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：设置触发源不是软触发。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：调用SDK时，在执行软触发命令时，需保证相机处于软触发模式以及触发源为软触发。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>相机不出图</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：相机配置异常，可能是配置了触发模式，但是未给相机触发信号。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查相机触发配置，例如是否开启触发模式、触发源配置是否正确。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>相机图像花屏/丢帧/多帧</b></p>
+<ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：带宽不足，丢包。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查带宽使用情况，避免多个相机使用1个网口，多个相机分别使用不同的网口，避免带宽使用率过高。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：网卡未开启巨帧，网络传输效率偏低。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查环境的MTU配置，调大修改MTU至9000。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：网络原因导致丢包，且您在客户端<b>设置 -&gt; 网络</b>中开启了自适应丢帧。开启后，当SDK检测到当前帧数据不完整时，会丢弃整帧。在网络存在堵塞等问题时，会导致持续无图。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：关闭自适应丢帧选项，检查带宽使用情况，优化网络。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：若您使用的为线阵相机，可能由于<b>PartialImageOutPutMode</b>节点配置为<b>PartialImageDiscard</b>（残帧丢弃）。设置为<b>PartialImageDiscard</b>后，若触发输出的图像高度不足，图像不完整，SDK将不完整的图像丢弃。 </p>
+<p class="interli"><b>解决方法</b>：检查相机<b>PartialImageOutPutMode</b>节点配置， 检查外部触发。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机配置了外部触发，但是外部触发信号数量异常，导致相机在收到信号后出图偏多或者偏少。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查相机触发配置及触发源。</p>
+<p class="interli"></p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：调用取流接口后，未及时释放资源，导致SDK缓存空间不足，引起相机发送图像无法存储，丢帧。 </p>
+<p class="interli"><b>解决方法</b>： </p><ul>
+<li>
+在调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86_xE4_xB8_x8E_xE6_xB8_xB2_xE6_x9F_x93.html#gae49be0fa21399bad340b974b5ea89f57" title="使用内部缓存获取一帧图片（与 MV_CC_Display() 不能同时使用）">MV_CC_GetImageBuffer()</a> 拿到图像后，您需及时调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86_xE4_xB8_x8E_xE6_xB8_xB2_xE6_x9F_x93.html#ga6b8f32c675cdec2a44c648ee76262e83" title="释放图像缓存(此接口用于释放不再使用的图像缓存，与 MV_CC_GetImageBuffer() 配套使用)">MV_CC_FreeImageBuffer()</a> 释放图像。 </li>
+<li>
+调用 MV_CC_SetImageNodeNum() 增大SDK缓冲区。 </li>
+</ul>
+<p class="endli"></p>
+</li>
+</ol>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b> <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86_xE4_xB8_x8E_xE6_xB8_xB2_xE6_x9F_x93.html#gae49be0fa21399bad340b974b5ea89f57" title="使用内部缓存获取一帧图片（与 MV_CC_Display() 不能同时使用）">MV_CC_GetImageBuffer()</a> 接口报错无数据</b></p>
+<ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机没有出图，SDK接口无法获取图像。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查相机配置，触发源等，确保相机出图。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机出图时间大于接口超时时间。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：调整超时时间（nMsec）的值，确保调整后的超时时间大于相机出图时间。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：上层获取的图像数据没有及时释放，SDK内部无空间可用。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86_xE4_xB8_x8E_xE6_xB8_xB2_xE6_x9F_x93.html#gae49be0fa21399bad340b974b5ea89f57" title="使用内部缓存获取一帧图片（与 MV_CC_Display() 不能同时使用）">MV_CC_GetImageBuffer()</a> 拿到的图像，及时调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86_xE4_xB8_x8E_xE6_xB8_xB2_xE6_x9F_x93.html#ga6b8f32c675cdec2a44c648ee76262e83" title="释放图像缓存(此接口用于释放不再使用的图像缓存，与 MV_CC_GetImageBuffer() 配套使用)">MV_CC_FreeImageBuffer()</a> 释放。<br />
+</p>
+<p class="endli"></p>
+</li>
+</ol>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>HB解码 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gaf610ed1745d1d26cdd8123e7759bebba" title="无损解码">MV_CC_HBDecode()</a> 接口报错</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：HB图像数据不完整（SDK收到图像数据不完整），解码库对异常数据解码进行解码，失败。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gaf610ed1745d1d26cdd8123e7759bebba" title="无损解码">MV_CC_HBDecode()</a> 前，对当前帧信息中的丢包进行校验（ <a class="el" href="class_camera_params__header_1_1_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x.html">MV_FRAME_OUT_INFO_EX</a> 中nLostPacket字段），如果丢包，则优化网络。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>相机异常掉线</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：网络阻塞，网卡休眠或者网口连接处松动。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查网络带宽，设置操作系统的电源选项，使计算机不要进入睡眠状态；确认下网口是否松动，检查带宽使用情况。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>编译报ld:-lMvCameraControl找不到libMvCameraControl库</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：安装完成后，当前控制台中会出现环境变量不生效的情况。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：排查环境变量是否生效，Lib库是否存在。 </p><ol type="a">
+<li>
+确认环境变量中关于SDK的环境变量都生效了 <div class="fragment"><div class="line">echo $MVCAM_COMMON_RUNENV </div></div><!-- fragment -->  </li>
+<li>
+若执行该命令后，未打印相应的SDK路径，执行如下命令： <div class="fragment"><div class="line">cd （客户端安装路径）</div><div class="line">source set_env_path.sh</div></div><!-- fragment -->  </li>
+<li>
+若正常打印相应的SDK路径，进入lib库路径，检查库是否存在。 <div class="fragment"><div class="line">cd /opt/MVS/lib/64</div><div class="line">ls -lh</div></div><!-- fragment -->  </li>
+</ol>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>编译报ld:-lMvCameraControl 不兼容的符号（not compatable symbol）</b></p>
+<p class="interli"></p>
+<p class="interli"><b>问题原因</b>：SDK版本与硬件版本不匹配，或者编译链不支持。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>： </p><ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli">确认当前的硬件环境和SDK版本。</p>
+<div class="fragment"><div class="line">uname -a</div><div class="line">cd /opt/MVS/lib/64</div><div class="line">readelf -h libMvCameraControl.so</div></div><!-- fragment --> <p class="interli">查看SDK的头部信息和系统信息是否匹配。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli">检查gcc版本。在控制台输入<b>gcc -v</b>，获取gcc版本。若低于最低版本要求，您可升级gcc版本。详情可咨询技术支持。</p>
+<p class="interli"></p>
+<p class="interli">各个SDK的gcc最低版本如下表所示：</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">SDK版本  </th><th class="markdownTableHeadCenter">gcc最低版本   </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">x86_64  </td><td class="markdownTableBodyCenter">4.8.5   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">i386  </td><td class="markdownTableBodyCenter">4.4.7   </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">armhf  </td><td class="markdownTableBodyCenter">4.8.2   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">aarch64  </td><td class="markdownTableBodyCenter">4.9.4   </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">arm-none  </td><td class="markdownTableBodyCenter">4.1.1   </td></tr>
+</table>
+</li>
+</ol>
+<p class="endli"></p>
+</li>
+</ol>
+</div></div></div><div id="troubleshooting"><div class="subparamswhite" style="margin: 0 0 0 20px;"> <div class="mainparams" id="U3V"> <h3>2. U3V相机问题</h3>
+</div></div></div><div id="troubleshooting"><div class="subparamswhite" style="margin: 0 0 0 20px;"><div class="mainparams" id="U3V"> </div> <div class="subparamswhite" style="margin: 0 0 0 20px"> <ol>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>打开相机失败</b></p>
+<ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机驱动未正确安装，或者被识别成其他厂商驱动。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查驱动是否安装正确。您可在控制台输入“lsusb”，并在列表中查看对应设备。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：设备通过USB2.0连接线和（或）端口连接。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查USB接线和接口，确保连接至3.0接口。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：相机被其他进程连接。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：您可检查客户端内相机连接状态。若相机状态为被占用，关闭其他占用相机的程序，并确保相机处于无连接状态。</p>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：Linux环境中libusb库版本冲突，符号异常。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：用ldd libMvUsb3vTL.so查看当前U3V依赖的libusb路径。</p>
+<p class="endli"></p>
+</li>
+</ol>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>取流异常/丢帧/帧号重置</b></p>
+<ol type="a">
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：USB接口带宽不足，导致丢数据。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>： </p><ul>
+<li>
+在客户端中，右键设备，单击<b>U3V传输配置</b>，调节<b>传输包大小</b>。 </li>
+<li>
+Linux可以使用USB脚本调节USB接口的缓存，调节图像分辨率、帧率。 </li>
+</ul>
+<p class="endli"></p>
+</li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>问题原因</b>：存在EMC干扰，导致流链路数据异常，流链路重置，帧号重置。</p>
+<p class="interli"></p>
+<p class="interli"><b>解决方法</b>：检查设备环境，减少静电；增加磁环提高抗干扰能力。</p>
+<p class="endli"></p>
+</li>
+</ol>
+</li>
+</ol>
+</div> </div> </div> </div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+</body>
+</html>

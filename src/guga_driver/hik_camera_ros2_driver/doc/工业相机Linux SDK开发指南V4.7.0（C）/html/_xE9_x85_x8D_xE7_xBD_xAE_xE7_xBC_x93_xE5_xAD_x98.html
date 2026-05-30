@@ -1,0 +1,104 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html"><span>环境配置</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">配置缓存</div> </div> </div> <div id="shortdesc"> <br />
+ </div><div id="shortdesc">SDK支持如下两种缓存配置的方式。您可按需选择。</div><div id="shortdesc"> <ul>
+<li>
+<a href="#internal">SDK内部分配缓存</a>：SDK内部主动分配图像缓存，用于获取图像数据。 </li>
+<li>
+<a href="#external">外部注册缓存</a>：您需自行分配多个缓存，之后通过SDK接口将分配的缓存注册到SDK内部。SDK使用您注册的缓存获取图像数据。 </li>
+</ul>
+<dl class="section note"><dt>注解</dt><dd>外部注册缓存需要主动调用接口注册，默认使用SDK内部缓存。</dd></dl>
+<div> <div id="internal"> <a class="anchor" id="配置缓存internal"></a> <div class="mainparams"> <h2>SDK内部分配缓存</h2>
+</div></div></div></div><div id="shortdesc"><div><div id="internal"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div><div id="shortdesc"><div><div id="internal"><div class="subparamswhite">您可通过 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga2088ec54d617eb629412729e0241067d" title="设置SDK内部图像缓存节点个数，大于等于1，在抓图前调用">MV_CC_SetImageNodeNum()</a> 设置SDK内部图像缓存节点个数。未设置缓存节点个数时，SDK使用默认的缓存个数。</div></div></div></div><div id="shortdesc"><div><div id="internal"><div class="subparamswhite"> <dl class="section note"><dt>注解</dt><dd><a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga2088ec54d617eb629412729e0241067d" title="设置SDK内部图像缓存节点个数，大于等于1，在抓图前调用">MV_CC_SetImageNodeNum()</a> 需要在 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 之前调用。</dd></dl>
+</div></div></div></div><div id="shortdesc"><div><div id="internal"><div class="subparamswhite"> </div></div></div></div><div id="shortdesc"><div><div id="internal"><div class="subparamswhite">如下代码演示了使用内部缓存获取图像数据的过程。</div></div></div></div><div id="shortdesc"><div><div id="internal"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">/*设置缓存节点个数（可选）*/</span></div><div class="line">nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga2088ec54d617eb629412729e0241067d">MV_CC_SetImageNodeNum</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>, 5);</div><div class="line">Check(nRet);</div><div class="line"></div><div class="line"><span class="comment">/*开始取流*/</span></div><div class="line">nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69">MV_CC_StartGrabbing</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>);</div><div class="line">Check(nRet);</div></div><!-- fragment --> </div> </div></div></div><div id="shortdesc"><div> <div id="external"> <a class="anchor" id="配置缓存external"></a> <div class="mainparams"> <h2>外部注册缓存</h2>
+</div></div></div></div><div id="shortdesc"><div><div id="external"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite">外部注册缓存是指您自行分配和释放图像缓存。</div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite"> </div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite">外部注册缓存的基本步骤如下：</div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite"> <ol>
+<li>
+调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gac5030eb8498bb2baa031c6b6e8d03406" title="获取设备payload大小（payload包含图像数据和Chunk数据）和内存对其方式，用于SDK外部注册缓存时，应用层分配足够的缓存及正确的内存对齐方式">MV_CC_GetPayloadSize()</a> 获取足够的缓存大小及正确的内存对齐方式。 <dl class="section note"><dt>注解</dt><dd>在您修改图像相关参数（例如修改图像宽度、高度和像素格式等）后，您需重新调用该接口，重新获取缓存大小。  </dd></dl>
+</li>
+<li>
+调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga7c45a21a04f57d3543fddb1395cec980" title="分配对齐内存">MV_CC_AllocAlignedBuffer()</a> 分配内存。 </li>
+<li>
+调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae81b58dd99ca7d224fec48e6fc425121" title="将应用程序分配缓存注册到SDK内部，供SDK使用">MV_CC_RegisterBuffer()</a> 将分配好的内存注册给SDK。 </li>
+<li>
+调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 开始采集图像。 </li>
+</ol>
+</div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite"> </div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite">结束采集后，您需取消已注册的缓存。步骤如下：</div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite"> <ol>
+<li>
+调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga9dbe5d78b2c6101f65645ad336d9ee7a" title="外部内存取消SDK内部注册">MV_CC_UnRegisterBuffer()</a> 取消已经注册的缓存。 </li>
+<li>
+调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga0496f83e0313df55c5e901a77324038a" title="对齐内存释放">MV_CC_FreeAlignedBuffer()</a> 释放缓存 <dl class="section note"><dt>注解</dt><dd><ul>
+<li><a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 前必须注册外部缓存，否则按照内部缓存取图。 <br />
+ </li>
+<li>支持动态缓存注册，在 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 开始采集后，支持多次调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae81b58dd99ca7d224fec48e6fc425121" title="将应用程序分配缓存注册到SDK内部，供SDK使用">MV_CC_RegisterBuffer()</a> 注册缓存和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga9dbe5d78b2c6101f65645ad336d9ee7a" title="外部内存取消SDK内部注册">MV_CC_UnRegisterBuffer()</a> 取消注册。 <br />
+ </li>
+<li>注册的缓存可用于主动取图和回调取图。 <br />
+ </li>
+</ul>
+</dd></dl>
+</li>
+</ol>
+</div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite"> <br />
+ <img src="MVCC_ExternalBuffer.png" width="600" alt="使用外部缓存的过程图示" class="inline"/>
+ <br />
+ <div class="fragment"><div class="line"><span class="comment">// ch:获取当前配置情况下图像的负载信息 </span></div><div class="line">nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gac5030eb8498bb2baa031c6b6e8d03406">MV_CC_GetPayloadSize</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>, &amp;nBufLen, &amp;nAlignment);</div><div class="line">Check(nRet);</div><div class="line"></div><div class="line"><span class="keywordflow">for</span> (<span class="keywordtype">int</span> k = 0; k &lt; IMAGE_NODE; k++)</div><div class="line">{</div><div class="line">    <span class="comment">// ch:用户分配的内存</span></div><div class="line">    pBufferList[k] = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga7c45a21a04f57d3543fddb1395cec980">MV_CC_AllocAlignedBuffer</a>(nBufLen, nAlignment);</div><div class="line">    <span class="keywordflow">if</span> (NULL == pBufferList[k])</div><div class="line">    {</div><div class="line">        nRet = <a class="code" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html#ga2636578dc5c2f4b830e78f42c3d168bb">MV_E_RESOURCE</a>;</div><div class="line">        <span class="keywordflow">break</span>;</div><div class="line">    }</div><div class="line"></div><div class="line">    <span class="comment">// ch:用户分配的内存注册到SDK中</span></div><div class="line">    nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae81b58dd99ca7d224fec48e6fc425121">MV_CC_RegisterBuffer</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>, pBufferList[k], nBufLen, NULL);</div><div class="line">    <span class="keywordflow">if</span> (<a class="code" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html#gacc4f15d534603b339f751d8b2d569305">MV_OK</a> != nRet)</div><div class="line">    {</div><div class="line">        <span class="keywordflow">break</span>;</div><div class="line">    }</div><div class="line">    </div><div class="line">}</div><div class="line">Check(nRet);</div><div class="line"></div><div class="line"><span class="comment">/*开始取流*/</span></div><div class="line">nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69">MV_CC_StartGrabbing</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>);</div><div class="line">Check(nRet);</div><div class="line"></div><div class="line"><span class="comment">//获取图像</span></div><div class="line"><span class="comment">//do something</span></div><div class="line"></div><div class="line"><span class="comment">// ch:停止取流 | en:Stop grab image</span></div><div class="line">nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae5d7f4ae46a53851f104e26fa449ab06">MV_CC_StopGrabbing</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>);</div><div class="line">Check(nRet);</div><div class="line"></div><div class="line"><span class="keywordflow">for</span> (<span class="keywordtype">int</span> k = 0; k &lt; IMAGE_NODE; k++)</div><div class="line">{</div><div class="line">    <span class="comment">// ch:取消SDK中注册的外部缓存</span></div><div class="line">    nRet = <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga9dbe5d78b2c6101f65645ad336d9ee7a">MV_CC_UnRegisterBuffer</a>(<a class="code" href="_image_save_8cpp.html#a81011b79683fab64ce3aff71114f8fdd">handle</a>, pBufferList[k]);</div><div class="line">    <span class="keywordflow">if</span> (<a class="code" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html#gacc4f15d534603b339f751d8b2d569305">MV_OK</a> != nRet)</div><div class="line">    {</div><div class="line">        <span class="keywordflow">break</span>;</div><div class="line">    }</div><div class="line">}</div><div class="line">Check(nRet);</div><div class="line"></div><div class="line"><span class="comment">// ch:释放用户分配的内存</span></div><div class="line"><span class="keywordflow">for</span> (<span class="keywordtype">int</span> k = 0; k &lt; IMAGE_NODE; k++)</div><div class="line">{</div><div class="line">    <a class="code" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga0496f83e0313df55c5e901a77324038a">MV_CC_FreeAlignedBuffer</a>(pBufferList[k]);</div><div class="line">    pBufferList[k] = NULL;</div><div class="line">}</div></div><!-- fragment --></div></div></div></div><div id="shortdesc"><div><div id="external"><div class="subparamswhite"> </div> </div></div></div><div id="shortdesc"><div> <div> <br />
+ <br />
+ <br />
+ <table width="60%">
+<tr>
+<td>上一篇： <a class="el" href="_xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html">事件及异常</a> </td><td>下一篇： <a class="el" href="_xE9_x87_x87_xE9_x9B_x86_xE5_x9B_xBE_xE5_x83_x8F.html">采集图像</a>  </td></tr>
+</table>
+</div> </div> </div></div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+<script>
+	// 当前选中的菜单
+	var currentMenuItem = document.querySelector('.tablist > li.current > a')
+	if (currentMenuItem) { // 子菜单情况
+	  window.parent.postMessage({
+		navHref: currentMenuItem.href
+	  }, '*')
+	} else {
+	  window.parent.postMessage({
+		url: window.location.href
+	  }, '*')
+	}
+  </script>
+</body>
+</html>
