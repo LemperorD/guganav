@@ -397,6 +397,126 @@ TEST_F(AlgorithmTest,
   EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 0U);
 }
 
+// ── estimateGround ──
+
+// 栅格边缘点触发射线邻居越界检查，不崩溃
+TEST_F(AlgorithmTest, EstimateGround_EdgePoint_HandlesOobNeighbors) {
+  constexpr double SZ = 0.2;
+  constexpr int HW = 25;  // PLANAR_VOXEL_HALF_WIDTH = (51-1)/2
+  double edge = SZ * (25 - 1);  // ~4.8m, column=49, delta_col+1=50 in bounds
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.terrain_cloud->clear();
+  pcl::PointXYZI pt;
+  pt.x = static_cast<float>(edge);
+  pt.y = 0;
+  pt.z = 0;
+  pt.intensity = 0;
+  state_.terrain_cloud->push_back(pt);
+
+  TerrainAlgorithm::estimateGround(cfg_, state_);
+  // No crash = pass; point Z=0 is within min/max relative_z range
+  EXPECT_TRUE(true);
+}
+
+// ── computeHeightMap ──
+
+// Z 超出范围的点被过滤
+TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
+  state_.vehicle_x = 0; state_.vehicle_y = 0; state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0);
+  state_.planar_voxel_dy_obs.fill(0);
+  for (auto& e : state_.planar_point_elev) e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  cfg_.min_block_point_num = 5;
+  cfg_.vehicle_height = 1.0;
+  cfg_.consider_drop = false;
+  cfg_.check_terrain_connectivity = false;
+
+  // Point at z=2.0 exceeds max_relative_z (0.2)
+  pcl::PointXYZI pt; pt.x = 0.5F; pt.y = 0; pt.z = 2.0F; pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  TerrainAlgorithm::computeHeightMap(cfg_, state_);
+  EXPECT_TRUE(state_.terrain_cloud_elev->points.empty());
+}
+
+// consider_drop 开启时高度取绝对值，负高度也被接受
+TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
+  state_.vehicle_x = 0; state_.vehicle_y = 0; state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0.3);  // ground at +0.3, point at z=0 → -0.3m
+  state_.planar_voxel_dy_obs.fill(0);
+  for (auto& e : state_.planar_point_elev) e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  cfg_.min_block_point_num = 5;
+  cfg_.vehicle_height = 1.0;
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.consider_drop = true;
+  cfg_.check_terrain_connectivity = false;
+  cfg_.clear_dy_obs = false;
+
+  pcl::PointXYZI pt; pt.x = 0.5F; pt.y = 0; pt.z = 0.0F; pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  TerrainAlgorithm::computeHeightMap(cfg_, state_);
+  EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 1U);
+  // height = abs(0 - 0.3) = 0.3 < 1.0 → accepted
+}
+
+// 高度超过 vehicle_height 的点被过滤
+TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
+  state_.vehicle_x = 0; state_.vehicle_y = 0; state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0);
+  state_.planar_voxel_dy_obs.fill(0);
+  for (auto& e : state_.planar_point_elev) e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  cfg_.min_block_point_num = 5;
+  cfg_.vehicle_height = 0.1;
+  cfg_.min_relative_z = -10.0;
+  cfg_.max_relative_z = 10.0;
+  cfg_.consider_drop = false;
+  cfg_.check_terrain_connectivity = false;
+  cfg_.clear_dy_obs = false;
+
+  pcl::PointXYZI pt; pt.x = 0.5F; pt.y = 0; pt.z = 0.5F; pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  TerrainAlgorithm::computeHeightMap(cfg_, state_);
+  // height = 0.5 - 0 = 0.5 >= 0.1 → filtered
+  EXPECT_TRUE(state_.terrain_cloud_elev->points.empty());
+}
+
+// ── checkTerrainConnectivity ──
+
+// 高度差超过 ceiling_filter_threshold 标记为天花板
+TEST_F(AlgorithmTest, CheckTerrainConnectivity_CeilingMarked) {
+  state_.planar_voxel_connectivity.fill(0);
+  // center: populate with valid ground
+  size_t center = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  state_.planar_point_elev[center] = {0.0, 0.1, 0.2};
+  state_.planar_voxel_elev[center] = 0.0;
+
+  // neighbor: very high → ceiling
+  size_t neighbor = TerrainConfig::planarVoxelIndex(
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH + 1,
+      TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
+  state_.planar_point_elev[neighbor] = {3.0, 3.1, 3.2};
+  state_.planar_voxel_elev[neighbor] = 3.0;
+
+  cfg_.ceiling_filter_threshold = 2.0;
+  cfg_.terrain_connectivity_threshold = 0.5;
+
+  TerrainAlgorithm::checkTerrainConnectivity(cfg_, state_);
+  EXPECT_EQ(state_.planar_voxel_connectivity[neighbor], -1);
+}
+
 // ── keepVoxelPoint boundary tests (via updateVoxels) ──
 
 namespace {
