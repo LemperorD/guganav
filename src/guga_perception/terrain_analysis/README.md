@@ -83,28 +83,19 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ## 数据流
 
+### terrainAnalysis
+
 ```
-point_lio (cloud_registered, aft_mapped_to_init)
-  │
-loam_interface (lidar_odometry, registered_scan)
-  │
-  ├─(lidar_odometry)──── terrainAnalysisExt
-  │                      │  (terrain_map_ext)
-  │                      ├─(terrain_map_ext)── global_costmap
-  │                      │  (intensity_voxel_layer, pb_nav2_plugins)
-  │                      │
-  │                      └─(terrain_map_ext)── pointcloud_to_laserscan
-  │                         (obstacle_scan)
-  │                           └─ slam_toolbox (map)
-  │                               (仅 SLAM 模式)
-  │
-  └─(lidar_odometry)──── terrainAnalysis
-     (registered_scan)   (terrain_map)
-                          ├─(terrain_map)── local_costmap
-                          │  (intensity_voxel_layer, pb_nav2_plugins)
-                          │
-                          └─(terrain_map)── terrainAnalysisExt
-                             (terrain_map_ext)── ...
+point_lio ──→ loam_interface ──→ (lidar_odometry)   ──→ terrainAnalysis ──→ (terrain_map) ──→ local_costmap
+                             ──→ (registered_scan)  ──→
+```
+
+### terrainAnalysisExt
+
+```
+point_lio ──→ loam_interface ──→ (lidar_odometry) ──→ terrainAnalysisExt ──→ (terrain_map_ext) ──→ global_costmap
+                                         (terrain_map) ──→                                     ──→ pointcloud_to_laserscan
+                                                                                                    ──→ (obstacle_scan) ──→ slam_toolbox (仅 SLAM)
 ```
 
 ## 两个节点
