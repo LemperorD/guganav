@@ -17,6 +17,9 @@
 #include "pcl_ros/transforms.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 namespace sensor_scan_generation
 {
 
@@ -26,10 +29,16 @@ SensorScanGenerationNode::SensorScanGenerationNode(const rclcpp::NodeOptions & o
   this->declare_parameter<std::string>("lidar_frame", "");
   this->declare_parameter<std::string>("base_frame", "");
   this->declare_parameter<std::string>("robot_base_frame", "");
+  this->declare_parameter<double>("min_odometry_dt", 1e-3);
+  this->declare_parameter<double>("max_linear_velocity", 10.0);
+  this->declare_parameter<double>("max_angular_velocity", 20.0);
 
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("base_frame", base_frame_);
   this->get_parameter("robot_base_frame", robot_base_frame_);
+  this->get_parameter("min_odometry_dt", min_odometry_dt_);
+  this->get_parameter("max_linear_velocity", max_linear_velocity_);
+  this->get_parameter("max_angular_velocity", max_angular_velocity_);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -127,31 +136,45 @@ void SensorScanGenerationNode::publishOdometry(
   out.pose.pose.position.z = origin.z();
   out.pose.pose.orientation = tf2::toMsg(transform.getRotation());
 
-  static tf2::Transform previous_transform;
-  static auto previous_time = std::chrono::steady_clock::now();
-  const auto current_time = std::chrono::steady_clock::now();
+  if (has_previous_odometry_) {
+    const double dt = (stamp - previous_odometry_stamp_).seconds();
+    if (dt > min_odometry_dt_) {
+      const auto linear_velocity =
+        (transform.getOrigin() - previous_odometry_transform_.getOrigin()) / dt;
 
-  const double dt =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time).count() *
-    1e-9;
+      tf2::Quaternion q_diff =
+        transform.getRotation() * previous_odometry_transform_.getRotation().inverse();
+      q_diff.normalize();
+      const double angle = std::remainder(q_diff.getAngle(), 2.0 * M_PI);
+      const auto angular_velocity = q_diff.getAxis() * angle / dt;
 
-  if (dt > 0) {
-    const auto linear_velocity = (transform.getOrigin() - previous_transform.getOrigin()) / dt;
-
-    const tf2::Quaternion q_diff =
-      transform.getRotation() * previous_transform.getRotation().inverse();
-    const auto angular_velocity = q_diff.getAxis() * q_diff.getAngle() / dt;
-
-    out.twist.twist.linear.x = linear_velocity.x();
-    out.twist.twist.linear.y = linear_velocity.y();
-    out.twist.twist.linear.z = linear_velocity.z();
-    out.twist.twist.angular.x = angular_velocity.x();
-    out.twist.twist.angular.y = angular_velocity.y();
-    out.twist.twist.angular.z = angular_velocity.z();
+      const double linear_speed = linear_velocity.length();
+      const double angular_speed = angular_velocity.length();
+      if (
+        std::isfinite(linear_speed) && std::isfinite(angular_speed) &&
+        linear_speed <= max_linear_velocity_ && angular_speed <= max_angular_velocity_) {
+        out.twist.twist.linear.x = linear_velocity.x();
+        out.twist.twist.linear.y = linear_velocity.y();
+        out.twist.twist.linear.z = linear_velocity.z();
+        out.twist.twist.angular.x = angular_velocity.x();
+        out.twist.twist.angular.y = angular_velocity.y();
+        out.twist.twist.angular.z = angular_velocity.z();
+      } else {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "Discard odometry twist spike: dt=%.6f, linear=%.3f, angular=%.3f",
+          dt, linear_speed, angular_speed);
+      }
+    } else {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "Skip odometry twist update because dt is too small or non-positive: %.6f", dt);
+    }
   }
 
-  previous_transform = transform;
-  previous_time = current_time;
+  previous_odometry_transform_ = transform;
+  previous_odometry_stamp_ = stamp;
+  has_previous_odometry_ = true;
 
   pub_chassis_odometry_->publish(out);
 }

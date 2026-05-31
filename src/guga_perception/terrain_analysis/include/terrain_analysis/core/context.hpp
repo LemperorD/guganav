@@ -170,7 +170,8 @@ public:
                     double timestamp_sec);
   void onJoystick(bool button5);
   void onClearing(double distance_clearing);
-  void onLocalTerrainCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud);
+  void onLocalTerrainCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
+                           double timestamp_sec);
 
   TerrainConfig cfg;
   TerrainState state;

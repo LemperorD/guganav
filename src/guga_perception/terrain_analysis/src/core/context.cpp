@@ -98,7 +98,13 @@ void TerrainAnalysisContext::onClearing(double distance_clearing) {
 }
 
 void TerrainAnalysisContext::onLocalTerrainCloud(
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) {
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, double timestamp_sec) {
+  state.laser_cloud_time = timestamp_sec;
+  if (!state.system_inited) {
+    state.system_init_time = state.laser_cloud_time;
+    state.system_inited = true;
+  }
+
   state.terrain_cloud_local->clear();
   *state.terrain_cloud_local = *cloud;
   state.new_laser_cloud = true;
