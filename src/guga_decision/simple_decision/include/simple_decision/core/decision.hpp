@@ -1,23 +1,20 @@
 #pragma once
 
-#include "simple_decision/core/environment_context.hpp"
 #include "simple_decision/core/types.hpp"
 
 namespace simple_decision {
   class Decision {
   public:
     explicit Decision(const ContextConfig& context_config);
-    DecisionAction computeAction(const Snapshot& snapshot) const;
-    bool isStatusRecovered(const RobotStatus& rs) const;
-    bool isStatusBad(const RobotStatus& rs) const;
-    bool buildAttackGoal(Snapshot& snapshot, const Armors& armors,
-                         const std::optional<Target>& target_opt) const;
+    [[nodiscard]] DecisionAction computeAction(const Snapshot& snapshot) const;
+    [[nodiscard]] static std::optional<Pose2D> findAttackPosition(
+        const Armors& armors, const std::optional<Target>& target_opt);
 
   private:
-    DecisionAction supplyAction() const;
-    DecisionAction attackAction(const Snapshot& s) const;
-    DecisionAction defaultAction(const Snapshot& s) const;
+    [[nodiscard]] DecisionAction supplyAction() const;
+    [[nodiscard]] DecisionAction attackAction(const Snapshot& s) const;
+    [[nodiscard]] DecisionAction defaultAction(const Snapshot& s) const;
 
-    const ContextConfig config;
+    ContextConfig config_;
   };
 }  // namespace simple_decision

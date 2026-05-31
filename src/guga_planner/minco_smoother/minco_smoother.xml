@@ -1,0 +1,7 @@
+<class_libraries>
+  <library path="minco_smoother">
+    <class name="minco_smoother/MincoSmoother" type="minco_smoother::MincoSmoother" base_class_type="nav2_core::Smoother">
+      <description>Increases smoothness and distance from obstacles of a path using MINCO optimization</description>
+    </class>
+  </library>
+</class_libraries>

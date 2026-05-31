@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        html,body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        ul, li {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .doc-root {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        .doc-root .doc-top {
+            height: 57px;
+            background: url('./html/titleleft.png');
+            background-color: rgb(102, 102, 102);
+        }
+        .doc-root .doc-bottom {
+            display: flex;
+            height: calc(100% - 57px);
+        }
+        .doc-content {
+            width: calc(100% - 240px);
+        }
+        .doc-content iframe {
+            width: 100%;
+            height: 100%;
+        }
+        #doc-nav-box {
+            height: 100%;
+            width: 15%;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow: auto;
+            border: 1px solid #CCC;
+        }
+        #doc-nav {
+            min-width: 100%;
+            width: fit-content;
+            box-sizing: border-box;
+        }
+        #doc-nav li {
+            line-height: 40px;
+            border-bottom: 1px solid #CCC;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #doc-nav > li:first-child {
+            border-top: 1px solid #ccc;
+        }
+        #doc-nav li:not(.has-children[expend="true"]):hover,
+        #doc-nav li.expend,
+        #doc-nav li[actived="true"] {
+            background-color: #EDEDED;
+        }
+        #doc-nav li > .nav-title {
+            display: inline-block;
+            vertical-align: middle;
+            /* overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap; */
+        }
+        #doc-nav li.z-index-0 > .nav-title {
+            padding-left: 20px;
+            width: calc(100% - 21px);
+        }
+        #doc-nav li.z-index-1 > .nav-title {
+            padding-left: 40px;
+            width: calc(100% - 41px);
+        }
+        #doc-nav li.z-index-2 > .nav-title {
+            padding-left: 60px;
+            width: calc(100% - 61px);
+        }
+        #doc-nav li.z-index-3 > .nav-title {
+            padding-left: 80px;
+            width: calc(100% - 81px);
+        }
+        #doc-nav li.z-index-3 > .nav-title {
+            padding-left: 100px;
+            width: calc(100% - 101px);
+        }
+
+        #doc-nav .doc-nav__li-ul {
+            border-top: 1px solid #ccc;
+            display: none;
+        }
+        #doc-nav .doc-nav__li-ul > li:last-child {
+            border-bottom: none !important;
+        }
+
+        #doc-nav li[expend="true"] > i.expend-arrow {
+            transform: rotate(90deg);
+            margin-bottom: -4px;
+        }
+        #doc-nav li[expend="true"] > .doc-nav__li-ul {
+            display: block;
+        }
+
+        .has-children i.expend-arrow {
+            display: inline-block;
+            border: 6px solid;
+            border-color: transparent;
+            border-left-color: #333;
+            margin-right: -20px;
+            margin-left: 4px;
+        }
+        .has-children.z-index-1 i.expend-arrow {
+            position: relative;
+            left: 15px;
+        }
+        .has-children.z-index-2 i.expend-arrow {
+            position: relative;
+            left: 35px;
+        }
+        .has-children.z-index-3 i.expend-arrow {
+            position: relative;
+            left: 55px;
+        }
+        .has-children.z-index-4 i.expend-arrow {
+            position: relative;
+            left: 75px;
+        }
+    </style>
+    <script src="./html/menudata.js"></script>
+</head>
+<body>
+    <div class="doc-root">
+        <div class="doc-top"></div>
+        <div class="doc-bottom">
+            <!-- 左侧导航 -->
+            <div id="doc-nav-box">
+                <ul id="doc-nav"></ul>
+            </div>
+            <!-- 右侧内容 -->
+            <div class="doc-content" style="border: 1px solid #CCC">
+                <iframe id="iframe" src="./html/index.html" frameborder="0"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var baseUrl = '/html/'
+        var iframeEl = document.getElementById("iframe")
+        // 菜单数据
+        var menudata = menudata.children
+        var navEl = document.getElementById('doc-nav')
+        navEl.innerHTML = createMenu(menudata)
+        // 默认选中第一个菜单
+        const firstLi = navEl.querySelector('li.doc-nav__li:not(.hasChildren)')
+        activeItem(firstLi)
+
+        /**
+         * iframe内部跳转时，同步给外部左侧菜单
+         **/
+        window.addEventListener('message', function(e) {
+            if (e.data) {
+                var url = e.data.url // iframe当中的url
+                var navHref = e.data.navHref // 实际对应的菜单url
+                if (/\/doc\/html\/(.*)/.test(navHref)) {
+                    if (RegExp.$1) {
+                        var actived = navEl.querySelector(`li[data-href="${RegExp.$1}"]`)
+                        activeItem(actived)
+                    }
+                } else if (/\/doc\/html\/(.*)/.test(url)) {
+                    if (RegExp.$1) {
+                        var actived = navEl.querySelector(`li[data-href="${RegExp.$1}"]`)
+                        activeItem(actived)
+                    }
+                }
+            }
+        })
+
+        /**
+         * 创建左侧菜单
+         **/
+        function createMenu(menudata, zIndex = 0) {
+            let navHTML = ''
+            menudata.forEach(data => {
+                if (data.children && data.children.length) {
+                    navHTML += 
+                    `<li class="doc-nav__li has-children z-index-${zIndex}" data-href="${data.url}">
+                        <i class="expend-arrow"></i>
+                        <span class="nav-title">${ data.text }</span>
+                        <ul class="doc-nav__li-ul">
+                            ${ createMenu(data.children, zIndex + 1) }    
+                        </ul>
+                    </li>`
+                } else {
+                    navHTML += 
+                    `<li class="doc-nav__li z-index-${zIndex}" data-href="${data.url}">
+                        <span class="nav-title">${ data.text }</span>    
+                    </li>`
+                }
+            });
+            return navHTML
+        }
+
+        /**
+         * 左侧菜单点击事件
+         **/
+        const nav = document.getElementById('doc-nav')
+        nav.addEventListener('click', (e) => {
+            var src = ''
+            var target = e.target
+            // 点击nav-title
+            if (target.className.indexOf('nav-title') > -1) {
+                var li = target.parentElement
+                if (li.className.indexOf('has-children') > -1) { // 展开
+                    if (li.hasAttribute('expend')) {
+                        li.removeAttribute('expend')
+                    } else {
+                        li.setAttribute('expend', 'true')
+                    }
+                    src = li.getAttribute('data-href')
+                } else {
+                    src = li.getAttribute('data-href')
+                    activeItem(li)
+                }
+            }
+            // 展开
+            else if (target.className.indexOf('has-children') > -1) {
+                if (target.hasAttribute('expend')) {
+                    target.removeAttribute('expend')
+                } else {
+                    target.setAttribute('expend', 'true')
+                    if (target.hasAttribute('data-href')) {
+                        src = target.getAttribute('data-href')
+                        activeItem(target)
+                    }
+                }
+            }
+            // 点击li
+            else if (target.hasAttribute('data-href')) {
+                src = target.getAttribute('data-href')
+                activeItem(target)
+            }
+            // 点击小三角
+            else if (target.className.indexOf('expend-arrow') > -1) {
+                if (target.parentElement.className.indexOf('has-children') > -1) {
+                    if (target.parentElement.hasAttribute('expend')) {
+                        target.parentElement.removeAttribute('expend')
+                    } else {
+                        target.parentElement.setAttribute('expend', 'true')
+                        if (target.parentElement.hasAttribute('data-href')) {
+                            src = target.parentElement.getAttribute('data-href')
+                            activeItem(target.parentElement)
+                        }
+                    }
+                }
+            }
+
+            if (src) {
+                iframeEl.src = `./${baseUrl}${src}`
+            }
+        })
+
+        /**
+         * 清空左侧菜单选中效果
+         **/
+        function cleanActived() {
+            var liList = document.querySelectorAll('li.doc-nav__li')
+            liList.forEach((node) => {
+                node.removeAttribute('actived')
+            })
+        }
+        /**
+         * 选中左侧菜单项
+         **/
+        function activeItem(target) {
+            if (!target) return
+
+            cleanActived()
+            if (target.className.indexOf('has-children') > -1) { // 展开
+                if (!target.hasAttribute('expend')) {
+                    target.setAttribute('expend', 'true')
+                }
+                return
+            } else { // 选中
+                target.setAttribute('actived', 'true')
+            }
+        }
+    </script>
+</body>
+</html>

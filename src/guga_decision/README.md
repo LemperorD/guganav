@@ -1,8 +1,7 @@
 # guga_decision
 
-决策模块，使用行为树实现哨兵的rmul/rmuc决策
+哨兵决策模块。
 
-## TODOLIST
-
-- [ ] 决策行为树设计
-- [ ] 可视化行为树，尝试开发可视化界面，不依赖groot2
+| 包 | 说明 |
+|---|------|
+| [simple_decision](simple_decision/) | 规则决策节点：补给/攻击/默认模式切换 + 导航目标发布 |

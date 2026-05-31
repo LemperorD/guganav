@@ -1,0 +1,123 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html"><span>环境配置</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">初始化采集卡</div> </div> </div><div> <div> <br />
+ </div></div><div><div>本节介绍如何调用SDK接口，在您的程序上实现采集卡控制功能，例如枚举、打开、配置和关闭采集卡。</div></div><div><div></div></div><div><div> <br />
+ </div></div><div><div>基本的采集卡控制流程包含：</div></div><div><div> <ol>
+<li>
+<a href="#step1">枚举采集卡</a> </li>
+<li>
+<a href="#step2">创建采集卡实例</a> </li>
+<li>
+<a href="#step3">打开采集卡</a> </li>
+<li>
+<a href="#step4">设置参数（可选）</a> </li>
+<li>
+<a href="#step5">关闭采集卡</a> </li>
+<li>
+<a href="#step6">销毁采集卡实例</a> </li>
+</ol>
+</div></div><div> <div> <div class="mainparams"> <h2 id="前提条件">前提条件</h2>
+</div></div></div><div><div><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div><div><div><div class="subparamswhite">在继续前，确保您已初始化SDK。详情请参见 <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_s_d_k.html">初始化SDK</a> 。</div></div></div><div><div><div class="subparamswhite"> </div> <div></div></div></div><div><div><div> <div id="step1"> <div class="mainparams"> <h2>步骤一：枚举采集卡</h2>
+</div></div></div></div></div><div><div><div><div id="step1"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite">您可以调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gad22fcad93034b5de199bc8a6c7c1f7eb" title="枚举采集卡">MV_CC_EnumInterfaces()</a> 并传入采集卡接口类型nTLayerType，以获取对应类型采集卡列表（pInterfaceInfoList）。</div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"> </div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite">该例演示了枚举CoaXPress和XoFLink类型的采集卡。</div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"> <div class="fragment"><div class="line"><a class="code" href="struct_m_v___i_n_t_e_r_f_a_c_e___i_n_f_o___l_i_s_t.html">MV_INTERFACE_INFO_LIST</a> stInterfaceInfoList={0};</div><div class="line">memset(&amp;stDeviceList, 0, <span class="keyword">sizeof</span>(<a class="code" href="struct_m_v___c_c___d_e_v_i_c_e___i_n_f_o___l_i_s_t.html">MV_CC_DEVICE_INFO_LIST</a>));</div><div class="line">nRet = <a class="code" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gad22fcad93034b5de199bc8a6c7c1f7eb">MV_CC_EnumInterfaces</a>(<a class="code" href="group___xE5_xAE_x8F_xE5_xAE_x9A_xE4_xB9_x89.html#gad543da4ccf34413876d6b3bb9d6b782b">MV_CXP_INTERFACE</a>|<a class="code" href="group___xE5_xAE_x8F_xE5_xAE_x9A_xE4_xB9_x89.html#ga6e18f60e6718031ba00fa3be2abcecf3">MV_XOF_INTERFACE</a>, &amp;stInterfaceInfoList);   <span class="comment">//在nTLayerType处传入“MV_CXP_INTERFACE”和“MV_XOF_INTERFACE”</span></div><div class="line">Check(nRet);</div></div><!-- fragment --> <dl class="section note"><dt>注解</dt><dd>采集卡接口类型详情如下： <table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadLeft">采集卡接口类型定义  </th><th class="markdownTableHeadLeft">值  </th><th class="markdownTableHeadLeft">说明   </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft">MV_GIGE_INTERFACE  </td><td class="markdownTableBodyLeft">0x00000001  </td><td class="markdownTableBodyLeft">GigE Vision采集卡   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft">MV_CAMERALINK_INTERFACE  </td><td class="markdownTableBodyLeft">0x00000004  </td><td class="markdownTableBodyLeft">Camera Link采集卡   </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft">MV_CXP_INTERFACE  </td><td class="markdownTableBodyLeft">0x00000008  </td><td class="markdownTableBodyLeft">CoaXPress采集卡   </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft">MV_XOF_INTERFACE  </td><td class="markdownTableBodyLeft">0x00000010  </td><td class="markdownTableBodyLeft">XoFLink采集卡   </td></tr>
+</table>
+</dd></dl>
+<div id="step2"> <div class="mainparams"> <h2>步骤二：创建采集卡实例</h2>
+</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step2"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step2"><div class="subparamswhite">您可通过采集卡设备信息或采集卡设备ID，创建采集卡实例。</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step2"><div class="subparamswhite"> <ul>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项1</b>：调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga62d20dad6ddb396018fe82ef5e676bb1" title="创建采集卡句柄">MV_CC_CreateInterface()</a> ，输入采集卡设备信息 pInterfaceInfo 。接口根据传入的设备信息，创建对应的采集卡实例。</p>
+<p class="interli"></p>
+<div class="fragment"><div class="line"><span class="keywordtype">void</span>* hInterface = NULL;</div><div class="line"></div><div class="line"><span class="comment">// 创建采集卡句柄</span></div><div class="line">nRet = <a class="code" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga62d20dad6ddb396018fe82ef5e676bb1">MV_CC_CreateInterface</a>(&amp;hInterface, stInterfaceInfoList.<a class="code" href="struct_m_v___i_n_t_e_r_f_a_c_e___i_n_f_o___l_i_s_t.html#afa9168d7cfac51ba8585a7407c2f2648">pInterfaceInfos</a>[nIndex]);</div><div class="line">Check(nRet);</div></div><!-- fragment -->  </li>
+<li>
+<p class="startli"></p>
+<p class="interli"><b>选项2</b>：调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga750ae7d67675d701b430c84e1bca31ef" title="通过采集卡ID创建采集卡句柄">MV_CC_CreateInterfaceByID()</a> ，输入采集卡ID pInterfaceID ，获取采集卡实例。其中，ID可以是设备序列号。</p>
+<dl class="section note"><dt>注解</dt><dd>通过此方式创建采集卡实例时，您不需要预先<a href="#step1">枚举采集卡</a>，直接传入采集卡序列号即可。 </dd></dl>
+<p>如下示例代码演示了通过 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga750ae7d67675d701b430c84e1bca31ef" title="通过采集卡ID创建采集卡句柄">MV_CC_CreateInterfaceByID()</a> 枚举设备序列号为“DA1433238”的采集卡。</p>
+<div class="fragment"><div class="line"><span class="keywordtype">void</span>* hInterface = NULL;    </div><div class="line"><span class="keyword">const</span> <span class="keywordtype">char</span> *pInterfaceID = <span class="stringliteral">&quot;DA1433238&quot;</span>;</div><div class="line"></div><div class="line"><span class="comment">// 创建采集卡句柄</span></div><div class="line">nRet = <a class="code" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga750ae7d67675d701b430c84e1bca31ef">MV_CC_CreateInterfaceByID</a>(&amp;hInterface, pInterfaceID);</div><div class="line">Check(nRet);</div></div><!-- fragment -->  </li>
+</ul>
+</div> </div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"> <div id="step3"> <div class="mainparams"> <h2>步骤三：打开采集卡</h2>
+</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step3"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step3"><div class="subparamswhite">“打开采集卡”指建立采集卡实例与物理采集卡的连接，使采集卡实例获得物理采集卡的访问权限，实现与物理采集卡通信。</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step3"><div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step3"><div class="subparamswhite">您可调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gac57264660ca9acb36a43c23adb2147a7" title="打开采集卡">MV_CC_OpenInterface()</a> 打开采集卡。若返回值为 <a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">MV_OK</a>，则表示打开成功，否则打开失败。</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step3"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">// 打开采集卡</span></div><div class="line">nRet = <a class="code" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gac57264660ca9acb36a43c23adb2147a7">MV_CC_OpenInterface</a>(hInterface, NULL);</div><div class="line">Check(nRet);</div></div><!-- fragment --> </div><p> <br />
+ </div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"> <div id="step4"> <div class="mainparams"> <h2>（可选）步骤四：配置参数</h2>
+</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step4"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step4"><div class="subparamswhite">打开采集卡后，您可调用对应的SDK接口：</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step4"><div class="subparamswhite"> <ul>
+<li>
+实现采集卡参数配置功能。详情请参见 <a class="el" href="group___xE5_x8F_x82_xE6_x95_xB0_xE8_xAE_xBE_xE7_xBD_xAE.html">参数设置</a> 。 </li>
+<li>
+获取采集卡事件。详情请参见 <a class="el" href="_xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html">事件及异常</a> 。 </li>
+</ul>
+</div> </div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"> <div id="step5"> <div class="mainparams"> <h2>步骤五：关闭采集卡</h2>
+</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step5"><div class="mainparams"> </div> <div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step5"><div class="subparamswhite">若采集卡实例不再需要与物理采集卡通信，可调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga98f4a5025eebf615499a23da0b73970d" title="关闭采集卡">MV_CC_CloseInterface()</a> 关闭采集卡。</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step5"><div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step5"><div class="subparamswhite">示例代码如下：</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step5"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">// 关闭设备</span></div><div class="line">nRet = <a class="code" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga98f4a5025eebf615499a23da0b73970d">MV_CC_CloseInterface</a>(hInterface);</div><div class="line">Check(nRet);</div></div><!-- fragment --> </div><p> <br />
+ </div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"> <div id="step6"> <div class="mainparams"> <h2 id="销毁采集卡实例">步骤六：销毁采集卡实例</h2>
+</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="mainparams"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"> <div class="subparamswhite"> </div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="subparamswhite">调用 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga365d684482405b74afe9d21b986185af" title="销毁采集卡句柄">MV_CC_DestroyInterface()</a> 销毁采集卡实例，释放实例占用的资源。</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="subparamswhite"> <dl class="section attention"><dt>注意</dt><dd>在您销毁采集卡实例后，先前的实例失效，不可用于其他接口的调用。</dd></dl>
+</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="subparamswhite">示例代码如下：</div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="subparamswhite"> <div class="fragment"><div class="line"><span class="comment">// 销毁句柄</span></div><div class="line">nRet = <a class="code" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga365d684482405b74afe9d21b986185af">MV_CC_DestroyInterface</a>(hInterface);</div><div class="line">Check(nRet);</div></div><!-- fragment --></div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="subparamswhite"> <dl class="section note"><dt>注解</dt><dd>在使用SDK实现功能后，您需及时反初始化SDK，以释放SDK占用的系统资源。详情请参见 <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_s_d_k.html">初始化SDK</a> 。</dd></dl>
+<div> <br />
+ <br />
+ <br />
+ <table width="60%">
+<tr>
+<td>上一篇： <a class="el" href="_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96_xE7_x9B_xB8_xE6_x9C_xBA.html">初始化相机</a> </td><td>下一篇： <a class="el" href="_xE8_xAE_xBE_xE7_xBD_xAE_xE5_x8F_x82_xE6_x95_xB0.html">设置参数</a>  </td></tr>
+</table>
+</div></div></div></div></div></div></div></div><div><div><div><div id="step1"><div class="subparamswhite"><div id="step6"><div class="subparamswhite"></div> </div></div></div></div></div></div></div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+<script>
+	// 当前选中的菜单
+	var currentMenuItem = document.querySelector('.tablist > li.current > a')
+	if (currentMenuItem) { // 子菜单情况
+	  window.parent.postMessage({
+		navHref: currentMenuItem.href
+	  }, '*')
+	} else {
+	  window.parent.postMessage({
+		url: window.location.href
+	  }, '*')
+	}
+  </script>
+</body>
+</html>

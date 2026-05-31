@@ -1,0 +1,17 @@
+/hik_camera_ros2_driver:
+  ros__parameters:
+    camera_type: 1 # 0:gige, 1:usb
+    pcIp: 192.168.10.30
+    cameraIp: 192.168.10.10
+    device_index: 0
+
+    camera_info_url: "package://hik_camera_ros2_driver/config/camera_info.yaml"
+    pixel_format: "BayerBG8"
+    use_sensor_data_qos: false
+    camera_name: "camera"
+    # frame_id: "optical_frame"     # If not set, it will be set as <camera_name>_optical_frame
+    # camera_topic: "image"         # If not set, it will be set as <camera_name>/image
+
+    acquisition_frame_rate: 200.0   # Unit: Hz
+    exposure_time: 50000             # Unit: us
+    gain: 12.0                      # Range: 0.0 ~ 16.9, Unit: dB

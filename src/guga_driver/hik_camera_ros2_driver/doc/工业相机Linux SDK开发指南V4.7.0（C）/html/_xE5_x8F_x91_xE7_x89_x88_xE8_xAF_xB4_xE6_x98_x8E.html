@@ -1,0 +1,461 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<link href="doxygen.css" rel="stylesheet" type="text/css"/>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link href="custom-style.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+</head>
+<body>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+	<div style="overflow: hidden;">
+		<div style="height: 57px;min-width: 1039px;background-size: auto 100%;background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAABCAYAAADKO/rAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABRSURBVFhH7dUxCoBADEXB5LK5/w1iIaLIrsgWNs50Sf/4WVUd8HOZGd1nCqMbGNMPrNMPrJv1cvz0A3OjfuwPvDPrxf7A7t7IlX7gmX74VsQGguw4S6+UnSYAAAAASUVORK5CYII=');">
+			<img src="titleleft.png" style="float: left;"/>
+			<img src="titleright.png" alt="" style="float: right;" />
+		</div>
+	</div>
+<!-- 制作者 Doxygen 1.8.15 -->
+  <div id="navrow1" class="tabs">
+    <ul class="tablist">
+      <li><a href="index.html"><span>首页</span></a></li>
+      <li><a href="_xE5_x8F_x91_xE7_x89_x88_xE8_xAF_xB4_xE6_x98_x8E.html"><span>发版说明</span></a></li>
+      <li><a href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html"><span>环境配置</span></a></li>
+      <li><a href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html"><span>编程引导</span></a></li>
+      <li><a href="modules.html"><span>API参考</span></a></li>
+      <li><a href="_xE7_x9B_xB8_xE6_x9C_xBA_xE5_x8F_x82_xE6_x95_xB0_xE8_x8A_x82_xE7_x82_xB9_xE8_xA1_xA8.html"><span>相机参数节点表</span></a></li>
+      <li><a href="_xE7_xA4_xBA_xE4_xBE_x8B_xE7_xA8_x8B_xE5_xBA_x8F_xE6_xA6_x82_xE8_xA7_x88.html"><span>示例程序概览</span></a></li>
+      <li><a href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html"><span>常见问题</span></a></li>
+      <li><a href="_xE6_xB3_x95_xE5_xBE_x8B_xE5_xA3_xB0_xE6_x98_x8E.html"><span>法律声明</span></a></li>
+    </ul>
+  </div>
+</div><!-- top -->
+<div class="PageDoc"><div class="contents">
+<div class="textblock"><div class="header" style="margin-left:-12px;margin-top:-10px;margin-right:-8px;"> <div class="headertitle"> <div class="title">发版说明</div> </div> </div><div class="mainparams"><h2>V4.7.0 </h2>
+</div><div class="mainparams"></div> <div class="subparamwhite" style="margin-left:12px"> </div><div class="subparamwhite" style="margin-left:12px">V4.7.0版本发布于2025年11月。</div><div class="subparamwhite" style="margin-left:12px"> <br />
+ </div><div class="subparamwhite" style="margin-left:12px"><b>【功能新增】</b></div><div class="subparamwhite" style="margin-left:12px"><ul>
+<li>开放外部注册缓存。新增 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga7c45a21a04f57d3543fddb1395cec980" title="分配对齐内存">MV_CC_AllocAlignedBuffer()</a> 、 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga0496f83e0313df55c5e901a77324038a" title="对齐内存释放">MV_CC_FreeAlignedBuffer()</a> 、 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae81b58dd99ca7d224fec48e6fc425121" title="将应用程序分配缓存注册到SDK内部，供SDK使用">MV_CC_RegisterBuffer()</a> 和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga9dbe5d78b2c6101f65645ad336d9ee7a" title="外部内存取消SDK内部注册">MV_CC_UnRegisterBuffer()</a> ，分别用于分配对齐内存、释放对齐内存、外部注册缓存到SDK内部和取消SDK内部注册缓存。<ul>
+<li>在您调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 之前，若未注册缓存，则SDK默认使用内部缓存。</li>
+<li>在您调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 之前，若已注册缓存（通过 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gac5030eb8498bb2baa031c6b6e8d03406" title="获取设备payload大小（payload包含图像数据和Chunk数据）和内存对其方式，用于SDK外部注册缓存时，应用层分配足够的缓存及正确的内存对齐方式">MV_CC_GetPayloadSize()</a> 、 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga7c45a21a04f57d3543fddb1395cec980" title="分配对齐内存">MV_CC_AllocAlignedBuffer()</a> 和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae81b58dd99ca7d224fec48e6fc425121" title="将应用程序分配缓存注册到SDK内部，供SDK使用">MV_CC_RegisterBuffer()</a> ），则SDK是外部注册缓存模式。 <br />
+ 该模式支持动态调整缓存大小。即在调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga78728211c47c6f118110fde635d6ac69" title="开始取流">MV_CC_StartGrabbing()</a> 之后，您仍可根据实际需求，动态调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gae81b58dd99ca7d224fec48e6fc425121" title="将应用程序分配缓存注册到SDK内部，供SDK使用">MV_CC_RegisterBuffer()</a> 和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga9dbe5d78b2c6101f65645ad336d9ee7a" title="外部内存取消SDK内部注册">MV_CC_UnRegisterBuffer()</a> 调整缓存。 <dl class="section note"><dt>注解</dt><dd>您可参考 <a class="el" href="_xE9_x85_x8D_xE7_xBD_xAE_xE7_xBC_x93_xE5_xAD_x98.html">配置缓存</a> 中的介绍，了解相关接口调用流程。 <br />
+</dd></dl>
+</li>
+</ul>
+</li>
+<li>支持RGB12格式图像的渲染和保存。<ul>
+<li>支持渲染RGB12像素格式的图像。</li>
+<li>支持调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gaf2f458d195ec3b6688cc0e51472e482c" title="保存图片，支持Bmp和Jpeg.">MV_CC_SaveImageEx3()</a> ， <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga40f9049ef3772725e97d82a4a0b185df" title="保存图像到文件">MV_CC_SaveImageToFileEx()</a> 和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gae035e7dfab861d4d47b76710dacc429c" title="保存图像到文件">MV_CC_SaveImageToFileEx2()</a> 保存RGB12格式的图像。</li>
+</ul>
+</li>
+<li>支持快速FileAccess功能。若相机和其固件支持，则可通过该功能，大幅提高文件的导入导出速率。</li>
+</ul>
+</div><div class="subparamwhite" style="margin-left:12px"></div><div class="subparamwhite" style="margin-left:12px"><b>【功能更新】</b></div><div class="subparamwhite" style="margin-left:12px"></div><div class="subparamwhite" style="margin-left:12px"><ul>
+<li><a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE6_xB8_xB2_xE6_x9F_x93.html#gabf9833e6083f440922602035b7b743f7" title="显示一帧图像（扩展接口）">MV_CC_DisplayOneFrameEx()</a> 和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE6_xB8_xB2_xE6_x9F_x93.html#ga5f44d5b3c0280e0030c6af1f40542e9a" title="显示一帧图像（扩展接口2）">MV_CC_DisplayOneFrameEx2()</a> 支持渲染 PixelType_Gvsp_YUV420SP_NV12 和 PixelType_Gvsp_YUV420SP_NV21 格式。</li>
+<li><a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga36d02611e46d9c488cae6d2fe4eff262" title="像素格式转换">MV_CC_ConvertPixelTypeEx()</a> 支持将部分Bayer8（包含BayerRG8、BayerGR8、BayerGB8、BayerBG8）像素格式图像转换为RGB8 Planar像素格式图像。</li>
+<li>事件相关功能优化。<ul>
+<li>单进程下，支持同一采集卡的多个句柄同时注册事件。在同一进程下，假设您分别对其句柄A和句柄B调用 <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#gacf91dadffe76819c9a10d2ec62077779" title="注册单个事件回调，在打开设备之后调用">MV_CC_RegisterEventCallBackEx()</a> 注册同一事件M，句柄A和句柄B会同时接收到事件M。 <dl class="section note"><dt>注解</dt><dd>对同一句柄多次注册同一事件时，旧注册的回调函数和自定义信息会被覆盖。</dd></dl>
+</li>
+<li>SDK支持接收CoaXPress相机事件。</li>
+</ul>
+</li>
+<li><a class="el" href="group___xE6_x9E_x9A_xE4_xB8_xBE_xE7_xB1_xBB_xE5_x9E_x8B_xE5_xAE_x9A_xE4_xB9_x89.html#ga869bc22df6c5656ee47d4ed0b1f9eec6">MV_CC_STREAM_EXCEPTION_TYPE</a> 中新增 <a class="el" href="group___xE6_x9E_x9A_xE4_xB8_xBE_xE7_xB1_xBB_xE5_x9E_x8B_xE5_xAE_x9A_xE4_xB9_x89.html#gga869bc22df6c5656ee47d4ed0b1f9eec6aee9f9a63943a15f0167be739c6d0080c">MV_CC_STREAM_EXCEPTION_IMAGE_BUFFER_OVERFLOW</a> ，表示设备发送的图像数据大小超过了图像缓冲区容量，该帧被丢弃。</li>
+<li><a class="el" href="struct_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x.html">MV_FRAME_OUT_INFO_EX</a> 新增“nFirstLineEncoderCount”和“nLastLineEncoderCount”成员，分别表示首行编码器计数和尾行编码器计数。</li>
+<li>VisionPro插件支持VP9.23和VP9.24。</li>
+<li>优化采集卡事件性能，降低CPU占用。 </li>
+</ul>
+</div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.6.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamwhite" style="margin-left:12px"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px">V4.6.0版本发布于2025年6月。</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> <br />
+ </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> <ul>
+<li>
+该版本新增支持串口光源控制器。您可通过 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE8_xAE_xBE_xE5_xA4_x87.html">串口设备</a> 相关接口，完成打开、控制串口光源控制器等操作。 </li>
+<li>
+新增取图回调扩展接口 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga0847c2bcdbc152d4e43df9cee28c3989" title="注册图像数据回调">MV_CC_RegisterImageCallBackEx2()</a> 。该接口支持您在回调函数外手动调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gaeff416b2d35df148fa2e63521d8847d3" title="释放图像缓存（此接口用于释放不再使用的图像缓存，与 MV_CC_GetImageBuffer() 配套使用）">MV_CC_FreeImageBuffer()</a> 释放缓存。 <dl class="section note"><dt>注解</dt><dd>关于该接口的更多使用说明，请参见接口描述。</dd></dl>
+</li>
+<li>
+新增流异常回调相关功能，用于通过回调函数上报取流过程中出现的异常。 <ul>
+<li>
+新增 <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#ga85930669d3bf30dc7af81db20e9350b5" title="注册流异常消息回调">MV_CC_RegisterStreamExceptionCallBack()</a> ，用于注册流异常消息回调。该接口支持GEV、U3V和采集卡下的所有相机。 </li>
+<li>
+<a class="el" href="group___xE6_x9E_x9A_xE4_xB8_xBE_xE7_xB1_xBB_xE5_x9E_x8B_xE5_xAE_x9A_xE4_xB9_x89.html#ga869bc22df6c5656ee47d4ed0b1f9eec6">MV_CC_STREAM_EXCEPTION_TYPE</a> 中，新增流异常类型。 </li>
+<li>
+新增 <a class="el" href="struct_m_v___c_c___s_t_r_e_a_m___e_x_c_e_p_t_i_o_n___i_n_f_o.html" title="流异常回调信息">MV_CC_STREAM_EXCEPTION_INFO</a> ，表示流异常回调信息。 </li>
+</ul>
+</li>
+<li>
+新增 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE5_x85_xB3.html">串口控制相关</a> 接口。该类接口用于在工业相机外接串口设备时（如液态镜头），通过SDK串口控制相关接口，实现与相机外接的串口设备进行通信。 <ul>
+<li>
+支持通过 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE5_x85_xB3.html#ga2a00fe499f31cb87b673e6fb32d19834" title="打开串口">MV_CC_SerialPort_Open()</a> 打开串口。 </li>
+<li>
+支持读取（ <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE5_x85_xB3.html#ga2a78e9ead240f50999f72403d2f149f7" title="读串口数据">MV_CC_SerialPort_Read()</a> ）、写入（ <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE5_x85_xB3.html#ga5e48b13bd53eb8f189951bd8c204356b" title="向串口写数据，一次最大写512字节的数据">MV_CC_SerialPort_Write()</a> ）、或清空已获取的串口数据（ <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE5_x85_xB3.html#gad6c75d415f9c18b6967c300424f6d709" title="清空已接收的串口数据">MV_CC_SerialPort_ClearBuffer()</a> ）。 </li>
+<li>
+支持通过 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE6_x8E_xA7_xE5_x88_xB6_xE7_x9B_xB8_xE5_x85_xB3.html#ga1f231b8493643339f272ca5e0126b446" title="关闭串口">MV_CC_SerialPort_Close()</a> 关闭串口。 </li>
+</ul>
+</li>
+<li>
+新增 <a class="el" href="group___xE5_x9B_x9E_xE8_xB0_x83_xE5_x87_xBD_xE6_x95_xB0_xE5_xAE_x9A_xE4_xB9_x89.html">回调函数定义</a> ，用于注册图像数据、异常消息等。 </li>
+<li>
+<a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga36d02611e46d9c488cae6d2fe4eff262" title="像素格式转换">MV_CC_ConvertPixelTypeEx()</a> 支持将Bayer10/12转为Bayer16格式。 <dl class="section note"><dt>注解</dt><dd>对于Bayer10 packed和Bayer12 packed格式，您需首先将图像格式转为Bayer10和Bayer12后，再转为Bayer16。  </dd></dl>
+</li>
+<li>
+新增 <a class="el" href="group___s_d_k_xE5_x86_x85_xE9_x83_xA8_xE8_x87_xAA_xE5_xAE_x9A_xE4_xB9_x89_xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">通用状态码</a> ： <ul>
+<li>
+0x80000018：DDR缓存不足。 </li>
+<li>
+0x80000019：流通道不足。 </li>
+</ul>
+</li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"><b>【示例程序】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> <ul>
+<li>
+新增 <a class="el" href="_line_scan_software_trigger_8cpp-example.html">LineScanSoftwareTrigger.cpp</a> 示例，用于演示控制线阵相机设置帧触发，开启软触发取图。 </li>
+<li>
+修改 <a class="el" href="_parametrize_camera__line_scan_i_o_settings_8cpp-example.html">ParametrizeCamera_LineScanIOSettings.cpp</a> 示例程序，您可参考该程序，了解如何兼容新版本的相机节点。 </li>
+<li>
+修改 <a class="el" href="_chunk_data_8cpp-example.html">ChunkData.cpp</a> 、 <a class="el" href="_grab__asynchronous_8cpp-example.html">Grab_Asynchronous.cpp</a> 等示例程序。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"><b>【功能废弃】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> <ul>
+<li>
+废弃 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga1f3835e65ca878f82c084f626c228802" title="注册流异常消息回调，在打开设备之后调用（只支持U3V相机，不支持GenTL设备）">MV_USB_RegisterStreamExceptionCallBack()</a> ，您可使用 <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#ga85930669d3bf30dc7af81db20e9350b5" title="注册流异常消息回调">MV_CC_RegisterStreamExceptionCallBack()</a> 实现相关需求。  </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.5.1 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamwhite" style="margin-left:12px"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px">该版本新增ISP配置相关接口，您可在程序调用相应接口对图像进行ISP算法处理。</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> <br />
+ </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamwhite" style="margin-left:12px"> <ul>
+<li>
+支持传入ISP参数以对图像进行ISP算法处理。在通过ISP工具配置图像处理参数并保存配置文件后，您可通过 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gaaba518fc71594f6c61ba5efb57bbe44a" title="设置ISP参数">MV_CC_SetISPConfig()</a> 及 <a class="el" href="struct_m_v___c_c___i_s_p___c_o_n_f_i_g___p_a_r_a_m.html" title="ISP配置结构体">MV_CC_ISP_CONFIG_PARAM</a> 将ISP配置文件传入程序。之后，您可调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gad6bd76ba55497d654af5b9b66f327274" title="对图像进行ISP算法处理">MV_CC_ISPProcess()</a> 对图像数据进行ISP算法处理。  </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.5.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【升级必看】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite">该版本将 <a class="el" href="struct_m_v___c_c___i_m_a_g_e.html" title="图像信息">MV_CC_IMAGE</a> 图像信息结构体中的 nImageBufLen 成员名称更改为 <a href="struct_m_v___c_c___i_m_a_g_e.html#a66221b01016cb3c382b9fe843c53b609">nImageLen</a>。为确保您程序的正常运行，您需要在升级到该版本后，更新您程序中的代码。</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+<b>支持图像去紫边功能</b>。新增去紫边接口 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga53a0de429109474a07835bbb1d34cf93" title="图像去紫边">MV_CC_PurpleFringing()</a> 和结构体 <a class="el" href="struct_m_v___c_c___p_u_r_p_l_e___f_r_i_n_g_i_n_g___p_a_r_a_m.html" title="去紫边结构体">MV_CC_PURPLE_FRINGING_PARAM</a> ，用于去除图像中物体边缘由高反差、逆光等引起的紫边，从而提高图像质量。您可设置 <a class="el" href="struct_m_v___c_c___p_u_r_p_l_e___f_r_i_n_g_i_n_g___p_a_r_a_m.html" title="去紫边结构体">MV_CC_PURPLE_FRINGING_PARAM</a> 中 nKernelSize 和 nEdgeThreshold 的值，调整去紫边的处理效果。 <br />
+ 同时，新增<a href="group___xE5_x8E_xBB_xE7_xB4_xAB_xE8_xBE_xB9_xE7_x89_xB9_xE6_x9C_x89_xE9_x94_x99_xE8_xAF_xAF_xE7_xA0_x81.html">去紫边特有错误码</a>，范围为0x10405000-0x10405002，用于表示在调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga53a0de429109474a07835bbb1d34cf93" title="图像去紫边">MV_CC_PurpleFringing()</a> 时可能存在的错误。您可根据错误信息，排查问题。 <dl class="section note"><dt>注解</dt><dd>该功能支持RGB和BGR像素格式的图像。</dd></dl>
+</li>
+<li>
+<b>支持4GB以上大小的图像取流、渲染和存图</b>。 <ul>
+<li>
+支持通过 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gac5030eb8498bb2baa031c6b6e8d03406" title="获取设备payload大小（payload包含图像数据和Chunk数据）和内存对其方式，用于SDK外部注册缓存时，应用层分配足够的缓存及正确的内存对齐方式">MV_CC_GetPayloadSize()</a> 注册4GB以上的缓存。 </li>
+<li>
+支持调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga367fa35568b2bb6a22c98354c32ff3c7" title="注册图像数据回调">MV_CC_RegisterImageCallBackEx()</a> 和 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga33331585a4e2a64653b74af66157a6d8" title="获取一帧图片（与 MV_CC_Display() 不能同时使用）">MV_CC_GetImageBuffer()</a> 获取4GB以上图像。 </li>
+<li>
+支持调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE6_xB8_xB2_xE6_x9F_x93.html#ga5f44d5b3c0280e0030c6af1f40542e9a" title="显示一帧图像（扩展接口2）">MV_CC_DisplayOneFrameEx2()</a> 渲染4GB以上超大图。 <dl class="section note"><dt>注解</dt><dd>渲染4GB以上超大图时，需确保OpenGL为2.0及之后版本。  </dd></dl>
+</li>
+<li>
+支持调用 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gae035e7dfab861d4d47b76710dacc429c" title="保存图像到文件">MV_CC_SaveImageToFileEx2()</a> 以PNG或TIFF格式保存4G以上超大图。 </li>
+</ul>
+</li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能更新】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+帧信息结构体 <a class="el" href="struct_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x.html" title="输出帧的信息">MV_FRAME_OUT_INFO_EX</a> 新增 <b><a href="union_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x_1_1_sub_image_list.html">SubImageList</a></b>：用于表示采集卡拼图时图像缓存中的子图个数，包含子图信息 <a href="union_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x_1_1_sub_image_list.html">pstSubImage</a> 和校准 <a href="union_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x_1_1_sub_image_list.html">nAligning</a>。在分时频闪场景，通过采集卡端拆图时，您可通过SubImageList获取子图。 </li>
+<li>
+帧信息结构体 <a class="el" href="struct_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x.html" title="输出帧的信息">MV_FRAME_OUT_INFO_EX</a> 新增 <a href="union_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x_1_1_user_ptr.html"><b>UserPtr</b></a>：用于表示外部注册缓存时的用户自定义指针，包含自定义指针 <a href="union_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x_1_1_user_ptr.html">pUser</a> 和校准 <a href="union_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x_1_1_user_ptr.html">nAligning</a>。 </li>
+<li>
+<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 中，新增<a href="group___xE9_x80_x9A_xE7_x94_xA8_xE9_x94_x99_xE8_xAF_xAF_xE7_xA0_x81.html#ga3894f4bea0193c965d6ddd3fcfb81494">0x80000017</a>，表示图像高度异常（残帧丢弃）。 </li>
+<li>
+新增控制台demo <a href="_parametrize_camera__area_scan_i_o_settings_8cpp-example.html">ParametrizeCamera_AreaScanIOSettings.cpp</a>，您可以参照该demo，在您的程序中配置面阵相机触发节点IO。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能废弃】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+废弃ForceIP.cpp示例程序。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【文档调整】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+优化编程引导内容，您可参照<a class="el" href="_xE7_xBC_x96_xE7_xA8_x8B_xE5_xBC_x95_xE5_xAF_xBC.html">编程引导</a> 快速上手和使用本SDK。 </li>
+<li>
+更新常见问题章节，详情请参见<a class="el" href="_xE5_xB8_xB8_xE8_xA7_x81_xE9_x97_xAE_xE9_xA2_x98.html">常见问题</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.4.1 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增获取Enum属性值扩展接口 <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#gab5d124be1a007423035d2b43bce25444" title="获取Enum属性值">MV_CC_GetEnumValueEx()</a> 和对应的枚举类型值结构体 <a class="el" href="struct_m_v_c_c___e_n_u_m_v_a_l_u_e___e_x.html" title="枚举类型值">MVCC_ENUMVALUE_EX</a> 。该接口最大支持到256个节点。 </li>
+<li>
+新增显示一帧图像扩展接口 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE6_xB8_xB2_xE6_x9F_x93.html#ga5f44d5b3c0280e0030c6af1f40542e9a" title="显示一帧图像（扩展接口2）">MV_CC_DisplayOneFrameEx2()</a> 和对应的图像信息结构体 <a class="el" href="struct_m_v___c_c___i_m_a_g_e.html" title="图像信息">MV_CC_IMAGE</a> 。 </li>
+<li>
+新增保存图像到文件扩展接口 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gae035e7dfab861d4d47b76710dacc429c" title="保存图像到文件">MV_CC_SaveImageToFileEx2()</a> 和对应的保存图片所需参数结构体 <a class="el" href="struct_m_v___c_c___s_a_v_e___i_m_a_g_e___p_a_r_a_m.html" title="保存图片所需参数">MV_CC_SAVE_IMAGE_PARAM</a> 。 </li>
+<li>
+新增通过采集卡句柄枚举相机接口 <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga75ed8e246378db5f7f87e4af26bae74f" title="通过采集卡句柄枚举设备">MV_CC_EnumDevicesByInterface()</a> 。 </li>
+<li>
+新增开启设备指定事件接口 <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#ga21ff79ee2297cbe0374464343d787f8f" title="开启设备指定事件">MV_CC_EventNotificationOn()</a> 和关闭设备指定事件接口 <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#gab8cf38e9e3efa37339453c8c86c87e91" title="关闭设备指定事件">MV_CC_EventNotificationOff()</a> 。 </li>
+<li>
+新增Linux控制台demo，包含<a class="el" href="_multi_light_ctrl__image_stitching_8cpp-example.html">MultiLightCtrl_ImageStitching.cpp</a> 、<a class="el" href="_events__interface_8cpp-example.html">Events_Interface.cpp</a> 、<a class="el" href="_image_save_8cpp-example.html">ImageSave.cpp</a> 和<a class="el" href="_parametrize_camera__line_scan_i_o_settings_8cpp-example.html">ParametrizeCamera_LineScanIOSettings.cpp</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能更新】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+更新 <a class="el" href="struct_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x.html" title="输出帧的信息">MV_FRAME_OUT_INFO_EX()</a> 输出帧的信息结构体，新增<a href="struct_m_v___f_r_a_m_e___o_u_t___i_n_f_o___e_x.html#a733999b9d4f3d252eb79df06f517b410">nFrameLenEx</a>字段。 </li>
+<li>
+更新部分Linux控制台demo，包含<a class="el" href="_display_8cpp-example.html">Display.cpp</a> 、<a class="el" href="_interface_and_device_demo_8cpp-example.html">InterfaceAndDeviceDemo.cpp</a> 等。 </li>
+<li>
+新增部分<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 。<ul>
+<li>
+<a href="group___xE9_x80_x9A_xE7_x94_xA8_xE9_x94_x99_xE8_xAF_xAF_xE7_xA0_x81.html#gaddb3d87236a6f9d1d710425fc6af51b7">0x80000015</a>：表示解码错误。 </li>
+<li>
+<a href="group___xE9_x80_x9A_xE7_x94_xA8_xE9_x94_x99_xE8_xAF_xAF_xE7_xA0_x81.html#ga6f4e99de61aab29d4cfc133e828342f3">0x80000016</a>：表示图像大小超出unsigned int数据类型上限值。 </li>
+<li>
+<a href="group___gig_e___s_t_a_t_u_s_xE9_x94_x99_xE8_xAF_xAF_xE7_xA0_x81.html#ga2b531cb110c1b676c8fdc9379b169265">0x8000020E</a>：表示在固定IP模式下不支持修改设备IP模式。 </li>
+</ul>
+</li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能废弃】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+废弃相机初始化相关接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga041a15775822d43cd17228e5adc2fd99" title="获取支持的传输层">MV_CC_EnumerateTls()</a> 和 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga09fd2a7fa7b1bbeec829eca959061169" title="创建设备句柄，不生成日志">MV_CC_CreateHandleWithoutLog()</a> 。 </li>
+<li>
+废弃图像采集相关接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#gae6954f9096ccd7f2c270e095d6f6fea8" title="注册图像数据回调，RGB">MV_CC_RegisterImageCallBackForRGB()</a> 、 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga7e611d0443faab309a94565b7b07048a" title="注册图像数据回调，BGR">MV_CC_RegisterImageCallBackForBGR()</a> 、 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga242bac9388de9cb8076e0a0b3dc0e724" title="获取一帧RGB数据，此函数为查询式获取，每次调用查询内部 缓存有无数据，有数据则获取数据，无数据返回错误码">MV_CC_GetImageForRGB()</a> 和 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#gae268407dfa03f526984cb845ae5b908f" title="获取一帧BGR数据，此函数为查询式获取，每次调用查询内部 缓存有无数据，有数据则获取数据，无数据返回错误码">MV_CC_GetImageForBGR()</a> 。 </li>
+<li>
+废弃显示相关接口和结构体： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga5de8e4375875d610cdef1ba9330e7e07" title="显示一帧图像（该接口已启用，建议改用 MV_CC_DisplayOneFrameEx2() 接口）">MV_CC_DisplayOneFrame()</a> 和 MV_DISPLAY_FRAME_INFO 。 </li>
+<li>
+废弃相机属性相关接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#gaf53ecacb0513125bab00400feffc799e" title="打开获取或设置相机参数的GUI界面">MV_CC_OpenParamsGUI()</a> 。 </li>
+<li>
+废弃3D点云图像相关接口、结构体及枚举类型： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga2f760d7152a42f7f3e926e535a44f0f6" title="保存3D点云数据，支持PLY、CSV和OBJ三种格式">MV_CC_SavePointCloudData()</a> 、 MV_SAVE_POINT_CLOUD_PARAM 和 MV_SAVE_POINT_CLOUD_FILE_TYPE() 。 </li>
+<li>
+废弃SetIO.cpp示例程序。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.4.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增导入设备属性扩展接口 <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#gaf4ad17c17f2a3c234f8c642ea4b7c68f" title="导入设备属性并保存错误信息列表">MV_CC_FeatureLoadEx()</a> 。 </li>
+<li>
+新增节点错误信息结构体 <a class="el" href="struct_m_v_c_c___n_o_d_e___e_r_r_o_r.html" title="节点错误信息">MVCC_NODE_ERROR</a> 、节点错误信息列表结构体 <a class="el" href="struct_m_v_c_c___n_o_d_e___e_r_r_o_r___l_i_s_t.html" title="节点错误信息列表">MVCC_NODE_ERROR_LIST</a> 。 </li>
+<li>
+支持采集卡快速软触发功能，并新增示例程序：<a class="el" href="_quick_software_trigger_8cpp-example.html">QuickSoftwareTrigger.cpp</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能更新】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+调整通过回调获取相机图像demo的文件名：<a class="el" href="_grab_image__callback_8cpp-example.html">GrabImage_Callback.cpp</a> 。 </li>
+<li>
+更新Linux控制台demo，包含<a class="el" href="_interface_demo_8cpp-example.html">InterfaceDemo.cpp</a> 、<a class="el" href="_reconnect_demo_8cpp-example.html">ReconnectDemo.cpp</a> 等。 </li>
+<li>
+新增部分<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【文档调整】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+合并<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 至<a href="modules.html" class="el">接口说明</a>中介绍。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.3.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增初始化SDK接口 <a class="el" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga768544eb6e6435313dd99ee9cf92d59d" title="初始化SDK">MV_CC_Initialize()</a> 、反初始化SDK接口 <a class="el" href="group___s_d_k_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gafa1820a0da8671fc6f77dc9a7dfa69d3" title="反初始化SDK，释放资源">MV_CC_Finalize()</a> 。 </li>
+<li>
+新增枚举采集卡接口 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gad22fcad93034b5de199bc8a6c7c1f7eb" title="枚举采集卡">MV_CC_EnumInterfaces()</a> 、创建采集卡句柄接口 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga62d20dad6ddb396018fe82ef5e676bb1" title="创建采集卡句柄">MV_CC_CreateInterface()</a> 和 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga750ae7d67675d701b430c84e1bca31ef" title="通过采集卡ID创建采集卡句柄">MV_CC_CreateInterfaceByID()</a> 。 </li>
+<li>
+新增打开采集卡接口 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gac57264660ca9acb36a43c23adb2147a7" title="打开采集卡">MV_CC_OpenInterface()</a> 、关闭采集卡接口 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga98f4a5025eebf615499a23da0b73970d" title="关闭采集卡">MV_CC_CloseInterface()</a> 、销毁采集卡句柄接口 <a class="el" href="group___xE9_x87_x87_xE9_x9B_x86_xE5_x8D_xA1_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga365d684482405b74afe9d21b986185af" title="销毁采集卡句柄">MV_CC_DestroyInterface()</a> 。 </li>
+<li>
+新增获取串口信息列表接口 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE8_xAE_xBE_xE5_xA4_x87.html#gaee4cc1b56f15cdd391f92f8540697dbd" title="获取串口信息列表">MV_CAML_GetSerialPortList()</a> 、设置指定串口列表接口 <a class="el" href="group___xE4_xB8_xB2_xE5_x8F_xA3_xE8_xAE_xBE_xE5_xA4_x87.html#gaafd9b2441010f88cbb56f6d724667e37" title="设置取指定枚举串口">MV_CAML_SetEnumSerialPorts()</a> 。 </li>
+<li>
+<a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE6_xB8_xB2_xE6_x9F_x93.html">图像渲染</a> 接口支持对大图（宽高上限为16384*163840）进行渲染。 </li>
+<li>
+<a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html">图像处理</a> 中的设置插值算法类型接口 <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga83bb7439fb0f17b0805510bf887b017b" title="设置插值算法类型">MV_CC_SetBayerCvtQuality()</a> 新增“最优+”插值方法。 </li>
+<li>
+<a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html">图像处理</a> 和<a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html">属性配置</a> 接口支持采集卡句柄。 </li>
+<li>
+<a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_xE5_x8D_x87_xE7_xBA_xA7.html">设备升级</a> 接口支持采集卡固件升级。 </li>
+<li>
+<a class="el" href="_xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html">事件及异常</a> 接口支持采集卡事件。 </li>
+<li>
+新增采集卡信息结构体 <a class="el" href="struct_m_v___i_n_t_e_r_f_a_c_e___i_n_f_o.html" title="采集卡信息">MV_INTERFACE_INFO</a> 、采集卡信息列表结构体 <a class="el" href="struct_m_v___i_n_t_e_r_f_a_c_e___i_n_f_o___l_i_s_t.html" title="采集卡信息列表">MV_INTERFACE_INFO_LIST</a> 。 </li>
+<li>
+新增串口信息结构体 <a class="el" href="struct_m_v___c_a_m_l___s_e_r_i_a_l___p_o_r_t.html" title="串口信息">MV_CAML_SERIAL_PORT</a> 、串口信息列表结构体 <a class="el" href="struct_m_v___c_a_m_l___s_e_r_i_a_l___p_o_r_t___l_i_s_t.html" title="串口信息列表">MV_CAML_SERIAL_PORT_LIST</a> 。 </li>
+<li>
+新增CoaXPress相机信息结构体 <a class="el" href="struct_m_v___c_x_p___d_e_v_i_c_e___i_n_f_o.html" title="CoaXPress相机信息">MV_CXP_DEVICE_INFO</a> 、CameraLink相机信息结构体 <a class="el" href="struct_m_v___c_m_l___d_e_v_i_c_e___i_n_f_o.html" title="Camera Link相机信息">MV_CML_DEVICE_INFO</a> 、XoFLink相机信息结构体 <a class="el" href="struct_m_v___x_o_f___d_e_v_i_c_e___i_n_f_o.html" title="XoFLink相机信息">MV_XOF_DEVICE_INFO</a> 。 </li>
+<li>
+新增Linux控制台demo：<a class="el" href="_display_8cpp-example.html">Display.cpp</a> 、<a class="el" href="_force_i_p_ex_8cpp-example.html">ForceIPEx.cpp</a> 、<a class="el" href="_grab__asynchronous_8cpp-example.html">Grab_Asynchronous.cpp</a> 、<a class="el" href="_interface_and_device_demo_8cpp-example.html">InterfaceAndDeviceDemo.cpp</a> 、<a class="el" href="_interface_demo_8cpp-example.html">InterfaceDemo.cpp</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能更新】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+更新保存图片到文件参数结构体 <a class="el" href="struct_m_v___s_a_v_e___i_m_a_g_e___t_o___f_i_l_e___p_a_r_a_m___e_x.html" title="保存图片到文件参数">MV_SAVE_IMAGE_TO_FILE_PARAM_EX</a> 、图片保存参数结构体 <a class="el" href="struct_m_v___s_a_v_e___i_m_a_g_e___p_a_r_a_m___e_x3.html" title="图片保存参数">MV_SAVE_IMAGE_PARAM_EX3</a> 。 </li>
+<li>
+更新显示帧信息结构体 MV_DISPLAY_FRAME_INFO 和 <a class="el" href="struct_m_v___d_i_s_p_l_a_y___f_r_a_m_e___i_n_f_o___e_x.html" title="显示帧信息（适用于例如线阵相机等宽高大于65535的设备）">MV_DISPLAY_FRAME_INFO_EX</a> 。 </li>
+<li>
+更新CCM参数结构体 <a class="el" href="struct_m_v___c_c___c_c_m___p_a_r_a_m.html" title="CCM参数">MV_CC_CCM_PARAM</a> 和 <a class="el" href="struct_m_v___c_c___c_c_m___p_a_r_a_m___e_x.html" title="CCM参数（适用于例如线阵相机等宽高大于65535的设备）">MV_CC_CCM_PARAM_EX</a> 。 </li>
+<li>
+更新设备信息结构体 <a class="el" href="struct_m_v___c_c___d_e_v_i_c_e___i_n_f_o.html" title="设备信息">MV_CC_DEVICE_INFO</a> 。 </li>
+<li>
+更新锐化结构体 <a class="el" href="struct_m_v___c_c___s_h_a_r_p_e_n___p_a_r_a_m.html" title="锐化结构体">MV_CC_SHARPEN_PARAM</a> 。 </li>
+<li>
+更新<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【文档调整】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+调整<a href="modules.html" class="el">接口说明</a>的模块划分。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.2.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+支持采集卡GE1104。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V4.1.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+所有接口支持跨平台（Windows32/64、Linux32/64、armhf、aarch64、arm-none），Linux和Windows下工业相机SDK功能模块统一。 </li>
+<li>
+新增通过加载cti文件的方式控制相机的demo（BasicDemoByGenTL）和线阵相机demo（BasicDemoLineScan）。 </li>
+<li>
+新增HB解码demo：HighBandwithDecode.cpp 。 </li>
+<li>
+新增图像保存接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gaf2f458d195ec3b6688cc0e51472e482c" title="保存图片，支持Bmp和Jpeg.">MV_CC_SaveImageEx3()</a>，废弃旧接口 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#gab73eb88b16c79657558ac9c511ff0ad4" title="保存图片，支持Bmp和Jpeg，编码质量在50-99之前（该接口已弃用，建议改用 MV_CC_SaveImageEx3() 接口）">MV_CC_SaveImageEx2()</a> 。 </li>
+<li>
+新增保存图像到文件接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga40f9049ef3772725e97d82a4a0b185df" title="保存图像到文件">MV_CC_SaveImageToFileEx()</a>，废弃旧接口 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga32f26edc877398d6a3dc431b096b47a0" title="保存图像到文件（该接口已弃用，建议改用 MV_CC_SaveImageToFileEx() 接口）">MV_CC_SaveImageToFile()</a>。 </li>
+<li>
+新增像素格式转换接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga36d02611e46d9c488cae6d2fe4eff262" title="像素格式转换">MV_CC_ConvertPixelTypeEx()</a>，废弃旧接口 <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga447c5adde3663634c18ab32c5d8a7a6a" title="像素格式转换（该接口已弃用，建议改用 MV_CC_ConvertPixelTypeEx() 接口）">MV_CC_ConvertPixelType()</a>。 </li>
+<li>
+新增图片保存参数结构体： <a class="el" href="struct_m_v___s_a_v_e___i_m_a_g_e___p_a_r_a_m___e_x3.html" title="图片保存参数">MV_SAVE_IMAGE_PARAM_EX3</a> 。 </li>
+<li>
+新增保存图片到文件参数结构体： <a class="el" href="struct_m_v___s_a_v_e___i_m_a_g_e___t_o___f_i_l_e___p_a_r_a_m___e_x.html" title="保存图片到文件参数">MV_SAVE_IMAGE_TO_FILE_PARAM_EX</a> 。 </li>
+<li>
+新增像素转换结构体： <a class="el" href="struct_m_v___c_c___p_i_x_e_l___c_o_n_v_e_r_t___p_a_r_a_m___e_x.html" title="像素转换结构体">MV_CC_PIXEL_CONVERT_PARAM_EX</a> 。 </li>
+<li>
+新增部分<a class="el" href="group___xE7_x8A_xB6_xE6_x80_x81_xE7_xA0_x81.html">状态码</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【文档调整】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+更新<a class="el" href="_xE7_x8E_xAF_xE5_xA2_x83_xE9_x85_x8D_xE7_xBD_xAE.html">环境配置</a> 章节的驱动安装步骤。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V3.2.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增清除取流数据缓存接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga90fcfa3fb929d76e99ea7f5946d6c5ff" title="清除取流数据缓存">MV_CC_ClearImageBuffer()</a> 。 </li>
+<li>
+新增图像旋转接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gac775d06840d619ba489ba02a732aa752" title="图像旋转">MV_CC_RotateImage()</a> 。 </li>
+<li>
+新增图像翻转接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#ga07cfc389b4a09de5bb81ac999f70cd0b" title="图像翻转">MV_CC_FlipImage()</a> 。 </li>
+<li>
+新增设置Bayer格式的Gamma信息接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gac0be390b7240cbf14df3f424d5c70ab5" title="设置Bayer格式的Gamma信息">MV_CC_SetBayerGammaParam()</a> 。 </li>
+<li>
+新增无损解码接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE5_xA4_x84_xE7_x90_x86.html#gaf4afd4daffefd78f3b044f26d6151c33" title="无损解码">MV_CC_HB_Decode()</a> 。 </li>
+<li>
+新增设置U3V的传输包大小接口： <a class="el" href="group___u3_v_xE7_x9B_xB8_xE6_x9C_xBA.html#gaf9880ddfc9b0a2c4a06b058993599f51" title="设置U3V的传输包大小">MV_USB_SetTransferSize()</a> 。 </li>
+<li>
+新增获取U3V的传输包大小接口： <a class="el" href="group___u3_v_xE7_x9B_xB8_xE6_x9C_xBA.html#ga205fd2f71841e4308942d591d8c5f4a3" title="获取U3V的传输包大小">MV_USB_GetTransferSize()</a> 。 </li>
+<li>
+新增设置U3V的传输通道个数接口： <a class="el" href="group___u3_v_xE7_x9B_xB8_xE6_x9C_xBA.html#gadb674609cf080d6de1c45ce08d6ee808" title="设置U3V的传输通道个数">MV_USB_SetTransferWays()</a> 。 </li>
+<li>
+新增获取U3V的传输通道个数接口： <a class="el" href="group___u3_v_xE7_x9B_xB8_xE6_x9C_xBA.html#ga81279e9efcb358c2b4202ca94440cfa1" title="获取U3V的传输通道个数">MV_USB_GetTransferWays()</a> 。 </li>
+<li>
+新增获取GVCP命令超时时间接口： <a class="el" href="group___gig_e_xE7_x9B_xB8_xE6_x9C_xBA.html#ga845e4f09d81a00e292b59d6ec0f591ce" title="获取GVCP命令超时时间">MV_GIGE_GetGvcpTimeout()</a> 。 </li>
+<li>
+新增设置重传GVCP命令次数接口： <a class="el" href="group___gig_e_xE7_x9B_xB8_xE6_x9C_xBA.html#gac83f55a145fbb0c84587948cc22e04e1" title="设置重传GVCP命令次数">MV_GIGE_SetRetryGvcpTimes()</a> 。 </li>
+<li>
+新增获取重传GVCP命令次数接口： <a class="el" href="group___gig_e_xE7_x9B_xB8_xE6_x9C_xBA.html#ga5a09d661574c303086cbb9b383bca9d1" title="获取重传GVCP命令次数">MV_GIGE_GetRetryGvcpTimes()</a> 。 </li>
+<li>
+新增图像旋转结构体： <a class="el" href="struct_m_v___c_c___r_o_t_a_t_e___i_m_a_g_e___p_a_r_a_m.html" title="图像旋转结构体">MV_CC_ROTATE_IMAGE_PARAM</a> 。 </li>
+<li>
+新增图像翻转结构体： <a class="el" href="struct_m_v___c_c___f_l_i_p___i_m_a_g_e___p_a_r_a_m.html" title="图像翻转结构体">MV_CC_FLIP_IMAGE_PARAM</a> 。 </li>
+<li>
+新增Gamma信息结构体： <a class="el" href="struct_m_v___c_c___g_a_m_m_a___p_a_r_a_m.html" title="Gamma信息结构体">MV_CC_GAMMA_PARAM</a> 。 </li>
+<li>
+新增水印信息结构体： <a class="el" href="struct_m_v___c_c___f_r_a_m_e___s_p_e_c___i_n_f_o.html" title="水印信息">MV_CC_FRAME_SPEC_INFO</a> 。 </li>
+<li>
+新增无损解码参数结构体： <a class="el" href="struct_m_v___c_c___h_b___d_e_c_o_d_e___p_a_r_a_m.html" title="无损解码参数">MV_CC_HB_DECODE_PARAM</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能优化】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+采用静态链接GenICam库的方式，不提供GenICam动态库。 </li>
+<li>
+GigE 驱动支持arm架构设备，支持两款开发板环境： NVIDIA TX2 和 ODROID-XU4 。 </li>
+<li>
+提供SDK安装包（Runtime包），包括驱动安装、U3V开缓存等脚本，不包含巨帧设置，区分arm和x86安装包。 </li>
+<li>
+更新驱动名称为 gevfilter。 </li>
+<li>
+更新注册单个Event事件回调接口，支持USB设备： <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#gacf91dadffe76819c9a10d2ec62077779" title="注册单个事件回调，在打开设备之后调用">MV_CC_RegisterEventCallBackEx()</a> 。 </li>
+<li>
+更新注册多个Event事件回调接口，支持USB设备： <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#gac36b8680dfbe6457b5f8ff78932ce76a" title="注册全部事件回调，在打开设备之后调用">MV_CC_RegisterAllEventCallBack()</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V3.1.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+X86架构对接Gige相机，新增驱动支持。 </li>
+<li>
+新增枚举以广播包回复的智能相机的支持。 </li>
+<li>
+新增3D相机的取流支持。 </li>
+<li>
+新增BGR图像取流及渲染的支持。 </li>
+<li>
+新增新相机（3.1.0及以后固件）ChunkData的支持。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V3.0.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增发出PTP时钟拍照动作命令函数接口： <a class="el" href="group___gig_e_xE7_x9B_xB8_xE6_x9C_xBA.html#ga6dd4eca90cd69d3d442d71563c5ef300" title="发出动作命令">MV_GIGE_IssueActionCommand()</a> 。 </li>
+<li>
+新增判断相机是否处于连接状态函数接口： <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#ga25ec535d08180f1c987c20c75b2224a2" title="判断设备是否处于连接状态">MV_CC_IsDeviceConnected()</a> 。 </li>
+<li>
+新增清除GenICam节点缓存接口： <a class="el" href="group___xE8_xAE_xBE_xE5_xA4_x87_x_m_l_xE6_x96_x87_xE4_xBB_xB6.html#ga4ef6fa3b866fe11dfacf6514d8a289d0" title="清除GenICam节点缓存">MV_CC_InvalidateNodes()</a> 。 </li>
+<li>
+新增释放图像缓存接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gaeff416b2d35df148fa2e63521d8847d3" title="释放图像缓存（此接口用于释放不再使用的图像缓存，与 MV_CC_GetImageBuffer() 配套使用）">MV_CC_FreeImageBuffer()</a> 。 </li>
+<li>
+新增高性能取流接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#ga33331585a4e2a64653b74af66157a6d8" title="获取一帧图片（与 MV_CC_Display() 不能同时使用）">MV_CC_GetImageBuffer()</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能优化】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+优化获取各种类型的信息函数接口： <a class="el" href="group___xE7_x9B_xB8_xE6_x9C_xBA_xE5_x88_x9D_xE5_xA7_x8B_xE5_x8C_x96.html#gaa0b5fc03d13b3d0dc37d06a6e96ed646" title="获取各种类型的信息">MV_CC_GetAllMatchInfo()</a> 。 </li>
+<li>
+优化获取网络传输相关信息函数接口： <a class="el" href="group___gig_e_xE7_x9B_xB8_xE6_x9C_xBA.html#ga95fbc062d66f54a2af61947f8f52e6b4" title="获取网络传输信息">MV_GIGE_GetNetTransInfo()</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V2.4.0 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增读取相机文件接口： <a class="el" href="group___xE8_xAF_xBB_xE5_x86_x99_xE7_x9B_xB8_xE6_x9C_xBA_xE6_x96_x87_xE4_xBB_xB6.html#ga50cac3acd95fee2899e7492ffac47db4" title="从设备读取文件">MV_CC_FileAccessRead()</a> 。 </li>
+<li>
+新增将本地文件写入相机接口： <a class="el" href="group___xE8_xAF_xBB_xE5_x86_x99_xE7_x9B_xB8_xE6_x9C_xBA_xE6_x96_x87_xE4_xBB_xB6.html#ga67b69d346a26d82c79091f7bee9e10c9" title="将文件写入设备">MV_CC_FileAccessWrite()</a> 。 </li>
+<li>
+新增导入相机属性接口： <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#ga4116f994b841652f4680a8d921c89d03" title="导入设备属性">MV_CC_FeatureLoad()</a> 。 </li>
+<li>
+新增保存相机属性接口： <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#gaca81257cf7e241b7f1be116a864d69e6" title="保存设备属性">MV_CC_FeatureSave()</a> 。 </li>
+<li>
+新增注册单个Event事件回调接口： <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#gacf91dadffe76819c9a10d2ec62077779" title="注册单个事件回调，在打开设备之后调用">MV_CC_RegisterEventCallBackEx()</a> 。 </li>
+<li>
+新增注册多个Event事件回调接口： <a class="el" href="group___xE4_xBA_x8B_xE4_xBB_xB6_xE5_x8F_x8A_xE5_xBC_x82_xE5_xB8_xB8.html#gac36b8680dfbe6457b5f8ff78932ce76a" title="注册全部事件回调，在打开设备之后调用">MV_CC_RegisterAllEventCallBack()</a> 。 </li>
+<li>
+新增设置SDK内部优先使用的网络模式接口： <a class="el" href="group___gig_e_xE7_x9B_xB8_xE6_x9C_xBA.html#ga4a46947998f4ecb94d04afb699f74fe0" title="设置传输模式，可以为单播模式、组播模式等">MV_GIGE_SetTransmissionType()</a> 。 </li>
+<li>
+新增设置sdklog文件保存路径接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga9c6780918bdbd0b71ee9600e4e500b48" title="设置SDK日志路径">MV_CC_SetSDKLogPath()</a> 。 </li>
+<li>
+新增新增图片保存接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#gab73eb88b16c79657558ac9c511ff0ad4" title="保存图片，支持Bmp和Jpeg，编码质量在50-99之前（该接口已弃用，建议改用 MV_CC_SaveImageEx3() 接口）">MV_CC_SaveImageEx2()</a> 。 </li>
+<li>
+新增获取相机64位int型节点值接口： <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#ga6240aac97e206f77b4ce3bd7a1ef1048" title="获取Integer属性值">MV_CC_GetIntValueEx()</a> 。 </li>
+<li>
+新增设置相机64位int型节点值接口： <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#ga9bf0ac21078791974fd4f5b8b2c6328b" title="设置Integer型属性值">MV_CC_SetIntValueEx()</a> 。 </li>
+<li>
+新增设置相机Enum型节点值接口： <a class="el" href="group___xE5_xB1_x9E_xE6_x80_xA7_xE9_x85_x8D_xE7_xBD_xAE.html#ga920d6f7c5547a7099feb85c6e9e738ab" title="设置Enum型属性值">MV_CC_SetEnumValueByString()</a> 。 </li>
+<li>
+新增获取相机参数导入导出进度接口： <a class="el" href="group___xE8_xAF_xBB_xE5_x86_x99_xE7_x9B_xB8_xE6_x9C_xBA_xE6_x96_x87_xE4_xBB_xB6.html#ga80244ce60e82b15d81341e2904465423" title="获取文件存取的进度">MV_CC_GetFileAccessProgress()</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"><h2>V2.2.0.7 </h2>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="mainparams"></div> <div class="subparamswhite"> </div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能新增】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+新增转换像素格式的接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga447c5adde3663634c18ab32c5d8a7a6a" title="像素格式转换（该接口已弃用，建议改用 MV_CC_ConvertPixelTypeEx() 接口）">MV_CC_ConvertPixelType()</a> 。 </li>
+<li>
+新增直接取图接口： <a class="el" href="group___xE5_x9B_xBE_xE5_x83_x8F_xE9_x87_x87_xE9_x9B_x86.html#gafb284e0ae3eeced7e1f9395317800c6f" title="采用超时机制获取一帧图片，SDK内部等待直到有数据时返回">MV_CC_GetOneFrameTimeout()</a> 。 </li>
+<li>
+新增图像保存接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga8f8ed9f4baa30e32f2845aee85baf721">MV_CC_SaveImage()</a> 。 </li>
+<li>
+新增图像保存拓展接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#ga63ed6e9ee6e3567cf4643f7d9fffa410" title="保存图片，支持Bmp和Jpeg，编码质量在50-99之前 （该接口已弃用，建议改用 MV_CC_SaveImageEx3() 接口）">MV_CC_SaveImageEx()</a> 。 </li>
+</ul>
+</div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"><b>【功能调整】</b></div></div><div class="subparamwhite" style="margin-left:12px"><div class="subparamswhite"> <ul>
+<li>
+逐渐废弃获取一帧图像接口： <a class="el" href="group___xE5_xBA_x9F_xE5_xBC_x83_xE6_x8E_xA5_xE5_x8F_xA3.html#gad0621c9b4ee6eca2b8ab3432309e11c0">MV_CC_GetOneFrame()</a> 。 </li>
+</ul>
+</div> </div></div></div><!-- PageDoc -->
+</div><!-- contents -->
+<!-- start footer part -->
+<div class="footer" style="text-align: right;">
+	<hr/>
+	<small></small>
+</div>
+<script>
+	// 当前选中的菜单
+	var currentMenuItem = document.querySelector('.tablist > li.current > a')
+	if (currentMenuItem) { // 子菜单情况
+	  window.parent.postMessage({
+		navHref: currentMenuItem.href
+	  }, '*')
+	} else {
+	  window.parent.postMessage({
+		url: window.location.href
+	  }, '*')
+	}
+  </script>
+</body>
+</html>
