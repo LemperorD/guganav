@@ -1,0 +1,6 @@
+/**:
+  ros_parameters: 
+    device_name: "" # 串口设备的文件地址
+    cam_ip: "192.168.1.100" # 相机IP地址
+    pc_ip: "" # 计算机IP地址
+    output_topic: "image" # 发布的ROS话题名称
