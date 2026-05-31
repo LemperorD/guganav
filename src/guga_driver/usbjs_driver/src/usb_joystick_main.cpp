@@ -20,8 +20,8 @@ UsbJoystickMain::UsbJoystickMain(const char *file_name)
     throw std::runtime_error(str.str());
   }
   std::cout << "\033[32m"
-          << "UsbJoystick name: " << name_c_str
-          << "\033[0m" << std::endl;
+            << "UsbJoystick name: " << name_c_str
+            << "\033[0m" << std::endl;
 
   is_running_ = true;
   timer_thread_ = std::thread(&UsbJoystickMain::timerThread, this);

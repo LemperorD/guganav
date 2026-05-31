@@ -25,14 +25,8 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
-#include "communication/Com.h"
-#include "communication/ros_serial_bridge.hpp"
-
-#include "pb_rm_interfaces/msg/robot_status.hpp"
-#include "pb_rm_interfaces/msg/game_status.hpp"
-#include "pb_rm_interfaces/msg/rfid_status.hpp"
-
-using json = nlohmann::json;
+#include "serial_driver/serial_driver_main.hpp"
+#include "serial_driver/ros_serial_bridge.hpp"
 
 namespace serial_driver
 {
@@ -43,43 +37,25 @@ public: // 构造和析构
   explicit SerialDriverNode(const rclcpp::NodeOptions & options);
   ~SerialDriverNode() override;
 
-public: // 检测雷达是否连接
+protected: // 友元
+  std::shared_ptr<SerialDriverMain> serial_driver_main_;
 
-private: // 编解码函数
+private: // 方法
+  void onConfigure();
   uint8_t* encodeTwist(const geometry_msgs::msg::Twist& msg);
-  std_msgs::msg::Float32 decodeYaw(const uint8_t* payload);
-  geometry_msgs::msg::Twist decodeTESspeed(const uint8_t* payload);
-  geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
-
-private: // dwa滤波器
-  int max_dwa_size_ = 15;
-  std::deque<double> dwa_;
-  double dwa_filter(double sample);
-  geometry_msgs::msg::Twist transformVelocityToChassis(const geometry_msgs::msg::Twist & twist_in, double yaw_diff);
-
-private:
-  void publishTransformGimbalVision();
   void publishTransformGimbalYaw(double yaw);
+  void publishTransformGimbalBase(double yaw);
+  inline double dwa_filter(double sample);
+  inline geometry_msgs::msg::Twist transformVelocityToChassis(
+      const geometry_msgs::msg::Twist& twist_in, double yaw_diff);
 
-private:
+private: // 成员变量
   std::string port_name_ = "/dev/ttyACM0";
   int baud_rate_ = 115200;
   double Yaw_bias_ = 0.0;
   double vel_trans_scale_ = 40.0;
   double yaw_diff_ = 0.0;
   double angle_init_ = 0.0;
-
-  std::shared_ptr<SerialCommunicationClass> com_;
-
-  // 模板类桥接器
-  std::shared_ptr<RosSerialBridge<geometry_msgs::msg::Twist>> bridge_twist_pc_;
-  std::shared_ptr<RosSerialBridge<std_msgs::msg::Float32>> bridge_Yaw_mcu_;
-  std::shared_ptr<RosSerialBridge<geometry_msgs::msg::Twist>> bridge_TESspeed_mcu_;
-  std::shared_ptr<RosSerialBridge<geometry_msgs::msg::Point>> bridge_EnemyPos_mcu_;
-
-  // timer
-  rclcpp::TimerBase::SharedPtr gimbal_vision_timer_;
-  rclcpp::TimerBase::SharedPtr referee_rx_timer_;
 
   // tf相关变量
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -92,17 +68,6 @@ private:
 
   // 多输入/输出所使用的成员变量可在此添加
   // Member variables used for multi-input/output can be added here
-  uint8_t chassis_mode_ = chassisFollowed;
-
-  // 判断是否有雷达连接
-  bool lidar_connected_ = false;
-
-private: // 裁判系统相关
-  rclcpp::Publisher<pb_rm_interfaces::msg::RobotStatus>::SharedPtr robot_status_pub_;
-  rclcpp::Publisher<pb_rm_interfaces::msg::GameStatus>::SharedPtr game_status_pub_;
-  rclcpp::Publisher<pb_rm_interfaces::msg::RfidStatus>::SharedPtr rfid_status_pub_;
-  void publishRefereeData();
-  pb_rm_interfaces::msg::RfidStatus rfid2ros(uint32_t rfid);
 };
 
 }  // namespace serial_driver
