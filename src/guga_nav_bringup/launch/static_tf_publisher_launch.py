@@ -138,6 +138,32 @@ def generate_launch_description():
         ],
     )
 
+    # gimbal_pitch_odom to gimbal_yaw static transform
+    start_static_transform_node6 = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform_publisher_node6",
+        output="screen",
+        arguments=[
+            "--x",
+            "0.0",
+            "--y",
+            "0.0",
+            "--z",
+            "-0.1",
+            "--roll",
+            "0.0",
+            "--pitch",
+            "0.0",
+            "--yaw",
+            "0.0",
+            "--frame-id",
+            "gimbal_pitch_odom",
+            "--child-frame-id",
+            "gimbal_yaw",
+        ],
+    )
+
     # chassis to front_mid360 static transform
     start_static_transform_node3 = Node(
         package="tf2_ros",
@@ -190,7 +216,7 @@ def generate_launch_description():
         ],
     )
 
-    # gimbal_pitch_odom to gimbal_pitch static transform
+    # gimbal_yaw to gimbal_pitch static transform
     start_static_transform_node5 = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
@@ -202,7 +228,7 @@ def generate_launch_description():
             "--y",
             "0.0",
             "--z",
-            "0.0",
+            "0.1",
             "--roll",
             "0.0",
             "--pitch",
@@ -210,7 +236,7 @@ def generate_launch_description():
             "--yaw",
             "0.0",
             "--frame-id",
-            "gimbal_pitch_odom",
+            "gimbal_yaw",
             "--child-frame-id",
             "gimbal_pitch",
         ],
@@ -229,6 +255,7 @@ def generate_launch_description():
     # Running Map Saver Server
     ld.add_action(start_static_transform_node1)
     ld.add_action(start_static_transform_node2)
+    ld.add_action(start_static_transform_node6)
     ld.add_action(start_static_transform_node3)
     ld.add_action(start_static_transform_node4)
     ld.add_action(start_static_transform_node5)

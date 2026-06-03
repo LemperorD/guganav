@@ -15,7 +15,7 @@
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
@@ -208,7 +208,7 @@ def generate_launch_description():
 
     joy_teleop_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(launch_dir, "joy_teleop_launch.py")),
-        IfCondition(use_joy_teleop),
+        condition=IfCondition(use_joy_teleop),
         launch_arguments={
             "namespace": namespace,
             "use_sim_time": use_sim_time,
@@ -219,9 +219,9 @@ def generate_launch_description():
     decision_simple_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
-                get_package_share_directory("decision_simple"),
+                get_package_share_directory("simple_decision"),
                 "launch",
-                "decision_simple.launch.py",
+                "simple_decision.launch.py",
             )
         ),
         condition=IfCondition(
@@ -229,20 +229,27 @@ def generate_launch_description():
         ),
     )
 
-    pb2025_behavior_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("pb2025_sentry_behavior"),
-                "launch",
-                "pb2025_sentry_behavior_launch.py",
-            )
-        ),
-        condition=IfCondition(
-        PythonExpression(
-            ["'", behavior_tree_type, "' == 'pb2025_sentry_behavior'"]
+    try:
+        pb2025_behavior_dir = get_package_share_directory("pb2025_sentry_behavior")
+    except PackageNotFoundError:
+        pb2025_behavior_dir = None
+
+    pb2025_behavior_cmd = None
+    if pb2025_behavior_dir is not None:
+        pb2025_behavior_cmd = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    pb2025_behavior_dir,
+                    "launch",
+                    "pb2025_sentry_behavior_launch.py",
+                )
+            ),
+            condition=IfCondition(
+                PythonExpression(
+                    ["'", behavior_tree_type, "' == 'pb2025_sentry_behavior'"]
+                )
+            ),
         )
-    ),
-    )
 
     ld = LaunchDescription()
 
@@ -269,5 +276,6 @@ def generate_launch_description():
     ld.add_action(rviz_cmd)
     ld.add_action(declare_behavior_tree_type_cmd)
     ld.add_action(decision_simple_cmd)
-    ld.add_action(pb2025_behavior_cmd)
+    if pb2025_behavior_cmd is not None:
+        ld.add_action(pb2025_behavior_cmd)
     return ld
