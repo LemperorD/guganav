@@ -1,7 +1,7 @@
 # 导航测试脚本
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source install/setup.bash
-ros2 launch guga_nav_bringup rm_navigation_reality_launch.py \
+ros2 launch guga_nav_bringup reality_launch.py \
 slam:=True \
 use_robot_state_pub:=False \
 use_rviz:=True \

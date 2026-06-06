@@ -181,7 +181,7 @@ done
 
 require_workspace_setup
 
-exec ros2 launch guga_nav_bringup rm_navigation_simulation_launch.py \
+exec ros2 launch guga_nav_bringup simulation_launch.py \
   world:="$world" \
   slam:="$slam" \
   "${launch_args[@]}"

@@ -145,7 +145,7 @@ def generate_launch_description():
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(launch_dir, "slam_launch.py")
+                    os.path.join(launch_dir, "core", "slam_launch.py")
                 ),
                 condition=IfCondition(slam),
                 launch_arguments={
@@ -158,7 +158,7 @@ def generate_launch_description():
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(launch_dir, "localization_launch.py")
+                    os.path.join(launch_dir, "core", "localization_launch.py")
                 ),
                 condition=IfCondition(PythonExpression(["not ", slam])),
                 launch_arguments={
@@ -175,7 +175,7 @@ def generate_launch_description():
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(launch_dir, "navigation_launch.py")
+                    os.path.join(launch_dir, "core", "navigation_launch.py")
                 ),
                 launch_arguments={
                     "namespace": namespace,
