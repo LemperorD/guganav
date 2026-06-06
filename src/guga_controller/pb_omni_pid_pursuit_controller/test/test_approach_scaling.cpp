@@ -10,6 +10,28 @@
 #include <memory>
 
 namespace pb_omni_pid_pursuit_controller {
+  namespace {
+
+    [[nodiscard]] nav_msgs::msg::Path makePath(double x_distance) {
+      nav_msgs::msg::Path path;
+      path.header.frame_id = "odom";
+      geometry_msgs::msg::PoseStamped ps;
+      ps.header.frame_id = "odom";
+      ps.pose.position.y = 0.0;
+      if (x_distance <= 0.0) {
+        path.poses.push_back(ps);
+        return path;
+      }
+      int steps = std::max(10, static_cast<int>(x_distance / 0.01));
+      double step = x_distance / steps;
+      for (int i = 0; i <= steps; ++i) {
+        ps.pose.position.x = i * step;
+        path.poses.push_back(ps);
+      }
+      return path;
+    }
+
+  }  // namespace
 
   class ApproachScalingTest : public ::testing::Test {
   protected:
@@ -27,25 +49,6 @@ namespace pb_omni_pid_pursuit_controller {
           "test_costmap");
       costmap_->on_configure(rclcpp_lifecycle::State{});
       controller_.configure(parent_, "test", tf_, costmap_);
-    }
-
-    nav_msgs::msg::Path makePath(double x_distance) const {
-      nav_msgs::msg::Path path;
-      path.header.frame_id = "odom";
-      geometry_msgs::msg::PoseStamped ps;
-      ps.header.frame_id = "odom";
-      ps.pose.position.y = 0.0;
-      if (x_distance <= 0.0) {
-        path.poses.push_back(ps);
-        return path;
-      }
-      int steps = std::max(10, static_cast<int>(x_distance / 0.01));
-      double step = x_distance / steps;
-      for (int i = 0; i <= steps; ++i) {
-        ps.pose.position.x = i * step;
-        path.poses.push_back(ps);
-      }
-      return path;
     }
 
     OmniPidPursuitControllerNode controller_;
@@ -77,5 +80,4 @@ namespace pb_omni_pid_pursuit_controller {
     EXPECT_LT(scaled, 0.05);
     EXPECT_DOUBLE_EQ(lin_vel, 0.05);  // floor enforced
   }
-
 }  // namespace pb_omni_pid_pursuit_controller

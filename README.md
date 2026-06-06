@@ -22,10 +22,10 @@ pre-commit install
 
 之后每次 `git commit` 自动运行：
 
-| 检查项                | 触发条件                                                     | 行为                 |
-| --------------------- | ------------------------------------------------------------ | -------------------- |
-| clang-format          | 修改了 C++ 文件                                              | 格式不合规则拒绝提交 |
-| terrain_analysis 测试 | 修改了 `src/guga_perception/terrain_analysis/`               | 测试失败则拒绝提交   |
-| PID 控制器测试        | 修改了 `src/guga_controller/pb_omni_pid_pursuit_controller/` | 测试失败则拒绝提交   |
-
+| 检查项                | 触发条件                                                                    | 行为                 |
+| --------------------- | --------------------------------------------------------------------------- | -------------------- |
+| clang-format          | 修改了核心包 C++ 文件                                                       | 自动格式化后拒绝提交 |
+| terrain_analysis 测试 | 修改了 `src/guga_perception/terrain_analysis/` 或对应测试脚本               | 测试失败则拒绝提交   |
+| PID 控制器测试        | 修改了 `src/guga_controller/pb_omni_pid_pursuit_controller/` 或对应测试脚本 | 测试失败则拒绝提交   |
+| simple_decision 测试  | 修改了 `src/guga_decision/simple_decision/` 或对应测试脚本                  | 测试失败则拒绝提交   |
 

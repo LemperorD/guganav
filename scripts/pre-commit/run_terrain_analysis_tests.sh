@@ -18,7 +18,7 @@ fi
 source_setup "$WS/install/setup.bash"
 cd "$WS"
 
-colcon build --packages-select pb_omni_pid_pursuit_controller \
+colcon build --symlink-install --packages-select terrain_analysis \
   --event-handlers console_direct+ \
   --cmake-args \
     -DBUILD_TESTING=ON \
@@ -26,8 +26,8 @@ colcon build --packages-select pb_omni_pid_pursuit_controller \
 
 source_setup "$WS/install/setup.bash"
 
-cd "$WS/build/pb_omni_pid_pursuit_controller"
-for t in test_pid test_geometry_utils test_visualise test_pathhandler test_approach_scaling test_types; do
+cd "$WS/build/terrain_analysis"
+for t in test_terrain_analysis test_context test_algorithm test_connectivity; do
   ./$t >/dev/null 2>&1 || { echo "FAILED: $t"; exit 1; }
 done
-echo "PID: all tests OK"
+echo "terrain_analysis: all tests OK"

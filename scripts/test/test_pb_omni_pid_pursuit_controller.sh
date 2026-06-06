@@ -31,6 +31,7 @@ colcon build --packages-select pb_omni_pid_pursuit_controller \
   --event-handlers console_direct+ \
   --cmake-args \
     -DBUILD_TESTING=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DCMAKE_CXX_FLAGS="--coverage -O0" \
     -DCMAKE_C_FLAGS="--coverage -O0" \
     -DCMAKE_EXE_LINKER_FLAGS="--coverage" \

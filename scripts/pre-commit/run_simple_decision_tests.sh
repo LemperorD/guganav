@@ -15,10 +15,11 @@ source_setup() {
 if [ -z "${ROS_DISTRO:-}" ]; then
   source_setup /opt/ros/humble/setup.bash
 fi
+source_setup "$HOME/nav2_ws/install/setup.bash"
 source_setup "$WS/install/setup.bash"
 cd "$WS"
 
-colcon build --packages-select pb_omni_pid_pursuit_controller \
+colcon build --packages-up-to simple_decision \
   --event-handlers console_direct+ \
   --cmake-args \
     -DBUILD_TESTING=ON \
@@ -26,8 +27,8 @@ colcon build --packages-select pb_omni_pid_pursuit_controller \
 
 source_setup "$WS/install/setup.bash"
 
-cd "$WS/build/pb_omni_pid_pursuit_controller"
-for t in test_pid test_geometry_utils test_visualise test_pathhandler test_approach_scaling test_types; do
+cd "$WS/build/simple_decision"
+for t in test_transform test_environment_context test_decision test_simple_decision; do
   ./$t >/dev/null 2>&1 || { echo "FAILED: $t"; exit 1; }
 done
-echo "PID: all tests OK"
+echo "simple_decision: all tests OK"

@@ -19,11 +19,26 @@
 | ------------------------ | ---------------------------------------------------------------------- |
 | `scripts/colconBuild.sh` | 使用 Release 配置执行 `colcon build`，并导出 `compile_commands.json`。 |
 
-## 测试与覆盖率
+## Git 辅助
+
+| 脚本                 | 用途                                                                    |
+| -------------------- | ----------------------------------------------------------------------- |
+| `scripts/gitPush.sh` | 按项目格式生成 commit message；传入 `--push` 时提交成功后推送当前分支。 |
+
+## 测试
+
+| 脚本                                               | 用途                                                   |
+| -------------------------------------------------- | ------------------------------------------------------ |
+| `scripts/pre-commit/run_terrain_analysis_tests.sh` | pre-commit/CI 使用的 `terrain_analysis` 快速测试入口。 |
+| `scripts/pre-commit/run_pid_tests.sh`              | pre-commit/CI 使用的 PID/controller 快速测试入口。     |
+| `scripts/pre-commit/run_simple_decision_tests.sh`  | pre-commit/CI 使用的 `simple_decision` 快速测试入口。  |
+
+## 手动覆盖率
+
+覆盖率脚本用于本地阶段性检查，不作为默认 pre-commit/CI 流程。
 
 | 脚本                                                  | 用途                                                                      |
 | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| `scripts/pre-commit/run_pid_tests.sh`                 | pre-commit 使用的 PID/controller 快速构建与测试入口。                     |
 | `scripts/test/test_terrain_analysis_coverage.sh`      | 构建并运行 `terrain_analysis` 测试，生成 gcovr 覆盖率报告。               |
 | `scripts/test/test_simple_decision_coverage.sh`       | 构建并运行 `simple_decision` 测试，生成 gcovr 覆盖率报告。                |
 | `scripts/test/test_pb_omni_pid_pursuit_controller.sh` | 构建并运行 `pb_omni_pid_pursuit_controller` 测试，生成 gcovr 覆盖率报告。 |

@@ -9,21 +9,21 @@ repos:
 
       - id: test-terrain-analysis
         name: test terrain_analysis
-        entry: scripts/test/test_terrain_analysis_coverage.sh
+        entry: scripts/pre-commit/run_terrain_analysis_tests.sh
         language: system
         pass_filenames: false
-        files: ^src/guga_perception/terrain_analysis/.*$
+        files: ^(src/guga_perception/terrain_analysis/.*|scripts/pre-commit/run_terrain_analysis_tests\.sh|scripts/test/test_terrain_analysis_coverage\.sh)$
 
       - id: test-pid-controller
         name: test pid controller
         entry: scripts/pre-commit/run_pid_tests.sh
         language: system
         pass_filenames: false
-        files: ^src/guga_controller/pb_omni_pid_pursuit_controller/.*$
+        files: ^(src/guga_controller/pb_omni_pid_pursuit_controller/.*|scripts/pre-commit/run_pid_tests\.sh|scripts/test/test_pb_omni_pid_pursuit_controller\.sh)$
 
       - id: test-simple-decision
         name: test simple_decision
-        entry: scripts/test/test_simple_decision_coverage.sh
+        entry: scripts/pre-commit/run_simple_decision_tests.sh
         language: system
         pass_filenames: false
-        files: ^src/guga_decision/simple_decision/.*$
+        files: ^(src/guga_decision/simple_decision/.*|scripts/pre-commit/run_simple_decision_tests\.sh|scripts/test/test_simple_decision_coverage\.sh)$
