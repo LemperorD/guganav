@@ -51,7 +51,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +u
           source /opt/ros/humble/setup.bash
+          set -u
           mapfile -t core_cpp_files < <(
             git ls-files \
               src/guga_perception/terrain_analysis \
