@@ -7,7 +7,7 @@
 | Launch | 用途 |
 | --- | --- |
 | `reality_launch.py` | 实车导航/建图入口，由 `scripts/map.sh` 和 `scripts/nav_decision.sh` 调用。 |
-| `simulation_launch.py` | 仿真导航/建图入口，由 `scripts/simulation` 调用。 |
+| `simulation_launch.py` | 仿真导航/建图入口，由 `scripts/simulation.sh` 调用。 |
 
 ## 核心层
 

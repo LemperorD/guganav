@@ -6,14 +6,14 @@ WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/simulation <nav[n]|map[m]> [world] [launch_arg:=value ...]
+  scripts/simulation.sh <nav[n]|map[m]> [world] [launch_arg:=value ...]
 
 Examples:
-  scripts/simulation n
-  scripts/simulation nav
-  scripts/simulation m rmul_2025
-  scripts/simulation map rmul_2025
-  scripts/simulation nav rmuc_2025 use_rviz:=False
+  scripts/simulation.sh n
+  scripts/simulation.sh nav
+  scripts/simulation.sh m rmul_2025
+  scripts/simulation.sh map rmul_2025
+  scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 EOF
 }
 
@@ -94,24 +94,24 @@ run_complete_simulation() {
     fi
   done
 
-  if run_in_terminal "guganav gazebo" "$WS/scripts/simulation" __gazebo world:="$world_arg"; then
+  if run_in_terminal "guganav gazebo" "$WS/scripts/simulation.sh" __gazebo world:="$world_arg"; then
     sleep "$start_delay"
-    if run_in_terminal "guganav ${run_mode}" "$WS/scripts/simulation" "$nav_mode" "$@"; then
+    if run_in_terminal "guganav ${run_mode}" "$WS/scripts/simulation.sh" "$nav_mode" "$@"; then
       echo "Started complete simulation: gazebo + ${run_mode}/rviz"
       return 0
     fi
 
     echo "Could not open a second terminal; running ${run_mode}/rviz in current terminal." >&2
-    "$WS/scripts/simulation" "$nav_mode" "$@"
+    "$WS/scripts/simulation.sh" "$nav_mode" "$@"
     return 0
   fi
 
   echo "No supported terminal emulator found; running gazebo in background." >&2
-  "$WS/scripts/simulation" __gazebo world:="$world_arg" &
+  "$WS/scripts/simulation.sh" __gazebo world:="$world_arg" &
   local gazebo_pid=$!
   trap 'kill "$gazebo_pid" 2>/dev/null || true' EXIT
   sleep "$start_delay"
-  "$WS/scripts/simulation" "$nav_mode" "$@"
+  "$WS/scripts/simulation.sh" "$nav_mode" "$@"
 }
 
 mode=${1:-}

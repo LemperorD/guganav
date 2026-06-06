@@ -6,19 +6,19 @@
 
 | 脚本                       | 用途                                                                   |
 | -------------------------- | ---------------------------------------------------------------------- |
-| `scripts/simulation`       | 一键启动完整仿真，`nav[n]` 或 `map[m]` 会拉起 Gazebo 与导航/建图 RViz。 |
+| `scripts/simulation.sh`    | 一键启动完整仿真，`nav[n]` 或 `map[m]` 会拉起 Gazebo 与导航/建图 RViz。 |
 | `scripts/map.sh`           | 启动实车建图入口，`slam:=True`。                                       |
 | `scripts/nav_decision.sh`  | 基于统一实车 launch 启动导航决策测试，开启 RViz 与通信，关闭 robot state publisher。 |
-| `scripts/real_save_map.sh` | 保存实车 2D 栅格地图到 `src/guga_nav_bringup/map/reality/`。           |
+| `scripts/save_map.sh`      | 保存实车 2D 栅格地图到 `src/guga_nav_bringup/map/reality/`。           |
 
 示例：
 
 ```bash
-scripts/simulation n
-scripts/simulation nav
-scripts/simulation m rmul_2025
-scripts/simulation map rmul_2025
-scripts/simulation nav rmuc_2025 use_rviz:=False
+scripts/simulation.sh n
+scripts/simulation.sh nav
+scripts/simulation.sh m rmul_2025
+scripts/simulation.sh map rmul_2025
+scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 ```
 
 ## 构建
