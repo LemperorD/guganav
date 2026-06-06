@@ -73,7 +73,7 @@ edit_field() {
 
 print_commit_message() {
   echo
-  echo "commit message:"
+  echo "提交预览："
   echo "$title"
   echo
   echo "范围：$scope"
@@ -99,15 +99,19 @@ edit_commit_message() {
     case "$choice" in
       1)
         title=$(edit_field "标题" "$title")
+        return
         ;;
       2)
         scope=$(edit_field "范围" "$scope")
+        return
         ;;
       3)
         behavior=$(edit_field "行为" "$behavior")
+        return
         ;;
       4)
         validation=$(edit_field "验证" "$validation")
+        return
         ;;
       5)
         return
@@ -124,15 +128,15 @@ confirm_commit_message() {
 
   while true; do
     print_commit_message
-    read -r -p "确认提交？[y 提交 / e 修改 / n 取消] " confirm
+    read -r -p "确认提交？[y 提交 / e 修改 / n 取消，默认提交] " confirm
     case "$confirm" in
-      y|Y)
+      y|Y|"")
         return 0
         ;;
       e|E)
         edit_commit_message
         ;;
-      n|N|"")
+      n|N)
         echo "已取消。"
         return 1
         ;;
