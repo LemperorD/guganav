@@ -27,7 +27,7 @@ echo "=== Clean previous coverage data ===" | tee -a "$RESULT_FILE"
 find build/terrain_analysis -name "*.gcda" -delete 2>/dev/null
 
 echo "=== Build terrain_analysis with coverage flags ===" | tee -a "$RESULT_FILE"
-colcon build --symlink-install --allow-overriding terrain_analysis --packages-select terrain_analysis \
+colcon build --symlink-install --packages-select terrain_analysis \
   --event-handlers console_direct+ \
   --cmake-args \
     -DBUILD_TESTING=ON \
