@@ -8,7 +8,7 @@
 | -------------------------- | ---------------------------------------------------------------------- |
 | `scripts/simulation`       | 一键启动完整仿真，`nav[n]` 或 `map[m]` 会拉起 Gazebo 与导航/建图 RViz。 |
 | `scripts/map.sh`           | 启动实车建图入口，`slam:=True`。                                       |
-| `scripts/nav_decision.sh`  | 启动实车导航决策测试入口，`slam:=True`，`behavior_tree_type:=manual`。 |
+| `scripts/nav_decision.sh`  | 基于统一实车 launch 启动导航决策测试，开启 RViz 与通信，关闭 robot state publisher。 |
 | `scripts/real_save_map.sh` | 保存实车 2D 栅格地图到 `src/guga_nav_bringup/map/reality/`。           |
 
 示例：
