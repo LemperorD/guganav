@@ -20,7 +20,9 @@ cd "$WS"
 
 colcon build --packages-select pb_omni_pid_pursuit_controller \
   --event-handlers console_direct+ \
-  --cmake-args -DBUILD_TESTING=ON
+  --cmake-args \
+    -DBUILD_TESTING=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 source_setup "$WS/install/setup.bash"
 
