@@ -102,7 +102,7 @@ namespace simple_decision {
     bool isRecent(Stamp last, int64_t now_ns, double hold_sec) {
       const int64_t last_ns = toFullNanos(last.sec, last.nanosec);
       return (last_ns != 0)
-          && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
+             && (static_cast<double>(now_ns - last_ns) * 1e-9 <= hold_sec);
     }
   }  // namespace
 
@@ -137,8 +137,8 @@ namespace simple_decision {
                                         attacked_hold_sec_);
 
     snapshot.needs_supply = isStatusBad(snapshot.robotstatus)
-                         || (snapshot.state == State::SUPPLY
-                             && !isStatusRecovered(snapshot.robotstatus));
+                            || (snapshot.state == State::SUPPLY
+                                && !isStatusRecovered(snapshot.robotstatus));
 
     snapshot.default_spin_latched = default_spin_latched_;
     snapshot.at_center = isNearRobotPose(config_.default_x, config_.default_y,

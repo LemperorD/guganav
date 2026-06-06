@@ -84,8 +84,8 @@ namespace simple_decision {
     }
 
     action.chassis_mode = s.attacked_recent || action.default_spin_latched
-                            ? ChassisMode::LITTLE_TES
-                            : ChassisMode::CHASSIS_FOLLOWED;
+                              ? ChassisMode::LITTLE_TES
+                              : ChassisMode::CHASSIS_FOLLOWED;
     return action;
   }
 

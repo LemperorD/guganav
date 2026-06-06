@@ -3,16 +3,9 @@ repos:
     hooks:
       - id: clang-format
         name: clang-format
-        entry: clang-format --dry-run -Werror
+        entry: clang-format -i
         language: system
-        types: [c, c++]
-        exclude: |
-          (?x)^(
-            src/guga_thirdparty/.*|
-            src/guga_sim/.*|
-            build/.*|
-            install/.*
-          )$
+        files: ^(src/guga_perception/terrain_analysis|src/guga_controller/pb_omni_pid_pursuit_controller|src/guga_decision/simple_decision)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
 
       - id: test-terrain-analysis
         name: test terrain_analysis
@@ -27,3 +20,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^src/guga_controller/pb_omni_pid_pursuit_controller/.*$
+
+      - id: test-simple-decision
+        name: test simple_decision
+        entry: scripts/test/test_simple_decision_coverage.sh
+        language: system
+        pass_filenames: false
+        files: ^src/guga_decision/simple_decision/.*$

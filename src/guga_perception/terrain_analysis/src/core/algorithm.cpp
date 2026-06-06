@@ -88,7 +88,7 @@ namespace {
     int cell = static_cast<int>(
                    std::floor((point_cloud - vehicle_cloud + half_voxel_size)
                               / voxel_size))
-             + half_width;
+               + half_width;
     return cell;
   }
 
@@ -102,7 +102,7 @@ namespace {
       return true;
     }
     double elapsed = state.laser_cloud_time - state.system_init_time
-                   - state.terrain_voxel_update_time[cell];
+                     - state.terrain_voxel_update_time[cell];
     return elapsed >= config.voxel_time_update_thre;
   }
 
@@ -118,7 +118,7 @@ namespace {
     bool near = distance < config.no_decay_distance;
     bool decayed = (state.laser_cloud_time - state.system_init_time
                     - point_time)
-                >= config.decay_time;
+                   >= config.decay_time;
     if (decayed && !near) {
       return false;
     }
@@ -137,19 +137,19 @@ namespace {
   SensorPoint transformToSensorFrame(double x, double y, double z,
                                      const TerrainState& state) {
     double rotated_x = (x * state.cos_vehicle_yaw)
-                     + (y * state.sin_vehicle_yaw);
+                       + (y * state.sin_vehicle_yaw);
     double rotated_y = -(x * state.sin_vehicle_yaw)
-                     + (y * state.cos_vehicle_yaw);
+                       + (y * state.cos_vehicle_yaw);
 
     double pitched_x = (rotated_x * state.cos_vehicle_pitch)
-                     - (z * state.sin_vehicle_pitch);
+                       - (z * state.sin_vehicle_pitch);
     double pitched_z = (rotated_x * state.sin_vehicle_pitch)
-                     + (z * state.cos_vehicle_pitch);
+                       + (z * state.cos_vehicle_pitch);
 
     double rolled_y = (rotated_y * state.cos_vehicle_roll)
-                    + (pitched_z * state.sin_vehicle_roll);
+                      + (pitched_z * state.sin_vehicle_roll);
     double rolled_z = -(rotated_y * state.sin_vehicle_roll)
-                    + (pitched_z * state.cos_vehicle_roll);
+                      + (pitched_z * state.cos_vehicle_roll);
 
     return {pitched_x, rolled_y, rolled_z};
   }
@@ -402,7 +402,7 @@ void TerrainAlgorithm::estimateGround(const TerrainConfig& config,
         int neighbor_col = col + delta_col;
         if (neighbor_col >= 0 && neighbor_col < width) {
           int index = static_cast<int>(base) + (delta_row * PLANAR_VOXEL_WIDTH)
-                    + delta_col;
+                      + delta_col;
           state.planar_point_elev[static_cast<size_t>(index)].push_back(
               point.z);
         }
@@ -563,7 +563,7 @@ void TerrainAlgorithm::checkTerrainConnectivity(const TerrainConfig& config,
       TerrainConfig::PLANAR_VOXEL_HALF_WIDTH);
   if (state.planar_point_elev[center].empty()) {
     state.planar_voxel_elev[center] = state.vehicle_z
-                                    + config.terrain_under_vehicle;
+                                      + config.terrain_under_vehicle;
   }
 
   std::queue<size_t> cell_queue;

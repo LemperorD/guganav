@@ -218,9 +218,8 @@ namespace pb_omni_pid_pursuit_controller {
           chassisModeCallback(msg);
         });
 
-    path_handler_ = std::make_unique<PathHandler>(tf_, costmap_ros_,
-                                                  local_path_pub_,
-                                                  config_.transform_tolerance);
+    path_handler_ = std::make_unique<PathHandler>(
+        tf_, costmap_ros_, local_path_pub_, config_.transform_tolerance);
     config_.max_robot_pose_search_dist = path_handler_->getCostmapMaxExtent();
 
     move_pid_ = std::make_shared<PID>(
@@ -375,8 +374,8 @@ namespace pb_omni_pid_pursuit_controller {
                                                      double& angular_vel) {
     linear_vel = move_pid_->calculate(linear_distance, 0);
     angular_vel = config_.enable_rotation
-                    ? heading_pid_->calculate(angle_to_goal, 0)
-                    : 0.0;
+                      ? heading_pid_->calculate(angle_to_goal, 0)
+                      : 0.0;
   }
 
   void OmniPidPursuitControllerNode::applyVelocityLimits(
@@ -393,7 +392,7 @@ namespace pb_omni_pid_pursuit_controller {
     double lookahead_dist = config_.lookahead_dist;
     if (config_.use_velocity_scaled_lookahead_dist) {
       lookahead_dist = std::hypot(speed.linear.x, speed.linear.y)
-                     * config_.lookahead_time;
+                       * config_.lookahead_time;
       lookahead_dist = std::clamp(lookahead_dist, config_.min_lookahead_dist,
                                   config_.max_lookahead_dist);
     }
@@ -408,7 +407,7 @@ namespace pb_omni_pid_pursuit_controller {
         transformed_plan.poses.begin(), transformed_plan.poses.end(),
         [&](const auto& ps) {
           return std::hypot(ps.pose.position.x, ps.pose.position.y)
-              >= lookahead_dist;
+                 >= lookahead_dist;
         });
 
     if (goal_pose_it == transformed_plan.poses.end()) {
@@ -463,19 +462,20 @@ namespace pb_omni_pid_pursuit_controller {
       if (curvature > config_.curvature_max) {
         reduction_ratio = config_.reduction_ratio_at_high_curvature;
       } else {
-        reduction_ratio = 1.0
-                        - ((curvature - config_.curvature_min)
-                           / (config_.curvature_max - config_.curvature_min)
-                           * (1.0 - config_.reduction_ratio_at_high_curvature));
+        reduction_ratio =
+            1.0
+            - ((curvature - config_.curvature_min)
+               / (config_.curvature_max - config_.curvature_min)
+               * (1.0 - config_.reduction_ratio_at_high_curvature));
       }
 
       double target_scaled_vel = linear_vel * reduction_ratio;
       double rate_limit = config_.max_velocity_scaling_factor_rate
-                        * config_.control_duration;
-      scaled_linear_vel = state_.last_velocity_scaling_factor
-                        + std::clamp(target_scaled_vel
-                                         - state_.last_velocity_scaling_factor,
-                                     -rate_limit, rate_limit);
+                          * config_.control_duration;
+      scaled_linear_vel =
+          state_.last_velocity_scaling_factor
+          + std::clamp(target_scaled_vel - state_.last_velocity_scaling_factor,
+                       -rate_limit, rate_limit);
     }
     scaled_linear_vel = std::max(scaled_linear_vel,
                                  2.0 * config_.min_approach_linear_velocity);
@@ -509,8 +509,8 @@ namespace pb_omni_pid_pursuit_controller {
         backward_pose.pose.position, lookahead_pose.pose.position,
         forward_pose.pose.position);
     double curvature = 1.0 / curvature_radius;
-    auto markers = visualization_helper::visualizeCurvaturePoints(
-        backward_pose, forward_pose);
+    auto markers = visualization_helper::visualizeCurvaturePoints(backward_pose,
+                                                                  forward_pose);
     curvature_points_pub_->publish(markers);
     return curvature;
   }

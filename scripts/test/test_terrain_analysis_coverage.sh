@@ -1,19 +1,30 @@
 #!/bin/bash
+set -euo pipefail
+
 WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)
 PKG=${1:-terrain_analysis}
 
-if [ -z "$ROS_DISTRO" ]; then
-  test -f /opt/ros/humble/setup.bash && source /opt/ros/humble/setup.bash
+source_setup() {
+  local setup_file=$1
+  if [ -f "$setup_file" ]; then
+    set +u
+    source "$setup_file"
+    set -u
+  fi
+}
+
+if [ -z "${ROS_DISTRO:-}" ]; then
+  source_setup /opt/ros/humble/setup.bash
 fi
-test -f "$WS/install/setup.bash" && source "$WS/install/setup.bash"
+source_setup "$WS/install/setup.bash"
 cd "$WS"
 
+mkdir -p build/terrain_analysis
 RESULT_FILE=$WS/build/terrain_analysis/coverage_result.ans
 rm -f "$RESULT_FILE"
 
 echo "=== Clean previous coverage data ===" | tee -a "$RESULT_FILE"
 find build/terrain_analysis -name "*.gcda" -delete 2>/dev/null
-mkdir -p build/terrain_analysis
 
 echo "=== Build terrain_analysis with coverage flags ===" | tee -a "$RESULT_FILE"
 colcon build --symlink-install --allow-overriding terrain_analysis --packages-select terrain_analysis \
@@ -24,7 +35,7 @@ colcon build --symlink-install --allow-overriding terrain_analysis --packages-se
     -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
   2>&1 | tee -a "$RESULT_FILE"
 
-. "$WS/install/setup.bash"
+source_setup "$WS/install/setup.bash"
 
 echo "=== Run tests ===" | tee -a "$RESULT_FILE"
 cd "$WS/build/terrain_analysis"
@@ -70,8 +81,6 @@ gcovr \
   --exclude '.*test.*' \
   --exclude '.*gtest.*' \
   --gcov-ignore-errors=source_not_found 2>&1 | tee -a "$RESULT_FILE"
-
-ln -sf build/terrain_analysis/lcov_terrain_analysis.info lcov.info
 
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Done ===" | tee -a "$RESULT_FILE"

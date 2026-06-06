@@ -1,0 +1,65 @@
+name: Minimal CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pre-commit:
+    name: Run pre-commit checks
+    runs-on: ubuntu-22.04
+    container: ros:humble-ros-base
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y \
+            clang-format \
+            gcovr \
+            git \
+            python3-colcon-common-extensions \
+            python3-pip \
+            python3-rosdep
+          pip3 install pre-commit
+
+      - name: Install ROS dependencies for pre-commit packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+          rosdep update --rosdistro humble
+          rosdep install \
+            --from-paths \
+              src/guga_perception/terrain_analysis \
+              src/guga_controller/pb_omni_pid_pursuit_controller \
+              src/guga_interfaces \
+              src/guga_decision/simple_decision \
+            --ignore-src \
+            --rosdistro humble \
+            -r -y
+
+      - name: Run checks for pre-commit core packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/humble/setup.bash
+          mapfile -t core_cpp_files < <(
+            git ls-files \
+              src/guga_perception/terrain_analysis \
+              src/guga_controller/pb_omni_pid_pursuit_controller \
+              src/guga_decision/simple_decision \
+              | grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
+          )
+          clang-format --dry-run -Werror "${core_cpp_files[@]}"
+          pre-commit run test-terrain-analysis --all-files
+          pre-commit run test-pid-controller --all-files
+          pre-commit run test-simple-decision --all-files

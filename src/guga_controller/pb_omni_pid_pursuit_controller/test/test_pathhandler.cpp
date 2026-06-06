@@ -9,16 +9,20 @@ using pb_omni_pid_pursuit_controller::PathHandler;
 
 class PathHandlerTest : public ::testing::Test {
 protected:
-  static void SetUpTestSuite() { rclcpp::init(0, nullptr); }
-  static void TearDownTestSuite() { rclcpp::shutdown(); }
+  static void SetUpTestSuite() {
+    rclcpp::init(0, nullptr);
+  }
+  static void TearDownTestSuite() {
+    rclcpp::shutdown();
+  }
 };
 
 TEST_F(PathHandlerTest, EmptyPlanThrows) {
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("test_node");
   auto tf = std::make_shared<tf2_ros::Buffer>(node->get_clock());
   auto pub = node->create_publisher<nav_msgs::msg::Path>("test_plan", 1);
-  auto costmap =
-      std::make_shared<nav2_costmap_2d::Costmap2DROS>("test_costmap");
+  auto costmap = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+      "test_costmap");
   costmap->on_configure(rclcpp_lifecycle::State{});
 
   PathHandler handler(tf, costmap, pub);
