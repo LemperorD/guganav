@@ -39,7 +39,6 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory("guga_nav_bringup")
     launch_dir = os.path.join(bringup_dir, "launch")
 
-    # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
     slam = LaunchConfiguration("slam")
     map_yaml_file = LaunchConfiguration("map")
@@ -51,24 +50,17 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
-    # Create our own temporary YAML files that include substitutions
-    param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
-
-    # Only it applies when `namespace` is not empty.
-    # '<robot_namespace>' keyword shall be replaced by 'namespace' launch argument
-    # in config file 'nav2_multirobot_params.yaml' as a default & example.
-    # User defined config file should contain '<robot_namespace>' keyword for the replacements.
     params_file = ReplaceString(
+        condition=LaunchConfigurationEquals("namespace", ""),
         source_file=params_file,
         replacements={"<robot_namespace>": ("")},
-        condition=LaunchConfigurationEquals("namespace", ""),
     )
-
     params_file = ReplaceString(
+        condition=LaunchConfigurationNotEquals("namespace", ""),
         source_file=params_file,
         replacements={"<robot_namespace>": ("/", namespace)},
-        condition=LaunchConfigurationNotEquals("namespace", ""),
     )
+    param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
 
     configured_params = ParameterFile(
         RewrittenYaml(

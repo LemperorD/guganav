@@ -45,7 +45,6 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
-    use_joy_teleop = LaunchConfiguration("use_joy_teleop")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -136,12 +135,6 @@ def generate_launch_description():
         # "use_rviz", default_value="False", description="Whether to start RVIZ"
     )
 
-    declare_joy_cmd = DeclareLaunchArgument(
-        "use_joy_teleop",
-        default_value="False",
-        description="Whether to start the joy teleop node",
-    )
-
     # Create our own temporary YAML files that include substitutions
 
     configured_params = ParameterFile(
@@ -212,16 +205,6 @@ def generate_launch_description():
         }.items(),
     )
 
-    joy_teleop_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(launch_dir, "joy_teleop_launch.py")),
-        condition=IfCondition(use_joy_teleop),
-        launch_arguments={
-            "namespace": namespace,
-            "use_sim_time": use_sim_time,
-            "joy_config_file": params_file,
-        }.items(),
-    )
-
     communication_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, "communication.launch.py")
@@ -248,14 +231,12 @@ def generate_launch_description():
     ld.add_action(declare_use_robot_state_pub_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_respawn_cmd)
-    ld.add_action(declare_joy_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(start_static_publisher_cmd)
     ld.add_action(start_livox_ros_driver2_node)
     ld.add_action(bringup_cmd)
-    ld.add_action(joy_teleop_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(communication_cmd)
 

@@ -27,11 +27,9 @@ from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
-    # Get the launch directory
     bringup_dir = get_package_share_directory("guga_nav_bringup")
     launch_dir = os.path.join(bringup_dir, "launch")
 
-    # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
     slam = LaunchConfiguration("slam")
     world = LaunchConfiguration("world")
@@ -103,9 +101,7 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value=os.path.join(
-            # bringup_dir, "config", "simulation", "nav2_params.yaml"
             bringup_dir, "config", "simulation", "nav2_params_smoother.yaml"
-            # bringup_dir, "config", "simulation", "nav2_params_mppi.yaml"
         ),
         description="Full path to the ROS2 parameters file to use for all launched nodes",
     )
@@ -159,7 +155,6 @@ def generate_launch_description():
 
     bringup_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(launch_dir, "bringup_launch.py")),
-        #PythonLaunchDescriptionSource(os.path.join(launch_dir, "bringup_launch_test.py")),
         launch_arguments={
             "namespace": namespace,
             "slam": slam,
@@ -175,7 +170,6 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
-    # Declare the launch options
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_world_cmd)
@@ -189,7 +183,6 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
-    # Add the actions to launch all of the navigation nodes
     ld.add_action(start_velodyne_convert_tool)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
