@@ -50,17 +50,3 @@ scripts/simulation nav rmuc_2025 use_rviz:=False
 | `scripts/test/test_terrain_analysis_coverage.sh`      | 构建并运行 `terrain_analysis` 测试，生成 gcovr 覆盖率报告。               |
 | `scripts/test/test_simple_decision_coverage.sh`       | 构建并运行 `simple_decision` 测试，生成 gcovr 覆盖率报告。                |
 | `scripts/test/test_pb_omni_pid_pursuit_controller.sh` | 构建并运行 `pb_omni_pid_pursuit_controller` 测试，生成 gcovr 覆盖率报告。 |
-
-## rosbag 诊断
-
-| 脚本                                   | 用途                                                         |
-| -------------------------------------- | ------------------------------------------------------------ |
-| `scripts/analyze_controller.py`        | 从 rosbag 统计控制器速度、局部路径、全局路径和错误日志指标。 |
-| `scripts/visualize_bag_diagnostics.py` | 从 rosbag 生成速度跟踪、碰撞、costmap 等诊断图和 CSV。       |
-
-示例：
-
-```bash
-python3 scripts/analyze_controller.py <bag_path> --storage mcap
-python3 scripts/visualize_bag_diagnostics.py <bag_path> --storage mcap --output-prefix bag_diag
-```
