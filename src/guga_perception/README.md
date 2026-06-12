@@ -1,9 +1,8 @@
 # guga_perception
 
-感知模块，实现里程计，建图，生成代价地图，进行定位/重定位
+感知模块，实现loam接口以及点云地图到代价地图的生成
 
 ## TODOLIST
 
-- [ ] point_lio / fast_lio / ...
-- [ ] slam后端与回环检测
-- [ ] 重定位
+- [ ] ESDF
+- [ ] 地形识别
