@@ -12,6 +12,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Target.msg"
   "msg/GameStatus.msg"
   "msg/RobotStatus.msg"
+  "msg/RfidStatus.msg"
 
   DEPENDENCIES
     geometry_msgs

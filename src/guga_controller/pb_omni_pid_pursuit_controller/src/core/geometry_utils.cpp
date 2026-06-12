@@ -97,8 +97,8 @@ geometry_msgs::msg::PoseStamped geometry_utils::findPoseAtDistance(
   }
 
   double ratio = (target_distance - cumulative_distances[index - 1])
-               / (cumulative_distances[index]
-                  - cumulative_distances[index - 1]);
+                 / (cumulative_distances[index]
+                    - cumulative_distances[index - 1]);
   geometry_msgs::msg::PoseStamped pose1 = path.poses[index - 1];
   geometry_msgs::msg::PoseStamped pose2 = path.poses[index];
 
