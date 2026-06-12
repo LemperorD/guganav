@@ -100,12 +100,12 @@ namespace simple_decision {
 
     bool allConnected() {
       return game_status_pub_->get_subscription_count() > 0
-          && robot_status_pub_->get_subscription_count() > 0
-          && armor_pub_->get_subscription_count() > 0
-          && target_pub_->get_subscription_count() > 0
-          && chassis_mode_sub_->get_publisher_count() > 0
-          && goal_pose_sub_->get_publisher_count() > 0
-          && debug_attack_sub_->get_publisher_count() > 0;
+             && robot_status_pub_->get_subscription_count() > 0
+             && armor_pub_->get_subscription_count() > 0
+             && target_pub_->get_subscription_count() > 0
+             && chassis_mode_sub_->get_publisher_count() > 0
+             && goal_pose_sub_->get_publisher_count() > 0
+             && debug_attack_sub_->get_publisher_count() > 0;
     }
 
     template <typename PublisherT, typename MsgT>
@@ -115,8 +115,7 @@ namespace simple_decision {
       exec_.spin_some();
     }
 
-    void sendRobotStatus(uint16_t hp, uint16_t ammo,
-                         bool is_hp_deduced = false,
+    void sendRobotStatus(uint16_t hp, uint16_t ammo, bool is_hp_deduced = false,
                          double pose_x = 2.0, double pose_y = 0.5) {
       auto msg = guga_interfaces::msg::RobotStatus();
       msg.current_hp = hp;
@@ -176,11 +175,14 @@ namespace simple_decision {
       return false;
     }
 
-    bool waitForChassisMode(ChassisMode mode, std::chrono::milliseconds timeout) {
-      return waitUntil([this, mode]() {
-        return !chassis_modes_.empty()
-            && chassis_modes_.back() == static_cast<uint8_t>(mode);
-      }, timeout);
+    bool waitForChassisMode(ChassisMode mode,
+                            std::chrono::milliseconds timeout) {
+      return waitUntil(
+          [this, mode]() {
+            return !chassis_modes_.empty()
+                   && chassis_modes_.back() == static_cast<uint8_t>(mode);
+          },
+          timeout);
     }
 
     bool waitForGoalAtLeast(size_t n, std::chrono::milliseconds timeout) {

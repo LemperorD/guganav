@@ -193,7 +193,8 @@ void TerrainAnalysis::initExtSubscriptions() {
           [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
             auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
             pcl::fromROSMsg(*msg, *cloud);
-            context_.onLocalTerrainCloud(cloud);
+            double t = rclcpp::Time(msg->header.stamp).seconds();
+            context_.onLocalTerrainCloud(cloud, t);
           });
 }
 

@@ -1,86 +1,213 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# ===============================
-# 配置工作空间根目录和代理
-# ===============================
-WORKSPACE_DIR=~/guganav
-HTTPS_PROXY=http://127.0.0.1:7897
-HTTP_PROXY=http://127.0.0.1:7897
-ALL_PROXY=socks5://127.0.0.1:7897
+ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+cd "$ROOT"
 
-cd "$WORKSPACE_DIR" || { echo "无法进入工作目录 $WORKSPACE_DIR"; exit 1; }
+push_after_commit=false
 
-# ===============================
-# 扫描 Git 仓库（主仓库 + 子模块）
-# ===============================
-echo "正在扫描 Git 仓库..."
-repos=()
-repo_names=()
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/gitPush.sh [--push]
 
-# 检查主仓库
-if [ -d ".git" ]; then
-    repos+=(".")
-    # 仓库名用 git rev-parse 获取根目录名
-    name=$(basename "$(git rev-parse --show-toplevel)")
-    repo_names+=("$name")
+Create a commit with the project message format. With --push, push the current
+branch after a successful commit.
+EOF
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    -p|--push)
+      push_after_commit=true
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $arg" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+require_git_repo() {
+  git rev-parse --show-toplevel >/dev/null
+}
+
+has_staged_changes() {
+  ! git diff --cached --quiet
+}
+
+has_unstaged_changes() {
+  ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]
+}
+
+prompt_required() {
+  local label=$1
+  local value
+  while true; do
+    read -r -p "$label" value
+    if [ -n "$value" ]; then
+      printf '%s' "$value"
+      return
+    fi
+    echo "不能为空。" >&2
+  done
+}
+
+edit_field() {
+  local name=$1
+  local current=$2
+  local value
+
+  read -r -p "$name [$current]: " value
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$current"
+  fi
+}
+
+print_commit_message() {
+  echo
+  echo "提交预览："
+  echo "$title"
+  echo
+  echo "范围：$scope"
+  echo
+  echo "行为：$behavior"
+  echo
+  echo "验证：$validation"
+  echo
+}
+
+edit_commit_message() {
+  local choice
+
+  while true; do
+    echo "修改哪一项？"
+    echo "1) 标题"
+    echo "2) 范围"
+    echo "3) 行为"
+    echo "4) 验证"
+    echo "5) 返回预览"
+    read -r -p "请选择 [1-5]: " choice
+
+    case "$choice" in
+      1)
+        title=$(edit_field "标题" "$title")
+        return
+        ;;
+      2)
+        scope=$(edit_field "范围" "$scope")
+        return
+        ;;
+      3)
+        behavior=$(edit_field "行为" "$behavior")
+        return
+        ;;
+      4)
+        validation=$(edit_field "验证" "$validation")
+        return
+        ;;
+      5)
+        return
+        ;;
+      *)
+        echo "请输入 1-5。"
+        ;;
+    esac
+  done
+}
+
+confirm_commit_message() {
+  local confirm
+
+  while true; do
+    print_commit_message
+    read -r -p "确认提交？[y 提交 / e 修改 / n 取消，默认提交] " confirm
+    case "$confirm" in
+      y|Y|"")
+        return 0
+        ;;
+      e|E)
+        edit_commit_message
+        ;;
+      n|N)
+        echo "已取消。"
+        return 1
+        ;;
+      *)
+        echo "请输入 y、e 或 n。"
+        ;;
+    esac
+  done
+}
+
+ensure_staged_changes() {
+  if has_staged_changes; then
+    return
+  fi
+
+  if ! has_unstaged_changes; then
+    echo "没有可提交的改动。"
+    exit 1
+  fi
+
+  git status --short
+  read -r -p "当前没有暂存改动，是否 git add -A 暂存全部改动？[y/N] " answer
+  case "$answer" in
+    y|Y)
+      git add -A
+      ;;
+    *)
+      echo "请先 git add 需要提交的文件。"
+      exit 1
+      ;;
+  esac
+
+  if ! has_staged_changes; then
+    echo "暂存区仍然为空。"
+    exit 1
+  fi
+}
+
+push_current_branch() {
+  local branch
+  branch=$(git symbolic-ref --short HEAD)
+
+  if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    git push
+  else
+    git push -u origin "$branch"
+  fi
+}
+
+require_git_repo
+ensure_staged_changes
+
+echo "即将提交以下暂存改动："
+git diff --cached --name-status
+echo
+
+title=$(prompt_required "标题（例：测试：整理 PID 控制器单元测试）: ")
+scope=$(prompt_required "范围：")
+behavior=$(prompt_required "行为：")
+validation=$(prompt_required "验证：")
+
+if ! confirm_commit_message; then
+  exit 1
 fi
 
-# 扫描子模块
-while IFS= read -r line; do
-    path=$(echo "$line" | awk '{print $2}')
-    if [ -d "$path/.git" ]; then
-        repos+=("$path")
-        # 进入子模块获取仓库名
-        name=$(cd "$path" && basename "$(git rev-parse --show-toplevel)")
-        repo_names+=("$name")
-    fi
-done < <(git submodule status)
+git commit \
+  -m "$title" \
+  -m "范围：$scope" \
+  -m "行为：$behavior" \
+  -m "验证：$validation"
 
-# 显示仓库表格
-echo -e "\e[1;32m找到以下 Git 仓库：\e[0m"
-for i in "${!repos[@]}"; do
-    echo "$i) ${repo_names[$i]} -> ${repos[$i]}"
-done
-
-# ===============================
-# 用户选择仓库
-# ===============================
-echo "-------------------------------"
-read -rp "$(echo -e "\e[1;32m请输入要 push 的仓库序号（多个用空格分隔）：\e[0m")" -a choices
-
-# ===============================
-# 对选择的仓库执行 push
-# ===============================
-for index in "${choices[@]}"; do
-    repo="${repos[$index]}"
-    repo_name="${repo_names[$index]}"
-    echo "-------------------------------"
-    echo -e "\e[1;32m正在处理仓库: $repo_name (路径: $repo)\e[0m"
-    cd "$WORKSPACE_DIR/$repo" || continue
-
-    # 设置代理
-    export https_proxy=$HTTPS_PROXY
-    export http_proxy=$HTTP_PROXY
-    export all_proxy=$ALL_PROXY
-
-    # 获取当前分支
-    current_branch=$(git symbolic-ref --short HEAD)
-    echo "当前分支: $current_branch"
-
-    # 检查是否有未提交的修改
-    if git diff --quiet && git diff --cached --quiet; then
-        echo -e "\e[1;32m仓库 $repo_name 没有未提交的修改，执行 push...\e[0m"
-    else
-        echo -e "\e[1;31m仓库 $repo_name 有未提交的修改，请先在 VSCode 完成 commit!\e[0m"
-        read -rp "$(echo -e "\e[1;33m是否仍然强制 push 当前分支已提交内容？(y/n)：\e[0m")" confirm
-
-        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-            echo -e "\e[1;33m已跳过仓库 $repo_name\e[0m"
-            continue
-        fi
-    fi
-
-    # push 到远程同名分支
-    git push origin "$current_branch"
-    echo -e "\e[1;32m所有选择的仓库已 push 完成!\e[0m"
-done
+if [ "$push_after_commit" = true ]; then
+  push_current_branch
+fi

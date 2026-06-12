@@ -25,8 +25,7 @@ protected:
     }
     state_.laser_cloud_crop =
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-    state_.terrain_cloud =
-        std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    state_.terrain_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     state_.terrain_cloud_elev =
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     state_.terrain_cloud_local =
@@ -62,8 +61,7 @@ TEST_F(ConnectivityTest, CheckTerrainConnectivity_SeedsVehicleCell) {
 }
 
 // 高度差在 connectivity_threshold 内的相邻 cell 标记为连通
-TEST_F(ConnectivityTest,
-       CheckTerrainConnectivity_SimilarHeight_Connected) {
+TEST_F(ConnectivityTest, CheckTerrainConnectivity_SimilarHeight_Connected) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
   state_.vehicle_z = 0;
@@ -88,8 +86,7 @@ TEST_F(ConnectivityTest,
 }
 
 // 高度差超过 ceiling_filter_threshold 的 cell 标记为天花板
-TEST_F(ConnectivityTest,
-       CheckTerrainConnectivity_LargeHeightDiff_Ceiling) {
+TEST_F(ConnectivityTest, CheckTerrainConnectivity_LargeHeightDiff_Ceiling) {
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
   state_.vehicle_z = 0;
@@ -114,8 +111,7 @@ TEST_F(ConnectivityTest,
 }
 
 // 关闭 connectivity 检查时不执行连通性判断（网关在 run() 层面）
-TEST_F(ConnectivityTest,
-       CheckTerrainConnectivity_Disabled_InRunPipeline) {
+TEST_F(ConnectivityTest, CheckTerrainConnectivity_Disabled_InRunPipeline) {
   // 直接调用仍会执行 BFS（无内部网关），栅栏在 run() 里检查 config flag
   // 此处验证关闭时不崩溃
   cfg_.check_terrain_connectivity = false;
@@ -126,8 +122,7 @@ TEST_F(ConnectivityTest,
 // ── mergeLocalTerrain ──
 
 // local terrain map 半径内的点被合并到输出点云
-TEST_F(ConnectivityTest,
-       MergeLocalTerrain_WithinRadius_PointsMerged) {
+TEST_F(ConnectivityTest, MergeLocalTerrain_WithinRadius_PointsMerged) {
   cfg_.local_terrain_map_radius = 4.0;
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
@@ -142,8 +137,7 @@ TEST_F(ConnectivityTest,
 }
 
 // 超出半径的点不合并
-TEST_F(ConnectivityTest,
-       MergeLocalTerrain_BeyondRadius_Excluded) {
+TEST_F(ConnectivityTest, MergeLocalTerrain_BeyondRadius_Excluded) {
   cfg_.local_terrain_map_radius = 4.0;
   state_.vehicle_x = 0;
   state_.vehicle_y = 0;
@@ -159,8 +153,7 @@ TEST_F(ConnectivityTest,
 }
 
 // radius 为 0 时不合并任何点
-TEST_F(ConnectivityTest,
-       MergeLocalTerrain_ZeroRadius_NoMerge) {
+TEST_F(ConnectivityTest, MergeLocalTerrain_ZeroRadius_NoMerge) {
   cfg_.local_terrain_map_radius = 0.0;
   state_.terrain_cloud_elev->clear();
   state_.terrain_cloud_local->clear();

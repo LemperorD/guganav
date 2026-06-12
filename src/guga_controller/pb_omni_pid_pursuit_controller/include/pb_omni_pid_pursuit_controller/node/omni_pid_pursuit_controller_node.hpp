@@ -31,7 +31,7 @@
 
 namespace pb_omni_pid_pursuit_controller {
 
-class PathHandler;
+  class PathHandler;
 
   class OmniPidPursuitControllerNode : public nav2_core::Controller {
   public:

@@ -96,6 +96,9 @@ sensor_scan_generation:
     lidar_frame: "front_mid360"
     base_frame: "base_footprint"
     robot_base_frame: "gimbal_yaw"
+    min_odometry_dt: 0.001
+    max_linear_velocity: 10.0
+    max_angular_velocity: 20.0
 
 terrain_analysis:
   ros__parameters:
@@ -155,8 +158,6 @@ fake_vel_transform:
     input_cmd_vel_topic: "cmd_vel_nav2_result"
     output_cmd_vel_topic: "cmd_vel"
     cmd_spin_topic: "cmd_spin"
-    chassis_mode_topic: "chassis_mode"
-    chassis_frame: "chassis"
     init_spin_speed: 3.14
 
 small_gicp_relocalization:
@@ -381,23 +382,23 @@ controller_server:
       yaw_goal_tolerance: 6.28
     FollowPath:
       plugin: "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode"
-      translation_kp: 3.0
-      translation_ki: 0.1
+      translation_kp: 1.5
+      translation_ki: 0.0
       translation_kd: 0.3
       enable_rotation: true
-      rotation_kp: 3.0
-      rotation_ki: 0.1
+      rotation_kp: 1.0
+      rotation_ki: 0.0
       rotation_kd: 0.3
-      transform_tolerance: 0.5
+      transform_tolerance: 0.1
       min_max_sum_error: 1.0
       lookahead_dist: 2.0
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 1.0
       min_lookahead_dist: 0.5
       max_lookahead_dist: 1.0
-      use_interpolation: false
+      use_interpolation: true
       use_rotate_to_heading: false
-      use_rotate_to_heading_treshold: 0.1
+      use_rotate_to_heading_treshold: 0.0
       # use_rotate_to_heading: true
       # use_rotate_to_heading_treshold: 0.0
       min_approach_linear_velocity: 0.5
@@ -541,12 +542,37 @@ planner_server:
 smoother_server:
   ros__parameters:
     use_sim_time: True
-    smoother_plugins: ["simple_smoother"]
-    simple_smoother:
-      plugin: "nav2_smoother::SimpleSmoother"
-      tolerance: 1.0e-10
-      max_its: 1000
-      do_refinement: True
+    smoother_plugins: ["SmoothPath"]
+
+    SmoothPath:
+      plugin: "nav2_constrained_smoother/ConstrainedSmoother"
+      reversing_enabled: true       # whether to detect forward/reverse direction and cusps. Should be set to false for paths without orientations assigned
+      path_downsampling_factor: 3   # every n-th node of the path is taken. Useful for speed-up
+      path_upsampling_factor: 1     # 0 - path remains downsampled, 1 - path is upsampled back to original granularity using cubic bezier, 2... - more upsampling
+      keep_start_orientation: true  # whether to prevent the start orientation from being smoothed
+      keep_goal_orientation: true   # whether to prevent the gpal orientation from being smoothed
+      minimum_turning_radius: 0.40  # minimum turning radius the robot can perform. Can be set to 0.0 (or w_curve can be set to 0.0 with the same effect) for diff-drive/holonomic robots
+      w_curve: 30.0                 # weight to enforce minimum_turning_radius
+      w_dist: 0.0                   # weight to bind path to original as optional replacement for cost weight
+      w_smooth: 2000000.0           # weight to maximize smoothness of path
+      w_cost: 0.015                 # weight to steer robot away from collision and cost
+
+      # Parameters used to improve obstacle avoidance near cusps (forward/reverse movement changes)
+      # See the [docs page](https://docs.nav2.org/configuration/packages/configuring-constrained-smoother) for further clarification
+      w_cost_cusp_multiplier: 3.0   # option to have higher weight during forward/reverse direction change which is often accompanied with dangerous rotations
+      cusp_zone_length: 2.5         # length of the section around cusp in which nodes use w_cost_cusp_multiplier (w_cost rises gradually inside the zone towards the cusp point, whose costmap weight equals w_cost*w_cost_cusp_multiplier)
+
+      # Points in robot frame to grab costmap values from. Format: [x1, y1, weight1, x2, y2, weight2, ...]
+      # IMPORTANT: Requires much higher number of iterations to actually improve the path. Uncomment only if you really need it (highly elongated/asymmetric robots)
+      # See the [docs page](https://docs.nav2.org/configuration/packages/configuring-constrained-smoother) for further clarification
+      # cost_check_points: [-0.185, 0.0, 1.0]
+
+      optimizer:
+        max_iterations: 70            # max iterations of smoother
+        debug_optimizer: false        # print debug info
+        gradient_tol: 5.0e+3
+        fn_tol: 1.0e-15
+        param_tol: 1.0e-20
 
 behavior_server:
   ros__parameters:
@@ -570,7 +596,7 @@ behavior_server:
     local_frame: odom
     global_frame: map
     robot_base_frame: gimbal_yaw_fake
-    transform_tolerance: 0.5
+    transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4

@@ -15,12 +15,12 @@ struct TerrainConfig {
   static constexpr int TERRAIN_VOXEL_WIDTH = 21;
   static constexpr int TERRAIN_VOXEL_HALF_WIDTH = (TERRAIN_VOXEL_WIDTH - 1) / 2;
   static constexpr int TERRAIN_VOXEL_NUM = TERRAIN_VOXEL_WIDTH
-                                         * TERRAIN_VOXEL_WIDTH;
+                                           * TERRAIN_VOXEL_WIDTH;
 
   static constexpr int PLANAR_VOXEL_WIDTH = 51;
   static constexpr int PLANAR_VOXEL_HALF_WIDTH = (PLANAR_VOXEL_WIDTH - 1) / 2;
   static constexpr int PLANAR_VOXEL_NUM = PLANAR_VOXEL_WIDTH
-                                        * PLANAR_VOXEL_WIDTH;
+                                          * PLANAR_VOXEL_WIDTH;
 
   static constexpr size_t terrainVoxelIndex(int row, int col) {
     return (TERRAIN_VOXEL_WIDTH * row) + col;
@@ -170,7 +170,8 @@ public:
                     double timestamp_sec);
   void onJoystick(bool button5);
   void onClearing(double distance_clearing);
-  void onLocalTerrainCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud);
+  void onLocalTerrainCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
+                           double timestamp_sec);
 
   TerrainConfig cfg;
   TerrainState state;

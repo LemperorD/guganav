@@ -358,10 +358,10 @@ controller_server:
       translation_ki: 0.1
       translation_kd: 0.3
       enable_rotation: true
-      rotation_kp: 1.0
+      rotation_kp: 2.0
       rotation_ki: 0.01
       rotation_kd: 0.1
-      transform_tolerance: 0.1
+      transform_tolerance: 0.5
       min_max_sum_error: 1.0
       lookahead_dist: 2.0
       use_velocity_scaled_lookahead_dist: true

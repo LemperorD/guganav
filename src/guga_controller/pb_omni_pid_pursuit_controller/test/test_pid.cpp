@@ -31,8 +31,10 @@ TEST(PidTest, SetSumError_ResetsIntegral) {
   PID pid(0.1, 10.0, -10.0, 0.0, 0.0, 1.0);
 
   // accumulate some integral
-  pid.calculate(1.0, 0.0);
-  pid.calculate(1.0, 0.0);
+  double first_output = pid.calculate(1.0, 0.0);
+  double second_output = pid.calculate(1.0, 0.0);
+  EXPECT_GT(first_output, 0.0);
+  EXPECT_GT(second_output, first_output);
 
   // reset integral
   pid.setSumError(0.0);
@@ -48,7 +50,7 @@ TEST(PidTest, DerivativeResponse) {
   PID pid(0.05, 10.0, -10.0, 0.0, 0.5, 0.0);  // only kd=0.5, dt=0.05
 
   // steady state (no error change)
-  pid.calculate(0.0, 0.0);  // error=0, pre_error=0
+  EXPECT_DOUBLE_EQ(pid.calculate(0.0, 0.0), 0.0);  // error=0, pre_error=0
 
   // step change in error: pre_error=0, new error=1, de/dt = 1/0.05 = 20
   double output = pid.calculate(1.0, 0.0);  // D_out = 0.5 * 20 = 10
