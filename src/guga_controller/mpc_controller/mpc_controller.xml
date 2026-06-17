@@ -1,0 +1,12 @@
+<class_libraries>
+  <library path="mpc_controller">
+    <class name="mpc_controller/MpcControllerNode"
+           type="mpc_controller::MpcControllerNode"
+           base_class_type="nav2_core::Controller">
+      <description>
+        MPC path tracking controller for omnidirectional mobile robots.
+        Supports Discrete / B-Spline / MINCO trajectory generation modes.
+      </description>
+    </class>
+  </library>
+</class_libraries>
