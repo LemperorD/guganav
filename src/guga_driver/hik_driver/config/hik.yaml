@@ -1,6 +1,21 @@
 /**:
-  ros_parameters: 
-    device_name: "" # 串口设备的文件地址
-    cam_ip: "192.168.1.100" # 相机IP地址
-    pc_ip: "" # 计算机IP地址
-    output_topic: "image" # 发布的ROS话题名称
+  ros__parameters:
+    # ---- Connection ----
+    # camera_type: 0 = GigE (Ethernet), 1 = USB
+    camera_type: 0
+    cam_ip: "192.168.1.100"
+    pc_ip: "192.168.10.30"
+    device_index: 0
+
+    # ---- ROS naming ----
+    camera_name: "camera"
+    frame_id: "camera_optical_frame"
+    camera_topic: "camera/image"
+    camera_info_url: "package://hik_driver/config/camera_info.yaml"
+    use_sensor_data_qos: true
+
+    # ---- Image settings (applied after camera is opened) ----
+    pixel_format: "RGB8Packed"
+    acquisition_frame_rate: 165.0
+    exposure_time: 5000
+    gain: 12.0
