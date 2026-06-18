@@ -5,9 +5,6 @@
 namespace mpc_controller
 {
 
-// ==========================================================================
-// 工具函数，无命名空间
-// ==========================================================================
 namespace
 {
 
@@ -18,15 +15,7 @@ double wrapToPi(double angle)
   return angle;
 }
 
-// ==========================================================================
-// Projected Gradient Descent QP 求解器 (box-constrained)
-//
-//   min  0.5 * xᵀ H x + gᵀ x
-//   s.t. lb ≤ x ≤ ub
-//
-// 使用对角预条件投影梯度 + 回溯线搜索。
-// 完全无外部依赖（仅 Eigen3）。
-// ==========================================================================
+// PGD box-QP solver (same as before)
 Eigen::VectorXd solveProjectedGradientQp(
   const Eigen::MatrixXd & H,
   const Eigen::VectorXd & g,
@@ -34,27 +23,20 @@ Eigen::VectorXd solveProjectedGradientQp(
   const Eigen::VectorXd & ub,
   int max_iter = 200,
   double tol = 1e-4)
+
 {
   const int n = static_cast<int>(H.rows());
   Eigen::VectorXd x(n);
-
-  // 初始解：投影到 box 内的零点
   for (int i = 0; i < n; ++i) {
     x(i) = std::max(lb(i), std::min(ub(i), 0.0));
   }
-
-  // 对角预条件
   Eigen::VectorXd diag_h(n);
   for (int i = 0; i < n; ++i) {
     diag_h(i) = std::max(H(i, i), 1e-6);
   }
-
   Eigen::VectorXd grad(n), x_proj(n);
-
   for (int iter = 0; iter < max_iter; ++iter) {
     grad = H * x + g;
-
-    // KKT 停止条件
     double kkt = 0.0;
     for (int i = 0; i < n; ++i) {
       if (x(i) <= lb(i) + 1e-10) {
@@ -66,19 +48,14 @@ Eigen::VectorXd solveProjectedGradientQp(
       }
     }
     if (kkt < tol * n) { break; }
-
-    // 初始化步长
     double step = 1.0;
     for (int i = 0; i < n; ++i) {
       step = std::max(step, std::abs(grad(i)) / diag_h(i));
     }
     step = 1.0 / step;
-
-    // 回溯线搜索 (Armijo-like)
     for (int ls = 0; ls < 20; ++ls) {
       for (int i = 0; i < n; ++i) {
-        x_proj(i) = std::max(
-          lb(i), std::min(ub(i),
+        x_proj(i) = std::max(lb(i), std::min(ub(i),
           x(i) - step * grad(i) / diag_h(i)));
       }
       const Eigen::VectorXd dx = x_proj - x;
@@ -87,15 +64,12 @@ Eigen::VectorXd solveProjectedGradientQp(
       if (df + qd <= 1e-12) { break; }
       step *= 0.5;
     }
-
     x = x_proj;
   }
-
   return x;
 }
 
 }  // anonymous namespace
-
 
 // ==========================================================================
 // MpcSolver
@@ -104,10 +78,8 @@ void MpcSolver::configure(const MpcConfig & config)
 {
   config_ = config;
   n_vars_ = config.horizon_n * OmniKinematics::NU;
-
   lb_.resize(n_vars_);
   ub_.resize(n_vars_);
-
   for (int k = 0; k < config.horizon_n; ++k) {
     const int base = k * 3;
     lb_(base + 0) = config.vx_min;
@@ -119,7 +91,6 @@ void MpcSolver::configure(const MpcConfig & config)
   }
 }
 
-// ==========================================================================
 void MpcSolver::setWarmStart(const Eigen::Vector3d & u)
 {
   (void)u;
@@ -139,7 +110,6 @@ void MpcSolver::assembleQP(
   H.setZero(n_vars_, n_vars_);
   g.setZero(n_vars_);
 
-  // ---- Build A_k, B_k along reference trajectory ----
   std::vector<Eigen::Matrix3d> A_k(N), B_k(N);
   for (int k = 0; k < N; ++k) {
     const auto & ref = ref_traj.at(k);
@@ -149,9 +119,7 @@ void MpcSolver::assembleQP(
     B_k[k] = OmniKinematics::controlJacobian(ref.theta, dt);
   }
 
-  // ---- Weight matrices ----
-  const Eigen::DiagonalMatrix<double, 3> Q(
-    config_.qx, config_.qy, config_.qtheta);
+  const Eigen::DiagonalMatrix<double, 3> Q(config_.qx, config_.qy, config_.qtheta);
   const Eigen::Matrix3d R_mat = Eigen::DiagonalMatrix<double, 3>(
     config_.rvx, config_.rvy, config_.romega).toDenseMatrix();
   const Eigen::Matrix3d Rd_mat = Eigen::DiagonalMatrix<double, 3>(
@@ -160,8 +128,6 @@ void MpcSolver::assembleQP(
   // ---- H = H_track + H_ctrl + H_smooth ----
   std::vector<Eigen::Matrix3d> M_cur(N);
   for (int j = 0; j < N; ++j) { M_cur[j] = Eigen::Matrix3d::Zero(); }
-
-  // Forward sweep: k = 1..N, accumulate M_{k,j} and H blocks
   for (int k = 1; k <= N; ++k) {
     for (int j = 0; j < k; ++j) {
       if (j == k - 1) { M_cur[j] = B_k[k - 1]; }
@@ -169,23 +135,15 @@ void MpcSolver::assembleQP(
       for (int l = 0; l <= j; ++l) {
         const Eigen::Matrix3d contrib = M_cur[j].transpose() * Q * M_cur[l];
         H.block<3, 3>(3 * j, 3 * l) += contrib;
-        if (j != l) {
-          H.block<3, 3>(3 * l, 3 * j) += contrib.transpose();
-        }
+        if (j != l) { H.block<3, 3>(3 * l, 3 * j) += contrib.transpose(); }
       }
     }
   }
+  for (int j = 0; j < N; ++j) { H.block<3, 3>(3 * j, 3 * j) += R_mat; }
 
-  // H_ctrl: diagonal blocks = R
   for (int j = 0; j < N; ++j) {
-    H.block<3, 3>(3 * j, 3 * j) += R_mat;
-  }
-
-  // H_smooth: symmetric block-tridiagonal (Δu penalty)
-  for (int j = 0; j < N; ++j) {
-    if (j == 0) {
-      H.block<3, 3>(0, 0) += Rd_mat;
-    } else {
+    if (j == 0) { H.block<3, 3>(0, 0) += Rd_mat; }
+    else {
       H.block<3, 3>(3 * j, 3 * j) += Rd_mat;
       H.block<3, 3>(3 * (j - 1), 3 * (j - 1)) += Rd_mat;
       H.block<3, 3>(3 * j, 3 * (j - 1)) -= Rd_mat;
@@ -193,20 +151,15 @@ void MpcSolver::assembleQP(
     }
   }
 
-  // ===== g vector =====
+  // ---- g vector ----
   std::vector<Eigen::Matrix3d> Mg(N);
   for (int j = 0; j < N; ++j) { Mg[j] = Eigen::Matrix3d::Zero(); }
-
   Eigen::Vector3d x_free = x0;
   for (int k = 1; k <= N; ++k) {
     x_free = A_k[k - 1] * x_free;
-    const Eigen::Vector3d x_ref(
-      ref_traj.at(k - 1).x,
-      ref_traj.at(k - 1).y,
-      ref_traj.at(k - 1).theta);
+    const Eigen::Vector3d x_ref(ref_traj.at(k - 1).x, ref_traj.at(k - 1).y, ref_traj.at(k - 1).theta);
     Eigen::Vector3d err = x_free - x_ref;
     err(2) = wrapToPi(err(2));
-
     for (int j = 0; j < k; ++j) {
       if (j == k - 1) { Mg[j] = B_k[k - 1]; }
       else            { Mg[j] = A_k[k - 1] * Mg[j]; }
@@ -214,17 +167,12 @@ void MpcSolver::assembleQP(
     }
   }
 
-  // Smoothness: -2 * Rd * ũ_{-1} contributes to g_0
-  Eigen::Vector3d u_prev(
-    mpc_state.last_vx - ref_traj[0].vx,
-    mpc_state.last_vy - ref_traj[0].vy,
-    mpc_state.last_omega - ref_traj[0].omega);
+  Eigen::Vector3d u_prev(mpc_state.last_vx - ref_traj[0].vx,
+                          mpc_state.last_vy - ref_traj[0].vy,
+                          mpc_state.last_omega - ref_traj[0].omega);
   g.segment<3>(0) -= 2.0 * Rd_mat * u_prev;
 
-  // Regularize H for positive definiteness
-  for (int i = 0; i < n_vars_; ++i) {
-    H(i, i) += 1e-6;
-  }
+  for (int i = 0; i < n_vars_; ++i) { H(i, i) += 1e-6; }
 }
 
 // ==========================================================================
@@ -236,25 +184,20 @@ Eigen::Vector3d MpcSolver::solve(
   if (static_cast<int>(ref_traj.size()) < config_.horizon_n) {
     return Eigen::Vector3d::Zero();
   }
-
   Eigen::MatrixXd H;
   Eigen::VectorXd g;
   assembleQP(x0, ref_traj, mpc_state, H, g);
 
-  const Eigen::VectorXd du_vec =
-    solveProjectedGradientQp(H, g, lb_, ub_);
-
-  // du_opt = [Δvx, Δvy, Δω]^T — deviation from reference control at step 0
+  const Eigen::VectorXd du_vec = solveProjectedGradientQp(H, g, lb_, ub_);
   const Eigen::Vector3d du_opt = du_vec.segment<3>(0);
 
   mpc_state.last_vx = du_opt(0) + ref_traj[0].vx;
   mpc_state.last_vy = du_opt(1) + ref_traj[0].vy;
   mpc_state.last_omega = du_opt(2) + ref_traj[0].omega;
 
-  return Eigen::Vector3d(
-    du_opt(0) + ref_traj[0].vx,
-    du_opt(1) + ref_traj[0].vy,
-    du_opt(2) + ref_traj[0].omega);
+  return Eigen::Vector3d(du_opt(0) + ref_traj[0].vx,
+                          du_opt(1) + ref_traj[0].vy,
+                          du_opt(2) + ref_traj[0].omega);
 }
 
 }  // namespace mpc_controller
