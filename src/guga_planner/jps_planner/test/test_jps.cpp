@@ -224,26 +224,32 @@ protected:
 
 TEST_F(JPSBehaviorTest, Jump_HitsObstacle_StopsBefore)
 {
-  // Wall immediately to the right
+  // Wall spanning the full height at x=4, with a gap at y=0
+  // Start left, goal right → must go down through gap
   auto grid = makeGrid({
-    "...#....",
-    "........",
+    "....#.........",
+    "....#.........",
+    "....#.........",
+    "....#.........",
+    "....#.........",
+    ".............",
   });
-  constexpr int W = 8, H = 2;
+  constexpr int W = 13, H = 6;
   JPSState state{};
   initState(state, grid, W, H);
 
   std::vector<std::pair<double, double>> path{};
   bool ok = JPSAlgorithm::generatePath(
-    config_, state, 0, 0, 7, 0, path);
+    config_, state, 1, 2, 11, 2, path);
   EXPECT_TRUE(ok);
 
-  // Path must avoid (3,0) which is obstacle
+  // Verify no point on path passes through any obstacle cell
   for (const auto & [px, py] : path) {
     int cx = static_cast<int>(px);
     int cy = static_cast<int>(py);
-    if (cy == 0) {
-      EXPECT_NE(cx, 3) << "Path entered obstacle cell";
+    if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
+      EXPECT_LT(grid[static_cast<size_t>(cy * W + cx)], 253u)
+        << "Path entered obstacle at (" << cx << "," << cy << ")";
     }
   }
 }
