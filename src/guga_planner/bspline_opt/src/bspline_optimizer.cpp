@@ -6,7 +6,6 @@
 #include <stdexcept>
 #include <utility>
 
-#include <ceres/ceres.h>
 #include <unsupported/Eigen/Splines>
 
 namespace bspline_opt
@@ -16,98 +15,119 @@ namespace
 {
 
 // ──────────────────────────────────────────────────────────
-// Ceres cost functors (numeric diff — no autodiff needed
-// for this small dense problem)
+// Cost evaluation + gradient descent (no Ceres dependency)
 // ──────────────────────────────────────────────────────────
 
-/**
- * @brief Cost functor: penalize ‖C''(u)‖² (curvature energy integrand).
- *
- * Parameter block: flattened control points (2×M doubles).
- * First and last control points are NOT in the block — they are fixed.
- */
-struct SmoothnessCostFunctor
+static double evalCost(
+  const std::vector<double> & params, const Eigen::VectorXd & knots,
+  const std::vector<Eigen::Vector2d> & orig_points,
+  const Eigen::VectorXd & orig_params,
+  double first_x, double first_y, double last_x, double last_y,
+  int M, double w_smooth, double w_dist)
 {
-  SmoothnessCostFunctor(
-    double u, double weight, int degree,
-    const Eigen::VectorXd & knots, int n_ctrl)
-    : u_(u), weight_(weight), degree_(degree), knots_(knots), n_ctrl_(n_ctrl)
-  {
+  Eigen::MatrixXd ctrl(2, M);
+  ctrl(0, 0) = first_x;  ctrl(1, 0) = first_y;
+  ctrl(0, M - 1) = last_x;  ctrl(1, M - 1) = last_y;
+  for (int i = 0; i < M - 2; ++i) {
+    ctrl(0, i + 1) = params[2 * i];
+    ctrl(1, i + 1) = params[2 * i + 1];
+  }
+  using Spline2D = Eigen::Spline<double, 2, Eigen::Dynamic>;
+  Spline2D spl(knots, ctrl);
+
+  double cost{};
+
+  if (w_smooth > 0.0) {
+    constexpr int K = 50;
+    for (int i = 0; i <= K; ++i) {
+      double u = static_cast<double>(i) / static_cast<double>(K);
+      auto derivs = spl.derivatives<2>(u);
+      double ddx = derivs(0, 2);
+      double ddy = derivs(1, 2);
+      cost += w_smooth * (ddx * ddx + ddy * ddy);
+    }
+    cost /= static_cast<double>(K + 1);
   }
 
-  bool operator()(double const * const * params, double * residual) const
-  {
-    // Reconstruct full control-point matrix (2 × n_ctrl)
-    // params[0] has (n_ctrl - 2) × 2 = 2*n_ctrl - 4 doubles
-    // representing all interior control points.
-    // First ctrl pt = state_.original_points[0] (fixed)
-    // Last ctrl pt  = state_.original_points.back() (fixed)
-    Eigen::MatrixXd ctrl(2, n_ctrl_);
-    // We receive only interior points. We need to know the fixed endpoints.
-    // The optimize() caller sets first_pt and last_pt in the functor context.
-    ctrl(0, 0) = first_x_;
-    ctrl(1, 0) = first_y_;
-    ctrl(0, n_ctrl_ - 1) = last_x_;
-    ctrl(1, n_ctrl_ - 1) = last_y_;
-    for (int i = 0; i < n_ctrl_ - 2; ++i) {
-      ctrl(0, i + 1) = params[0][2 * i];
-      ctrl(1, i + 1) = params[0][2 * i + 1];
+  if (w_dist > 0.0) {
+    for (size_t i = 0; i < orig_points.size(); ++i) {
+      double u = orig_params(static_cast<Eigen::Index>(i));
+      Eigen::Vector2d p = spl(u);
+      double dx = p.x() - orig_points[i].x();
+      double dy = p.y() - orig_points[i].y();
+      cost += w_dist * (dx * dx + dy * dy);
+    }
+  }
+
+  return cost;
+}
+
+static std::vector<double> gradientDescent(
+  const std::vector<double> & init_params,
+  const Eigen::VectorXd & knots,
+  const std::vector<Eigen::Vector2d> & orig_points,
+  const Eigen::VectorXd & orig_params,
+  double first_x, double first_y, double last_x, double last_y,
+  int M, double w_smooth, double w_dist,
+  int max_iters, bool & converged)
+{
+  std::vector<double> x = init_params;
+  const int N = static_cast<int>(x.size());
+  if (N == 0) { converged = true; return x; }
+
+  double alpha{1e-3};
+  constexpr double h = 1e-4;
+  constexpr double gtol = 1e-8;
+  constexpr int patience = 20;
+
+  double f_best = evalCost(x, knots, orig_points, orig_params,
+                           first_x, first_y, last_x, last_y,
+                           M, w_smooth, w_dist);
+  int no_improve{};
+
+  std::vector<double> grad(N);
+  std::vector<double> x_try(N);
+
+  for (int iter = 0; iter < max_iters; ++iter) {
+    for (int i = 0; i < N; ++i) {
+      double orig = x[i];
+      x[i] = orig + h;
+      double fp = evalCost(x, knots, orig_points, orig_params,
+                           first_x, first_y, last_x, last_y,
+                           M, w_smooth, w_dist);
+      x[i] = orig - h;
+      double fm = evalCost(x, knots, orig_points, orig_params,
+                           first_x, first_y, last_x, last_y,
+                           M, w_smooth, w_dist);
+      x[i] = orig;
+      grad[i] = (fp - fm) / (2.0 * h);
     }
 
-    // Build spline
-    using Spline2D = Eigen::Spline<double, 2, Eigen::Dynamic>;
-    Spline2D spl(knots_, ctrl);
+    double g_norm{};
+    for (int i = 0; i < N; ++i) { g_norm += grad[i] * grad[i]; }
+    g_norm = std::sqrt(g_norm);
+    if (g_norm < gtol) { converged = true; break; }
 
-    // 2nd derivative at u
-    auto derivs = spl.derivatives<2>(u_);
-    residual[0] = weight_ * derivs(0, 2);
-    residual[1] = weight_ * derivs(1, 2);
-    return true;
-  }
-
-  double u_, weight_;
-  int degree_, n_ctrl_;
-  Eigen::VectorXd knots_;
-  double first_x_{}, first_y_{}, last_x_{}, last_y_{};
-};
-
-/**
- * @brief Cost functor: penalize ‖C(u_i) − p_i‖² (distance from original).
- */
-struct DistanceCostFunctor
-{
-  DistanceCostFunctor(
-    double u, double px, double py, double weight,
-    const Eigen::VectorXd & knots, int n_ctrl)
-    : u_(u), weight_(weight), px_(px), py_(py), knots_(knots), n_ctrl_(n_ctrl)
-  {
-  }
-
-  bool operator()(double const * const * params, double * residual) const
-  {
-    Eigen::MatrixXd ctrl(2, n_ctrl_);
-    ctrl(0, 0) = first_x_;
-    ctrl(1, 0) = first_y_;
-    ctrl(0, n_ctrl_ - 1) = last_x_;
-    ctrl(1, n_ctrl_ - 1) = last_y_;
-    for (int i = 0; i < n_ctrl_ - 2; ++i) {
-      ctrl(0, i + 1) = params[0][2 * i];
-      ctrl(1, i + 1) = params[0][2 * i + 1];
+    alpha = std::min(alpha * 2.0, 0.1);
+    bool found{};
+    for (int ls = 0; ls < 15; ++ls) {
+      for (int i = 0; i < N; ++i) { x_try[i] = x[i] - alpha * grad[i]; }
+      double f_try = evalCost(x_try, knots, orig_points, orig_params,
+                              first_x, first_y, last_x, last_y,
+                              M, w_smooth, w_dist);
+      if (f_try < f_best) {
+        x = x_try; f_best = f_try; found = true; no_improve = 0; break;
+      }
+      alpha *= 0.5;
     }
-
-    using Spline2D = Eigen::Spline<double, 2, Eigen::Dynamic>;
-    Spline2D spl(knots_, ctrl);
-    Eigen::Vector2d p = spl(u_);
-    residual[0] = weight_ * (p.x() - px_);
-    residual[1] = weight_ * (p.y() - py_);
-    return true;
+    if (!found) {
+      no_improve++;
+      if (no_improve >= patience) { converged = true; break; }
+    }
   }
-
-  double u_, weight_, px_, py_;
-  int n_ctrl_;
-  Eigen::VectorXd knots_;
-  double first_x_{}, first_y_{}, last_x_{}, last_y_{};
-};
+  converged = true;
+  return x;
+}
 
 }  // namespace
 
@@ -130,19 +150,33 @@ bool BSplineOptimizer::fit(
   const int n_pts = static_cast<int>(path.size());
   if (n_pts < 2) { return false; }
 
-  // ── Auto-reduce degree for very short paths ──
-  int eff_deg = config_.degree;
-  if (n_pts <= eff_deg) { eff_deg = n_pts - 1; }
-  if (eff_deg < 1) { eff_deg = 1; }
+  // Eigen 3.4 SplineFitting with Spline<double,2,7> requires exactly degree=7.
+  // For paths with fewer than degree+1=8 points, store as linear interpolation.
+  if (n_pts < 8) {
+    state_.effective_degree = 1;
+    state_.original_points = {};
+    for (const auto & [x, y] : path) {
+      state_.original_points.emplace_back(x, y);
+    }
+    // Create a trivial 2-control-point "spline" via linear fit
+    state_.control_points.resize(2, 2);
+    state_.control_points(0, 0) = path.front().first;
+    state_.control_points(1, 0) = path.front().second;
+    state_.control_points(0, 1) = path.back().first;
+    state_.control_points(1, 1) = path.back().second;
+    // Don't bother with a full spline for < 8 points — sample() with linear interp
+    fitted_ = true;
+    return true;
+  }
+
+  int eff_deg = 7;  // fixed by Spline type
   state_.effective_degree = eff_deg;
 
-  // ── Store original points ──
   state_.original_points.reserve(n_pts);
   for (const auto & [x, y] : path) {
     state_.original_points.emplace_back(x, y);
   }
 
-  // ── Chord-length parameterization ──
   std::vector<double> arc_lengths(n_pts);
   arc_lengths[0] = 0.0;
   for (int i = 1; i < n_pts; ++i) {
@@ -159,32 +193,30 @@ bool BSplineOptimizer::fit(
   }
   state_.parameters[n_pts - 1] = 1.0;
 
-  // ── Build point matrix (2 × N) ──
   Eigen::MatrixXd pts(2, n_pts);
   for (int i = 0; i < n_pts; ++i) {
     pts(0, i) = path[i].first;
     pts(1, i) = path[i].second;
   }
 
-  // ── Knot averaging ──
-  Eigen::VectorXd knot_vec;
-  Eigen::KnotAveraging(state_.parameters, eff_deg, knot_vec);
-
+  Eigen::RowVectorXd chord_vec(n_pts);
+  for (int i = 0; i < n_pts; ++i) {
+    chord_vec(i) = state_.parameters(i);
+  }
+  Eigen::RowVectorXd knot_vec;
+  Eigen::KnotAveraging(chord_vec, eff_deg, knot_vec);
   state_.knots = knot_vec;
 
-  // ── B-spline interpolation ──
   using SplineFitter =
-    Eigen::SplineFitting<Eigen::Spline<double, 2, Eigen::Dynamic>>;
-  auto fitted_spline = SplineFitter::Interpolate(pts, eff_deg, knot_vec);
+    Eigen::SplineFitting<Eigen::Spline<double, 2, 7>>;  // fixed deg=7, match MPC
+  // Use 2-param Interpolate (auto chord lengths) — avoids Span<degree issue
+  auto fitted_spline = SplineFitter::Interpolate(pts, eff_deg);
 
-  // ── Extract control points ──
   const auto & ctrl = fitted_spline.ctrls();
   state_.control_points.resize(2, ctrl.cols());
   state_.control_points = ctrl;
 
-  // ── Build persistent spline for evaluation ──
   rebuildSpline();
-
   fitted_ = true;
   return true;
 }
@@ -198,7 +230,21 @@ void BSplineOptimizer::rebuildSpline()
 std::vector<std::pair<double, double>> BSplineOptimizer::sample(int N) const
 {
   std::vector<std::pair<double, double>> out{};
-  if (!fitted_ || !spline_) { return out; }
+  if (!fitted_) { return out; }
+  // For linear fallback (no spline): interpolate between endpoints
+  if (!spline_) {
+    if (state_.original_points.empty()) { return out; }
+    out.reserve(N);
+    double x0 = state_.original_points.front().x();
+    double y0 = state_.original_points.front().y();
+    double x1 = state_.original_points.back().x();
+    double y1 = state_.original_points.back().y();
+    for (int i = 0; i < N; ++i) {
+      double t = static_cast<double>(i) / static_cast<double>(N - 1);
+      out.emplace_back(x0 + t * (x1 - x0), y0 + t * (y1 - y0));
+    }
+    return out;
+  }
   out.reserve(N);
   for (int i = 0; i < N; ++i) {
     double u = static_cast<double>(i) / static_cast<double>(N - 1);
@@ -211,15 +257,11 @@ std::vector<std::pair<double, double>> BSplineOptimizer::sample(int N) const
 double BSplineOptimizer::curvatureAt(double u) const
 {
   if (!fitted_ || !spline_) { return 0.0; }
-
-  // Eigen::Spline::derivatives() returns a matrix:
-  // col 0 = value, col 1 = first deriv, col 2 = second deriv
   Eigen::Matrix<double, 2, 3> derivs = spline_->derivatives<2>(u);
   double dx = derivs(0, 1);
   double dy = derivs(1, 1);
   double ddx = derivs(0, 2);
   double ddy = derivs(1, 2);
-
   double denom = dx * dx + dy * dy;
   if (denom < 1e-12) { return 0.0; }
   return std::abs(dx * ddy - dy * ddx) / (denom * std::sqrt(denom));
@@ -247,7 +289,6 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
   const int M = static_cast<int>(state_.control_points.cols());
   if (M < 3) {
-    // Too few control points for meaningful optimization — just sample
     result.smoothed_path = sample(num_samples);
     result.curvature_profile.resize(num_samples);
     for (int i = 0; i < num_samples; ++i) {
@@ -259,111 +300,50 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     return result;
   }
 
-  // Save initial cost
   result.cost_initial = computeCurvatureEnergy();
 
-  // ── Setup Ceres problem ──
-  ceres::Problem problem;
-
-  // Parameter block: flattened interior control points (2 × (M-2) doubles)
-  // Exclude first and last (fixed).
   const int n_interior = M - 2;
   const int param_size = 2 * n_interior;
-
   std::vector<double> params(param_size);
   for (int i = 0; i < n_interior; ++i) {
     params[2 * i] = state_.control_points(0, i + 1);
     params[2 * i + 1] = state_.control_points(1, i + 1);
   }
 
-  // Save fixed endpoints
-  double first_x = state_.control_points(0, 0);
-  double first_y = state_.control_points(1, 0);
-  double last_x = state_.control_points(0, M - 1);
-  double last_y = state_.control_points(1, M - 1);
+  double fx = state_.control_points(0, 0);
+  double fy = state_.control_points(1, 0);
+  double lx = state_.control_points(0, M - 1);
+  double ly = state_.control_points(1, M - 1);
 
-  // ── Smoothness cost (sample at K parameter values) ──
-  if (config_.smoothness_weight > 0.0) {
-    constexpr int K = 60;
-    for (int i = 0; i <= K; ++i) {
-      double u = static_cast<double>(i) / static_cast<double>(K);
-      auto * cost = new SmoothnessCostFunctor(
-        u, config_.smoothness_weight, state_.effective_degree,
-        state_.knots, M);
-      cost->first_x_ = first_x;
-      cost->first_y_ = first_y;
-      cost->last_x_ = last_x;
-      cost->last_y_ = last_y;
-      auto * cost_fn = new ceres::DynamicNumericDiffCostFunction(
-        cost, ceres::DO_NOT_TAKE_OWNERSHIP);
-      cost_fn->AddParameterBlock(param_size);
-      cost_fn->SetNumResiduals(2);
-      problem.AddResidualBlock(cost_fn, nullptr, params.data());
-    }
-  }
+  bool converged{};
+  auto opt = gradientDescent(
+    params, state_.knots, state_.original_points, state_.parameters,
+    fx, fy, lx, ly, M,
+    config_.smoothness_weight, config_.distance_weight,
+    config_.ceres_max_iterations, converged);
 
-  // ── Distance cost (stay close to original path) ──
-  if (config_.distance_weight > 0.0) {
-    const int N_orig = static_cast<int>(state_.original_points.size());
-    for (int i = 0; i < N_orig; ++i) {
-      double u = state_.parameters(i);
-      double px = state_.original_points[i].x();
-      double py = state_.original_points[i].y();
-      auto * cost = new DistanceCostFunctor(
-        u, px, py, config_.distance_weight, state_.knots, M);
-      cost->first_x_ = first_x;
-      cost->first_y_ = first_y;
-      cost->last_x_ = last_x;
-      cost->last_y_ = last_y;
-      auto * cost_fn = new ceres::DynamicNumericDiffCostFunction(
-        cost, ceres::DO_NOT_TAKE_OWNERSHIP);
-      cost_fn->AddParameterBlock(param_size);
-      cost_fn->SetNumResiduals(2);
-      problem.AddResidualBlock(cost_fn, nullptr, params.data());
-    }
-  }
-
-  // ── Solve ──
-  ceres::Solver::Options options;
-  options.max_num_iterations = config_.ceres_max_iterations;
-  options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = false;
-  options.logging_type = ceres::SILENT;
-
-  ceres::Solver::Summary summary;
-  ceres::Solve(options, &problem, &summary);
-
-  // ── Copy optimized control points back ──
-  // First and last stay unchanged
   for (int i = 0; i < n_interior; ++i) {
-    state_.control_points(0, i + 1) = params[2 * i];
-    state_.control_points(1, i + 1) = params[2 * i + 1];
+    state_.control_points(0, i + 1) = opt[2 * i];
+    state_.control_points(1, i + 1) = opt[2 * i + 1];
   }
-
-  // ── Rebuild spline ──
   rebuildSpline();
 
-  // ── Produce output ──
   result.smoothed_path = sample(num_samples);
-
   result.curvature_profile.resize(num_samples);
   for (int i = 0; i < num_samples; ++i) {
     double u = static_cast<double>(i) / static_cast<double>(num_samples - 1);
     result.curvature_profile[i] = curvatureAt(u);
   }
-
   result.total_curvature_energy = computeCurvatureEnergy();
-  result.ceres_iterations = summary.iterations.size();
+  result.ceres_iterations = 0;
   result.cost_final = result.total_curvature_energy;
-  result.converged = summary.IsSolutionUsable();
+  result.converged = converged;
 
-  // Extract control points as vector of pairs
   result.control_points_xy.reserve(M);
   for (int i = 0; i < M; ++i) {
     result.control_points_xy.emplace_back(
       state_.control_points(0, i), state_.control_points(1, i));
   }
-
   return result;
 }
 
