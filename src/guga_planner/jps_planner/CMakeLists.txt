@@ -32,6 +32,14 @@ if(BUILD_TESTING)
   target_include_directories(test_jps PRIVATE include test)
   target_compile_definitions(test_jps PRIVATE TESTING)
 
+  # JPS visualization data exporter (standalone, no ROS needed)
+  add_executable(jps_viz_exporter
+    test/jps_viz_exporter.cpp
+    src/jps_algorithm.cpp
+  )
+  target_include_directories(jps_viz_exporter PRIVATE include test)
+  target_compile_definitions(jps_viz_exporter PRIVATE TESTING)
+
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()

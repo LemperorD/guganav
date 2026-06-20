@@ -43,6 +43,18 @@ struct JPSConfig
   bool allow_unknown{false};
 };
 
+/** @brief Debug data collected during a JPS search (when debug_enabled=true). */
+struct JPSDebug
+{
+  bool enabled{false};
+  /** Grid cells expanded (jump-point successors identified). */
+  std::vector<int> expanded_x{};
+  std::vector<int> expanded_y{};
+  /** All jump points discovered (including those never expanded). */
+  std::vector<int> jumppoint_x{};
+  std::vector<int> jumppoint_y{};
+};
+
 /** @brief Mutable state re-created for each planning request. */
 struct JPSState
 {
@@ -68,6 +80,9 @@ struct JPSState
     }
   };
   std::priority_queue<SearchNode *, std::vector<SearchNode *>, Comp> open_list_{};
+
+  /** @brief Debug data populated during search when enabled. */
+  JPSDebug debug_{};
 };
 
 /**

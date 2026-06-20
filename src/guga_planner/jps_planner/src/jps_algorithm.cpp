@@ -220,6 +220,10 @@ SearchNode * jump(
     auto & ptr = s.nodes_.emplace_back(
       std::make_unique<SearchNode>(SearchNode{nx, ny}));
     s.node_position_[idx] = ptr.get();
+    if (s.debug_.enabled) {
+      s.debug_.jumppoint_x.push_back(nx);
+      s.debug_.jumppoint_y.push_back(ny);
+    }
     return ptr.get();
   }
 
@@ -230,6 +234,10 @@ SearchNode * jump(
     auto & ptr = s.nodes_.emplace_back(
       std::make_unique<SearchNode>(SearchNode{nx, ny}));
     s.node_position_[idx] = ptr.get();
+    if (s.debug_.enabled) {
+      s.debug_.jumppoint_x.push_back(nx);
+      s.debug_.jumppoint_y.push_back(ny);
+    }
     return ptr.get();
   }
 
@@ -244,6 +252,10 @@ SearchNode * jump(
       auto & ptr = s.nodes_.emplace_back(
         std::make_unique<SearchNode>(SearchNode{nx, ny}));
       s.node_position_[idx] = ptr.get();
+      if (s.debug_.enabled) {
+        s.debug_.jumppoint_x.push_back(nx);
+        s.debug_.jumppoint_y.push_back(ny);
+      }
       return ptr.get();
     }
   }
@@ -381,6 +393,12 @@ bool JPSAlgorithm::generatePath(
 
     // Expand
     identifySuccessors(c, s, current, gx, gy, successors);
+
+    // Debug: record expanded node
+    if (s.debug_.enabled) {
+      s.debug_.expanded_x.push_back(current->x);
+      s.debug_.expanded_y.push_back(current->y);
+    }
 
     for (auto [succ, jump_cost] : successors) {
       if (succ->closed) { continue; }
