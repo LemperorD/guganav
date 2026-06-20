@@ -17,8 +17,9 @@ struct BSplineConfig
 {
   int degree{7};  // Degree 7 to match Eigen 3.4 SplineFitting fixed-degree requirement
   double smoothness_weight{1.0};
-  double distance_weight{10.0};
-  int ceres_max_iterations{100};
+  double distance_weight{500.0};  // Strong anchoring to original path
+  int ceres_max_iterations{200};
+  int max_control_points{15};  // Cap ctrl pts to avoid under-constrained smoothness
 };
 
 /**
@@ -73,7 +74,8 @@ public:
   explicit BSplineOptimizer(const BSplineConfig & config = BSplineConfig{});
 
   [[nodiscard]] bool fit(
-    const std::vector<std::pair<double, double>> & path);
+    const std::vector<std::pair<double, double>> & path,
+    int num_control_points = 0);  // 0 = auto (min(path.size(), 15))
 
   [[nodiscard]] BSplineResult optimize(int num_samples = 200);
 

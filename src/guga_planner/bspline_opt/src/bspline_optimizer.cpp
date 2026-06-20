@@ -141,7 +141,8 @@ BSplineOptimizer::BSplineOptimizer(const BSplineConfig & config)
 }
 
 bool BSplineOptimizer::fit(
-  const std::vector<std::pair<double, double>> & path)
+  const std::vector<std::pair<double, double>> & path,
+  int num_control_points)
 {
   fitted_ = false;
   state_ = {};
@@ -207,14 +208,35 @@ bool BSplineOptimizer::fit(
   Eigen::KnotAveraging(chord_vec, eff_deg, knot_vec);
   state_.knots = knot_vec;
 
+  // ── B-spline interpolation with M control points ──
+  // Default: use config_.max_control_points or num_control_points
+  int M = num_control_points > 0 ? num_control_points : config_.max_control_points;
+  if (M < 8) { M = 8; }
+  if (M > n_pts) { M = n_pts; }
+
+  // Interpolate with FULL points first to get a dense reference spline
   using SplineFitter =
     Eigen::SplineFitting<Eigen::Spline<double, 2, 7>>;  // fixed deg=7, match MPC
-  // Use 2-param Interpolate (auto chord lengths) — avoids Span<degree issue
-  auto fitted_spline = SplineFitter::Interpolate(pts, eff_deg);
+  auto dense_spline = SplineFitter::Interpolate(pts, eff_deg);
 
-  const auto & ctrl = fitted_spline.ctrls();
-  state_.control_points.resize(2, ctrl.cols());
-  state_.control_points = ctrl;
+  // Resample M control points from the dense spline at uniform parameter spacing
+  state_.control_points.resize(2, M);
+  for (int i = 0; i < M; ++i) {
+    double u = static_cast<double>(i) / static_cast<double>(M - 1);
+    Eigen::Vector2d p = dense_spline(u);
+    state_.control_points(0, i) = p.x();
+    state_.control_points(1, i) = p.y();
+  }
+
+  // Compute new knot vector for M control points with degree 7
+  // KnotAveraging needs M parameter values uniformly spaced
+  Eigen::RowVectorXd sub_chord(M);
+  for (int i = 0; i < M; ++i) {
+    sub_chord(i) = static_cast<double>(i) / static_cast<double>(M - 1);
+  }
+  Eigen::RowVectorXd new_knots;
+  Eigen::KnotAveraging(sub_chord, eff_deg, new_knots);
+  state_.knots = new_knots;
 
   rebuildSpline();
   fitted_ = true;
