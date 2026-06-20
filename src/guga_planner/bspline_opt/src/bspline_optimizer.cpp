@@ -23,7 +23,8 @@ static double evalCost(
   const std::vector<Eigen::Vector2d> & orig_points,
   const Eigen::VectorXd & orig_params,
   double first_x, double first_y, double last_x, double last_y,
-  int M, double w_smooth, double w_dist)
+  int M, double w_smooth, double w_dist, double w_obs,
+  const unsigned char * costmap, int cm_w, int cm_h)
 {
   Eigen::MatrixXd ctrl(2, M);
   ctrl(0, 0) = first_x;  ctrl(1, 0) = first_y;
@@ -59,6 +60,26 @@ static double evalCost(
     }
   }
 
+  // Obstacle cost: penalize any point on the spline that lands in a costmap cell >= 253
+  if (w_obs > 0.0 && costmap != nullptr) {
+    constexpr int K = 200;  // dense sampling for obstacle safety
+    for (int i = 0; i <= K; ++i) {
+      double u = static_cast<double>(i) / static_cast<double>(K);
+      Eigen::Vector2d p = spl(u);
+      int cx = static_cast<int>(p.x());
+      int cy = static_cast<int>(p.y());
+      if (cx >= 0 && cx < cm_w && cy >= 0 && cy < cm_h) {
+        unsigned char v = costmap[static_cast<size_t>(cy * cm_w + cx)];
+        if (v >= 253) {
+          // Distance into the obstacle (penetration depth heuristic)
+          double dx = p.x() - static_cast<double>(cx) - 0.5;
+          double dy = p.y() - static_cast<double>(cy) - 0.5;
+          cost += w_obs * (1.0 + std::abs(dx) + std::abs(dy));
+        }
+      }
+    }
+  }
+
   return cost;
 }
 
@@ -68,7 +89,8 @@ static std::vector<double> gradientDescent(
   const std::vector<Eigen::Vector2d> & orig_points,
   const Eigen::VectorXd & orig_params,
   double first_x, double first_y, double last_x, double last_y,
-  int M, double w_smooth, double w_dist,
+  int M, double w_smooth, double w_dist, double w_obs,
+  const unsigned char * costmap, int cm_w, int cm_h,
   int max_iters, bool & converged)
 {
   std::vector<double> x = init_params;
@@ -76,13 +98,13 @@ static std::vector<double> gradientDescent(
   if (N == 0) { converged = true; return x; }
 
   double alpha{1e-3};
-  constexpr double h = 1e-4;
+  constexpr double h = 1e-3;  // larger step to detect cell-costmap boundaries
   constexpr double gtol = 1e-8;
   constexpr int patience = 20;
 
   double f_best = evalCost(x, knots, orig_points, orig_params,
                            first_x, first_y, last_x, last_y,
-                           M, w_smooth, w_dist);
+                           M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
   int no_improve{};
 
   std::vector<double> grad(N);
@@ -94,11 +116,11 @@ static std::vector<double> gradientDescent(
       x[i] = orig + h;
       double fp = evalCost(x, knots, orig_points, orig_params,
                            first_x, first_y, last_x, last_y,
-                           M, w_smooth, w_dist);
+                           M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
       x[i] = orig - h;
       double fm = evalCost(x, knots, orig_points, orig_params,
                            first_x, first_y, last_x, last_y,
-                           M, w_smooth, w_dist);
+                           M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
       x[i] = orig;
       grad[i] = (fp - fm) / (2.0 * h);
     }
@@ -114,7 +136,7 @@ static std::vector<double> gradientDescent(
       for (int i = 0; i < N; ++i) { x_try[i] = x[i] - alpha * grad[i]; }
       double f_try = evalCost(x_try, knots, orig_points, orig_params,
                               first_x, first_y, last_x, last_y,
-                              M, w_smooth, w_dist);
+                              M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
       if (f_try < f_best) {
         x = x_try; f_best = f_try; found = true; no_improve = 0; break;
       }
@@ -342,12 +364,53 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     params, state_.knots, state_.original_points, state_.parameters,
     fx, fy, lx, ly, M,
     config_.smoothness_weight, config_.distance_weight,
+    config_.obstacle_weight,
+    state_.costmap_data, state_.costmap_w, state_.costmap_h,
     config_.ceres_max_iterations, converged);
 
   for (int i = 0; i < n_interior; ++i) {
     state_.control_points(0, i + 1) = opt[2 * i];
     state_.control_points(1, i + 1) = opt[2 * i + 1];
   }
+
+  // ── Post-optimization obstacle projection ──
+  // If any interior control point lands in an obstacle cell, push it to the
+  // nearest free cell by searching outward in increasing radius.
+  if (state_.costmap_data != nullptr) {
+    for (int i = 0; i < n_interior; ++i) {
+      double cx = state_.control_points(0, i + 1);
+      double cy = state_.control_points(1, i + 1);
+      int ix = static_cast<int>(cx);
+      int iy = static_cast<int>(cy);
+      if (ix < 0 || ix >= state_.costmap_w || iy < 0 || iy >= state_.costmap_h)
+        continue;
+      unsigned char v = state_.costmap_data[
+        static_cast<size_t>(iy * state_.costmap_w + ix)];
+      if (v < 253) continue;  // already safe
+
+      // Search outward spiral to find nearest free cell
+      bool found_free{};
+      for (int r = 1; r <= 10 && !found_free; ++r) {
+        for (int dy = -r; dy <= r && !found_free; ++dy) {
+          for (int dx = -r; dx <= r && !found_free; ++dx) {
+            if (std::abs(dx) < r && std::abs(dy) < r) continue;
+            int tx = ix + dx;
+            int ty = iy + dy;
+            if (tx < 0 || tx >= state_.costmap_w ||
+                ty < 0 || ty >= state_.costmap_h) continue;
+            unsigned char tv = state_.costmap_data[
+              static_cast<size_t>(ty * state_.costmap_w + tx)];
+            if (tv < 253) {
+              state_.control_points(0, i + 1) = static_cast<double>(tx) + 0.5;
+              state_.control_points(1, i + 1) = static_cast<double>(ty) + 0.5;
+              found_free = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
   rebuildSpline();
 
   result.smoothed_path = sample(num_samples);

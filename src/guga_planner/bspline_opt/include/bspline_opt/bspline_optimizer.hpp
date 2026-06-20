@@ -18,6 +18,7 @@ struct BSplineConfig
   int degree{7};  // Degree 7 to match Eigen 3.4 SplineFitting fixed-degree requirement
   double smoothness_weight{1.0};
   double distance_weight{500.0};  // Strong anchoring to original path
+  double obstacle_weight{50000.0}; // Dominant penalty for entering obstacle cells
   int ceres_max_iterations{200};
   int max_control_points{15};  // Cap ctrl pts to avoid under-constrained smoothness
 };
@@ -44,6 +45,12 @@ struct BSplineState
 
   /** Effective degree used for fitting (may be reduced for short paths). */
   int effective_degree{};
+
+  /** @brief Optional costmap grid for obstacle avoidance (cost >= 253 = obstacle).
+   *  Pointer NOT owned — caller must keep alive. nullptr = no obstacle check. */
+  const unsigned char * costmap_data{nullptr};
+  int costmap_w{};
+  int costmap_h{};
 };
 
 /**
@@ -88,6 +95,7 @@ public:
 
   /** @brief Access the internal state (for debugging / tests). */
   [[nodiscard]] const BSplineState & state() const { return state_; }
+  [[nodiscard]] BSplineState & state() { return state_; }  // mutable access for joint test
   [[nodiscard]] const BSplineConfig & config() const { return config_; }
 
   /**

@@ -99,7 +99,9 @@ int main(int argc, char ** argv)
 
   BSplineConfig cfg{};
   cfg.smoothness_weight = 1.0;
-  cfg.distance_weight = 10.0;
+  cfg.distance_weight = 500.0;
+  cfg.obstacle_weight = 50000.0;
+  cfg.max_control_points = 15;  // Balanced: fewer pts = less corner-cutting
   cfg.ceres_max_iterations = 200;
 
   std::ofstream bench(out_dir + "/benchmark.csv");
@@ -123,9 +125,42 @@ int main(int argc, char ** argv)
     std::cout << " (" << path.size() << " pts)... ";
 
     BSplineOptimizer opt(cfg);
+
+    // Load costmap grid into state for obstacle avoidance
+    std::string grid_in = data_dir + "/" + sc + "_grid.dat";
+    std::vector<unsigned char> grid_data{};
+    int gw{}, gh{};
+    {
+      std::ifstream gf(grid_in);
+      if (gf) {
+        double x{}, y{};
+        int c{};
+        // Two-pass: first determine size, then load
+        std::vector<std::tuple<int,int,int>> cells{};
+        while (gf >> x >> y >> c) {
+          int cx = static_cast<int>(x);
+          int cy = static_cast<int>(y);
+          gw = std::max(gw, cx + 1);
+          gh = std::max(gh, cy + 1);
+          cells.emplace_back(cx, cy, c);
+        }
+        grid_data.assign(static_cast<size_t>(gw * gh), 0);
+        for (auto [cx, cy, c] : cells) {
+          grid_data[static_cast<size_t>(cy * gw + cx)] = static_cast<unsigned char>(c);
+        }
+      }
+    }
+
     if (!opt.fit(path)) {
       std::cout << "FIT FAILED\n";
       continue;
+    }
+
+    // Inject costmap into state before optimize()
+    if (!grid_data.empty()) {
+      opt.state().costmap_data = grid_data.data();
+      opt.state().costmap_w = gw;
+      opt.state().costmap_h = gh;
     }
 
     auto result = opt.optimize(200);
@@ -139,11 +174,13 @@ int main(int argc, char ** argv)
     sg << path.front().first << " " << path.front().second << " start\n";
     sg << path.back().first << " " << path.back().second << " goal\n";
 
-    std::string grid_in = data_dir + "/" + sc + "_grid.dat";
-    std::ifstream gf(grid_in, std::ios::binary);
-    if (gf) {
-      std::ofstream go(out_dir + "/" + sc + "_grid.dat", std::ios::binary);
-      go << gf.rdbuf();
+    // Copy grid file (already loaded above)
+    {
+      std::ifstream gf2(grid_in, std::ios::binary);
+      if (gf2) {
+        std::ofstream go(out_dir + "/" + sc + "_grid.dat", std::ios::binary);
+        go << gf2.rdbuf();
+      }
     }
 
     double orig_max_k = pathMaxCurvature(path);
