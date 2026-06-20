@@ -1,0 +1,41 @@
+Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+[==========] Running 13 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from BSplineFittingTest
+[ RUN      ] BSplineFittingTest.DiagonalLine_FitsExactly
+[       OK ] BSplineFittingTest.DiagonalLine_FitsExactly (1 ms)
+[ RUN      ] BSplineFittingTest.StraightHorizontal_FitsCollinear
+[       OK ] BSplineFittingTest.StraightHorizontal_FitsCollinear (0 ms)
+[ RUN      ] BSplineFittingTest.Validation_SufficientPoints
+[       OK ] BSplineFittingTest.Validation_SufficientPoints (0 ms)
+[ RUN      ] BSplineFittingTest.TooFewPoints_Fails
+[       OK ] BSplineFittingTest.TooFewPoints_Fails (0 ms)
+[ RUN      ] BSplineFittingTest.TwoPoints_Linear
+[       OK ] BSplineFittingTest.TwoPoints_Linear (0 ms)
+[----------] 5 tests from BSplineFittingTest (1 ms total)
+
+[----------] 4 tests from BSplineOptimizationTest
+[ RUN      ] BSplineOptimizationTest.Corner_CurvatureDecreases
+[       OK ] BSplineOptimizationTest.Corner_CurvatureDecreases (11591 ms)
+[ RUN      ] BSplineOptimizationTest.EndpointsPreserved
+[       OK ] BSplineOptimizationTest.EndpointsPreserved (11559 ms)
+[ RUN      ] BSplineOptimizationTest.StraightPath_StaysStraight
+[       OK ] BSplineOptimizationTest.StraightPath_StaysStraight (58 ms)
+[ RUN      ] BSplineOptimizationTest.ControlPoints_CountMatches
+[       OK ] BSplineOptimizationTest.ControlPoints_CountMatches (58 ms)
+[----------] 4 tests from BSplineOptimizationTest (23266 ms total)
+
+[----------] 4 tests from BSplineQueryTest
+[ RUN      ] BSplineQueryTest.CurvatureAt_StraightLine_Zero
+[       OK ] BSplineQueryTest.CurvatureAt_StraightLine_Zero (0 ms)
+[ RUN      ] BSplineQueryTest.CurvatureAt_Endpoint_IsFinite
+[       OK ] BSplineQueryTest.CurvatureAt_Endpoint_IsFinite (0 ms)
+[ RUN      ] BSplineQueryTest.Sample_N_ReturnsN
+[       OK ] BSplineQueryTest.Sample_N_ReturnsN (1 ms)
+[ RUN      ] BSplineQueryTest.NotFitted_ReturnsEmpty
+[       OK ] BSplineQueryTest.NotFitted_ReturnsEmpty (0 ms)
+[----------] 4 tests from BSplineQueryTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 3 test suites ran. (23268 ms total)
+[  PASSED  ] 13 tests.
