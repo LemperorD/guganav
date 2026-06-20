@@ -1,0 +1,7 @@
+scenario,orig_points,smooth_points,orig_max_curv,smooth_max_curv,orig_len,smooth_len,curv_energy_init,curv_energy_final,converged
+s1_empty_diag,2,0,0,0,98.9949,0,0,0,0
+s2_wall_gap,6,0,0.137618,0,34.1421,0,0,0,0
+s3_maze,5,0,0.0534026,0,65.4142,0,0,0,0
+s4_obstaclefield,23,200,0.650645,2.28572,65.9828,88.4828,1.41471e+09,2.75353e+06,1
+s5_large_empty,2,0,0,0,254.558,0,0,0,0
+s6_costband,2,0,0,0,70.7107,0,0,0,0
