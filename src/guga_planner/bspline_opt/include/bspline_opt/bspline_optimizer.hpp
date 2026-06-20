@@ -1,9 +1,11 @@
 #pragma once
 
+#include <memory>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
+#include <unsupported/Eigen/Splines>
 
 namespace bspline_opt
 {

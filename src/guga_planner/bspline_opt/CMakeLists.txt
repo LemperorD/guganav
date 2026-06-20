@@ -12,6 +12,9 @@ endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ── ament_cmake (for colcon build system integration) ──
+find_package(ament_cmake REQUIRED)
+
 # ── Eigen3 (system) ──
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
