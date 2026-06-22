@@ -97,12 +97,7 @@ int main(int argc, char ** argv)
     "s1_empty_diag", "s2_wall_gap", "s3_maze",
     "s4_obstaclefield", "s5_large_empty", "s6_costband"};
 
-  BSplineConfig cfg{};
-  cfg.smoothness_weight = 1.0;
-  cfg.distance_weight = 500.0;
-  cfg.obstacle_weight = 50000.0;
-  cfg.max_control_points = 15;  // Balanced: fewer pts = less corner-cutting
-  cfg.ceres_max_iterations = 200;
+  BSplineConfig cfg{};  // default: exact interpolation, no gradient descent
 
   std::ofstream bench(out_dir + "/benchmark.csv");
   bench << "scenario,orig_points,smooth_points,orig_max_curv,"

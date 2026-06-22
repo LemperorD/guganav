@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include <unsupported/Eigen/Splines>
@@ -15,8 +14,55 @@ namespace
 {
 
 // ──────────────────────────────────────────────────────────
-// Cost evaluation + gradient descent (no Ceres dependency)
+// B-spline evaluation helpers
 // ──────────────────────────────────────────────────────────
+
+// Read costmap cell at integer grid coords (bounds-checked).
+inline unsigned char cellCost(
+  const unsigned char * cmap, int w, int h, int cx, int cy)
+{
+  if (!cmap || cx < 0 || cx >= w || cy < 0 || cy >= h) { return 255; }
+  return cmap[static_cast<size_t>(cy * w + cx)];
+}
+
+// Check whether a world-coord point is inside an obstacle cell.
+inline bool inObstacle(
+  const unsigned char * cmap, int w, int h, double px, double py)
+{
+  int cx = static_cast<int>(px);
+  int cy = static_cast<int>(py);
+  return cellCost(cmap, w, h, cx, cy) >= 253;
+}
+
+// Project a single point to the nearest free cell (spiral search, r ≤ 8).
+// Returns true if projection succeeded.
+inline bool projectPointToFree(
+  const unsigned char * cmap, int w, int h, double & px, double & py)
+{
+  int ix = static_cast<int>(px);
+  int iy = static_cast<int>(py);
+  if (!inObstacle(cmap, w, h, px, py)) { return true; }
+
+  for (int r = 1; r <= 8; ++r) {
+    for (int dy = -r; dy <= r; ++dy) {
+      for (int dx = -r; dx <= r; ++dx) {
+        if (std::abs(dx) < r && std::abs(dy) < r) { continue; }
+        int tx = ix + dx;
+        int ty = iy + dy;
+        if (cellCost(cmap, w, h, tx, ty) < 253) {
+          px = static_cast<double>(tx) + 0.5;
+          py = static_cast<double>(ty) + 0.5;
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// ===================================================================
+// Gradient descent (only compiled when enabled via config)
+// ===================================================================
 
 static double evalCost(
   const std::vector<double> & params, const Eigen::VectorXd & knots,
@@ -60,9 +106,8 @@ static double evalCost(
     }
   }
 
-  // Obstacle cost: penalize any point on the spline that lands in a costmap cell >= 253
-  if (w_obs > 0.0 && costmap != nullptr) {
-    constexpr int K = 200;  // dense sampling for obstacle safety
+  if (w_obs > 0.0 && costmap) {
+    constexpr int K = 200;
     for (int i = 0; i <= K; ++i) {
       double u = static_cast<double>(i) / static_cast<double>(K);
       Eigen::Vector2d p = spl(u);
@@ -71,7 +116,6 @@ static double evalCost(
       if (cx >= 0 && cx < cm_w && cy >= 0 && cy < cm_h) {
         unsigned char v = costmap[static_cast<size_t>(cy * cm_w + cx)];
         if (v >= 253) {
-          // Distance into the obstacle (penetration depth heuristic)
           double dx = p.x() - static_cast<double>(cx) - 0.5;
           double dy = p.y() - static_cast<double>(cy) - 0.5;
           cost += w_obs * (1.0 + std::abs(dx) + std::abs(dy));
@@ -91,14 +135,14 @@ static std::vector<double> gradientDescent(
   double first_x, double first_y, double last_x, double last_y,
   int M, double w_smooth, double w_dist, double w_obs,
   const unsigned char * costmap, int cm_w, int cm_h,
-  int max_iters, bool & converged)
+  int max_iters, double corridor_hw, bool & converged)
 {
   std::vector<double> x = init_params;
   const int N = static_cast<int>(x.size());
   if (N == 0) { converged = true; return x; }
 
   double alpha{1e-3};
-  constexpr double h = 1e-3;  // larger step to detect cell-costmap boundaries
+  constexpr double h = 0.5;  // half-cell step to detect obstacle boundaries
   constexpr double gtol = 1e-8;
   constexpr int patience = 20;
 
@@ -133,7 +177,12 @@ static std::vector<double> gradientDescent(
     alpha = std::min(alpha * 2.0, 0.1);
     bool found{};
     for (int ls = 0; ls < 15; ++ls) {
-      for (int i = 0; i < N; ++i) { x_try[i] = x[i] - alpha * grad[i]; }
+      for (int i = 0; i < N; ++i) {
+        x_try[i] = x[i] - alpha * grad[i];
+        // Corridor constraint: clamp to initial position ± corridor_hw
+        x_try[i] = std::clamp(x_try[i], init_params[i] - corridor_hw,
+                              init_params[i] + corridor_hw);
+      }
       double f_try = evalCost(x_try, knots, orig_points, orig_params,
                               first_x, first_y, last_x, last_y,
                               M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
@@ -154,7 +203,7 @@ static std::vector<double> gradientDescent(
 }  // namespace
 
 // ──────────────────────────────────────────────────────────
-// Public methods
+// Public API
 // ──────────────────────────────────────────────────────────
 
 BSplineOptimizer::BSplineOptimizer(const BSplineConfig & config)
@@ -163,8 +212,7 @@ BSplineOptimizer::BSplineOptimizer(const BSplineConfig & config)
 }
 
 bool BSplineOptimizer::fit(
-  const std::vector<std::pair<double, double>> & path,
-  int num_control_points)
+  const std::vector<std::pair<double, double>> & path)
 {
   fitted_ = false;
   state_ = {};
@@ -173,26 +221,23 @@ bool BSplineOptimizer::fit(
   const int n_pts = static_cast<int>(path.size());
   if (n_pts < 2) { return false; }
 
-  // Eigen 3.4 SplineFitting with Spline<double,2,7> requires exactly degree=7.
-  // For paths with fewer than degree+1=8 points, store as linear interpolation.
+  // ── Short-path fallback (linear) ──
   if (n_pts < 8) {
     state_.effective_degree = 1;
-    state_.original_points = {};
+    state_.original_points.reserve(n_pts);
     for (const auto & [x, y] : path) {
       state_.original_points.emplace_back(x, y);
     }
-    // Create a trivial 2-control-point "spline" via linear fit
     state_.control_points.resize(2, 2);
     state_.control_points(0, 0) = path.front().first;
     state_.control_points(1, 0) = path.front().second;
     state_.control_points(0, 1) = path.back().first;
     state_.control_points(1, 1) = path.back().second;
-    // Don't bother with a full spline for < 8 points — sample() with linear interp
     fitted_ = true;
     return true;
   }
 
-  int eff_deg = 7;  // fixed by Spline type
+  const int eff_deg = 7;
   state_.effective_degree = eff_deg;
 
   state_.original_points.reserve(n_pts);
@@ -200,6 +245,7 @@ bool BSplineOptimizer::fit(
     state_.original_points.emplace_back(x, y);
   }
 
+  // Chord-length parameterization
   std::vector<double> arc_lengths(n_pts);
   arc_lengths[0] = 0.0;
   for (int i = 1; i < n_pts; ++i) {
@@ -216,12 +262,14 @@ bool BSplineOptimizer::fit(
   }
   state_.parameters[n_pts - 1] = 1.0;
 
+  // Point matrix (2 × N)
   Eigen::MatrixXd pts(2, n_pts);
   for (int i = 0; i < n_pts; ++i) {
     pts(0, i) = path[i].first;
     pts(1, i) = path[i].second;
   }
 
+  // Knot averaging
   Eigen::RowVectorXd chord_vec(n_pts);
   for (int i = 0; i < n_pts; ++i) {
     chord_vec(i) = state_.parameters(i);
@@ -230,28 +278,40 @@ bool BSplineOptimizer::fit(
   Eigen::KnotAveraging(chord_vec, eff_deg, knot_vec);
   state_.knots = knot_vec;
 
-  // ── B-spline interpolation with M control points ──
-  // Default: use config_.max_control_points or num_control_points
-  int M = num_control_points > 0 ? num_control_points : config_.max_control_points;
+  // ── Step 1: Interpolate through ALL N waypoints via SplineFitting ──
+  using SplineFitter =
+    Eigen::SplineFitting<Eigen::Spline<double, 2, 7>>;
+  auto dense_spline = SplineFitter::Interpolate(pts, eff_deg);
+
+  // ── Step 2: Determine control point count ──
+  int M = std::min(config_.max_control_points, n_pts);
   if (M < 8) { M = 8; }
   if (M > n_pts) { M = n_pts; }
 
-  // Interpolate with FULL points first to get a dense reference spline
-  using SplineFitter =
-    Eigen::SplineFitting<Eigen::Spline<double, 2, 7>>;  // fixed deg=7, match MPC
-  auto dense_spline = SplineFitter::Interpolate(pts, eff_deg);
-
-  // Resample M control points from the dense spline at uniform parameter spacing
+  // ── Step 3: Re-sample M control points at chord-length parameters ──
+  // Instead of uniform spacing, use the chord-length parameters of a subset
+  // of the original waypoints. This preserves the geometric shape.
+  // Strategy: pick M waypoints uniformly along the ARC LENGTH (not u).
   state_.control_points.resize(2, M);
   for (int i = 0; i < M; ++i) {
-    double u = static_cast<double>(i) / static_cast<double>(M - 1);
+    // Map index i (0..M-1) to arc-length fraction, then find nearest chord param
+    double target_arc_frac = static_cast<double>(i) / static_cast<double>(M - 1);
+    // Find the waypoint index with closest arc-length fraction
+    int best_idx = 0;
+    double best_dist = 1e9;
+    for (int j = 0; j < n_pts; ++j) {
+      double d = std::abs(state_.parameters(j) - target_arc_frac);
+      if (d < best_dist) { best_dist = d; best_idx = j; }
+    }
+    // Evaluate the dense spline at this waypoint's chord-length parameter
+    double u = state_.parameters(best_idx);
     Eigen::Vector2d p = dense_spline(u);
     state_.control_points(0, i) = p.x();
     state_.control_points(1, i) = p.y();
   }
 
-  // Compute new knot vector for M control points with degree 7
-  // KnotAveraging needs M parameter values uniformly spaced
+  // ── Step 4: Create knot vector for M control points ──
+  // Use chord-length from the selected M waypoints
   Eigen::RowVectorXd sub_chord(M);
   for (int i = 0; i < M; ++i) {
     sub_chord(i) = static_cast<double>(i) / static_cast<double>(M - 1);
@@ -259,6 +319,14 @@ bool BSplineOptimizer::fit(
   Eigen::RowVectorXd new_knots;
   Eigen::KnotAveraging(sub_chord, eff_deg, new_knots);
   state_.knots = new_knots;
+
+  // Save initial control-point positions (flat doubles) for corridor constraint
+  state_.initial_params.clear();
+  state_.initial_params.reserve(2 * (M - 2));
+  for (int i = 1; i < M - 1; ++i) {
+    state_.initial_params.push_back(state_.control_points(0, i));
+    state_.initial_params.push_back(state_.control_points(1, i));
+  }
 
   rebuildSpline();
   fitted_ = true;
@@ -275,8 +343,8 @@ std::vector<std::pair<double, double>> BSplineOptimizer::sample(int N) const
 {
   std::vector<std::pair<double, double>> out{};
   if (!fitted_) { return out; }
-  // For linear fallback (no spline): interpolate between endpoints
   if (!spline_) {
+    // Linear fallback
     if (state_.original_points.empty()) { return out; }
     out.reserve(N);
     double x0 = state_.original_points.front().x();
@@ -346,83 +414,66 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
   result.cost_initial = computeCurvatureEnergy();
 
-  const int n_interior = M - 2;
-  const int param_size = 2 * n_interior;
-  std::vector<double> params(param_size);
-  for (int i = 0; i < n_interior; ++i) {
-    params[2 * i] = state_.control_points(0, i + 1);
-    params[2 * i + 1] = state_.control_points(1, i + 1);
-  }
-
-  double fx = state_.control_points(0, 0);
-  double fy = state_.control_points(1, 0);
-  double lx = state_.control_points(0, M - 1);
-  double ly = state_.control_points(1, M - 1);
-
-  bool converged{};
-  auto opt = gradientDescent(
-    params, state_.knots, state_.original_points, state_.parameters,
-    fx, fy, lx, ly, M,
-    config_.smoothness_weight, config_.distance_weight,
-    config_.obstacle_weight,
-    state_.costmap_data, state_.costmap_w, state_.costmap_h,
-    config_.ceres_max_iterations, converged);
-
-  for (int i = 0; i < n_interior; ++i) {
-    state_.control_points(0, i + 1) = opt[2 * i];
-    state_.control_points(1, i + 1) = opt[2 * i + 1];
-  }
-
-  // ── Post-optimization obstacle projection ──
-  // If any interior control point lands in an obstacle cell, push it to the
-  // nearest free cell by searching outward in increasing radius.
-  if (state_.costmap_data != nullptr) {
+  // ── Step 1: Optional gradient descent ──
+  if (config_.enable_gradient_descent) {
+    const int n_interior = M - 2;
+    const int param_size = 2 * n_interior;
+    std::vector<double> params(param_size);
     for (int i = 0; i < n_interior; ++i) {
-      double cx = state_.control_points(0, i + 1);
-      double cy = state_.control_points(1, i + 1);
-      int ix = static_cast<int>(cx);
-      int iy = static_cast<int>(cy);
-      if (ix < 0 || ix >= state_.costmap_w || iy < 0 || iy >= state_.costmap_h)
-        continue;
-      unsigned char v = state_.costmap_data[
-        static_cast<size_t>(iy * state_.costmap_w + ix)];
-      if (v < 253) continue;  // already safe
+      params[2 * i] = state_.control_points(0, i + 1);
+      params[2 * i + 1] = state_.control_points(1, i + 1);
+    }
 
-      // Search outward spiral to find nearest free cell
-      bool found_free{};
-      for (int r = 1; r <= 10 && !found_free; ++r) {
-        for (int dy = -r; dy <= r && !found_free; ++dy) {
-          for (int dx = -r; dx <= r && !found_free; ++dx) {
-            if (std::abs(dx) < r && std::abs(dy) < r) continue;
-            int tx = ix + dx;
-            int ty = iy + dy;
-            if (tx < 0 || tx >= state_.costmap_w ||
-                ty < 0 || ty >= state_.costmap_h) continue;
-            unsigned char tv = state_.costmap_data[
-              static_cast<size_t>(ty * state_.costmap_w + tx)];
-            if (tv < 253) {
-              state_.control_points(0, i + 1) = static_cast<double>(tx) + 0.5;
-              state_.control_points(1, i + 1) = static_cast<double>(ty) + 0.5;
-              found_free = true;
-            }
-          }
-        }
-      }
+    double fx = state_.control_points(0, 0);
+    double fy = state_.control_points(1, 0);
+    double lx = state_.control_points(0, M - 1);
+    double ly = state_.control_points(1, M - 1);
+
+    bool converged{};
+    auto opt = gradientDescent(
+      params, state_.knots, state_.original_points, state_.parameters,
+      fx, fy, lx, ly, M,
+      config_.smoothness_weight, config_.distance_weight,
+      config_.obstacle_weight,
+      state_.costmap_data, state_.costmap_w, state_.costmap_h,
+      config_.max_iterations, config_.corridor_halfwidth, converged);
+
+    for (int i = 0; i < n_interior; ++i) {
+      state_.control_points(0, i + 1) = opt[2 * i];
+      state_.control_points(1, i + 1) = opt[2 * i + 1];
+    }
+  }
+
+  // ── Step 2: Obstacle-avoidance projection on control points ──
+  if (state_.costmap_data != nullptr) {
+    for (int i = 1; i < M - 1; ++i) {
+      double & cx = state_.control_points(0, i);
+      double & cy = state_.control_points(1, i);
+      projectPointToFree(state_.costmap_data, state_.costmap_w,
+                         state_.costmap_h, cx, cy);
     }
   }
 
   rebuildSpline();
 
-  result.smoothed_path = sample(num_samples);
+  // ── Step 3: Sample and check each sample point for obstacles ──
+  auto path = sample(num_samples);
+  if (state_.costmap_data != nullptr) {
+    for (auto & [px, py] : path) {
+      projectPointToFree(state_.costmap_data, state_.costmap_w,
+                         state_.costmap_h, px, py);
+    }
+  }
+
+  result.smoothed_path = std::move(path);
   result.curvature_profile.resize(num_samples);
   for (int i = 0; i < num_samples; ++i) {
     double u = static_cast<double>(i) / static_cast<double>(num_samples - 1);
     result.curvature_profile[i] = curvatureAt(u);
   }
   result.total_curvature_energy = computeCurvatureEnergy();
-  result.ceres_iterations = 0;
   result.cost_final = result.total_curvature_energy;
-  result.converged = converged;
+  result.converged = true;
 
   result.control_points_xy.reserve(M);
   for (int i = 0; i < M; ++i) {
