@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_PANGOLIN_RENDER_3D_HPP
 #define GUGA_UI_PANGOLIN_RENDER_3D_HPP
-
 /**
  * @file render_3d.hpp
  * @brief 3D 场景渲染：机器人位姿、导航路径/目标点、敌方标记、坐标轴、地面参考网格。
@@ -10,6 +9,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <pangolin/pangolin.h>
 #include <pangolin/display/view.h>
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/gldraw.h>
@@ -259,7 +259,8 @@ class GugaRender3D {
   }
 
   pangolin::OpenGlRenderState s_cam_;
-  pangolin::Handler3D handler_{pangolin::AxisNone};
+  // pangolin::Handler3D handler_{pangolin::AxisNone};
+  pangolin::Handler3D handler_{s_cam_};
   ViewMode mode_{ViewMode::TOP_DOWN};
 };
 

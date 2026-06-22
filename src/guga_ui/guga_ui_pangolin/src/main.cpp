@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
   }
 
   // ---- 1. 打开共享内存 ----
-  guga_ui::UiDataSource data_source;
+  UiDataSource data_source;
   if (!data_source.open(shm_name)) {
     std::cerr << "[guga_ui] Failed to open shared memory \"" << shm_name
               << "\". Is any writer module running?" << std::endl;

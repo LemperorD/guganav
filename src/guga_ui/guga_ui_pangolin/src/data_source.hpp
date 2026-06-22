@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_PANGOLIN_DATA_SOURCE_HPP
 #define GUGA_UI_PANGOLIN_DATA_SOURCE_HPP
-
 /**
  * @file data_source.hpp
  * @brief 封装 ShmReader，提供 UI 渲染所需的统一数据视图。

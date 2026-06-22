@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_PANGOLIN_RENDER_HUD_HPP
 #define GUGA_UI_PANGOLIN_RENDER_HUD_HPP
-
 /**
  * @file render_hud.hpp
  * @brief HUD 状态面板渲染：HP、热量、弹量、金币、比赛阶段、倒计时、RFID 增益点。

@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_PANGOLIN_RENDER_DECISION_HPP
 #define GUGA_UI_PANGOLIN_RENDER_DECISION_HPP
-
 /**
  * @file render_decision.hpp
  * @brief 决策面板渲染：当前决策状态、底盘模式、目标位姿、机器人当前位置。

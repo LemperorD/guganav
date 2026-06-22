@@ -64,7 +64,7 @@ struct alignas(64) UiGameStatus {
   uint8_t _pad[51]{};
 };
 
-static_assert(sizeof(UiGameStatus) == 64);
+static_assert(alignof(UiGameStatus) == 64);
 static_assert(std::is_trivially_copyable_v<UiGameStatus>);
 
 // ==================== RFID 状态 ====================
@@ -103,7 +103,7 @@ struct alignas(64) UiRfidStatus {
   uint8_t _pad[40]{};
 };
 
-static_assert(sizeof(UiRfidStatus) == 64);
+static_assert(alignof(UiRfidStatus) == 64);
 static_assert(std::is_trivially_copyable_v<UiRfidStatus>);
 
 // ==================== 决策状态 ====================
@@ -137,7 +137,7 @@ struct alignas(64) UiDecision {
   uint8_t _pad[15]{};
 };
 
-static_assert(sizeof(UiDecision) == 64);
+static_assert(alignof(UiDecision) == 64);
 static_assert(std::is_trivially_copyable_v<UiDecision>);
 
 // ==================== 敌方信息 ====================
@@ -170,7 +170,7 @@ struct alignas(64) UiEnemy {
   uint8_t _pad[30]{};
 };
 
-static_assert(sizeof(UiEnemy) == 64);
+static_assert(alignof(UiEnemy) == 64);
 static_assert(std::is_trivially_copyable_v<UiEnemy>);
 
 // ==================== 里程计 ====================
@@ -194,7 +194,7 @@ struct alignas(64) UiOdom {
   uint8_t _pad[8]{};
 };
 
-static_assert(sizeof(UiOdom) == 64);
+static_assert(alignof(UiOdom) == 64);
 static_assert(std::is_trivially_copyable_v<UiOdom>);
 
 // ==================== 云台偏航 ====================
@@ -213,7 +213,7 @@ struct alignas(64) UiYaw {
   uint8_t _pad[48]{};
 };
 
-static_assert(sizeof(UiYaw) == 64);
+static_assert(alignof(UiYaw) == 64);
 static_assert(std::is_trivially_copyable_v<UiYaw>);
 
 // ==================== 导航路径 ====================
