@@ -10,8 +10,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ---- 查找依赖 ----
 
 # Pangolin (本地编译, 版本 0.9.4)
-# 设置 Pangolin_DIR 指向自编译的 CMake 配置
-set(Pangolin_DIR /home/ld/3rdparty/Pangolin/build)
 find_package(Pangolin REQUIRED)
 
 # Eigen3 (Pangolin 依赖, 用于 3D 数学)
@@ -22,12 +20,7 @@ find_package(OpenGL REQUIRED)
 
 # guga_ui_common (共享内存通信库, 纯头文件)
 # 先尝试在 worksapce 中查找
-find_package(guga_ui_common QUIET)
-if(NOT guga_ui_common_FOUND)
-  # 如果还没有 build/install, 直接用源目录路径
-  set(guga_ui_common_INCLUDE_DIRS
-      ${CMAKE_CURRENT_SOURCE_DIR}/../guga_ui_common/include)
-endif()
+find_package(guga_ui_common REQUIRED)
 
 # Threads (POSIX 线程, shm_reader/shm_writer 依赖)
 find_package(Threads REQUIRED)
@@ -41,6 +34,13 @@ endif()
 
 add_executable(guga_ui
   src/main.cpp
+)
+
+ament_target_dependencies(guga_ui
+  Pangolin
+  Eigen3
+  OpenGL
+  guga_ui_common
 )
 
 target_include_directories(guga_ui PRIVATE

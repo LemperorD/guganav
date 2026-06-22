@@ -55,7 +55,7 @@ ament_target_dependencies(serial_driver_node
 # 注册为 rclcpp component，同时生成独立可执行文件
 rclcpp_components_register_node(serial_driver_node
   PLUGIN "serial_driver::SerialDriverNode"
-  EXECUTABLE serial_driver_node
+  EXECUTABLE serial_driver_node_exe
 )
 
 # ---- 安装 ----
