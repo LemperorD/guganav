@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_COMMON_SHM_READER_HPP
 #define GUGA_UI_COMMON_SHM_READER_HPP
-
 /**
  * @file shm_reader.hpp
  * @brief 共享内存读取端，供 UI 进程读取算法模块写入的数据。
@@ -17,6 +16,7 @@
  */
 
 #include <atomic>
+#include <array>
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
@@ -28,12 +28,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "guga_ui_common/shm_layout.hpp"
+#include "shm_layout.hpp"
+#include "ui_types.hpp"
 
 namespace guga_ui {
 
 class ShmReader {
- public:
+public:
   ShmReader() = default;
 
   ~ShmReader() {
@@ -249,7 +250,7 @@ class ShmReader {
     return slot->seq.load(std::memory_order_acquire);
   }
 
- private:
+private:
   /**
    * @brief 按索引获取 slot 元数据指针（const 版本）。
    */

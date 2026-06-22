@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_COMMON_UI_TYPES_HPP
 #define GUGA_UI_COMMON_UI_TYPES_HPP
-
 /**
  * @file ui_types.hpp
  * @brief guga_ui 共享内存中传输的所有数据类型定义。

@@ -1,6 +1,5 @@
 #ifndef GUGA_UI_COMMON_SHM_LAYOUT_HPP
 #define GUGA_UI_COMMON_SHM_LAYOUT_HPP
-
 /**
  * @file shm_layout.hpp
  * @brief 共享内存整体布局和工具函数。
@@ -8,21 +7,21 @@
  * 布局（从 shm 起始地址开始）：
  *
  *   ┌────────────────────────────────────────┐  ← offset 0
- *   │ ShmHeader (96 bytes)                      │
- *   │   magic / version / slot_count / _pad    │
+ *   │ ShmHeader (96 bytes)                   │
+ *   │   magic / version / slot_count / _pad  │
  *   ├────────────────────────────────────────┤
- *   │ ShmSlot[0] (32 bytes)                     │  ← slot 对应的 offset 相对于
- *   │   data_offset / data_size / seq / _pad   │     shm 起始地址
+ *   │ ShmSlot[0] (32 bytes)                  │  ← slot 对应的 offset 相对于
+ *   │   data_offset / data_size / seq / _pad │    shm 起始地址
  *   ├────────────────────────────────────────┤
- *   │ ShmSlot[1] (32 bytes)                     │
+ *   │ ShmSlot[1] (32 bytes)                  │
  *   ├────────────────────────────────────────┤
- *   │ ... (共 slot_count 个)                    │
+ *   │ ... (一共 slot_count 个)                │
  *   ├────────────────────────────────────────┤
- *   │ Slot 0 实际数据区 (可变大小)               │
+ *   │ Slot 0 实际数据区 (可变大小)              │
  *   ├────────────────────────────────────────┤
- *   │ Slot 1 实际数据区                         │
+ *   │ Slot 1 实际数据区                        │
  *   ├────────────────────────────────────────┤
- *   │ ...                                       │
+ *   │ ...                                    │
  *   └────────────────────────────────────────┘
  *
  * 每个 slot 的数据大小固定为 64 字节（与 ui_types.hpp 中结构体一致），
@@ -37,19 +36,19 @@ namespace guga_ui {
 
 // ==================== 内存布局常量 ====================
 
-/// 共享内存默认名称
-static constexpr const char* SHM_DEFAULT_NAME{"guga_ui_shm"};
+// 共享内存默认名称
+static constexpr const char* SHM_DEFAULT_NAME{"guga_shm"};
 
-/// 单个 slot 的数据区大小（与 ui_types.hpp 中全部结构体的 alignas(64) 一致）
+// 单个 slot 的数据区大小（与 ui_types.hpp 中全部结构体的 alignas(64) 一致）
 static constexpr size_t SHM_SLOT_DATA_SIZE{64};
 
-/// 最大 slot 数量
+// 最大 slot 数量
 static constexpr size_t SHM_MAX_SLOTS{16};
 
-/// ShmHeader 中的 magic number（"GUGAUI##" 的十六进制）
-static constexpr uint64_t SHM_MAGIC{0x4755474155492323ULL};
+// ShmHeader 中的 magic number（"GUGUGAGA" 的十六进制）
+static constexpr uint64_t SHM_MAGIC{0x4755475547414741ULL};
 
-/// 当前 shm 布局版本（结构体变更时递增）
+// 当前 shm 布局版本（结构体变更时递增）
 static constexpr uint32_t SHM_VERSION{1};
 
 // ==================== 共享内存头部 ====================
@@ -71,8 +70,8 @@ struct ShmHeader {
   uint8_t reserved[48]{};
 };
 
-static_assert(sizeof(ShmHeader) == 64,
-              "ShmHeader must be 64 bytes (cache-line aligned)");
+// 编译期断言 ShmHeader 大小为 64 字节（一个缓存行），避免 false sharing 和未对齐访问
+static_assert(sizeof(ShmHeader) == 64, "ShmHeader must be 64 bytes (cache-line aligned)");
 
 // ==================== 槽位元数据 ====================
 
@@ -96,8 +95,8 @@ struct alignas(64) ShmSlot {
   uint8_t _pad[40]{};
 };
 
-static_assert(sizeof(ShmSlot) == 64,
-              "ShmSlot must be 64 bytes for cache-line alignment");
+// 编译期断言 ShmSlot 大小为 64 字节（一个缓存行），确保 seq 原子变量独占一行，避免 false sharing
+static_assert(sizeof(ShmSlot) == 64, "ShmSlot must be 64 bytes for cache-line alignment");
 
 // ==================== 工具函数 ====================
 

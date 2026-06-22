@@ -27,13 +27,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "guga_ui_common/shm_layout.hpp"
-#include "guga_ui_common/ui_types.hpp"
+#include "shm_layout.hpp"
+#include "ui_types.hpp"
 
 namespace guga_ui {
 
 class ShmWriter {
- public:
+public:
   ShmWriter() = default;
 
   ~ShmWriter() {
@@ -210,7 +210,7 @@ class ShmWriter {
     slot_meta_->seq.store(seq + 2ULL, std::memory_order_release);
   }
 
- private:
+private:
   /**
    * @brief 按索引获取 slot 元数据指针。
    *
