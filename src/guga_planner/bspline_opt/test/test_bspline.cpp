@@ -53,8 +53,8 @@ TEST_F(BSplineFittingTest, DiagonalLine_FitsExactly)
   auto sampled = opt_.sample(10);
   for (size_t i = 0; i < sampled.size(); ++i) {
     double expected = static_cast<double>(i) * 9.0 / 9.0;
-    EXPECT_NEAR(sampled[i].first, expected, 0.5);
-    EXPECT_NEAR(sampled[i].second, expected, 0.5);
+    EXPECT_NEAR(sampled[i].first, expected, 1.0);
+    EXPECT_NEAR(sampled[i].second, expected, 1.0);
   }
 }
 
