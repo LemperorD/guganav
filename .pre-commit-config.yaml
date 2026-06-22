@@ -5,7 +5,7 @@ repos:
         name: clang-format
         entry: clang-format -i
         language: system
-        files: ^(src/guga_perception/terrain_analysis|src/guga_controller/pb_omni_pid_pursuit_controller|src/guga_decision/simple_decision)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
+        files: ^(src/guga_perception/terrain_analysis|src/guga_controller/pb_omni_pid_pursuit_controller|src/guga_decision/simple_decision|src/guga_planner/jps_planner)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
 
       - id: test-terrain-analysis
         name: test terrain_analysis
@@ -27,3 +27,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/guga_decision/simple_decision/.*|scripts/pre-commit/run_simple_decision_tests\.sh|scripts/test/test_simple_decision_coverage\.sh)$
+
+      - id: test-jps-planner
+        name: test jps_planner
+        entry: scripts/pre-commit/run_jps_tests.sh
+        language: system
+        pass_filenames: false
+        files: ^(src/guga_planner/jps_planner/.*|scripts/pre-commit/run_jps_tests\.sh|scripts/test/test_jps.*\.sh)$
