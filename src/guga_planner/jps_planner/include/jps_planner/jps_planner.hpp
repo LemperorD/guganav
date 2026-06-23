@@ -19,10 +19,10 @@ namespace jps_planner
 
 /**
  * @class JPSPlanner
- * @brief Nav2 global planner plugin using Jump Point Search.
+ * @brief 使用 Jump Point Search 的 Nav2 全局规划器插件。
  *
- * Implements the nav2_core::GlobalPlanner interface. Wraps the stateless
- * JPSAlgorithm with ROS2 lifecycle management and costmap access.
+ * 实现 nav2_core::GlobalPlanner 接口, 用 ROS2 生命周期管理
+ * 和代价地图访问封装无状态 JPSAlgorithm。
  */
 class JPSPlanner : public nav2_core::GlobalPlanner
 {
@@ -45,10 +45,10 @@ public:
 
 private:
   /**
-   * @brief Interpolate between jump-point waypoints to match costmap resolution.
-   * @param raw_path  Sparse path in world coordinates.
-   * @param resolution  Desired spacing between waypoints (meters).
-   * @return Densely sampled nav_msgs::Path.
+   * @brief 在跳转点航点之间线性插值, 使输出路径间距匹配代价地图分辨率。
+   * @param raw_path  地图坐标下的稀疏路径。
+   * @param resolution  期望的航点间距 (米)。
+   * @return 密集采样的 nav_msgs::Path。
    */
   static nav_msgs::msg::Path linearInterpolation(
     const std::vector<std::pair<double, double>> & raw_path,

@@ -36,7 +36,7 @@ void JPSPlanner::configure(
   clock_ = node->get_clock();
   logger_ = node->get_logger();
 
-  // Declare parameters with the planner name as prefix
+  // 以规划器名称为前缀声明 ROS 参数
   nav2_util::declare_parameter_if_not_declared(
     node, name_ + ".w_traversal_cost",
     rclcpp::ParameterValue(10.0));
@@ -95,13 +95,13 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
     return plan;
   }
 
-  // Validate costmap
+  // 验证代价地图
   if (costmap_ == nullptr) {
     RCLCPP_ERROR(logger_, "JPSPlanner: costmap is null");
     return plan;
   }
 
-  // Convert start to map coordinates
+  // 将起点转换为地图坐标
   unsigned int mx_start{}, my_start{};
   if (!costmap_->worldToMap(
         start.pose.position.x, start.pose.position.y, mx_start, my_start)) {
@@ -111,7 +111,7 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
     return plan;
   }
 
-  // Convert goal to map coordinates
+  // 将终点转换为地图坐标
   unsigned int mx_goal{}, my_goal{};
   if (!costmap_->worldToMap(
         goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal)) {
@@ -130,13 +130,13 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
     logger_, "JPSPlanner: planning from (%d, %d) to (%d, %d) [cells]", sx, sy,
     gx, gy);
 
-  // Prepare algorithm state
+  // 准备算法状态
   JPSState state{};
   state.costmap_data = costmap_->getCharMap();
   state.size_x = static_cast<int>(costmap_->getSizeInCellsX());
   state.size_y = static_cast<int>(costmap_->getSizeInCellsY());
 
-  // Run JPS
+  // 运行 JPS
   std::vector<std::pair<double, double>> map_path{};
   bool found = JPSAlgorithm::generatePath(config_, state, sx, sy, gx, gy, map_path);
 
@@ -148,7 +148,7 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
   RCLCPP_INFO(
     logger_, "JPSPlanner: path found with %zu waypoints", map_path.size());
 
-  // Convert map coordinates to world coordinates
+  // 将地图坐标转换为世界坐标
   std::vector<std::pair<double, double>> world_path{};
   world_path.reserve(map_path.size());
   for (const auto & [mx, my] : map_path) {
@@ -158,7 +158,7 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
     world_path.emplace_back(wx, wy);
   }
 
-  // Interpolate to get a dense path at costmap resolution
+  // 插值生成与代价地图分辨率匹配的密集路径
   double resolution = costmap_->getResolution();
   plan = linearInterpolation(world_path, resolution);
   plan.header.stamp = clock_->now();
@@ -199,14 +199,14 @@ nav_msgs::msg::Path JPSPlanner::linearInterpolation(
       pose.pose.position.x = x0 + t * (x1 - x0);
       pose.pose.position.y = y0 + t * (y1 - y0);
       pose.pose.position.z = 0.0;
-      // Simple orientation: point toward next waypoint
+      // 简单的朝向: 指向下一个航点
       double yaw = std::atan2(y1 - y0, x1 - x0);
       pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(yaw);
       plan.poses.push_back(pose);
     }
   }
 
-  // Add the final point
+  // 添加最后一个点
   geometry_msgs::msg::PoseStamped final_pose;
   final_pose.pose.position.x = raw_path.back().first;
   final_pose.pose.position.y = raw_path.back().second;

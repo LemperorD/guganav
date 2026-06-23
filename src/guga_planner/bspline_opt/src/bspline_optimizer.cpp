@@ -13,11 +13,11 @@ namespace bspline_opt
 namespace
 {
 
-// ──────────────────────────────────────────────────────────
-// B-spline evaluation helpers
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// B-spline 求值辅助函数
+// ══════════════════════════════════════════════════════════
 
-// Read costmap cell at integer grid coords (bounds-checked).
+// 读取代价地图中整数格元坐标处的值 (带边界检查)
 inline unsigned char cellCost(
   const unsigned char * cmap, int w, int h, int cx, int cy)
 {
@@ -25,7 +25,7 @@ inline unsigned char cellCost(
   return cmap[static_cast<size_t>(cy * w + cx)];
 }
 
-// Check whether a world-coord point is inside an obstacle cell.
+// 检查世界坐标点是否落入障碍物格元
 inline bool inObstacle(
   const unsigned char * cmap, int w, int h, double px, double py)
 {
@@ -34,8 +34,8 @@ inline bool inObstacle(
   return cellCost(cmap, w, h, cx, cy) >= 253;
 }
 
-// Project a single point to the nearest free cell (spiral search, r ≤ 8).
-// Returns true if projection succeeded.
+// 将单个点投射到最近空闲格元 (螺旋搜索, 最大半径 8)
+// 返回 true 表示投射成功找到了空闲格元
 inline bool projectPointToFree(
   const unsigned char * cmap, int w, int h, double & px, double & py)
 {
@@ -60,9 +60,9 @@ inline bool projectPointToFree(
   return false;
 }
 
-// ===================================================================
-// Gradient descent (only compiled when enabled via config)
-// ===================================================================
+// ══════════════════════════════════════════════════════════
+// 梯度下降 (仅在 config 启用时编译)
+// ══════════════════════════════════════════════════════════
 
 static double evalCost(
   const std::vector<double> & params, const Eigen::VectorXd & knots,
@@ -179,7 +179,7 @@ static std::vector<double> gradientDescent(
     for (int ls = 0; ls < 15; ++ls) {
       for (int i = 0; i < N; ++i) {
         x_try[i] = x[i] - alpha * grad[i];
-        // Corridor constraint: clamp to initial position ± corridor_hw
+        // 走廊约束: 限制在初始位置 ± corridor_hw 范围内
         x_try[i] = std::clamp(x_try[i], init_params[i] - corridor_hw,
                               init_params[i] + corridor_hw);
       }
@@ -202,9 +202,9 @@ static std::vector<double> gradientDescent(
 
 }  // namespace
 
-// ──────────────────────────────────────────────────────────
-// Public API
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// 公开 API
+// ══════════════════════════════════════════════════════════
 
 BSplineOptimizer::BSplineOptimizer(const BSplineConfig & config)
     : config_(config)
@@ -221,7 +221,7 @@ bool BSplineOptimizer::fit(
   const int n_pts = static_cast<int>(path.size());
   if (n_pts < 2) { return false; }
 
-  // ── Short-path fallback (linear) ──
+  // ── 短路径回退 (线性) ──
   if (n_pts < 8) {
     state_.effective_degree = 1;
     state_.original_points.reserve(n_pts);
@@ -245,7 +245,7 @@ bool BSplineOptimizer::fit(
     state_.original_points.emplace_back(x, y);
   }
 
-  // Chord-length parameterization
+  // Chord-length 参数化
   std::vector<double> arc_lengths(n_pts);
   arc_lengths[0] = 0.0;
   for (int i = 1; i < n_pts; ++i) {
@@ -262,14 +262,14 @@ bool BSplineOptimizer::fit(
   }
   state_.parameters[n_pts - 1] = 1.0;
 
-  // Point matrix (2 × N)
+  // 点矩阵 (2 × N)
   Eigen::MatrixXd pts(2, n_pts);
   for (int i = 0; i < n_pts; ++i) {
     pts(0, i) = path[i].first;
     pts(1, i) = path[i].second;
   }
 
-  // Knot averaging
+  // 节点平均
   Eigen::RowVectorXd chord_vec(n_pts);
   for (int i = 0; i < n_pts; ++i) {
     chord_vec(i) = state_.parameters(i);
@@ -278,40 +278,38 @@ bool BSplineOptimizer::fit(
   Eigen::KnotAveraging(chord_vec, eff_deg, knot_vec);
   state_.knots = knot_vec;
 
-  // ── Step 1: Interpolate through ALL N waypoints via SplineFitting ──
+  // ── 第1步: 通过 SplineFitting 插值全部 N 个航点 ──
   using SplineFitter =
     Eigen::SplineFitting<Eigen::Spline<double, 2, 7>>;
   auto dense_spline = SplineFitter::Interpolate(pts, eff_deg);
 
-  // ── Step 2: Determine control point count ──
+  // ── 第2步: 确定控制点数量 ──
   int M = std::min(config_.max_control_points, n_pts);
   if (M < 8) { M = 8; }
   if (M > n_pts) { M = n_pts; }
 
-  // ── Step 3: Re-sample M control points at chord-length parameters ──
-  // Instead of uniform spacing, use the chord-length parameters of a subset
-  // of the original waypoints. This preserves the geometric shape.
-  // Strategy: pick M waypoints uniformly along the ARC LENGTH (not u).
+  // ── 第3步: 在 chord-length 参数处重新采样 M 个控制点 ──
+  // 不使用均匀间距, 而是沿 ARC LENGTH 均匀选取原始航点子集对应的参数。
+  // 这样可保留路径的几何形状。
   state_.control_points.resize(2, M);
   for (int i = 0; i < M; ++i) {
-    // Map index i (0..M-1) to arc-length fraction, then find nearest chord param
+    // 将索引 i (0..M-1) 映射到弧长比例, 再找到最近的 chord 参数
     double target_arc_frac = static_cast<double>(i) / static_cast<double>(M - 1);
-    // Find the waypoint index with closest arc-length fraction
     int best_idx = 0;
     double best_dist = 1e9;
     for (int j = 0; j < n_pts; ++j) {
       double d = std::abs(state_.parameters(j) - target_arc_frac);
       if (d < best_dist) { best_dist = d; best_idx = j; }
     }
-    // Evaluate the dense spline at this waypoint's chord-length parameter
+    // 在此航点的 chord-length 参数处对密集样条求值
     double u = state_.parameters(best_idx);
     Eigen::Vector2d p = dense_spline(u);
     state_.control_points(0, i) = p.x();
     state_.control_points(1, i) = p.y();
   }
 
-  // ── Step 4: Create knot vector for M control points ──
-  // Use chord-length from the selected M waypoints
+  // ── 第4步: 为 M 个控制点创建节点向量 ──
+  // 使用从 M 个航点子集中均匀间隔的 chord-length
   Eigen::RowVectorXd sub_chord(M);
   for (int i = 0; i < M; ++i) {
     sub_chord(i) = static_cast<double>(i) / static_cast<double>(M - 1);
@@ -320,7 +318,7 @@ bool BSplineOptimizer::fit(
   Eigen::KnotAveraging(sub_chord, eff_deg, new_knots);
   state_.knots = new_knots;
 
-  // Save initial control-point positions (flat doubles) for corridor constraint
+  // 保存初始控制点位置 (flat doubles), 用于走廊约束
   state_.initial_params.clear();
   state_.initial_params.reserve(2 * (M - 2));
   for (int i = 1; i < M - 1; ++i) {
@@ -344,7 +342,7 @@ std::vector<std::pair<double, double>> BSplineOptimizer::sample(int N) const
   std::vector<std::pair<double, double>> out{};
   if (!fitted_) { return out; }
   if (!spline_) {
-    // Linear fallback
+    // Linear fallback: 端点间线性插值
     if (state_.original_points.empty()) { return out; }
     out.reserve(N);
     double x0 = state_.original_points.front().x();
@@ -414,7 +412,7 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
   result.cost_initial = computeCurvatureEnergy();
 
-  // ── Step 1: Optional gradient descent ──
+  // ── 第1步: 可选梯度下降 ──
   if (config_.enable_gradient_descent) {
     const int n_interior = M - 2;
     const int param_size = 2 * n_interior;
@@ -444,7 +442,7 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     }
   }
 
-  // ── Step 2: Obstacle-avoidance projection on control points ──
+  // ── 第2步: 控制点的障碍物避让投射 ──
   if (state_.costmap_data != nullptr) {
     for (int i = 1; i < M - 1; ++i) {
       double & cx = state_.control_points(0, i);
@@ -456,7 +454,7 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
   rebuildSpline();
 
-  // ── Step 3: Sample and check each sample point for obstacles ──
+  // ── 第3步: 采样路径并对每个采样点做障碍物检查 ──
   auto path = sample(num_samples);
   if (state_.costmap_data != nullptr) {
     for (auto & [px, py] : path) {

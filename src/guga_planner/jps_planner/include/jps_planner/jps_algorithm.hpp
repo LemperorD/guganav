@@ -12,7 +12,7 @@ namespace jps_planner
 
 constexpr double INF_COST = 1e308;
 
-/** @brief Grid coordinate (cell index). */
+/** @brief 网格坐标 (格元索引)。 */
 struct Node
 {
   int x{};
@@ -20,8 +20,8 @@ struct Node
 };
 
 /**
- * @brief Search node used during JPS planning.
- * Stored in heap-allocated unique_ptr for pointer stability.
+ * @brief JPS 搜索中使用的搜索节点。
+ * 通过 unique_ptr 在堆上分配, 保证指针在 vector 扩容时不失效。
  */
 struct SearchNode
 {
@@ -34,7 +34,7 @@ struct SearchNode
   bool closed{false};
 };
 
-/** @brief Immutable configuration for the JPS algorithm. */
+/** @brief JPS 算法的不可变配置。 */
 struct JPSConfig
 {
   double w_euc_cost{1.0};
@@ -43,35 +43,33 @@ struct JPSConfig
   bool allow_unknown{false};
 };
 
-/** @brief Debug data collected during a JPS search (when debug_enabled=true). */
+/** @brief JPS 搜索过程中收集的调试数据 (debug_enabled=true 时启用)。 */
 struct JPSDebug
 {
   bool enabled{false};
-  /** Grid cells expanded (jump-point successors identified). */
-  std::vector<int> expanded_x{};
-  std::vector<int> expanded_y{};
-  /** All jump points discovered (including those never expanded). */
-  std::vector<int> jumppoint_x{};
-  std::vector<int> jumppoint_y{};
+  std::vector<int> expanded_x{};   // 被展开的格子 x 坐标
+  std::vector<int> expanded_y{};   // 被展开的格子 y 坐标
+  std::vector<int> jumppoint_x{};  // 发现的所有跳转点 x 坐标
+  std::vector<int> jumppoint_y{};  // 发现的所有跳转点 y 坐标
 };
 
-/** @brief Mutable state re-created for each planning request. */
+/** @brief 每次规划请求重新创建的可变状态。 */
 struct JPSState
 {
   const unsigned char * costmap_data{nullptr};
   int size_x{};
   int size_y{};
 
-  /** Heap-allocated node storage: indices remain valid across resizes. */
+  /** 节点存储: 在堆上分配, 保证指针不变性。 */
   std::vector<std::unique_ptr<SearchNode>> nodes_{};
 
   /**
-   * @brief O(1) map from grid coords to SearchNode*.
-   * Indexed as [size_x_ * y + x], nullptr = unvisited.
+   * @brief 从网格坐标到 SearchNode* 的 O(1) 映射。
+   * 索引方式: [size_x_ * y + x], nullptr = 未访问。
    */
   std::vector<SearchNode *> node_position_{};
 
-  /** Priority queue (open list) for A* expansion. */
+  /** A* 优先队列 (开放列表)。 */
   struct Comp
   {
     bool operator()(const SearchNode * a, const SearchNode * b) const
@@ -81,39 +79,37 @@ struct JPSState
   };
   std::priority_queue<SearchNode *, std::vector<SearchNode *>, Comp> open_list_{};
 
-  /** @brief Debug data populated during search when enabled. */
   JPSDebug debug_{};
 };
 
 /**
  * @class JPSAlgorithm
- * @brief Pure static methods implementing Jump Point Search on a costmap grid.
+ * @brief 纯静态方法, 在代价地图网格上执行 Jump Point Search。
  *
- * Follows Pattern A (函数式数据流): stateless, explicit (const Config&, State&)
- * parameter passing.
+ * 遵循模式 A (函数式数据流): 无状态, 参数通过 (const Config&, State&) 显式传递。
  */
 class JPSAlgorithm
 {
 public:
   /**
-   * @brief Run JPS from (sx, sy) to (gx, gy) on the grid described by state.
-   * @param config  Immutable algorithm parameters.
-   * @param state   Mutable working state (must have costmap_data/size populated).
-   * @param sx, sy  Start cell coordinates.
-   * @param gx, gy  Goal cell coordinates.
-   * @param path    Output path in map coordinates (will be cleared first).
-   * @return true if a path was found, false otherwise.
+   * @brief 在 state 描述的代价地图上从 (sx, sy) 到 (gx, gy) 执行 JPS 搜索。
+   * @param config  不可变算法参数。
+   * @param state   可变工作状态 (必须预先填充 costmap_data/size)。
+   * @param sx, sy  起点格元坐标。
+   * @param gx, gy  终点格元坐标。
+   * @param path    输出路径 (地图坐标, 格元中心), 会被先清空。
+   * @return 找到路径返回 true, 否则返回 false。
    */
   [[nodiscard]] static bool generatePath(
     const JPSConfig & config, JPSState & state, int sx, int sy, int gx, int gy,
     std::vector<std::pair<double, double>> & path);
 
   /**
-   * @brief Check whether cell (x, y) is traversable.
-   * @param config  Algorithm parameters (controls unknown-space policy).
-   * @param state   State with costmap data pointer.
-   * @param x, y    Cell coordinates.
-   * @return true if the cell can be entered.
+   * @brief 检查格元 (x, y) 是否可通行。
+   * @param config  算法参数 (控制未知空间策略)。
+   * @param state   包含代价地图指针的状态。
+   * @param x, y    格元坐标。
+   * @return 可通行返回 true。
    */
   [[nodiscard]] static bool isTraversable(
     const JPSConfig & config, const JPSState & state, int x, int y);
