@@ -78,56 +78,60 @@ class UiDataSource {
 
     // 机器人状态
     if (reader_.checkFresh(guga_ui::UiSlotId::ROBOT_STATUS)) {
-      reader_.read(guga_ui::UiSlotId::ROBOT_STATUS, &data_.robot_status,
-                   sizeof(data_.robot_status));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::ROBOT_STATUS,
+                                     &data_.robot_status,
+                                     sizeof(data_.robot_status)));
       data_.robot_status_age = frame_count_;
     }
 
     // 比赛状态
     if (reader_.checkFresh(guga_ui::UiSlotId::GAME_STATUS)) {
-      reader_.read(guga_ui::UiSlotId::GAME_STATUS, &data_.game_status,
-                   sizeof(data_.game_status));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::GAME_STATUS,
+                                     &data_.game_status,
+                                     sizeof(data_.game_status)));
       data_.game_status_age = frame_count_;
     }
 
     // RFID 状态
     if (reader_.checkFresh(guga_ui::UiSlotId::RFID_STATUS)) {
-      reader_.read(guga_ui::UiSlotId::RFID_STATUS, &data_.rfid_status,
-                   sizeof(data_.rfid_status));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::RFID_STATUS,
+                                     &data_.rfid_status,
+                                     sizeof(data_.rfid_status)));
     }
 
     // 决策状态
     if (reader_.checkFresh(guga_ui::UiSlotId::DECISION)) {
-      reader_.read(guga_ui::UiSlotId::DECISION, &data_.decision,
-                   sizeof(data_.decision));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::DECISION,
+                                     &data_.decision,
+                                     sizeof(data_.decision)));
       data_.decision_age = frame_count_;
     }
 
     // 敌方信息
     if (reader_.checkFresh(guga_ui::UiSlotId::ENEMY)) {
-      reader_.read(guga_ui::UiSlotId::ENEMY, &data_.enemy,
-                   sizeof(data_.enemy));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::ENEMY, &data_.enemy,
+                                     sizeof(data_.enemy)));
       data_.enemy_age = frame_count_;
     }
 
     // 里程计
     if (reader_.checkFresh(guga_ui::UiSlotId::ODOM)) {
-      reader_.read(guga_ui::UiSlotId::ODOM, &data_.odom,
-                   sizeof(data_.odom));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::ODOM, &data_.odom,
+                                     sizeof(data_.odom)));
       data_.odom_age = frame_count_;
     }
 
     // 云台偏航
     if (reader_.checkFresh(guga_ui::UiSlotId::YAW)) {
-      reader_.read(guga_ui::UiSlotId::YAW, &data_.yaw,
-                   sizeof(data_.yaw));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::YAW, &data_.yaw,
+                                     sizeof(data_.yaw)));
       data_.yaw_age = frame_count_;
     }
 
     // 导航路径
     if (reader_.checkFresh(guga_ui::UiSlotId::PATH)) {
-      reader_.read(guga_ui::UiSlotId::PATH, &data_.path,
-                   sizeof(data_.path));
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::PATH, &data_.path,
+                                     sizeof(data_.path)));
       data_.path_age = frame_count_;
     }
   }
