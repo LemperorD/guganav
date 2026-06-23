@@ -118,10 +118,7 @@ int main(int argc, char* argv[]) {
     // 每帧刷新共享内存数据
     data_source.update();
 
-    // 触发所有 view 的绘制回调
-    pangolin::RenderViews();
-
-    // OpenGL 交换缓冲 + 事件处理
+    // FinishFrame() 内部已包含 RenderViews() + SwapBuffers + ProcessEvents
     pangolin::FinishFrame();
   }
 
