@@ -15,10 +15,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
+# ── B-spline 平滑依赖 ──
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
+
 ament_auto_add_library(jps_planner SHARED
   src/jps_planner.cpp
   src/jps_algorithm.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/bspline_optimizer.cpp
 )
+target_include_directories(jps_planner
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/include
+    ${EIGEN3_INCLUDE_DIRS})
 
 pluginlib_export_plugin_description_file(nav2_core jps_planner_plugin.xml)
 

@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "bspline_opt/bspline_optimizer.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav2_util/geometry_utils.hpp"
@@ -36,7 +37,7 @@ void JPSPlanner::configure(
   clock_ = node->get_clock();
   logger_ = node->get_logger();
 
-  // 以规划器名称为前缀声明 ROS 参数
+  // 以规划器名称为前缀声明 JPS 参数
   nav2_util::declare_parameter_if_not_declared(
     node, name_ + ".w_traversal_cost",
     rclcpp::ParameterValue(10.0));
@@ -50,15 +51,22 @@ void JPSPlanner::configure(
     node, name_ + ".allow_unknown",
     rclcpp::ParameterValue(false));
 
+  // B-spline 平滑参数
+  nav2_util::declare_parameter_if_not_declared(
+    node, name_ + ".enable_bspline",
+    rclcpp::ParameterValue(true));
+
   node->get_parameter(name_ + ".w_traversal_cost", config_.w_traversal_cost);
   node->get_parameter(name_ + ".w_euc_cost", config_.w_euc_cost);
   node->get_parameter(name_ + ".w_heuristic_cost", config_.w_heuristic_cost);
   node->get_parameter(name_ + ".allow_unknown", config_.allow_unknown);
+  node->get_parameter(name_ + ".enable_bspline", enable_bspline_);
 
   RCLCPP_INFO(
-    logger_, "JPSPlanner configured: w_traversal=%.2f w_euc=%.2f w_heuristic=%.2f allow_unknown=%d",
+    logger_, "JPSPlanner configured: w_traversal=%.2f w_euc=%.2f "
+    "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d",
     config_.w_traversal_cost, config_.w_euc_cost,
-    config_.w_heuristic_cost, config_.allow_unknown);
+    config_.w_heuristic_cost, config_.allow_unknown, enable_bspline_);
 }
 
 void JPSPlanner::cleanup()
@@ -148,21 +156,93 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
   RCLCPP_INFO(
     logger_, "JPSPlanner: path found with %zu waypoints", map_path.size());
 
-  // 将地图坐标转换为世界坐标
-  std::vector<std::pair<double, double>> world_path{};
-  world_path.reserve(map_path.size());
-  for (const auto & [mx, my] : map_path) {
-    double wx{}, wy{};
-    costmap_->mapToWorld(
-      static_cast<unsigned int>(mx), static_cast<unsigned int>(my), wx, wy);
-    world_path.emplace_back(wx, wy);
+  // ── B-spline 平滑 (默认启用) ──
+  if (enable_bspline_ && map_path.size() >= 8) {
+    plan = bsplineSmooth(map_path, costmap_->getCharMap(),
+                         static_cast<int>(costmap_->getSizeInCellsX()),
+                         static_cast<int>(costmap_->getSizeInCellsY()),
+                         costmap_->getResolution());
+    RCLCPP_INFO(logger_, "JPSPlanner: B-spline smooth applied, %zu poses",
+                plan.poses.size());
+  } else {
+    // 回退到线性插值 (路径点太少或 B-spline 被禁用)
+    if (enable_bspline_) {
+      RCLCPP_INFO(
+        logger_, "JPSPlanner: too few waypoints (%zu) for B-spline, linear fallback",
+        map_path.size());
+    }
+    std::vector<std::pair<double, double>> world_path{};
+    world_path.reserve(map_path.size());
+    for (const auto & [mx, my] : map_path) {
+      double wx{}, wy{};
+      costmap_->mapToWorld(
+        static_cast<unsigned int>(mx), static_cast<unsigned int>(my), wx, wy);
+      world_path.emplace_back(wx, wy);
+    }
+    plan = linearInterpolation(world_path, costmap_->getResolution());
   }
 
-  // 插值生成与代价地图分辨率匹配的密集路径
-  double resolution = costmap_->getResolution();
-  plan = linearInterpolation(world_path, resolution);
   plan.header.stamp = clock_->now();
   plan.header.frame_id = global_frame_;
+
+  return plan;
+}
+
+nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
+  const std::vector<std::pair<double, double>> & map_path,
+  const unsigned char * costmap_data, int cm_w, int cm_h,
+  double resolution)
+{
+  nav_msgs::msg::Path plan;
+
+  // 创建 B-spline 优化器并拟合原始 JPS 路径
+  bspline_opt::BSplineOptimizer opt(bspline_config_);
+  if (!opt.fit(map_path)) {
+    RCLCPP_WARN(logger_, "JPSPlanner: B-spline fit failed, using linear interpolation");
+    std::vector<std::pair<double, double>> world_path{};
+    world_path.reserve(map_path.size());
+    for (const auto & [mx, my] : map_path) {
+      double wx{}, wy{};
+      costmap_->mapToWorld(
+        static_cast<unsigned int>(mx), static_cast<unsigned int>(my), wx, wy);
+      world_path.emplace_back(wx, wy);
+    }
+    return linearInterpolation(world_path, resolution);
+  }
+
+  // 注入代价地图数据用于障碍物避让
+  opt.state().costmap_data = costmap_data;
+  opt.state().costmap_w = cm_w;
+  opt.state().costmap_h = cm_h;
+
+  // 运行优化 (默认仅做障碍物投射, 不做梯度下降)
+  int num_samples = std::max(100, static_cast<int>(map_path.size()) * 5);
+  auto result = opt.optimize(num_samples);
+
+  // 将地图坐标平滑路径转换为世界坐标 nav_msgs::Path
+  plan.poses.reserve(result.smoothed_path.size());
+  for (size_t i = 0; i < result.smoothed_path.size(); ++i) {
+    double wx{}, wy{};
+    costmap_->mapToWorld(
+      static_cast<unsigned int>(result.smoothed_path[i].first),
+      static_cast<unsigned int>(result.smoothed_path[i].second),
+      wx, wy);
+    geometry_msgs::msg::PoseStamped pose;
+    pose.pose.position.x = wx;
+    pose.pose.position.y = wy;
+    pose.pose.position.z = 0.0;
+    // 朝向: 指向下一个航点 (绕 Z 轴的偏航角)
+    double yaw{};
+    if (i + 1 < result.smoothed_path.size()) {
+      double dx = result.smoothed_path[i + 1].first -
+                  result.smoothed_path[i].first;
+      double dy = result.smoothed_path[i + 1].second -
+                  result.smoothed_path[i].second;
+      yaw = std::atan2(dy, dx);
+    }
+    pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(yaw);
+    plan.poses.push_back(pose);
+  }
 
   return plan;
 }

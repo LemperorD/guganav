@@ -538,6 +538,7 @@ planner_server:
       w_traversal_cost: 10.0
       w_heuristic_cost: 1.0
       allow_unknown: false
+      enable_bspline: true
 
 smoother_server:
   ros__parameters:
