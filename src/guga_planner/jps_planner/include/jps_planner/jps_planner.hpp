@@ -15,6 +15,8 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "tf2_ros/buffer.h"
 
+#include "guga_ui_common/shm_writer.hpp"
+
 namespace jps_planner
 {
 
@@ -80,6 +82,10 @@ private:
 
   bspline_opt::BSplineConfig bspline_config_{};
   bool enable_bspline_{true};  // true = 启用 B-spline 平滑
+
+private: // 使用共享内存进行性能监控
+  
+
 };
 
 }  // namespace jps_planner
