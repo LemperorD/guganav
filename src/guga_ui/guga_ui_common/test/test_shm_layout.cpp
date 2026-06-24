@@ -117,6 +117,6 @@ TEST(ShmLayoutTest, ShmSlotSeqDefaultZero) {
 TEST(ShmLayoutTest, CalcShmSizeIsConstexpr) {
   // 如果 calcShmSize 可以被静态断言，说明它是 constexpr 的
   static_assert(gu::calcShmSize(0) == 64);
-  static_assert(gu::calcShmSize(16) == 2112);
+  static_assert(gu::calcShmSize(16) == 68672);
   SUCCEED();  // 到这里说明 static_assert 通过了
 }

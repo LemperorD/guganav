@@ -69,11 +69,12 @@ void JPSPlanner::configure(
     config_.w_heuristic_cost, config_.allow_unknown, enable_bspline_);
 
   // 构建共享内存结构体来传输路径信息
-  bool ok = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
-  if (!ok) {
+  shm_ready_ = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
+  if (!shm_ready_) {
     RCLCPP_ERROR(logger_, "ShmWriter init failed, UI path display unavailable");
-}
-
+  } else {
+    RCLCPP_INFO(logger_, "ShmWriter initialized for UI path display");
+  }
 }
 
 void JPSPlanner::cleanup()
@@ -192,6 +193,9 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
   plan.header.stamp = clock_->now();
   plan.header.frame_id = global_frame_;
 
+  // 将路径写入共享内存, 供 UI 显示
+  writePathToShm(plan);
+
   return plan;
 }
 
@@ -251,15 +255,6 @@ nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
     plan.poses.push_back(pose);
   }
 
-  // 将 smoothed_path 写入共享内存, 供 UI 显示
-  path_data_.stamp_sec = clock_->now().seconds();
-  path_data_.count = std::min(plan.poses.size(), guga_ui::UI_PATH_MAX_POINTS);
-  for (size_t i = 0; i < path_data_.count; ++i) {
-    path_data_.x[i] = plan.poses[i].pose.position.x;
-    path_data_.y[i] = plan.poses[i].pose.position.y;
-  }
-  shm_writer_.write(&path_data_, sizeof(path_data_));
-
   return plan;
 }
 
@@ -311,6 +306,34 @@ nav_msgs::msg::Path JPSPlanner::linearInterpolation(
   plan.poses.push_back(final_pose);
 
   return plan;
+}
+
+void JPSPlanner::writePathToShm(const nav_msgs::msg::Path & plan)
+{
+  if (!shm_ready_) return;
+
+  const size_t n = plan.poses.size();
+  if (n == 0) return;
+
+  guga_ui::UiPath ui_path{};
+  ui_path.stamp_sec = clock_->now().seconds();
+
+  // 降采样: 每 stride 个点取 1 个 (目标 ≤ UI_PATH_MAX_POINTS)
+  size_t stride = (n <= guga_ui::UI_PATH_MAX_POINTS)
+                    ? 1
+                    : (n / guga_ui::UI_PATH_MAX_POINTS + 1);
+  ui_path.count = static_cast<uint32_t>((n + stride - 1) / stride);
+  if (ui_path.count > guga_ui::UI_PATH_MAX_POINTS) {
+    ui_path.count = guga_ui::UI_PATH_MAX_POINTS;
+  }
+
+  for (uint32_t i = 0; i < ui_path.count; ++i) {
+    size_t src = i * stride;
+    ui_path.x[i] = plan.poses[src].pose.position.x;
+    ui_path.y[i] = plan.poses[src].pose.position.y;
+  }
+
+  shm_writer_.write(&ui_path, sizeof(ui_path));
 }
 
 }  // namespace jps_planner

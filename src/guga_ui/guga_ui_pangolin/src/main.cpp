@@ -13,8 +13,10 @@
  *   - ESC: 退出
  */
 
+#include <clocale>
 #include <csignal>
 #include <iostream>
+#include <locale>
 #include <memory>
 
 #include <pangolin/display/display.h>
@@ -42,6 +44,8 @@ static void sigintHandler(int /*signum*/) { g_running = 0; }
 // ==================== 主函数 ====================
 
 int main(int argc, char* argv[]) {
+  std::setlocale(LC_ALL, "");
+
   // 注册信号处理
   signal(SIGINT, sigintHandler);
 
@@ -117,11 +121,16 @@ int main(int argc, char* argv[]) {
   while (g_running && !pangolin::ShouldQuit()) {
     // 每帧刷新共享内存数据
     data_source.update();
+    std::cout << "111" << std::endl;
 
-    // FinishFrame() 内部已包含 RenderViews() + SwapBuffers + ProcessEvents
+    pangolin::glDrawColouredCube();
+    std::cout << "222" << std::endl;
+
     pangolin::FinishFrame();
+    std::cout << "333" << std::endl;
   }
 
+  pangolin::GetBoundWindow()->RemoveCurrent();
   std::cout << "[guga_ui] Shutting down." << std::endl;
   return 0;
 }

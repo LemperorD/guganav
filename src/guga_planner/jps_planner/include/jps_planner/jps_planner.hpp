@@ -85,8 +85,16 @@ private:
   bool enable_bspline_{true};  // true = 启用 B-spline 平滑
 
 private: // 使用共享内存进行性能监控
+  /**
+   * @brief 将规划结果写入共享内存 PATH 槽位, 供 UI 渲染。
+   *
+   * @note 仅写入降采样后的骨架点 (最多 3 个) 以适配 64 字节数据区。
+   *       完整路径需扩展 PATH 槽位数据区容量。
+   */
+  void writePathToShm(const nav_msgs::msg::Path & plan);
+
   guga_ui::ShmWriter shm_writer_;
-  guga_ui::UiPath path_data_{};
+  bool shm_ready_{false};
 
 };
 

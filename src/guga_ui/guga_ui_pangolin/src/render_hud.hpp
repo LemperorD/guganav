@@ -157,12 +157,12 @@ class GugaRenderHUD {
 
   void drawText(double x, double y, const std::string& text) {
     glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    pangolin::default_font().Text("%s", text).Draw(x, y);
+    pangolin::default_font().Text("%s", text.c_str()).Draw(x, y);
   }
 
   void drawTextDim(double x, double y, const std::string& text) {
     glColor4f(0.4f, 0.4f, 0.5f, 1.0f);
-    pangolin::default_font().Text("%s", text).Draw(x, y);
+    pangolin::default_font().Text("%s", text.c_str()).Draw(x, y);
   }
 
   /**
@@ -193,7 +193,7 @@ class GugaRenderHUD {
 
   void drawRfidTag(double x, double y, const std::string& label) {
     glColor4f(0.3f, 0.8f, 0.3f, 1.0f);
-    pangolin::default_font().Text("  [*] %s", label).Draw(x, y);
+    pangolin::default_font().Text("  [*] %s", label.c_str()).Draw(x, y);
   }
 
   const char* gameProgressStr(uint8_t progress) {

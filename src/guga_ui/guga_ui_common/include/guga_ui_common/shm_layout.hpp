@@ -40,7 +40,8 @@ namespace guga_ui {
 static constexpr const char* SHM_DEFAULT_NAME{"guga_shm"};
 
 // 单个 slot 的数据区大小（与 ui_types.hpp 中全部结构体的 alignas(64) 一致）
-static constexpr size_t SHM_SLOT_DATA_SIZE{64};
+// 取值设为 sizeof(UiPath) 的最大值 (≈4160 → 取 4224 为 64 的整倍数)
+static constexpr size_t SHM_SLOT_DATA_SIZE{4224};
 
 // 最大 slot 数量
 static constexpr size_t SHM_MAX_SLOTS{16};
@@ -49,7 +50,7 @@ static constexpr size_t SHM_MAX_SLOTS{16};
 static constexpr uint64_t SHM_MAGIC{0x4755475547414741ULL};
 
 // 当前 shm 布局版本（结构体变更时递增）
-static constexpr uint32_t SHM_VERSION{1};
+static constexpr uint32_t SHM_VERSION{2};
 
 // ==================== 共享内存头部 ====================
 

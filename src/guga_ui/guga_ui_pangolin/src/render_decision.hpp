@@ -118,12 +118,12 @@ class GugaRenderDecision {
 
  private:
   void drawText(double x, double y, const std::string& text) {
-    pangolin::default_font().Text("%s", text).Draw(x, y);
+    pangolin::default_font().Text("%s", text.c_str()).Draw(x, y);
   }
 
   void drawTextDim(double x, double y, const std::string& text) {
     glColor4f(0.35f, 0.35f, 0.45f, 1.0f);
-    pangolin::default_font().Text("%s", text).Draw(x, y);
+    pangolin::default_font().Text("%s", text.c_str()).Draw(x, y);
   }
 
   const char* stateStr(uint8_t state) {
