@@ -45,6 +45,7 @@ static void sigintHandler(int /*signum*/) { g_running = 0; }
 
 int main(int argc, char* argv[]) {
   std::setlocale(LC_ALL, "");
+  std::locale::global(std::locale(""));
 
   // 注册信号处理
   signal(SIGINT, sigintHandler);
@@ -121,13 +122,7 @@ int main(int argc, char* argv[]) {
   while (g_running && !pangolin::ShouldQuit()) {
     // 每帧刷新共享内存数据
     data_source.update();
-    std::cout << "111" << std::endl;
-
-    pangolin::glDrawColouredCube();
-    std::cout << "222" << std::endl;
-
     pangolin::FinishFrame();
-    std::cout << "333" << std::endl;
   }
 
   pangolin::GetBoundWindow()->RemoveCurrent();

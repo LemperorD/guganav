@@ -130,11 +130,8 @@ class UiDataSource {
 
     // 导航路径
     if (reader_.checkFresh(guga_ui::UiSlotId::PATH)) {
-      std::cout << "[guga_ui] PATH updated." << std::endl;
-      // static_cast<void>(reader_.read(guga_ui::UiSlotId::PATH, &data_.path,
-      //                                sizeof(data_.path)));
-      bool read_ok = reader_.read(guga_ui::UiSlotId::PATH, &data_.path, sizeof(data_.path));
-      std::cout << "[guga_ui] PATH read result: " << read_ok << std::endl;
+      static_cast<void>(reader_.read(guga_ui::UiSlotId::PATH, &data_.path,
+                                     sizeof(data_.path)));
       data_.path_age = frame_count_;
     }
   }
