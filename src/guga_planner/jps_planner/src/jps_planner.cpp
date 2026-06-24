@@ -251,7 +251,8 @@ nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
     plan.poses.push_back(pose);
   }
 
-  path_data_.stamp_sec = node->now().seconds();
+  // 将 smoothed_path 写入共享内存, 供 UI 显示
+  path_data_.stamp_sec = clock_->now().seconds();
   path_data_.count = std::min(plan.poses.size(), guga_ui::UI_PATH_MAX_POINTS);
   for (size_t i = 0; i < path_data_.count; ++i) {
     path_data_.x[i] = plan.poses[i].pose.position.x;
