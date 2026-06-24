@@ -67,6 +67,13 @@ void JPSPlanner::configure(
     "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d",
     config_.w_traversal_cost, config_.w_euc_cost,
     config_.w_heuristic_cost, config_.allow_unknown, enable_bspline_);
+
+  // 构建共享内存结构体来传输路径信息
+  bool ok = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
+  if (!ok) {
+    RCLCPP_ERROR(logger_, "ShmWriter init failed, UI path display unavailable");
+}
+
 }
 
 void JPSPlanner::cleanup()
@@ -243,6 +250,14 @@ nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
     pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(yaw);
     plan.poses.push_back(pose);
   }
+
+  path_data_.stamp_sec = node->now().seconds();
+  path_data_.count = std::min(plan.poses.size(), guga_ui::UI_PATH_MAX_POINTS);
+  for (size_t i = 0; i < path_data_.count; ++i) {
+    path_data_.x[i] = plan.poses[i].pose.position.x;
+    path_data_.y[i] = plan.poses[i].pose.position.y;
+  }
+  shm_writer_.write(&path_data_, sizeof(path_data_));
 
   return plan;
 }

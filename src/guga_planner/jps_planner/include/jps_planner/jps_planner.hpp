@@ -16,6 +16,7 @@
 #include "tf2_ros/buffer.h"
 
 #include "guga_ui_common/shm_writer.hpp"
+#include "guga_ui_common/ui_types.hpp"
 
 namespace jps_planner
 {
@@ -84,7 +85,8 @@ private:
   bool enable_bspline_{true};  // true = 启用 B-spline 平滑
 
 private: // 使用共享内存进行性能监控
-  
+  guga_ui::ShmWriter shm_writer_;
+  guga_ui::UiPath path_data_{};
 
 };
 
