@@ -46,6 +46,7 @@ def generate_launch_description():
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
+    use_ui = LaunchConfiguration("use_ui")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -142,6 +143,12 @@ def generate_launch_description():
         description="Whether to start the communication node",
     )
 
+    declare_use_ui_cmd = DeclareLaunchArgument(
+        "use_ui",
+        default_value="False",
+        description="Whether to start the guga_ui_pangolin process",
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     configured_params = ParameterFile(
@@ -228,6 +235,13 @@ def generate_launch_description():
         }.items(),
     )
 
+    guga_ui_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(launch_dir, "support", "guga_ui_launch.py")
+        ),
+        condition=IfCondition(use_ui),
+    )
+
     ld = LaunchDescription()
 
     # Declare the launch options
@@ -244,6 +258,7 @@ def generate_launch_description():
     ld.add_action(declare_use_robot_state_pub_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
+    ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     # Add the actions to launch all of the navigation nodes
@@ -253,5 +268,6 @@ def generate_launch_description():
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(communication_cmd)
+    ld.add_action(guga_ui_cmd)
 
     return ld
