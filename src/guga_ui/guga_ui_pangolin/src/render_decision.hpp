@@ -17,7 +17,7 @@
 #include "data_source.hpp"
 
 class GugaRenderDecision {
- public:
+public:
   void draw(pangolin::View& view, const UiDataSource& ds) {
     view.ActivatePixelOrthographic();
     glClearColor(0.06f, 0.06f, 0.08f, 1.0f);
@@ -116,7 +116,7 @@ class GugaRenderDecision {
     }
   }
 
- private:
+private:
   void drawText(double x, double y, const std::string& text) {
     pangolin::default_font().Text("%s", text.c_str()).Draw(x, y);
   }

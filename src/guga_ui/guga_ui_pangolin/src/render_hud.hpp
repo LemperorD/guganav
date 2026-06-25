@@ -20,7 +20,7 @@
 #include "data_source.hpp"
 
 class GugaRenderHUD {
- public:
+public:
   void draw(pangolin::View& view, const UiDataSource& ds) {
     // 激活 2D 像素坐标（x 右，y 下）
     view.ActivatePixelOrthographic();
@@ -152,7 +152,7 @@ class GugaRenderHUD {
     }
   }
 
- private:
+private:
   // ---- 帮助函数 ----
 
   void drawText(double x, double y, const std::string& text) {

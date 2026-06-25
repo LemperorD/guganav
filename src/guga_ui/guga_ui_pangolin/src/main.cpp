@@ -24,8 +24,6 @@
 #include <pangolin/gl/gldraw.h>
 #include <pangolin/gl/opengl_render_state.h>
 
-#include "guga_ui_common/shm_reader.hpp"
-
 // 子模块声明
 #include "data_source.hpp"
 #include "render_3d.hpp"
@@ -117,6 +115,7 @@ int main(int argc, char* argv[]) {
   while (g_running && !pangolin::ShouldQuit()) {
     // 每帧刷新共享内存数据
     data_source.update();
+    // glColor3f(1.0,1.0,1.0);
     pangolin::FinishFrame();
   }
 

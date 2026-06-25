@@ -5,6 +5,7 @@ project(guga_test)
 set(CMAKE_CXX_STANDARD 17)
 
 find_package(OpenCL REQUIRED)
+find_package(TBB REQUIRED)
 
 include_directories(
     include
@@ -18,6 +19,7 @@ add_executable(
 target_link_libraries(
     test_intelGpuMatrix
     OpenCL::OpenCL
+    TBB::tbb
 )
 
 set_target_properties(

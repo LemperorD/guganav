@@ -1,0 +1,4 @@
+#ifndef PANEL_DECISION_HPP
+#define PANEL_DECISION_HPP
+
+#endif // PANEL_DECISION_HPP
