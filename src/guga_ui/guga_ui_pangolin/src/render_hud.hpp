@@ -172,7 +172,11 @@ class GugaRenderHUD {
    * @param ratio 0.0–1.0 的填充比例。
    */
   void drawBar(double x, double y, double w, double h, float ratio) {
-    // 背景
+    // Save current color so the fill bar keeps the caller's color
+    GLfloat saved[4];
+    glGetFloatv(GL_CURRENT_COLOR, saved);
+
+    // Background
     glColor4f(0.2f, 0.2f, 0.2f, 0.8f);
     glBegin(GL_QUADS);
     glVertex2f(x, y);
@@ -181,7 +185,8 @@ class GugaRenderHUD {
     glVertex2f(x, y + h);
     glEnd();
 
-    // 填充
+    // Fill bar (uses color saved before drawBar was called)
+    glColor4f(saved[0], saved[1], saved[2], saved[3]);
     const float fill_w = w * ratio;
     glBegin(GL_QUADS);
     glVertex2f(x, y);

@@ -13,10 +13,8 @@
  *   - ESC: 退出
  */
 
-#include <clocale>
 #include <csignal>
 #include <iostream>
-#include <locale>
 #include <memory>
 
 #include <pangolin/display/display.h>
@@ -44,10 +42,7 @@ static void sigintHandler(int /*signum*/) { g_running = 0; }
 // ==================== 主函数 ====================
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "");
-  std::locale::global(std::locale(""));
-
-  // 注册信号处理
+  // Register signal handler
   signal(SIGINT, sigintHandler);
 
   const char* shm_name = guga_ui::SHM_DEFAULT_NAME;
