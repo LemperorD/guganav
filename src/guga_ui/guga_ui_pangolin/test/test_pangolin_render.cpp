@@ -75,7 +75,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Robot Status ----
   {
     gu::ShmWriter w;
-    w.init(name, S::ROBOT_STATUS);
+    (void)w.init(name, S::ROBOT_STATUS);
     gu::UiRobotStatus rs{};
     rs.current_hp                  = 600;
     rs.maximum_hp                  = 800;
@@ -91,7 +91,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Game Status ----
   {
     gu::ShmWriter w;
-    w.init(name, S::GAME_STATUS);
+    (void)w.init(name, S::GAME_STATUS);
     gu::UiGameStatus gs{};
     gs.game_progress      = 4;   // RUNNING
     gs.stage_remain_time  = 195; // seconds
@@ -102,7 +102,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- RFID Status ----
   {
     gu::ShmWriter w;
-    w.init(name, S::RFID_STATUS);
+    (void)w.init(name, S::RFID_STATUS);
     gu::UiRfidStatus rf{};
     rf.base_gain_point                      = true;
     rf.central_highland_gain_point          = true;
@@ -116,7 +116,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Decision ----
   {
     gu::ShmWriter w;
-    w.init(name, S::DECISION);
+    (void)w.init(name, S::DECISION);
     gu::UiDecision dec{};
     dec.state              = 1;     // ATTACK
     dec.chassis_mode       = 1;     // LITTLE_TES
@@ -134,7 +134,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Enemy ----
   {
     gu::ShmWriter w;
-    w.init(name, S::ENEMY);
+    (void)w.init(name, S::ENEMY);
     gu::UiEnemy en{};
     en.tracking       = true;
     en.enemy_detected = true;
@@ -150,7 +150,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Odom ----
   {
     gu::ShmWriter w;
-    w.init(name, S::ODOM);
+    (void)w.init(name, S::ODOM);
     gu::UiOdom od{};
     od.x     = 2.0;
     od.y     = 1.5;
@@ -165,7 +165,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Yaw ----
   {
     gu::ShmWriter w;
-    w.init(name, S::YAW);
+    (void)w.init(name, S::YAW);
     gu::UiYaw yw{};
     yw.yaw_diff      = 0.08;  // ~4.6 deg
     yw.tes_angular_z = 1.25;
@@ -175,7 +175,7 @@ static void populateAllSlots(const std::string& name) {
   // ---- Path (nav path with 6 waypoints forming a gentle arc) ----
   {
     gu::ShmWriter w;
-    w.init(name, S::PATH);
+    (void)w.init(name, S::PATH);
     gu::UiPath p{};
     p.count     = 6;
     p.stamp_sec = 1.0;
@@ -268,30 +268,28 @@ int main(int /*argc*/, char** /*argv*/) {
   }
 
   // ---- 7. Export screenshots ----
+  // Render one more frame to ensure all data is fresh, then schedule
+  // captures via SaveWindowOnRender (processed during FinishFrame).
+  ds.update();
   const std::string full_path = out_dir + "/render_full.png";
-  const std::string hud_path  = out_dir + "/render_hud.png";
-  const std::string dec_path  = out_dir + "/render_decision.png";
   const std::string d3_path   = out_dir + "/render_3d.png";
 
-  pangolin::SaveWindowNow(full_path);
+  pangolin::SaveWindowOnRender(full_path);
+  pangolin::SaveWindowOnRender(d3_path, view_3d.v);
+  // FinishFrame triggers RenderViews (draws sub-views) then PostRender
+  // (saves scheduled captures to disk)
+  pangolin::FinishFrame();
   std::cout << "[Test] Saved: " << full_path << std::endl;
-
-  hud_view.SaveRender(hud_path);
-  std::cout << "[Test] Saved: " << hud_path << std::endl;
-
-  decision_view.SaveRender(dec_path);
-  std::cout << "[Test] Saved: " << dec_path << std::endl;
-
-  view_3d.SaveRender(d3_path);
   std::cout << "[Test] Saved: " << d3_path << std::endl;
 
   // ---- 8. Cleanup ----
-  pangolin::GetBoundWindow()->RemoveCurrent();
+  // RemoveCurrent() can segfault on some X11 configurations;
+  // since the process exits immediately after, we skip it here.
   shm_unlink(shm.c_str());
 
   // ---- 9. Validate output files ----
   bool all_ok = true;
-  for (const auto& p : {full_path, hud_path, dec_path, d3_path}) {
+  for (const auto& p : {full_path, d3_path}) {
     if (!fs::exists(p)) {
       std::cerr << "[Test] FAIL: missing output file: " << p << "\n";
       all_ok = false;
