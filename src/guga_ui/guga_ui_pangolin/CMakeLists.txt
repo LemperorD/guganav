@@ -45,6 +45,7 @@ ament_target_dependencies(guga_ui
 
 target_include_directories(guga_ui PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${EIGEN3_INCLUDE_DIR}
   ${guga_ui_common_INCLUDE_DIRS}
 )

@@ -27,8 +27,8 @@
 // 子模块声明
 #include "data_source.hpp"
 #include "render_3d.hpp"
-#include "render_decision.hpp"
-#include "render_hud.hpp"
+#include "panel_decision.hpp"
+#include "panel_hud.hpp"
 
 // ==================== 全局标志 ====================
 
@@ -93,8 +93,8 @@ int main(int argc, char* argv[]) {
   GugaRender3D render_3d;
   render_3d.init(view_3d);
 
-  GugaRenderHUD render_hud;
-  GugaRenderDecision render_decision;
+  PanelHUD panel_hud;
+  PanelDecision panel_decision;
 
   // ---- 5. 设置自定义绘制回调 ----
   view_3d.SetDrawFunction([&](pangolin::View& v) {
@@ -102,11 +102,11 @@ int main(int argc, char* argv[]) {
   });
 
   hud_view.SetDrawFunction([&](pangolin::View& v) {
-    render_hud.draw(v, data_source);
+    panel_hud.draw(v, data_source);
   });
 
   decision_view.SetDrawFunction([&](pangolin::View& v) {
-    render_decision.draw(v, data_source);
+    panel_decision.draw(v, data_source);
   });
 
   // ---- 6. 主循环 ----

@@ -48,6 +48,7 @@ endif()
 add_executable(test_render test_pangolin_render.cpp)
 target_include_directories(test_render PRIVATE
   ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/include
   ${EIGEN3_INCLUDE_DIRS}
 )
 # Use the installed guga_ui_common namespace target for includes+deps

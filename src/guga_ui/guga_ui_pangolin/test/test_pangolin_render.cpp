@@ -47,8 +47,8 @@
 
 #include "data_source.hpp"
 #include "render_3d.hpp"
-#include "render_decision.hpp"
-#include "render_hud.hpp"
+#include "panel_decision.hpp"
+#include "panel_hud.hpp"
 
 namespace gu = guga_ui;
 namespace fs = std::filesystem;
@@ -247,17 +247,17 @@ int main(int /*argc*/, char** /*argv*/) {
   GugaRender3D render_3d;
   render_3d.init(view_3d);
 
-  GugaRenderHUD render_hud;
-  GugaRenderDecision render_decision;
+  PanelHUD panel_hud;
+  PanelDecision panel_decision;
 
   view_3d.SetDrawFunction([&](pangolin::View& v) {
     render_3d.draw(v, ds);
   });
   hud_view.SetDrawFunction([&](pangolin::View& v) {
-    render_hud.draw(v, ds);
+    panel_hud.draw(v, ds);
   });
   decision_view.SetDrawFunction([&](pangolin::View& v) {
-    render_decision.draw(v, ds);
+    panel_decision.draw(v, ds);
   });
 
   // ---- 6. Render several frames (let data flow through pipeline) ----
