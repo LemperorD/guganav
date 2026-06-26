@@ -1,5 +1,5 @@
-#ifndef PANGOLIN_WINDOW_HPP
-#define PANGOLIN_WINDOW_HPP
+#ifndef GUGA_UI_PANGOLIN_PANGOLIN_WINDOW_HPP
+#define GUGA_UI_PANGOLIN_PANGOLIN_WINDOW_HPP
 
 #include <csignal>
 #include <iostream>
@@ -41,4 +41,4 @@ private:
 
 } // namespace guga_ui
 
-#endif // PANGOLIN_WINDOW_HPP
+#endif // GUGA_UI_PANGOLIN_PANGOLIN_WINDOW_HPP
