@@ -47,8 +47,9 @@ struct UiData {
 /**
  * @brief UI 数据源——封装 ShmReader 并按需更新 UiData。
  */
-class UiDataSource {
- public:
+class UiDataSource
+{
+public:
   /**
    * @brief 打开共享内存。
    * @param shm_name 共享内存名称（与 ShmWriter 使用的名称一致）。
@@ -158,7 +159,7 @@ class UiDataSource {
     return (frame_count_ - age_field) <= max_age;
   }
 
- private:
+private:
   guga_ui::ShmReader reader_;
   UiData data_{};
   uint64_t frame_count_{};

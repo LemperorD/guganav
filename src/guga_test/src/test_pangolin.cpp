@@ -43,15 +43,23 @@ int main(/*int argc, char* argv[]*/)
   // Specialisations mean no conversions take place for exact types
   // and conversions between scalar types are cheap.
   pangolin::Var<bool> a_button("ui.A_Button",false,false);
-  pangolin::Var<double> a_double("ui.A_Double",3,0,5);
+  pangolin::Var<double> a_double("ui.A_Double",3,0,4);
   pangolin::Var<int> an_int("ui.An_Int",2,0,5);
   pangolin::Var<double> a_double_log("ui.Log_scale",3,1,1E4, true);
   pangolin::Var<bool> a_checkbox("ui.A_Checkbox",false,true);
   pangolin::Var<int> an_int_no_input("ui.An_Int_No_Input",2);
   pangolin::Var<std::string> a_string("ui.A_String", "Edit ME!");
 
-  pangolin::CreatePanel("ui2")
+  pangolin::CreatePanel("menu")
       .SetBounds(0.5, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
+
+  pangolin::Var<bool> b_button("menu.B_Button",false,false);
+  pangolin::Var<double> b_double("menu.B_Double",3,-5,5);
+  pangolin::Var<int> bn_int("menu.Bn_Int",2,0,5);
+  pangolin::Var<double> b_double_log("menu.Log_scale",3,1,1E4, true);
+  pangolin::Var<bool> b_checkbox("menu.B_Checkbox",false,true);
+  pangolin::Var<int> bn_int_no_input("menu.Bn_Int_No_Input",2);
+  pangolin::Var<std::string> b_string("menu.B_String", "Edit ME!");
 
   // std::function objects can be used for Var's too. These work great with C++11 closures.
   pangolin::Var<std::function<void(void)>> save_window("ui.Save_Window", [](){
@@ -68,8 +76,12 @@ int main(/*int argc, char* argv[]*/)
   });
 
   // Default hooks for exiting (Esc) and fullscreen (tab).
+  double dt = 0;
   while( !pangolin::ShouldQuit() )
   {
+    b_double = 5*sin(dt);
+    dt += 0.01;
+
     // Clear entire screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);    
 

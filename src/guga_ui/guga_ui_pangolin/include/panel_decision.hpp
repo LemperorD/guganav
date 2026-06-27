@@ -23,13 +23,9 @@
 namespace guga_ui
 {
 
-class PanelDecision
-{
-public:
-
-private:
-
-};
+void CreatePanelHud(pangolin::View& view, const UiDataSource& ui_data_source) {
+  
+}
 
 }  // namespace guga_ui
 

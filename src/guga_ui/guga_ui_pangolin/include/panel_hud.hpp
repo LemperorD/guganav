@@ -15,15 +15,9 @@
 namespace guga_ui
 {
 
-class PanelHUD
-{
-public: // 构造和析构
-  explicit PanelHUD();
-  ~PanelHUD() = default;
-
-private:
-
-};
+void CreatePanelHud(pangolin::View& view, const UiDataSource& ui_data_source) {
+  
+}
 
 }  // namespace guga_ui
 
