@@ -4,7 +4,7 @@
 
 ## TODOLIST
 
-- [ ] livox
+- [X] livox
 - [ ] hik
 - [ ] communication (需要重新制定通信协议)
 - [ ] 遥控器/手柄控制
