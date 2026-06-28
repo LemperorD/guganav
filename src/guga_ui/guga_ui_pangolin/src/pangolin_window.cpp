@@ -8,6 +8,9 @@ PangolinWindow::PangolinWindow()
   // 创建 Pangolin 窗口
   pangolin::CreateWindowAndBind(window_title_, win_width_, win_height_);
 
+	CreatePanelDecision(pangolin::Display("menu"), ui_data_source_);
+	CreatePanelHud(pangolin::Display("HUD"), ui_data_source_);
+
   CreateDisplayLayout();
 }
 

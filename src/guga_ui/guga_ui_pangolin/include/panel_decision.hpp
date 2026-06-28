@@ -18,12 +18,13 @@
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/gldraw.h>
 
-#include "data_source.hpp"
+const int UI_WIDTH = 20* pangolin::default_font().MaxWidth();
 
 namespace guga_ui
 {
 
-void CreatePanelHud(pangolin::View& view, const UiDataSource& ui_data_source) {
+void CreatePanelDecision(pangolin::View& view, const UiDataSource& ui_data_source) {
+  pangolin::CreatePanel("menu").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
   
 }
 

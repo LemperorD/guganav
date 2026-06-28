@@ -73,7 +73,8 @@ private: // 成员变量
 
   /// camera
   pangolin::OpenGlRenderState s_cam_main_;
-  
+
+  UiDataSource ui_data_source_;
 };
 
 } // namespace guga_ui
