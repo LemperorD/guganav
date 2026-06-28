@@ -6,4 +6,8 @@ install/
 
 log/
 
+bin/
+
+cmake/
+
 c_generated_code/

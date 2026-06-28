@@ -4,6 +4,8 @@ project(guga_test)
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin)
+
 find_package(OpenCL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(Pangolin REQUIRED)
@@ -32,5 +34,5 @@ target_link_libraries(test_pangolin pango_display pango_python )
 set_target_properties(
     test_intelGpuMatrix
     PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin
 )
