@@ -5,6 +5,6 @@
 ## TODOLIST
 
 - [X] intel显卡驱动加速矩阵运算
-- [ ] TBB并行计算
+- [X] TBB并行计算
 - [ ] iceoryx共享内存，让ROS2节点少一步共享内存拷贝
 - [ ] cuda加速矩阵运算
