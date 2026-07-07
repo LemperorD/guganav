@@ -1,2 +1,2 @@
-generate/*
-!generate/.gitkeep
+generated/*
+!generated/.gitkeep

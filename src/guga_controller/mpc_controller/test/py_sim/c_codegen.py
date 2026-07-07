@@ -92,18 +92,18 @@ class MPCSolver:
         self.ocp.acados_lib_path = acados_path + "/lib"
 
         # C代码导出目录，根据自身情况修改
-        self.ocp.code_export_directory = "/home/ld/guganav/src/guga_controller/mpc_controller/generated/c_code"
+        self.ocp.code_export_directory = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{self.model.name}_ocp"
         
 if __name__ == "__main__":
     mpc_solver = MPCSolver()
 	
     solver = AcadosOcpSolver(
         mpc_solver.ocp,
-        json_file=f"{mpc_solver.model.name}_ocp.json"
+        json_file = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{mpc_solver.model.name}_ocp.json"
     )
 
     print("=======================================")
     print("acados Solver 已生成")
-    print("生成目录：generated/c_code/")
-    print("JSON文件：generated/unicycle_ocp.json")
+    print(f"生成目录：{mpc_solver.ocp.code_export_directory}")
+    print(f"JSON文件：{mpc_solver.ocp.code_export_directory}.json")
     print("=======================================")
