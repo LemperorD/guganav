@@ -137,6 +137,7 @@ def test_closed_loop_mpc(
         # 获取最优控制
         u_opt = solver.get(0, "u")
         u_history[k] = u_opt
+        x_current = solver.get(1, "x")
 
         # 记录求解时间
         stats = solver.get_stats("time_tot")
@@ -249,7 +250,6 @@ def main():
 
     print("\n" + "=" * 60)
     print("验证完成！")
-    print(f"  开环对比图: open_loop_verification.png")
     print(f"  闭环圆轨迹: closed_loop_circle.png")
     print(f"  闭环8字轨迹: closed_loop_figure8.png")
     print("=" * 60)
