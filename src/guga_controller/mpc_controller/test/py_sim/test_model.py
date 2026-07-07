@@ -101,7 +101,7 @@ def test_closed_loop_mpc(
     if trajectory_type == "circle":
         x_current = np.array([1.5, 0.0, 0.0])  # 偏离圆心
     elif trajectory_type == "figure8":
-        x_current = np.array([0.5, 0.3, 0.0])
+        x_current = np.array([1.5, 1.3, 0.0])
     else:
         x_current = np.array([0.0, 0.2, 0.0])
 
