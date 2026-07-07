@@ -10,3 +10,5 @@ log/
 bin/
 
 cmake/
+
+compile_commands.json
