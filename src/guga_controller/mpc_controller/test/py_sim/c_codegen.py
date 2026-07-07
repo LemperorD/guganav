@@ -1,4 +1,4 @@
-from acados_template import AcadosOcp, AcadosOcpSolver
+from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSim, AcadosSimSolver
 from casadi import SX, vertcat
 import scipy.linalg
 import numpy as np
@@ -7,6 +7,8 @@ import os
 # 导入动力学模型
 from model.unicycle_model import export_cycle_model
 # from model.omni_model import export_omni_model
+
+dir_path = os.path.dirname(__file__)
 
 class MPCSolver:
     def __init__(self):
@@ -93,14 +95,52 @@ class MPCSolver:
 
         # C代码导出目录，根据自身情况修改
         self.ocp.code_export_directory = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{self.model.name}_ocp"
+
+class MPCSim: # 仿真测试使用
+    def __init__(self):
+        self.sim = AcadosSim()
+        self.sim.model = export_cycle_model()
+
+        Tf = 0.1
+        nx = self.sim.model.x.rows()
+        N_sim = 200
+
+        # set simulation time
+        self.sim.solver_options.T = Tf
+        # set options
+        self.sim.solver_options.integrator_type = 'IRK'
+        self.sim.solver_options.num_stages = 3
+        self.sim.solver_options.num_steps = 3
+        self.sim.solver_options.newton_iter = 3 # for implicit integrator
+        self.sim.solver_options.collocation_type = "GAUSS_RADAU_IIA"
+
+        # create
+        acados_integrator = AcadosSimSolver(self.sim)
+
+        x0 = np.array([0.0, np.pi+1, 0.0, 0.0])
+        u0 = np.array([0.0])
+        xdot_init = np.zeros((nx,))
+
+        simX = np.zeros((N_sim+1, nx))
+        simX[0,:] = x0
+
+        for i in range(N_sim):
+            # Note that xdot is only used if an IRK integrator is used
+            simX[i+1,:] = acados_integrator.simulate(x=simX[i,:], u=u0, xdot=xdot_init)
+
+        # C代码导出目录，根据自身情况修改
+        self.sim.code_export_directory = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{self.model.name}_sim"
         
 if __name__ == "__main__":
     mpc_solver = MPCSolver()
+    mpc_sim = MPCSim()
 	
     solver = AcadosOcpSolver(
         mpc_solver.ocp,
         json_file = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{mpc_solver.model.name}_ocp.json"
     )
+
+    sim = MPCSim()
 
     print("=======================================")
     print("acados Solver 已生成")

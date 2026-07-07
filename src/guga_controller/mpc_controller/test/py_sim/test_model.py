@@ -1,23 +1,9 @@
-#!/usr/bin/env python3
-"""
-test_model.py — acados unicycle MPC 模型精度验证 Demo。
-
-使用 Python AcadosOcpSolver 接口进行闭环路径跟踪仿真，
-验证：
-  1. 开环模型积分精度
-  2. 闭环 MPC 路径跟踪性能
-  3. 绘制轨迹图和控制量图
-
-用法:
-    python3 test_model.py
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+dir_path = os.path.dirname(__file__)
 
 from acados_template import AcadosOcpSolver, AcadosSimSolver
 from c_codegen import MPCSolver
@@ -31,7 +17,7 @@ def generate_reference_trajectory(
     """
     生成参考轨迹。
 
-    trajectory_type: "circle" | "line" | "figure8"
+    trajectory_type: "circle" | "figure8"
     返回值: (N, 3) 数组，每列 [x_ref, y_ref, theta_ref]
     """
     t = np.arange(0.0, total_time, dt)
@@ -43,12 +29,6 @@ def generate_reference_trajectory(
         y_ref = radius * np.sin(omega * t)
         theta_ref = omega * t + np.pi / 2.0  # 切线方向
 
-    elif trajectory_type == "line":
-        speed = 1.0
-        x_ref = speed * t
-        y_ref = np.zeros_like(t)
-        theta_ref = np.zeros_like(t)
-
     elif trajectory_type == "figure8":
         a_x, a_y = 2.0, 1.5
         omega_freq = 0.6
@@ -59,6 +39,7 @@ def generate_reference_trajectory(
         dx = np.gradient(x_ref, dt)
         dy = np.gradient(y_ref, dt)
         theta_ref = np.arctan2(dy, dx)
+        theta_ref = np.unwrap(theta_ref)
 
     else:
         raise ValueError(f"Unknown trajectory_type: {trajectory_type}")
@@ -102,8 +83,6 @@ def test_closed_loop_mpc(
         x_current = np.array([1.5, 0.0, 0.0])  # 偏离圆心
     elif trajectory_type == "figure8":
         x_current = np.array([1.5, 1.3, 0.0])
-    else:
-        x_current = np.array([0.0, 0.2, 0.0])
 
     # 仿真
     n_sim_steps = len(ref_full) - N - 1
@@ -216,8 +195,7 @@ def test_closed_loop_mpc(
     ax.grid(True)
 
     plt.tight_layout()
-    out_path = os.path.join(os.path.dirname(__file__)+"/results",
-                           f"closed_loop_{trajectory_type}.png")
+    out_path = os.path.join(dir_path + "/results" + f"/closed_loop_{trajectory_type}.png")
     plt.savefig(out_path, dpi=150)
     print(f"  图表已保存: {out_path}")
     plt.close()
