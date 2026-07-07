@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>guga_ui_pangolin</name>
+  <version>0.1.0</version>
+  <description>Pangolin-based real-time 3D HUD for GUGA sentry robot.
+    Reads robot status, game state, decision snapshot, and navigation
+    data from shared memory. No ROS2 topics needed at runtime.</description>
+  <maintainer email="ld2382619813@163.com">ld</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>guga_ui_common</build_depend>
+  <build_depend>eigen</build_depend>
+
+  <!-- Pangolin is not distributed as a ROS package;
+       we find it via CMake's find_package(Pangolin). -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

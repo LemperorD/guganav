@@ -30,7 +30,6 @@ void UsbJoystickNode::onConfigure()
   this->get_parameter("file_name", file_name_);
   this->declare_parameter<std::string>("output_vel_topic", "/cmd_vel");
   this->get_parameter("output_vel_topic", output_vel_topic_);
-
 }
 
 void UsbJoystickNode::ctrl_thread()

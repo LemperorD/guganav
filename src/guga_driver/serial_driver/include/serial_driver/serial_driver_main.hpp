@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <thread>
 

@@ -1,4 +1,32 @@
-// #include <so3_math.h>
+/**
+ * @file laserMapping.cpp
+ * @brief Point-LIO 主处理流程 (laserMapping 节点)
+ *
+ * 这是 Point-LIO 的核心主循环, 负责:
+ * - **节点初始化**: ROS2 订阅/发布/参数解析
+ * - **主循环** (500Hz): 同步→预测→更新→建图→发布
+ *
+ * 主循环流水线:
+ * @code
+ *   sync_packages()            // 1. LiDAR-IMU 时间同步
+ *   ↓
+ *   p_imu->Process()           // 2. IMU 预积分 + 去畸变
+ *   ↓
+ *   downSizeFilterSurf         // 3. 体素降采样
+ *   ↓
+ *   EKF Predict + Update       // 4. 迭代卡尔曼 (逐点)
+ *   ↓
+ *   MapIncremental             // 5. 增量地图更新 (iVox)
+ *   ↓
+ *   publish_odometry/path等    // 6. 发布里程计/路径/点云/TF
+ * @endcode
+ *
+ * 两种 EKF 模式:
+ * - **IMU-as-input** (use_imu_as_input=true): IMU 驱动预测, 激光做量测更新
+ * - **IMU-as-output** (use_imu_as_input=false, default): IMU 也作为量测,
+ *   角速度和加速度本身被估计, 每帧同时做激光量测和 IMU 量测更新
+ */
+
 #include <malloc.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
@@ -15,39 +43,73 @@
 
 using namespace std;
 
+/// @brief 发布帧周期 (仅含义注释)
 #define PUBFRAME_PERIOD (20)
 
+/// @brief 运动检测阈值 (m)
 const float MOV_THRESHOLD = 1.5f;
 
+/// @brief ROS2 包根目录 (由 CMakeLists 中 add_definitions 传入)
 string root_dir = ROOT_DIR;
 
+/// @brief 时间日志计数器
 int time_log_counter = 0;
 
-bool init_map = false, flg_first_scan = true;
+/// @brief 地图初始化完成标志
+bool init_map = false;
 
-// Time Log Variables
-double match_time = 0, solve_time = 0, propag_time = 0, update_time = 0;
+/// @brief 第一帧标志 (初始化姿态/重力)
+bool flg_first_scan = true;
 
-bool flg_reset = false, flg_exit = false;
+// ==================== 计时变量 (用于性能分析) ====================
+double match_time = 0;     ///< 匹配时间 (近邻搜索 + 平面拟合)
+double solve_time = 0;     ///< 求解时间 (EKF 更新)
+double propag_time = 0;    ///< 传播时间 (EKF 预测)
+double update_time = 0;    ///< ICP 总时间 (匹配+传播+求解)
 
-//surf feature in map
+/// @brief EKF 重置标志 (rosbag 回放时需重置)
+bool flg_reset = false;
+
+/// @brief 退出标志 (Ctrl+C 触发)
+bool flg_exit = false;
+
+// ==================== 点云缓存 ====================
+
+/** @brief 去畸变后的点云 (IMU系) */
 PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
+
+/** @brief 空间降采样后的 IMU 系点云 */
 PointCloudXYZI::Ptr feats_down_body_space(new PointCloudXYZI());
+
+/** @brief 初始化阶段累积的世界系点云 */
 PointCloudXYZI::Ptr init_feats_world(new PointCloudXYZI());
+
+/** @brief 深度特征世界系点云队列 (未使用) */
 std::deque<PointCloudXYZI::Ptr> depth_feats_world;
+
+/** @brief VoxelGrid 滤波器: 曲面点降采样 */
 pcl::VoxelGrid<PointType> downSizeFilterSurf;
+
+/** @brief VoxelGrid 滤波器: 地图点降采样 */
 pcl::VoxelGrid<PointType> downSizeFilterMap;
 
+/** @brief 当前欧拉角 (roll, pitch, yaw) [rad] */
 V3D euler_cur;
 
-nav_msgs::msg::Path path;
-nav_msgs::msg::Odometry odomAftMapped;
-geometry_msgs::msg::PoseStamped msg_body_pose;
+// ==================== 发布消息缓存 ====================
 
+nav_msgs::msg::Path path;              ///< 路径消息
+nav_msgs::msg::Odometry odomAftMapped; ///< 里程计消息
+geometry_msgs::msg::PoseStamped msg_body_pose;  ///< 位姿消息 (用于路径)
+
+/// @brief 先验 PCD 地图模式下的延迟建图计数器
 int sleep_time = 0;
 
 auto LOGGER = rclcpp::get_logger("laserMapping");
 
+// ==================== 工具函数 ====================
+
+/** @brief Ctrl+C 信号处理: 设置退出标志并通知条件变量 */
 void SigHandle(int sig)
 {
   flg_exit = true;
@@ -55,6 +117,7 @@ void SigHandle(int sig)
   sig_buffer.notify_all();
 }
 
+/** @brief 从 PCD 文件加载先验地图 */
 PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string & file_path)
 {
   auto pcd_ptr = std::make_shared<PointCloudXYZI>();
@@ -68,6 +131,13 @@ PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string & file_path)
   return pcd_ptr;
 }
 
+/** @brief 将完整的 LIO 状态转储到日志文件
+ *
+ * 输出格式:
+ *   time | euler(3) | pos(3) | omg(3) | vel(3) | acc(3) | bg(3) | ba(3) | gravity(3)
+ *
+ * 根据 use_imu_as_input 选择不同的 KF 实例
+ */
 inline void dump_lio_state_to_log(FILE * fp)
 {
   V3D rot_ang;
@@ -108,6 +178,14 @@ inline void dump_lio_state_to_log(FILE * fp)
   fflush(fp);
 }
 
+/**
+ * @brief 雷达坐标系 → IMU 坐标系点变换
+ *
+ * 变换链: p_IMU = R_LI * p_LiDAR + T_LI
+ * 根据 extrinsic_est_en 选择:
+ *   - 在线估计: 使用 EKF 状态中的 offset_R_L_I / offset_T_L_I
+ *   - 固定外参: 使用 YAML 中的 Lidar_R_wrt_IMU / Lidar_T_wrt_IMU
+ */
 void pointBodyLidarToIMU(PointType const * const pi, PointType * const po)
 {
   V3D p_body_lidar(pi->x, pi->y, pi->z);
@@ -127,6 +205,19 @@ void pointBodyLidarToIMU(PointType const * const pi, PointType * const po)
   po->intensity = pi->intensity;
 }
 
+/**
+ * @brief 增量地图更新: 将有效曲面点加入 iVox 局部地图
+ *
+ * 对每个世界坐标系下的曲面点:
+ * 1. 检查 Nearest_Points[i] 是否已有 5 个近邻
+ * 2. 如果有: 计算该点所在体素中心，判断是否已被地图覆盖
+ *    - 如果附近已有地图点: 跳过 (避免冗余)
+ *    - 否则: 加入 points_to_add
+ * 3. 如果无: 直接加入 (新探索区域)
+ * 4. 批量 AddPoints 到 iVox
+ *
+ * 该函数实现类似 "关键帧" 逻辑: 仅将地图中尚未覆盖的点加入。
+ */
 void MapIncremental()
 {
   PointVector points_to_add;
@@ -308,6 +399,38 @@ void publish_path(const rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubPat
   }
 }
 
+// ==================== 主入口 ====================
+
+/**
+ * @brief Point-LIO laserMapping 节点主函数
+ *
+ * 执行流程 (高层面):
+ *
+ * **初始化阶段**:
+ *   1. 解析 YAML 参数 → Preprocess/ImuProcess配置
+ *   2. 创建 iVox 地图实例
+ *   3. 设置降采样滤波器分辨率
+ *   4. 设置 LiDAR→IMU 外参
+ *   5. 初始化 EKF: 状态转移函数/雅可比/量测模型
+ *   6. 初始化协方差矩阵 (P, Q)
+ *   7. 创建 ROS2 订阅/发布
+ *
+ * **主循环** (500Hz):
+ *   1. executor.spin_some() — 处理回调, 积累数据到 buffer
+ *   2. sync_packages() — 时间同步, 组装 MeasureGroup
+ *   3. 首帧初始化 (重力/姿态/时间对齐)
+ *   4. p_imu->Process() — IMU 初始化/去畸变
+ *   5. 体素降采样 (VoxelGrid filter)
+ *   6. 时间压缩 (time_compressing)
+ *   7. 地图初始化 (init_map: 累积 init_map_size 点后首次建图)
+ *   8. EKF 逐点迭代 (Predict + Update):
+ *      - IMU 状态传播 (预测)
+ *      - 点面残差计算 + 迭代更新 (量测)
+ *      - IMU 伪量测更新 (output 模式)
+ *   9. 地图增量更新 (MapIncremental)
+ *   10. 发布里程计/路径/点云/TF
+ *   11. 性能日志输出
+ */
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
@@ -328,13 +451,16 @@ int main(int argc, char ** argv)
   double aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
          aver_time_solve = 0, aver_time_propag = 0;
 
+  // 初始化: 所有点默认标记为有效曲面点 (后续在量测模型中动态筛选)
   memset(point_selected_surf, true, sizeof(point_selected_surf));
   downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min);
   downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
 
+  // 从 YAML 参数设置 LiDAR→IMU 外参
   Lidar_T_wrt_IMU << VEC_FROM_ARRAY(extrinT);
   Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
 
+  // 如果启用在线外参估计，设置 EKF 状态中的外参初值
   if (extrinsic_est_en) {
     if (!use_imu_as_input) {
       kf_output.x_.offset_R_L_I = Lidar_R_wrt_IMU;
@@ -348,17 +474,25 @@ int main(int argc, char ** argv)
   p_imu->lidar_type = p_pre->lidar_type = lidar_type;
   p_imu->imu_en = imu_en;
 
+  // ---- EKF 初始化: 绑定状态转移函数、雅可比、量测模型 ----
+  // input 模式: 2个量测模型 (激光点面 + IMU 伪量测)
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
+  // output 模式: 3个量测模型 (激光点面 + IMU 伪量测 + IMU 伪量测协方差更新)
   kf_output.init_dyn_share_modified_3h(
     get_f_output, df_dx_output, h_model_output, h_model_IMU_output);
-  Eigen::Matrix<double, 24, 24> P_init;  // = MD(18, 18)::Identity() * 0.1;
+
+  // 初始化输入/输出模式的协方差矩阵
+  Eigen::Matrix<double, 24, 24> P_init;
   reset_cov(P_init);
   kf_input.change_P(P_init);
-  Eigen::Matrix<double, 30, 30> P_init_output;  // = MD(24, 24)::Identity() * 0.01;
+  Eigen::Matrix<double, 30, 30> P_init_output;
   reset_cov_output(P_init_output);
   kf_output.change_P(P_init_output);
+
+  // 构造过程噪声协方差矩阵
   Eigen::Matrix<double, 24, 24> Q_input = process_noise_cov_input();
   Eigen::Matrix<double, 30, 30> Q_output = process_noise_cov_output();
+
   /*** debug record ***/
   FILE * fp;
   string pos_log_dir = root_dir + "/Log/pos_log.txt";
@@ -366,8 +500,10 @@ int main(int argc, char ** argv)
   open_file();
 
   /*** ROS subscribe initialization ***/
+  // 根据雷达类型创建对应的点云订阅
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl_pc;
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_pcl_livox;
+  // ---- 订阅: LiDAR 点云 (Livox 或标准格式) + IMU ----
   if (p_pre->lidar_type == AVIA) {
     sub_pcl_livox = nh->create_subscription<livox_ros_driver2::msg::CustomMsg>(
       lid_topic, rclcpp::SensorDataQoS(),
@@ -379,6 +515,8 @@ int main(int argc, char ** argv)
   }
   auto sub_imu =
     nh->create_subscription<sensor_msgs::msg::Imu>(imu_topic, rclcpp::SensorDataQoS(), imu_cbk);
+
+  // ---- 发布: 里程计、路径、点云、TF ----
   auto pub_laser_cloud_full_res =
     nh->create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered", 20);
   auto pub_laser_cloud_full_res_body =
@@ -393,11 +531,12 @@ int main(int argc, char ** argv)
 
   //------------------------------------------------------------------------------------------------------
   signal(SIGINT, SigHandle);
-  rclcpp::Rate rate(500);
+  rclcpp::Rate rate(500);  // 主循环 500Hz (高于 LiDAR 帧率，保证数据及时处理)
   while (rclcpp::ok()) {
     if (flg_exit) break;
-    executor.spin_some();
-    if (sync_packages(Measures)) {
+    executor.spin_some();  // 处理订阅回调 (非阻塞)
+    if (sync_packages(Measures)) {  // 等待一组完整的 LiDAR+IMU 数据
+      // ==================== EKF 状态重置 (rosbag 回放) ====================
       if (flg_reset) {
         RCLCPP_WARN(LOGGER, "reset when rosbag play back");
         p_imu->Reset();
@@ -421,6 +560,7 @@ int main(int argc, char ** argv)
         }
       }
 
+      // ==================== 第一帧初始化 ====================
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
         flg_first_scan = false;
@@ -430,15 +570,14 @@ int main(int argc, char ** argv)
         }
         time_current = 0.0;
         if (imu_en) {
-          // imu_next = *(imu_deque.front());
+          // 初始化重力向量: 从 YAML 参数 (世界坐标系下 [0, 0, -9.81])
           kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
           kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
-          // kf_output.x_.acc << VEC_FROM_ARRAY(gravity);
-          // kf_output.x_.acc *= -1;
 
           {
+            // 时间对齐: 跳过在首帧 LiDAR 之前的 IMU 数据
             while (Measures.lidar_beg_time >
-                   get_time_sec(imu_next.header.stamp))  // if it is needed for the new map?
+                   get_time_sec(imu_next.header.stamp))
             {
               imu_deque.pop_front();
               if (imu_deque.empty()) {
@@ -446,7 +585,6 @@ int main(int argc, char ** argv)
               }
               imu_last = imu_next;
               imu_next = *(imu_deque.front());
-              // imu_deque.pop();
             }
           }
         } else {
@@ -461,6 +599,7 @@ int main(int argc, char ** argv)
           std::sqrt(gravity[0] * gravity[0] + gravity[1] * gravity[1] + gravity[2] * gravity[2]);
       }
 
+      // ---- 计时变量 (性能分析) ----
       double t0, t1, t2, t3, t4, t5, match_start, solve_start;
       match_time = 0;
       solve_time = 0;
@@ -468,61 +607,68 @@ int main(int argc, char ** argv)
       update_time = 0;
       t0 = omp_get_wtime();
 
+      // ==================== 步骤2-3: IMU 处理 + 降采样 + 时间压缩 ====================
       /*** downsample the feature points in a scan ***/
       t1 = omp_get_wtime();
-      p_imu->Process(Measures, feats_undistort);
+      p_imu->Process(Measures, feats_undistort);  // IMU 初始化/去畸变 (当前仅复制原始点云)
       if (space_down_sample) {
         downSizeFilterSurf.setInputCloud(feats_undistort);
-        downSizeFilterSurf.filter(*feats_down_body);
-        sort(feats_down_body->points.begin(), feats_down_body->points.end(), time_list);
+        downSizeFilterSurf.filter(*feats_down_body);                 // VoxelGrid 降采样
+        sort(feats_down_body->points.begin(), feats_down_body->points.end(), time_list);  // 按时间排序
       } else {
         feats_down_body = Measures.lidar;
         sort(feats_down_body->points.begin(), feats_down_body->points.end(), time_list);
       }
       {
-        time_seq = time_compressing<int>(feats_down_body);
+        time_seq = time_compressing<int>(feats_down_body);  // 按时间戳分组
         feats_down_size = feats_down_body->points.size();
       }
 
-      if (!p_imu->after_imu_init_)  // !p_imu->UseLIInit &&
+      // ==================== 步骤4: IMU 初始化完成后的重力对齐 ====================
+      if (!p_imu->after_imu_init_)
       {
         if (!p_imu->imu_need_init_) {
           V3D tmp_gravity;
           if (imu_en) {
+            // 从平均加速度估计重力方向: -mean_acc / |mean_acc| * G
             tmp_gravity = -p_imu->mean_acc / p_imu->mean_acc.norm() * G_m_s2;
           } else {
             tmp_gravity << VEC_FROM_ARRAY(gravity_init);
             p_imu->after_imu_init_ = true;
           }
-          // V3D tmp_gravity << VEC_FROM_ARRAY(gravity_init);
+          // 计算初始姿态: 使估计重力与先验重力对齐
           M3D rot_init;
           p_imu->Set_init(tmp_gravity, rot_init);
           kf_input.x_.rot = rot_init;
           kf_output.x_.rot = rot_init;
-          // kf_input.x_.rot; //.normalize();
-          // kf_output.x_.rot; //.normalize();
+          // output 模式下的初始加速度估计
           kf_output.x_.acc = -rot_init.transpose() * kf_output.x_.gravity;
         } else {
           continue;
         }
       }
-      /*** initialize the map ***/
+      /*** 步骤5: 地图初始化 (累积足够的首帧点后建图) ***/
       if (!init_map) {
         feats_down_world->resize(feats_undistort->size());
+        // 将首帧点云变换到世界坐标系
         for (int i = 0; i < feats_undistort->size(); i++) {
           {
             pointBodyToWorld(&(feats_undistort->points[i]), &(feats_down_world->points[i]));
           }
         }
+        // 累积初始化点云
         for (const auto & point : *feats_down_world) {
           init_feats_world->points.emplace_back(point);
         }
 
+        // 达到 init_map_size 后，初始化地图
         if (init_feats_world->size() >= init_map_size) {
           if (enable_prior_pcd) {
+            // 先验地图模式: 加载预建 PCD 地图作为初始局部地图
             auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
             ivox_->AddPoints(map_cloud->points);
           } else {
+            // 常规模式: 用累积的首帧点初始化地图
             ivox_->AddPoints(init_feats_world->points);
           }
           publish_init_map(pub_laser_cloud_map);
@@ -534,6 +680,7 @@ int main(int argc, char ** argv)
         continue;
       }
 
+      // ==================== 步骤6: ICP+KF 准备 / 量测数据预计算 ====================
       /*** ICP and Kalman filter update ***/
       normvec->resize(feats_down_size);
       feats_down_world->resize(feats_down_size);
@@ -542,10 +689,9 @@ int main(int argc, char ** argv)
 
       t2 = omp_get_wtime();
 
-      /*** iterated state estimation ***/
-      crossmat_list.reserve(feats_down_size);
-      pbody_list.reserve(feats_down_size);
-      // pbody_ext_list.reserve(feats_down_size);
+      /*** 预计算反对称矩阵和 body 系坐标 ***/
+      crossmat_list.reserve(feats_down_size);  // 反对称矩阵缓存
+      pbody_list.reserve(feats_down_size);     // IMU系下的坐标缓存
 
       for (size_t i = 0; i < feats_down_body->size(); i++) {
         V3D point_this(
@@ -570,16 +716,20 @@ int main(int argc, char ** argv)
           crossmat_list[i] = point_crossmat;
         }
       }
+      // ==================== 步骤7: 迭代卡尔曼滤波 (逐点 EKF Predict + Update) ====================
+
       if (!use_imu_as_input) {
+        // ===== IMU-as-output 模式: 逐点量测更新 =====
         bool imu_upda_cov = false;
         effct_feat_num = 0;
         /**** point by point update ****/
         if (!time_seq.empty()) {
           double pcl_beg_time = Measures.lidar_beg_time;
-          idx = -1;
+          idx = -1;  // 重置组偏移索引
           for (k = 0; k < time_seq.size(); k++) {
             PointType & point_body = feats_down_body->points[idx + time_seq[k]];
 
+            // 当前处理时间: 帧起始时间 + 当前点偏移时间
             time_current = point_body.curvature / 1000.0 + pcl_beg_time;
 
             if (is_first_frame) {

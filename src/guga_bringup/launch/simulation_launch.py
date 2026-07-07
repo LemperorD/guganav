@@ -42,6 +42,7 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration("use_respawn")
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
+    use_ui = LaunchConfiguration("use_ui")
 
     configured_params = ParameterFile(
         RewrittenYaml(
@@ -134,6 +135,12 @@ def generate_launch_description():
         "use_rviz", default_value="True", description="Whether to start RVIZ"
     )
 
+    declare_use_ui_cmd = DeclareLaunchArgument(
+        "use_ui",
+        default_value="False",
+        description="Whether to start the guga_ui_pangolin process",
+    )
+
     start_velodyne_convert_tool = Node(
         package="ign_sim_pointcloud_tool",
         executable="ign_sim_pointcloud_tool_node",
@@ -172,6 +179,13 @@ def generate_launch_description():
         }.items(),
     )
 
+    guga_ui_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(launch_dir, "support", "guga_ui_launch.py")
+        ),
+        condition=IfCondition(use_ui),
+    )
+
     ld = LaunchDescription()
 
     ld.add_action(declare_namespace_cmd)
@@ -185,10 +199,12 @@ def generate_launch_description():
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
+    ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     ld.add_action(start_velodyne_convert_tool)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
+    ld.add_action(guga_ui_cmd)
 
     return ld

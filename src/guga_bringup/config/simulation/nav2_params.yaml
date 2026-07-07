@@ -177,37 +177,6 @@ small_gicp_relocalization:
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 
-# kiss_matcher_relocalization:
-#   ros__parameters:
-#     use_sim_time: True
-#     map_frame: "map"
-#     odom_frame: "odom"
-#     base_frame: "base_footprint"
-#     robot_base_frame: "gimbal_yaw"
-#     lidar_frame: "front_mid360"
-#     resolution: 0.2
-#     use_quatro: true
-#     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
-#     # prior_pcd_file: ""
-
-buaa_sentry_relocalization:
-  ros__parameters:
-    use_sim_time: True
-    num_threads: 4
-    num_neighbors: 20
-    global_leaf_size: 0.1
-    registered_leaf_size: 0.05
-    max_dist_sq: 3.0
-    map_frame: "map"
-    odom_frame: "odom"
-    base_frame: "base_footprint"
-    robot_base_frame: "gimbal_yaw"
-    lidar_frame: "front_mid360"
-    resolution: 0.2
-    use_quatro: true
-    # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
-    # prior_pcd_file: ""
-
 pointcloud_to_laserscan:
   ros__parameters:
     use_sim_time: True
@@ -533,11 +502,12 @@ planner_server:
     expected_planner_frequency: 10.0
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner/ThetaStarPlanner" # In Iron and older versions, "/" was used instead of "::"
-      how_many_corners: 8
+      plugin: "jps_planner/JPSPlanner"
       w_euc_cost: 1.0
       w_traversal_cost: 10.0
       w_heuristic_cost: 1.0
+      allow_unknown: false
+      enable_bspline: true
 
 smoother_server:
   ros__parameters:

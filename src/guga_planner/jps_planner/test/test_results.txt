@@ -1,0 +1,83 @@
+Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+[==========] Running 31 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from JPSSearchTest
+[ RUN      ] JPSSearchTest.EmptyGrid_StraightHorizontal
+[       OK ] JPSSearchTest.EmptyGrid_StraightHorizontal (1 ms)
+[ RUN      ] JPSSearchTest.EmptyGrid_StraightVertical
+[       OK ] JPSSearchTest.EmptyGrid_StraightVertical (0 ms)
+[ RUN      ] JPSSearchTest.EmptyGrid_Diagonal
+[       OK ] JPSSearchTest.EmptyGrid_Diagonal (1 ms)
+[ RUN      ] JPSSearchTest.GridWithWall_FindsPathAround
+[       OK ] JPSSearchTest.GridWithWall_FindsPathAround (0 ms)
+[ RUN      ] JPSSearchTest.BlockedStart_ReturnsFalse
+[       OK ] JPSSearchTest.BlockedStart_ReturnsFalse (0 ms)
+[ RUN      ] JPSSearchTest.BlockedGoal_ReturnsFalse
+[       OK ] JPSSearchTest.BlockedGoal_ReturnsFalse (0 ms)
+[ RUN      ] JPSSearchTest.NoPath_EnclosedGoal
+[       OK ] JPSSearchTest.NoPath_EnclosedGoal (0 ms)
+[ RUN      ] JPSSearchTest.NarrowCorridor_FindsPath
+[       OK ] JPSSearchTest.NarrowCorridor_FindsPath (0 ms)
+[----------] 8 tests from JPSSearchTest (2 ms total)
+
+[----------] 5 tests from JPSBehaviorTest
+[ RUN      ] JPSBehaviorTest.Jump_HitsObstacle_StopsBefore
+[       OK ] JPSBehaviorTest.Jump_HitsObstacle_StopsBefore (0 ms)
+[ RUN      ] JPSBehaviorTest.Jump_HitsGoal_ReturnsGoalNode
+[       OK ] JPSBehaviorTest.Jump_HitsGoal_ReturnsGoalNode (0 ms)
+[ RUN      ] JPSBehaviorTest.DiagonalJump_CreatesJumpPoints
+[       OK ] JPSBehaviorTest.DiagonalJump_CreatesJumpPoints (0 ms)
+[ RUN      ] JPSBehaviorTest.ForcedNeighbor_TriggersJumpPoint
+[       OK ] JPSBehaviorTest.ForcedNeighbor_TriggersJumpPoint (0 ms)
+[ RUN      ] JPSBehaviorTest.JPS_ExpandsFewerNodes
+[       OK ] JPSBehaviorTest.JPS_ExpandsFewerNodes (2 ms)
+[----------] 5 tests from JPSBehaviorTest (2 ms total)
+
+[----------] 6 tests from JPSEdgeCaseTest
+[ RUN      ] JPSEdgeCaseTest.StartEqualsGoal_ReturnsSinglePoint
+[       OK ] JPSEdgeCaseTest.StartEqualsGoal_ReturnsSinglePoint (0 ms)
+[ RUN      ] JPSEdgeCaseTest.BoundaryPath_StaysInBounds
+[       OK ] JPSEdgeCaseTest.BoundaryPath_StaysInBounds (1 ms)
+[ RUN      ] JPSEdgeCaseTest.OriginStart_Works
+[       OK ] JPSEdgeCaseTest.OriginStart_Works (0 ms)
+[ RUN      ] JPSEdgeCaseTest.AdjacentCells_Works
+[       OK ] JPSEdgeCaseTest.AdjacentCells_Works (0 ms)
+[ RUN      ] JPSEdgeCaseTest.OutOfBounds_Start_ReturnsFalse
+[       OK ] JPSEdgeCaseTest.OutOfBounds_Start_ReturnsFalse (0 ms)
+[ RUN      ] JPSEdgeCaseTest.OutOfBounds_Goal_ReturnsFalse
+[       OK ] JPSEdgeCaseTest.OutOfBounds_Goal_ReturnsFalse (0 ms)
+[----------] 6 tests from JPSEdgeCaseTest (1 ms total)
+
+[----------] 5 tests from JPSCostTest
+[ RUN      ] JPSCostTest.HighCostRegion_PathPrefersFree
+[       OK ] JPSCostTest.HighCostRegion_PathPrefersFree (0 ms)
+[ RUN      ] JPSCostTest.AllowUnknown_PathThroughUnknown
+[       OK ] JPSCostTest.AllowUnknown_PathThroughUnknown (0 ms)
+[ RUN      ] JPSCostTest.DisallowUnknown_NoPath
+[       OK ] JPSCostTest.DisallowUnknown_NoPath (0 ms)
+[ RUN      ] JPSCostTest.InscribedCost_TreatedAsObstacle
+[       OK ] JPSCostTest.InscribedCost_TreatedAsObstacle (0 ms)
+[ RUN      ] JPSCostTest.CostBelowLethal_IsTraversable
+[       OK ] JPSCostTest.CostBelowLethal_IsTraversable (0 ms)
+[----------] 5 tests from JPSCostTest (0 ms total)
+
+[----------] 7 tests from JPSTraversableTest
+[ RUN      ] JPSTraversableTest.FreeSpace_True
+[       OK ] JPSTraversableTest.FreeSpace_True (0 ms)
+[ RUN      ] JPSTraversableTest.LethalObstacle_False
+[       OK ] JPSTraversableTest.LethalObstacle_False (0 ms)
+[ RUN      ] JPSTraversableTest.OutOfBounds_False
+[       OK ] JPSTraversableTest.OutOfBounds_False (0 ms)
+[ RUN      ] JPSTraversableTest.HighCostButBelowThreshold_True
+[       OK ] JPSTraversableTest.HighCostButBelowThreshold_True (0 ms)
+[ RUN      ] JPSTraversableTest.UnknownWithAllow_True
+[       OK ] JPSTraversableTest.UnknownWithAllow_True (0 ms)
+[ RUN      ] JPSTraversableTest.UnknownWithoutAllow_False
+[       OK ] JPSTraversableTest.UnknownWithoutAllow_False (0 ms)
+[ RUN      ] JPSTraversableTest.InscribedIsObstacle
+[       OK ] JPSTraversableTest.InscribedIsObstacle (0 ms)
+[----------] 7 tests from JPSTraversableTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 31 tests from 5 test suites ran. (5 ms total)
+[  PASSED  ] 31 tests.
