@@ -9,13 +9,13 @@ from model.unicycle_model import export_cycle_model
 # from model.omni_model import export_omni_model
 
 dir_path = os.path.dirname(__file__)
+print(f"当前文件路径: {dir_path}")
 
 class MPCSolver:
     def __init__(self):
         self.ocp = AcadosOcp()
         
         self.model = export_cycle_model()
-        # self.model = export_omni_model()
         self.ocp.model = self.model
         
         # Horizon 设置
@@ -99,7 +99,9 @@ class MPCSolver:
 class MPCSim: # 仿真测试使用
     def __init__(self):
         self.sim = AcadosSim()
-        self.sim.model = export_cycle_model()
+
+        self.model = export_cycle_model()
+        self.sim.model = self.model
 
         Tf = 0.1
         nx = self.sim.model.x.rows()
@@ -114,20 +116,6 @@ class MPCSim: # 仿真测试使用
         self.sim.solver_options.newton_iter = 3 # for implicit integrator
         self.sim.solver_options.collocation_type = "GAUSS_RADAU_IIA"
 
-        # create
-        acados_integrator = AcadosSimSolver(self.sim)
-
-        x0 = np.array([0.0, np.pi+1, 0.0, 0.0])
-        u0 = np.array([0.0])
-        xdot_init = np.zeros((nx,))
-
-        simX = np.zeros((N_sim+1, nx))
-        simX[0,:] = x0
-
-        for i in range(N_sim):
-            # Note that xdot is only used if an IRK integrator is used
-            simX[i+1,:] = acados_integrator.simulate(x=simX[i,:], u=u0, xdot=xdot_init)
-
         # C代码导出目录，根据自身情况修改
         self.sim.code_export_directory = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{self.model.name}_sim"
         
@@ -139,8 +127,10 @@ if __name__ == "__main__":
         mpc_solver.ocp,
         json_file = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{mpc_solver.model.name}_ocp.json"
     )
-
-    sim = MPCSim()
+    sim = AcadosSimSolver(
+        mpc_sim.sim,
+        json_file = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{mpc_sim.sim.model.name}_sim.json"
+    )
 
     print("=======================================")
     print("acados Solver 已生成")
