@@ -1,8 +1,1 @@
-# acados 代码生成和编译临时文件
-c_generated_code/
-*_cost/
-*_model/
-*.json
-*.so
-*.o
 __pycache__/

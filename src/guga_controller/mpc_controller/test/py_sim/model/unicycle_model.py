@@ -2,33 +2,32 @@ from acados_template import AcadosModel # 引入acados模型建立模块
 from casadi import SX, vertcat, sin, cos # 引入casadi模块
 import numpy as np
 
-def export_robot_model() -> AcadosModel:
-    model_name = "omni"
+def export_cycle_model() -> AcadosModel:
+    model_name = "unicycle"
 
     # set up states & controls
-    x = SX.sym("x")
-    y = SX.sym("y")
+    px = SX.sym("px")
+    py = SX.sym("py")
     v = SX.sym("v")
     theta = SX.sym("theta")
-    theta_d = SX.sym("theta_d")
+    omega = SX.sym("omega")
 
-    x = vertcat(x, y, v, theta, theta_d)
-
-    F = SX.sym("F")
-    T = SX.sym("T")
-    u = vertcat(F, T)
+    x = vertcat(px, py, theta)
+    u = vertcat(v, omega)
 
     # xdot
     x_dot = SX.sym("x_dot")
     y_dot = SX.sym("y_dot")
-    v_dot = SX.sym("v_dot")
     theta_dot = SX.sym("theta_dot")
-    theta_ddot = SX.sym("theta_ddot")
 
-    xdot = vertcat(x_dot, y_dot, v_dot, theta_dot, theta_ddot)
+    xdot = vertcat(x_dot, y_dot, theta_dot)
 
     # dynamics
-    f_expl = vertcat(v * cos(theta), v * sin(theta), F, theta_d, T)
+    f_expl = vertcat(
+        v * cos(theta),
+        v * sin(theta),
+        omega
+    )
 
     f_impl = xdot - f_expl
 
@@ -42,7 +41,7 @@ def export_robot_model() -> AcadosModel:
     model.name = model_name
 
     model.t_label = "$t$ [s]"
-    model.x_labels = ["$x$", "$y$", "$v$", "$\\theta$", "$\\dot{\\theta}$"]
-    model.u_labels = ["$F$", "$T$"]
+    model.x_labels = ["$p_x$", "$p_y$", "$\\theta$"]
+    model.u_labels = ["$v$", "$\\omega$"]
 
     return model
