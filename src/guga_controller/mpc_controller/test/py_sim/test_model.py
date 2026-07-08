@@ -6,7 +6,7 @@ import sys
 dir_path = os.path.dirname(__file__)
 
 from acados_template import AcadosOcpSolver, AcadosSimSolver
-from c_codegen import MPCSolver, MPCSim
+from guga_controller.mpc_controller.test.py_sim.c_codegen_unicycle import MPCSolver, MPCSim
 
 # 参考轨迹生成
 def generate_reference_trajectory(
