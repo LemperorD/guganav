@@ -28,6 +28,7 @@
 
 extern "C" {
 #include "acados_solver_unicycle.h"
+#include "acados_sim_solver_unicycle.h"
 }
 
 #define NX   UNICYCLE_NX
@@ -37,9 +38,7 @@ extern "C" {
 #define NYN  UNICYCLE_NYN
 #define NBX0 UNICYCLE_NBX0
 
-// ============================================================================
 // 辅助: RK4 积分
-// ============================================================================
 static void rk4_step(const double x[3], const double u[2], double dt,
                      double x_next[3]) {
     double k1[3] = {u[0]*cos(x[2]), u[0]*sin(x[2]), u[1]};
@@ -57,9 +56,7 @@ static void rk4_step(const double x[3], const double u[2], double dt,
     while (x_next[2] < -M_PI) x_next[2]+=2*M_PI;
 }
 
-// ============================================================================
-// 辅助: 参考轨迹
-// ============================================================================
+// 参考轨迹
 enum class TrajectoryType { CIRCLE = 0, FIGURE8 = 1 };
 
 static void generate_reference(TrajectoryType type, double t, double ref[3]) {
@@ -79,16 +76,12 @@ static void generate_reference(TrajectoryType type, double t, double ref[3]) {
 template<typename T>
 static inline void* void_ptr(const T* p) { return const_cast<T*>(p); }
 
-// ============================================================================
 // 确保目录存在
-// ============================================================================
 static void ensure_dir(const char *dir) {
     mkdir(dir, 0755);
 }
 
-// ============================================================================
 // 写 CSV
-// ============================================================================
 static void write_csv_mat(const char *path, const char *hdr,
                            const double *data, int rows, int cols) {
     FILE *f = fopen(path, "w");
@@ -101,9 +94,7 @@ static void write_csv_mat(const char *path, const char *hdr,
     fclose(f);
 }
 
-// ============================================================================
 // Test 1: Smoke
-// ============================================================================
 static bool test_create_destroy() {
     std::printf("--- Test 1: Create & Destroy ---\n");
     unicycle_solver_capsule *c = unicycle_acados_create_capsule();
@@ -117,9 +108,7 @@ static bool test_create_destroy() {
     return true;
 }
 
-// ============================================================================
 // 设置 solver 状态 & 参考
-// ============================================================================
 static void setup_solver(
     ocp_nlp_config *cfg, ocp_nlp_dims *dims,
     ocp_nlp_in *in, ocp_nlp_out *out,
@@ -141,9 +130,7 @@ static void setup_solver(
     ocp_nlp_cost_model_set(cfg,dims,in,N,"y_ref",void_ptr(yref_e));
 }
 
-// ============================================================================
 // Test 2: 闭环 MPC — 输出 CSV
-// ============================================================================
 static bool test_closed_loop_mpc(TrajectoryType type,
                                   const char *tag, const char *csv_dir) {
     std::printf("--- Test: Closed-Loop MPC (%s) ---\n", tag);
@@ -168,11 +155,12 @@ static bool test_closed_loop_mpc(TrajectoryType type,
     auto *t_hist   =new double[n_sim]();
 
     double x_cur[NX];
+
+    // 设置初始状态并写入history数组
     if (type==TrajectoryType::CIRCLE)
         {x_cur[0]=1.5;x_cur[1]=0.0;x_cur[2]=0.0;}
     else
         {x_cur[0]=0.5;x_cur[1]=0.3;x_cur[2]=0.0;}
-
     x_hist[0]=x_cur[0];x_hist[1]=x_cur[1];x_hist[2]=x_cur[2];
 
     for (int k=0;k<n_sim;++k) {
@@ -267,9 +255,7 @@ fail:
     return false;
 }
 
-// ============================================================================
 // Test 3: 开环模型
-// ============================================================================
 static bool test_open_loop_model(const char *csv_dir) {
     std::printf("--- Test: Open-Loop Model Verification ---\n");
 
@@ -308,7 +294,6 @@ static bool test_open_loop_model(const char *csv_dir) {
     return true;
 }
 
-// ============================================================================
 int main() {
     const char *out = "../data";
     ensure_dir(out);

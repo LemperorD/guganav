@@ -2,18 +2,19 @@ cmake_minimum_required(VERSION 3.10)
 project(test_unicycle_solver CXX C)
 
 # ---- acados paths ----
-set(ACADOS_DIR /home/ld/3rdparty/acados)
-set(ACADOS_INCLUDE_DIR ${ACADOS_DIR}/include)
-set(ACADOS_LIB_DIR ${ACADOS_DIR}/lib)
+set(ACADOS_INCLUDE_DIR $ENV{ACADOS_SOURCE_DIR}/include)
+set(ACADOS_LIB_DIR $ENV{ACADOS_SOURCE_DIR}/lib)
+
+# message(${ACADOS_INCLUDE_DIR})
 
 # ---- generated solver source directory ----
-set(GENERATED_DIR
-    ${CMAKE_SOURCE_DIR}/../../generated/unicycle_ocp)
+set(GENERATED_OCP_DIR ${CMAKE_SOURCE_DIR}/../../generated/unicycle_ocp)
+set(GENERATED_SIM_DIR ${CMAKE_SOURCE_DIR}/../../generated/unicycle_sim)
 
 # ---- gather generated C sources (model + cost + solver) ----
-file(GLOB MODEL_SRC   ${GENERATED_DIR}/unicycle_model/*.c)
-file(GLOB COST_SRC    ${GENERATED_DIR}/unicycle_cost/*.c)
-file(GLOB SOLVER_SRC  ${GENERATED_DIR}/acados_solver_unicycle.c)
+file(GLOB MODEL_SRC   ${GENERATED_OCP_DIR}/unicycle_model/*.c)
+file(GLOB COST_SRC    ${GENERATED_OCP_DIR}/unicycle_cost/*.c)
+file(GLOB SOLVER_SRC  ${GENERATED_OCP_DIR}/acados_solver_unicycle.c)
 
 set(GENERATED_SRC
     ${MODEL_SRC}
@@ -33,7 +34,7 @@ target_include_directories(test_unicycle_solver PRIVATE
     ${ACADOS_INCLUDE_DIR}/acados
     ${ACADOS_INCLUDE_DIR}/blasfeo/include
     ${ACADOS_INCLUDE_DIR}/hpipm/include
-    ${GENERATED_DIR}
+    ${GENERATED_OCP_DIR}
 )
 
 # ---- compile flags ----
