@@ -52,8 +52,8 @@ static void rk4_step(const double x[3], const double u[2], double dt,
     x_next[0]=x[0]+(dt/6.0)*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
     x_next[1]=x[1]+(dt/6.0)*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
     x_next[2]=x[2]+(dt/6.0)*(k1[2]+2*k2[2]+2*k3[2]+k4[2]);
-    while (x_next[2] >  M_PI) x_next[2]-=2*M_PI;
-    while (x_next[2] < -M_PI) x_next[2]+=2*M_PI;
+    // while (x_next[2] >  M_PI) x_next[2]-=2*M_PI;
+    // while (x_next[2] < -M_PI) x_next[2]+=2*M_PI;
 }
 
 // 参考轨迹
@@ -69,6 +69,7 @@ static void generate_reference(TrajectoryType type, double t, double ref[3]) {
         double eps=0.001;
         ref[2]=atan2(ay*sin(2.0*w*(t+eps))-ay*sin(2.0*w*(t-eps)),
                      ax*sin(w*(t+eps))-ax*sin(w*(t-eps)));
+        // TODO：unwrap
     }
 }
 
@@ -190,6 +191,7 @@ static bool test_closed_loop_mpc(TrajectoryType type,
         }
 
         // 前向仿真
+        // TODO: 使用 acados_sim_solver_unicycle 进行前向仿真
         {
             double u_opt[2]={u_hist[k*NU],u_hist[k*NU+1]};
             rk4_step(x_cur,u_opt,dt,x_cur);
