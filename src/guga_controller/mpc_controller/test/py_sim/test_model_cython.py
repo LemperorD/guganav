@@ -67,18 +67,20 @@ def test_closed_loop_mpc(
         trajectory_type=trajectory_type, total_time=total_time, dt=dt
     )
 
-    # 创建求解器
+    # 设置 acados OCP Solver
+    json_file = os.path.join(mpc_solver.ocp.code_export_directory,
+                             "..", f"{mpc_solver.model.name}_ocp.json") # 按照json文件设置
     solver = AcadosOcpSolver(
         mpc_solver.ocp,
-        json_file=os.path.join(mpc_solver.ocp.code_export_directory,
-                               "..", f"{mpc_solver.model.name}_ocp.json"),
+        json_file=json_file,
+        generate=False, build=False, check_reuse_possible=False, # 此处设置 generate=False, build=False, check_reuse_possible=False
     )
 
     nx = mpc_solver.nx
     nu = mpc_solver.nu
     N = mpc_solver.N
 
-    # 初始状态 (偏离参考)
+    # 初始状态
     if trajectory_type == "circle":
         x_current = np.array([1.5, 0.0, 0.0])  # 偏离圆心
     elif trajectory_type == "figure8":
