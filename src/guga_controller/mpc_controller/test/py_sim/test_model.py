@@ -6,7 +6,7 @@ import sys
 dir_path = os.path.dirname(__file__)
 
 from acados_template import AcadosOcpSolver, AcadosSimSolver
-from c_codegen import MPCSolver
+from c_codegen import MPCSolver, MPCSim
 
 # 参考轨迹生成
 def generate_reference_trajectory(
@@ -50,41 +50,38 @@ def generate_reference_trajectory(
 # 闭环 MPC 路径跟踪
 def test_closed_loop_mpc(
     mpc_solver: MPCSolver,
+    sim_solver: AcadosSimSolver = None,
     trajectory_type: str = "circle",
 ):
-    """
-    使用 acados OCP Solver 进行闭环路径跟踪仿真。
-    """
     print("\n" + "=" * 60)
     print(f"2. 闭环 MPC 路径跟踪仿真 ({trajectory_type})")
     print("=" * 60)
 
-    dt = mpc_solver.Tf / mpc_solver.N  # 控制步长 = 1.0/20 = 0.05s
+    dt = mpc_solver.Tf / mpc_solver.N
     total_time = 10.0
 
-    # 生成参考轨迹
     ref_full, t_ref = generate_reference_trajectory(
         trajectory_type=trajectory_type, total_time=total_time, dt=dt
     )
 
-    # 创建求解器
+    # OCP 求解器
+    json_file = os.path.join(mpc_solver.ocp.code_export_directory,
+                             "..", f"{mpc_solver.model.name}_ocp.json")
     solver = AcadosOcpSolver(
         mpc_solver.ocp,
-        json_file=os.path.join(mpc_solver.ocp.code_export_directory,
-                               "..", f"{mpc_solver.model.name}_ocp.json"),
+        json_file=json_file,
+        generate=False, build=False, check_reuse_possible=False,
     )
 
     nx = mpc_solver.nx
     nu = mpc_solver.nu
     N = mpc_solver.N
 
-    # 初始状态 (偏离参考)
     if trajectory_type == "circle":
-        x_current = np.array([1.5, 0.0, 0.0])  # 偏离圆心
+        x_current = np.array([1.5, 0.0, 0.0])
     elif trajectory_type == "figure8":
         x_current = np.array([1.5, 1.3, 0.0])
 
-    # 仿真
     n_sim_steps = len(ref_full) - N - 1
     x_history = np.zeros((n_sim_steps + 1, nx))
     u_history = np.zeros((n_sim_steps, nu))
@@ -93,32 +90,32 @@ def test_closed_loop_mpc(
 
     x_history[0] = x_current
 
+    sim_solver.set("T", dt)
+
     for k in range(n_sim_steps):
-        # 当前 horizon 内的参考轨迹
         ref_window = ref_full[k : k + N + 1]
 
-        # 设置初始状态约束
         solver.set(0, "lbx", x_current)
         solver.set(0, "ubx", x_current)
 
-        # 设置参考轨迹 (yref = [x, y, theta, v, omega])
         for i in range(N):
             rx, ry, rtheta = ref_window[i]
             solver.set(i, "yref", np.array([rx, ry, rtheta, 0.0, 0.0]))
 
-        # 末端参考
         rx_e, ry_e, rtheta_e = ref_window[N]
         solver.set(N, "yref", np.array([rx_e, ry_e, rtheta_e]))
 
-        # 求解
         solver.solve()
 
-        # 获取最优控制
         u_opt = solver.get(0, "u")
         u_history[k] = u_opt
-        x_current = solver.get(1, "x")
 
-        # 记录求解时间
+        # ---- 前向仿真 ----
+        sim_solver.set("x", x_current)
+        sim_solver.set("u", u_opt)
+        sim_solver.solve()
+        x_current = sim_solver.get("x")
+
         stats = solver.get_stats("time_tot")
         if stats is not None:
             solve_times[k] = stats
@@ -209,21 +206,29 @@ def main():
     print("acados Unicycle MPC — 模型精度验证 Demo")
     print("=" * 60)
 
-    # 构建 MPC 配置
     mpc_solver = MPCSolver()
     print(f"  模型:  {mpc_solver.model.name}")
     print(f"  状态:  nx={mpc_solver.nx}, 控制: nu={mpc_solver.nu}")
     print(f"  Horizon: N={mpc_solver.N}, Tf={mpc_solver.Tf}s")
     print(f"  权重 Q=diag(30,30,15), R=diag(1.0,0.5)")
 
-    # 圆轨迹
+    # 创建 acados 仿真求解器用于前向积分
+    mpc_sim = MPCSim()
+    sim_json = os.path.join(mpc_sim.sim.code_export_directory,
+                            "..", f"{mpc_sim.sim.model.name}_sim.json")
+    sim = AcadosSimSolver(
+        mpc_sim.sim,
+        json_file=sim_json,
+        generate=False, build=False, check_reuse_possible=False,
+    )
+    print(f"  仿真器: IRK, T_sim={mpc_sim.sim.solver_options.T}s (运行时设为 dt)")
+
     x_hist, u_hist, solve_times = test_closed_loop_mpc(
-        mpc_solver, trajectory_type="circle"
+        mpc_solver, sim, trajectory_type="circle"
     )
 
-    # 8字轨迹
     x_hist2, u_hist2, solve_times2 = test_closed_loop_mpc(
-        mpc_solver, trajectory_type="figure8"
+        mpc_solver, sim, trajectory_type="figure8"
     )
 
     print("\n" + "=" * 60)

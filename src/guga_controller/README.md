@@ -5,7 +5,7 @@
 ## TODOLIST
 
 - [X] acados设计模式探索
-- [ ] python仿真中使用cython导入求解器与仿真器（需求不大，但如果你懒得开发C++需求就很大）
+- [X] python仿真中导入生成好的求解器与仿真器
 - [ ] 模型建立
 - [ ] mpc_controller
 - [ ] nmpc_controller
