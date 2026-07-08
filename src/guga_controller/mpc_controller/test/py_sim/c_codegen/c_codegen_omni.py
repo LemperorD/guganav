@@ -137,6 +137,6 @@ if __name__ == "__main__":
 
     print("=======================================")
     print("acados Solver 已生成")
-    print(f"生成目录：{mpc_solver.ocp.code_export_directory}")
-    print(f"JSON文件：{mpc_solver.ocp.code_export_directory}.json")
+    print(f"生成目录: {mpc_solver.ocp.code_export_directory}")
+    print(f"JSON文件: {mpc_solver.ocp.code_export_directory}.json")
     print("=======================================")

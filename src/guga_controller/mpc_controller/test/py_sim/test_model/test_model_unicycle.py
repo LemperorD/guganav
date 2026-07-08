@@ -5,8 +5,12 @@ import sys
 
 dir_path = os.path.dirname(__file__)
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(ROOT)
+sys.path.insert(0, ROOT)
+
 from acados_template import AcadosOcpSolver, AcadosSimSolver
-from guga_controller.mpc_controller.test.py_sim.c_codegen_unicycle import MPCSolver, MPCSim
+from c_codegen.c_codegen_unicycle import MPCSolver, MPCSim
 
 # 参考轨迹生成
 def generate_reference_trajectory(
@@ -192,7 +196,7 @@ def test_closed_loop_mpc(
     ax.grid(True)
 
     plt.tight_layout()
-    out_path = os.path.join(dir_path + "/results" + f"/closed_loop_{trajectory_type}.png")
+    out_path = os.path.join(dir_path + f"/../results/{mpc_solver.model.name}" + f"/{mpc_solver.model.name}_{trajectory_type}.png")
     plt.savefig(out_path, dpi=150)
     print(f"  图表已保存: {out_path}")
     plt.close()
@@ -233,8 +237,8 @@ def main():
 
     print("\n" + "=" * 60)
     print("验证完成！")
-    print(f"  闭环圆轨迹: closed_loop_circle.png")
-    print(f"  闭环8字轨迹: closed_loop_figure8.png")
+    print(f"  闭环圆轨迹: {mpc_solver.model.name}_circle.png")
+    print(f"  闭环8字轨迹: {mpc_solver.model.name}_figure8.png")
     print("=" * 60)
 
 
