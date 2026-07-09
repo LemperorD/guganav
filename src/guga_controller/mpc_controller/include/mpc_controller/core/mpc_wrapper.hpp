@@ -1,49 +1,64 @@
-#pragma once
+#ifndef MPC_WRAPPER_HPP_
+#define MPC_WRAPPER_HPP_
 
-#include <Eigen/Dense>
-#include <vector>
-#include <string>
-#include "mpc_controller/core/types.hpp"
-#include "mpc_controller/core/omni_kinematics.hpp"
+// acados
+#include "acados_c/ocp_nlp_interface.h"
+#include "acados_c/external_function_interface.h"
+#include "acados/utils/math.h"
+#include "acados/utils/print.h"
+
+// import omni model
+extern "C" {
+#include "acados_solver_omni.h"
+}
+
+#include <Eigen/Eigen>
+
+#define NX   OMNI_NX
+#define NU   OMNI_NU
+#define N    OMNI_N
+#define NY   OMNI_NY
+#define NYN  OMNI_NYN
+#define NBX0 OMNI_NBX0
 
 namespace mpc_controller
 {
 
-/**
- * @brief Modle A MPC 求解器 — 原生 C++ 实现。
- *
- * LTV-MPC QP 求解，使用内置 Projected Gradient Descent。
- * 零外部依赖（除 Eigen3）。
- */
-class MpcSolver
+class MpcWrapper
 {
 public:
-  MpcSolver() = default;
-  ~MpcSolver() = default;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW  // Eigen内存对齐宏，确保在STL容器中安全使用
 
-  MpcSolver(const MpcSolver &) = delete;
-  MpcSolver & operator=(const MpcSolver &) = delete;
+  explicit MpcWrapper(); // 构造函数
+  ~MpcWrapper(); // 析构函数
 
-  void configure(const MpcConfig & config);
-  void setWarmStart(const Eigen::Vector3d & u);
+  // 不允许复制
+  MpcWrapper(const MpcWrapper &) = delete;
+  MpcWrapper & operator=(const MpcWrapper &) = delete;
 
-  [[nodiscard]] Eigen::Vector3d solve(
-    const Eigen::Vector3d & x0,
-    const ReferenceTrajectory & ref_traj,
-    MpcState & mpc_state);
+  // 设置代价权重
+  bool setCosts(
+    const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> Q,
+    const Eigen::Ref<const Eigen::Matrix<double, NU, NU>> R,
+    const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> QE
+  );
+
+  // 设置边界条件
+  bool setLimits(
+    double vx_min, double vx_max, double vy_min, double vy_max,
+    double omega_min, double omega_max
+  );
+
+  static void setup_solver(
+    ocp_nlp_config *cfg, ocp_nlp_dims *dims,
+    ocp_nlp_in *in, ocp_nlp_out *out,
+    const double x_cur[3], TrajectoryType type, double t_start, double dt);
 
 private:
-  void assembleQP(
-    const Eigen::Vector3d & x0,
-    const ReferenceTrajectory & ref_traj,
-    const MpcState & mpc_state,
-    Eigen::MatrixXd & H,
-    Eigen::VectorXd & g);
+  omni_solver_capsule *capsule_;
 
-  MpcConfig config_;
-  int n_vars_{};
-  Eigen::VectorXd lb_;
-  Eigen::VectorXd ub_;
 };
 
 }  // namespace mpc_controller
+
+#endif  // MPC_WRAPPER_HPP_
