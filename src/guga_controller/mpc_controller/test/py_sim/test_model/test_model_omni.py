@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
+import scipy.linalg
 
 dir_path = os.path.dirname(__file__)
 
@@ -80,6 +81,16 @@ def test_closed_loop_mpc(
     nx = mpc_solver.nx
     nu = mpc_solver.nu
     N = mpc_solver.N
+
+    Q = np.diag([100,100,20])
+    R = np.diag([0.5,0.5,0.2])
+
+    W = scipy.linalg.block_diag(Q, R)
+
+    for i in range(N):
+        solver.cost_set(i, "W", W)
+
+    solver.cost_set(N, "W", Q)
 
     if trajectory_type == "circle":
         x_current = np.array([1.5, 0.0, 0.0])
