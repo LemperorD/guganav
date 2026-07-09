@@ -71,9 +71,7 @@ Eigen::VectorXd solveProjectedGradientQp(
 
 }  // anonymous namespace
 
-// ==========================================================================
 // MpcSolver
-// ==========================================================================
 void MpcSolver::configure(const MpcConfig & config)
 {
   config_ = config;
@@ -96,7 +94,6 @@ void MpcSolver::setWarmStart(const Eigen::Vector3d & u)
   (void)u;
 }
 
-// ==========================================================================
 void MpcSolver::assembleQP(
   const Eigen::Vector3d & x0,
   const ReferenceTrajectory & ref_traj,
@@ -175,7 +172,6 @@ void MpcSolver::assembleQP(
   for (int i = 0; i < n_vars_; ++i) { H(i, i) += 1e-6; }
 }
 
-// ==========================================================================
 Eigen::Vector3d MpcSolver::solve(
   const Eigen::Vector3d & x0,
   const ReferenceTrajectory & ref_traj,
