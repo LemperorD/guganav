@@ -45,9 +45,9 @@ const std::vector<double>& MpcWrapper::solve(){
     // initialize solution
     for (int i = 0; i < N; i++)
     {
-        ocp_nlp_out_set(cfg_, dims_, out_, in_, i, "x", x_init_.data());
-        ocp_nlp_out_set(cfg_, dims_, out_, in_, i, "u", u_init_.data());
-        ocp_nlp_cost_model_set(cfg_, dims_, in_, i, "yref", y_ref_.data());
+      ocp_nlp_out_set(cfg_, dims_, out_, in_, i, "x", x_init_.data());
+      ocp_nlp_out_set(cfg_, dims_, out_, in_, i, "u", u_init_.data());
+      ocp_nlp_cost_model_set(cfg_, dims_, in_, i, "yref", y_ref_.data());
     }
     ocp_nlp_out_set(cfg_, dims_, out_, in_, N, "x", x_init_.data());
     ocp_nlp_cost_model_set(cfg_, dims_, in_, N, "yref", y_ref_.data());
@@ -79,7 +79,6 @@ const std::vector<double>& MpcWrapper::solve(){
   return u_opt_;
 }
 
-// uses previous u_opt as u_ref
 const std::vector<double>& MpcWrapper::solve(std::vector<double>& x0, const std::vector<double>& x_des){
     set_uinit(u_opt_);
     set_xinit(x0);
@@ -124,6 +123,37 @@ void MpcWrapper::set_yref(const std::vector<double>& xref, const std::vector<dou
   for (size_t i = 0; i<NU ;++i){
     y_ref_[NX+i] = uref[i];
     u_ref_[i] = uref[i];
+  }
+}
+
+void MpcWrapper::setCosts(
+  const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> Q,
+  const Eigen::Ref<const Eigen::Matrix<double, NU, NU>> R,
+  const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> QE
+) {
+  Eigen::Matrix<double,NX+NU,NX+NU> W;
+  W.setZero();
+
+  W.block<NX,NX>(0,0)=Q;
+  W.block<NU,NU>(NX,NX)=R;
+
+  for(int stage=0;stage<N;++stage) {
+    ocp_nlp_cost_model_set(cfg_, dims_, in_, stage, "W", W.data());
+  }
+
+  ocp_nlp_cost_model_set(cfg_, dims_, in_, N, "W", QE.data());
+}
+
+void MpcWrapper::setControlLimits(
+  double vx_min, double vx_max, double vy_min, double vy_max, double omega_min, double omega_max
+) {
+  double lbu[NU] = {vx_min, vy_min, omega_min};
+  double ubu[NU] = {vx_max, vy_max, omega_max};
+
+  for(int stage=0; stage<N; ++stage)
+  {
+    ocp_nlp_constraints_model_set(cfg_, dims_, in_, out_, stage, "lbu", lbu);
+    ocp_nlp_constraints_model_set(cfg_, dims_, in_, out_, stage, "ubu", ubu);
   }
 }
 

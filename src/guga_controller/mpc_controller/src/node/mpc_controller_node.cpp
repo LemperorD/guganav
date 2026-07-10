@@ -3,7 +3,6 @@
 namespace mpc_controller
 {
 
-// configure — Lifecycle: 初始化所有组件和参数
 void MpcControllerNode::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
   std::string name,
@@ -34,7 +33,6 @@ void MpcControllerNode::configure(
     config_.path_max_length);
 
   selectTrajectoryGenerator();
-  mpc_solver_.configure(config_);
 
   RCLCPP_INFO(node->get_logger(),
     "[mpc_controller] Configured. N=%d, dt=%.3f, mode=%d",
@@ -42,7 +40,6 @@ void MpcControllerNode::configure(
     static_cast<int>(config_.trajectory_mode));
 }
 
-// activate / deactivate / cleanup
 void MpcControllerNode::activate()
 {
   if (local_plan_pub_) {
@@ -68,16 +65,13 @@ void MpcControllerNode::cleanup()
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Cleaned up");
 }
 
-// setPlan — 从 Nav2 BT 接收全局路径
 void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   global_plan_ = path;
 }
 
-// computeVelocityCommands — 每 20 Hz 调用一次
-geometry_msgs::msg::TwistStamped
-MpcControllerNode::computeVelocityCommands(
+geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & pose,
   const geometry_msgs::msg::Twist & velocity,
   nav2_core::GoalChecker * goal_checker)
@@ -134,7 +128,7 @@ MpcControllerNode::computeVelocityCommands(
     pose.pose.position.y,
     robot_yaw);
 
-  const Eigen::Vector3d u_opt = mpc_solver_.solve(x0, ref_traj, state_);
+  const Eigen::Vector3d u_opt = mpc_wrapper_.solve(x0, ref_traj, state_);
 
   // ---- 5. 应用速度限制并输出 ----
   const double speed_limit = speed_limit_percentage_
@@ -209,19 +203,6 @@ void MpcControllerNode::loadParameters()
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".romega", rclcpp::ParameterValue(0.05));
   node->get_parameter(plugin_name_ + ".romega", config_.romega);
-
-  // 平滑权重
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".rdvx", rclcpp::ParameterValue(0.5));
-  node->get_parameter(plugin_name_ + ".rdvx", config_.rdvx);
-
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".rdvy", rclcpp::ParameterValue(0.5));
-  node->get_parameter(plugin_name_ + ".rdvy", config_.rdvy);
-
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".rdomega", rclcpp::ParameterValue(0.3));
-  node->get_parameter(plugin_name_ + ".rdomega", config_.rdomega);
 
   // 控制约束
   nav2_util::declare_parameter_if_not_declared(

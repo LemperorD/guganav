@@ -55,8 +55,7 @@ public:
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
 
-  void setSpeedLimit(const double & speed_limit,
-                     const bool & percentage) override;
+  void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
 private:
   /** 
