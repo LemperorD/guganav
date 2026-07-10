@@ -99,10 +99,8 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
   }
 
   // ---- 2. 速度自适应前瞻 ----
-  const double current_speed = std::hypot(
-    velocity.linear.x, velocity.linear.y);
-  const double lookahead = path_handler_.computeLookahead(
-    std::max(current_speed, 0.1));  // 最小速度 0.1 防止除零
+  const double current_speed = std::hypot(velocity.linear.x, velocity.linear.y);
+  const double lookahead = path_handler_.computeLookahead(std::max(current_speed, 0.1));
 
   // ---- 3. 轨迹生成 ----
   if (!traj_gen_) {
@@ -128,7 +126,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
     pose.pose.position.y,
     robot_yaw);
 
-  const Eigen::Vector3d u_opt = mpc_wrapper_.solve(x0, ref_traj, state_);
+  const Eigen::Vector3d u_opt = mpc_wrapper_.solve(x0, ref_traj);
 
   // ---- 5. 应用速度限制并输出 ----
   const double speed_limit = speed_limit_percentage_
@@ -144,12 +142,6 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
   cmd_vel.twist.linear.x = u_opt(0) * scale;
   cmd_vel.twist.linear.y = u_opt(1) * scale;
   cmd_vel.twist.angular.z = u_opt(2);
-
-  // 角速度也应用速度限制（如果需要）
-  if (std::abs(cmd_vel.twist.angular.z) > config_.omega_max) {
-    cmd_vel.twist.angular.z = std::copysign(
-      config_.omega_max, cmd_vel.twist.angular.z);
-  }
 
   return cmd_vel;
 }

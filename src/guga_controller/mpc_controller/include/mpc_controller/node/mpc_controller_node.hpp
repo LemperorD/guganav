@@ -81,6 +81,8 @@ private:
   // 管道组件
   PathHandler path_handler_;
   std::unique_ptr<TrajectoryGenerator> traj_gen_;
+
+  // MPC控制器
   MpcWrapper mpc_wrapper_;
 
   // 已存储的全局规划

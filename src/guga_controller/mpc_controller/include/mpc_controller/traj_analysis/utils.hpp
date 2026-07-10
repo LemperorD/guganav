@@ -23,7 +23,9 @@ class PathHandler
 public:
   PathHandler() = default;
 
-  /** @brief 设置 TF buffer 和 costmap 引用。 */
+  /**
+   * @brief 设置 TF buffer 和 costmap 引用。
+   */
   void configure(
     std::shared_ptr<tf2_ros::Buffer> tf,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
