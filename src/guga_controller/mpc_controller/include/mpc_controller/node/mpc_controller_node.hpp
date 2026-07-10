@@ -12,6 +12,8 @@
 #include "pluginlib/class_list_macros.hpp"
 #include "nav_msgs/msg/path.hpp"
 
+#include "mpc_controller/core/mpc_wrapper.hpp"
+
 namespace mpc_controller
 {
 
@@ -23,7 +25,7 @@ namespace mpc_controller
  * 控制流水线:
  *   1. PathHandler::transformPath() — 全局路径 → 局部路径（车体系）
  *   2. TrajectoryGenerator::generate() — Nav2 Path → N 个等距 ReferencePoint
- *   3. MpcSolver::solve() — QP 求解 → 最优控制 u*
+ *   3. MpcWrapper::solve() — QP 求解 → 最优控制 u*
  *   4. 返回 TwistStamped (vx, vy, ω)
  */
 class MpcControllerNode : public nav2_core::Controller
@@ -78,11 +80,9 @@ private:
     local_plan_pub_;
 
   // 管道组件
-  MpcConfig config_;
-  MpcState state_;
   PathHandler path_handler_;
   std::unique_ptr<TrajectoryGenerator> traj_gen_;
-  MpcSolver mpc_solver_;
+  MpcWrapper mpc_wrapper_;
 
   // 已存储的全局规划
   nav_msgs::msg::Path global_plan_;

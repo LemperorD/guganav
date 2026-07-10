@@ -50,9 +50,19 @@ public:
     double omega_min, double omega_max
   );
 
-  // 设置初始条件与参考点
-  void setup_solver(const double x_cur[3], TrajectoryType type, double t_start, double dt);
+  // 设置初始状态
+  void set_xinit(const std::vector<double>& x0);
 
+  // 设置初始控制量
+  void set_uinit(const std::vector<double>& u0);
+
+  // 设置参考轨迹
+  void set_yref(const std::vector<double>& x_ref, const std::vector<double>& u_ref);
+
+  // 设置当前状态
+  void set_x0(const std::vector<double>& x0);
+
+  // 求解MPC问题
   const std::vector<double>& solve();
 
   // uses previous u_opt as u_ref
@@ -66,6 +76,8 @@ private:
   ocp_nlp_out *out_;
   ocp_nlp_solver *slv_;
 
+  int status_;
+
   // solver metrics
   int NTIMINGS_ = 1;
   double min_time_ = 1e12;
@@ -73,8 +85,8 @@ private:
   double elapsed_time_;
   int sqp_iter_;
 
-  std::vector<double> xtraj_=std::vector<double>(NX * (N_+1), 0.0);
-  std::vector<double> utraj_=std::vector<double>(NU * N_,  0.0);
+  std::vector<double> x_traj_=std::vector<double>(NX * (N+1), 0.0);
+  std::vector<double> u_traj_=std::vector<double>(NU * N,  0.0);
   std::vector<double> x_init_=std::vector<double>(NX,  0.0);
   std::vector<double> u_init_=std::vector<double>(NU,  0.0);
   std::vector<double> x_ref_=std::vector<double>(NX,  0.0);
