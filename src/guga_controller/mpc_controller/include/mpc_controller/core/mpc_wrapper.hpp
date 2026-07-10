@@ -9,17 +9,18 @@
 
 // import omni model
 extern "C" {
-#include "acados_solver_omni.h"
+  #include "acados_solver_omni.h"
 }
 
-#include <Eigen/Eigen>
-
+// import omni model dimensions
 #define NX   OMNI_NX
 #define NU   OMNI_NU
 #define N    OMNI_N
 #define NY   OMNI_NY
 #define NYN  OMNI_NYN
 #define NBX0 OMNI_NBX0
+
+#include <Eigen/Dense>
 
 namespace mpc_controller
 {
@@ -49,13 +50,18 @@ public:
     double omega_min, double omega_max
   );
 
-  static void setup_solver(
+  void setup_solver(
     ocp_nlp_config *cfg, ocp_nlp_dims *dims,
     ocp_nlp_in *in, ocp_nlp_out *out,
     const double x_cur[3], TrajectoryType type, double t_start, double dt);
 
 private:
   omni_solver_capsule *capsule_;
+  ocp_nlp_config *cfg_;
+  ocp_nlp_dims *dims_;
+  ocp_nlp_in *in_;
+  ocp_nlp_out *out_;
+  ocp_nlp_solver *slv_;
 
 };
 
