@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MPC_CONTROLLER_NODE_HPP_
+#define MPC_CONTROLLER_NODE_HPP_
 
 #include <memory>
 #include <mutex>
@@ -10,14 +11,6 @@
 #include "tf2_ros/buffer.h"
 #include "pluginlib/class_list_macros.hpp"
 #include "nav_msgs/msg/path.hpp"
-
-#include "mpc_controller/core/types.hpp"
-#include "mpc_controller/core/path_handler.hpp"
-#include "mpc_controller/core/mpc_solver.hpp"
-#include "mpc_controller/trajectory/trajectory_generator.hpp"
-#include "mpc_controller/trajectory/discrete_generator.hpp"
-#include "mpc_controller/trajectory/bspline_generator.hpp"
-#include "mpc_controller/trajectory/minco_generator.hpp"
 
 namespace mpc_controller
 {
@@ -43,8 +36,6 @@ public:
   MpcControllerNode(const MpcControllerNode &) = delete;
   MpcControllerNode & operator=(const MpcControllerNode &) = delete;
 
-  // ---- nav2_core::Controller 接口 ----
-
   void configure(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     std::string name,
@@ -66,10 +57,14 @@ public:
                      const bool & percentage) override;
 
 private:
-  /** @brief 从参数服务器加载配置。 */
+  /** 
+   * @brief 从参数服务器加载配置。
+   */
   void loadParameters();
 
-  /** @brief 根据 TrajectoryMode 切换轨迹生成器。 */
+  /** 
+   * @brief 根据 TrajectoryMode 切换轨迹生成器。
+   */
   void selectTrajectoryGenerator();
 
   // ROS2
@@ -101,3 +96,5 @@ private:
 };
 
 }  // namespace mpc_controller
+
+#endif  // MPC_CONTROLLER_NODE_HPP_

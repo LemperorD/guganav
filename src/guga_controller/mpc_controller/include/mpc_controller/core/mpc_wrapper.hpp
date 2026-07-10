@@ -38,22 +38,25 @@ public:
   MpcWrapper & operator=(const MpcWrapper &) = delete;
 
   // 设置代价权重
-  bool setCosts(
+  void setCosts(
     const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> Q,
     const Eigen::Ref<const Eigen::Matrix<double, NU, NU>> R,
     const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> QE
   );
 
-  // 设置边界条件
-  bool setLimits(
+  // 设置控制量边界条件
+  void setControlLimits(
     double vx_min, double vx_max, double vy_min, double vy_max,
     double omega_min, double omega_max
   );
 
-  void setup_solver(
-    ocp_nlp_config *cfg, ocp_nlp_dims *dims,
-    ocp_nlp_in *in, ocp_nlp_out *out,
-    const double x_cur[3], TrajectoryType type, double t_start, double dt);
+  // 设置初始条件与参考点
+  void setup_solver(const double x_cur[3], TrajectoryType type, double t_start, double dt);
+
+  const std::vector<double>& solve();
+
+  // uses previous u_opt as u_ref
+  const std::vector<double>& solve(std::vector<double>& x0, const std::vector<double>& x_des);
 
 private:
   omni_solver_capsule *capsule_;
@@ -62,6 +65,22 @@ private:
   ocp_nlp_in *in_;
   ocp_nlp_out *out_;
   ocp_nlp_solver *slv_;
+
+  // solver metrics
+  int NTIMINGS_ = 1;
+  double min_time_ = 1e12;
+  double kkt_norm_inf_;
+  double elapsed_time_;
+  int sqp_iter_;
+
+  std::vector<double> xtraj_=std::vector<double>(NX * (N_+1), 0.0);
+  std::vector<double> utraj_=std::vector<double>(NU * N_,  0.0);
+  std::vector<double> x_init_=std::vector<double>(NX,  0.0);
+  std::vector<double> u_init_=std::vector<double>(NU,  0.0);
+  std::vector<double> x_ref_=std::vector<double>(NX,  0.0);
+  std::vector<double> u_ref_=std::vector<double>(NU,  0.0);
+  std::vector<double> y_ref_=std::vector<double>(NX + NU,  0.0);
+  std::vector<double> u_opt_=std::vector<double>(NU,  0.0);
 
 };
 

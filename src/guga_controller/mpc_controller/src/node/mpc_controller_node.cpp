@@ -1,18 +1,9 @@
 #include "mpc_controller/node/mpc_controller_node.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <memory>
-#include <string>
-#include "nav2_util/node_utils.hpp"
-#include "geometry_msgs/msg/twist_stamped.hpp"
-
 namespace mpc_controller
 {
 
-// ==========================================================================
 // configure — Lifecycle: 初始化所有组件和参数
-// ==========================================================================
 void MpcControllerNode::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
   std::string name,
@@ -51,9 +42,7 @@ void MpcControllerNode::configure(
     static_cast<int>(config_.trajectory_mode));
 }
 
-// ==========================================================================
 // activate / deactivate / cleanup
-// ==========================================================================
 void MpcControllerNode::activate()
 {
   if (local_plan_pub_) {
@@ -79,18 +68,14 @@ void MpcControllerNode::cleanup()
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Cleaned up");
 }
 
-// ==========================================================================
 // setPlan — 从 Nav2 BT 接收全局路径
-// ==========================================================================
 void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   global_plan_ = path;
 }
 
-// ==========================================================================
 // computeVelocityCommands — 每 20 Hz 调用一次
-// ==========================================================================
 geometry_msgs::msg::TwistStamped
 MpcControllerNode::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & pose,
@@ -175,9 +160,7 @@ MpcControllerNode::computeVelocityCommands(
   return cmd_vel;
 }
 
-// ==========================================================================
 // setSpeedLimit
-// ==========================================================================
 void MpcControllerNode::setSpeedLimit(
   const double & speed_limit, const bool & percentage)
 {
@@ -186,9 +169,7 @@ void MpcControllerNode::setSpeedLimit(
   speed_limit_percentage_ = percentage;
 }
 
-// ==========================================================================
 // loadParameters — 从参数服务器读取配置
-// ==========================================================================
 void MpcControllerNode::loadParameters()
 {
   auto node = node_.lock();
@@ -298,9 +279,7 @@ void MpcControllerNode::loadParameters()
                       config_.transform_tolerance);
 }
 
-// ==========================================================================
 // selectTrajectoryGenerator
-// ==========================================================================
 void MpcControllerNode::selectTrajectoryGenerator()
 {
   switch (config_.trajectory_mode) {
@@ -319,10 +298,6 @@ void MpcControllerNode::selectTrajectoryGenerator()
 
 }  // namespace mpc_controller
 
-// ==========================================================================
 // Pluginlib 注册
-// ==========================================================================
 #include "pluginlib/class_list_macros.hpp"
-PLUGINLIB_EXPORT_CLASS(
-  mpc_controller::MpcControllerNode,
-  nav2_core::Controller)
+PLUGINLIB_EXPORT_CLASS(mpc_controller::MpcControllerNode, nav2_core::Controller)
