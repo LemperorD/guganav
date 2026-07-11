@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(guga_nav_bringup)
+project(guga_bringup)
 
 find_package(ament_cmake_auto REQUIRED)
 
