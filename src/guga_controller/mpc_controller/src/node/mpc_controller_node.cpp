@@ -9,30 +9,14 @@ void MpcControllerNode::configure(
   std::shared_ptr<tf2_ros::Buffer> tf,
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
-  node_ = parent;
-  plugin_name_ = std::move(name);
-  tf_ = std::move(tf);
+  parent_ = parent;
+  name_ = std::move(name);
+  tf_buffer_ = std::move(tf);
   costmap_ros_ = std::move(costmap_ros);
-
-  auto node = node_.lock();
-  if (!node) { return; }
+  auto node = parent_.lock(); if (!node) { return; }
 
   // 加载参数
   loadParameters();
-
-  // 发布器
-  local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>(
-    "local_plan", rclcpp::SystemDefaultsQoS());
-
-  // 初始化管道组件
-  path_handler_.configure(
-    tf_, costmap_ros_, config_.transform_tolerance);
-  path_handler_.setLookaheadParams(
-    config_.lookahead_min,
-    config_.lookahead_velocity_gain,
-    config_.path_max_length);
-
-  selectTrajectoryGenerator();
 
   RCLCPP_INFO(node->get_logger(),
     "[mpc_controller] Configured. N=%d, dt=%.3f, mode=%d",
@@ -58,10 +42,7 @@ void MpcControllerNode::deactivate()
 
 void MpcControllerNode::cleanup()
 {
-  local_plan_pub_.reset();
-  traj_gen_.reset();
-  costmap_ros_.reset();
-  tf_.reset();
+  local_plan_pub_.reset(); costmap_ros_.reset(); tf_buffer_.reset();
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Cleaned up");
 }
 
@@ -87,32 +68,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
 
   if (global_plan_.poses.empty()) { return cmd_vel; }
 
-  // ---- 1. 路径变换 ----
-  auto local_plan_opt = path_handler_.transformPath(pose, global_plan_);
-  if (!local_plan_opt.has_value()) { return cmd_vel; }
-
-  const auto & local_plan = *local_plan_opt;
-
-  // 发布局部路径
-  if (local_plan_pub_) {
-    local_plan_pub_->publish(local_plan);
-  }
-
-  // ---- 2. 速度自适应前瞻 ----
   const double current_speed = std::hypot(velocity.linear.x, velocity.linear.y);
   const double lookahead = path_handler_.computeLookahead(std::max(current_speed, 0.1));
 
-  // ---- 3. 轨迹生成 ----
-  if (!traj_gen_) {
-    traj_gen_ = std::make_unique<DiscreteGenerator>();
-  }
-  const ReferenceTrajectory ref_traj = traj_gen_->generate(
-    local_plan, config_.horizon_n, config_.control_dt, lookahead);
-
-  if (ref_traj.empty()) { return cmd_vel; }
-
-  // ---- 4. MPC 求解 ----
-  // 从 pose 获取机器人状态
   double robot_yaw = 0.0;
   {
     const auto & q = pose.pose.orientation;
@@ -128,34 +86,13 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
 
   const Eigen::Vector3d u_opt = mpc_wrapper_.solve(x0, ref_traj);
 
-  // ---- 5. 应用速度限制并输出 ----
-  const double speed_limit = speed_limit_percentage_
-    ? speed_limit_ * std::max(
-        std::abs(config_.vx_max),
-        std::abs(config_.vy_max))
-    : speed_limit_;
-
-  const double u_norm = std::hypot(u_opt(0), u_opt(1));
-  const double scale = (u_norm > speed_limit && u_norm > 1e-9)
-    ? speed_limit / u_norm : 1.0;
-
-  cmd_vel.twist.linear.x = u_opt(0) * scale;
-  cmd_vel.twist.linear.y = u_opt(1) * scale;
+  cmd_vel.twist.linear.x = u_opt(0);
+  cmd_vel.twist.linear.y = u_opt(1);
   cmd_vel.twist.angular.z = u_opt(2);
 
   return cmd_vel;
 }
 
-// setSpeedLimit
-void MpcControllerNode::setSpeedLimit(
-  const double & speed_limit, const bool & percentage)
-{
-  std::lock_guard<std::mutex> lock(mutex_);
-  speed_limit_ = speed_limit;
-  speed_limit_percentage_ = percentage;
-}
-
-// loadParameters — 从参数服务器读取配置
 void MpcControllerNode::loadParameters()
 {
   auto node = node_.lock();
@@ -250,23 +187,6 @@ void MpcControllerNode::loadParameters()
     rclcpp::ParameterValue(0.5));
   node->get_parameter(plugin_name_ + ".transform_tolerance",
                       config_.transform_tolerance);
-}
-
-// selectTrajectoryGenerator
-void MpcControllerNode::selectTrajectoryGenerator()
-{
-  switch (config_.trajectory_mode) {
-    case TrajectoryMode::B_SPLINE:
-      traj_gen_ = std::make_unique<BSplineGenerator>();
-      break;
-    case TrajectoryMode::MINCO:
-      traj_gen_ = std::make_unique<MincoGenerator>();
-      break;
-    case TrajectoryMode::DISCRETE:
-    default:
-      traj_gen_ = std::make_unique<DiscreteGenerator>();
-      break;
-  }
 }
 
 }  // namespace mpc_controller

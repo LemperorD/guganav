@@ -17,17 +17,6 @@
 namespace mpc_controller
 {
 
-/**
- * @brief MPC 全向移动机器人路径跟踪控制器 — Nav2 插件。
- *
- * 实现 nav2_core::Controller 接口，在 controller_server 中以 20 Hz 运行。
- *
- * 控制流水线:
- *   1. PathHandler::transformPath() — 全局路径 → 局部路径（车体系）
- *   2. TrajectoryGenerator::generate() — Nav2 Path → N 个等距 ReferencePoint
- *   3. MpcWrapper::solve() — QP 求解 → 最优控制 u*
- *   4. 返回 TwistStamped (vx, vy, ω)
- */
 class MpcControllerNode : public nav2_core::Controller
 {
 public:
@@ -55,32 +44,17 @@ public:
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
 
-  void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
-
 private:
   /** 
    * @brief 从参数服务器加载配置。
    */
   void loadParameters();
 
-  /** 
-   * @brief 根据 TrajectoryMode 切换轨迹生成器。
-   */
-  void selectTrajectoryGenerator();
-
   // ROS2
-  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
-  std::shared_ptr<tf2_ros::Buffer> tf_;
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-  std::string plugin_name_;
-
-  // 发布器
-  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
-    local_plan_pub_;
-
-  // 管道组件
-  PathHandler path_handler_;
-  std::unique_ptr<TrajectoryGenerator> traj_gen_;
+  std::string name_;
 
   // MPC控制器
   MpcWrapper mpc_wrapper_;
