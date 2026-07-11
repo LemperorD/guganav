@@ -98,7 +98,7 @@ void MpcControllerNode::loadParameters()
   auto node = node_.lock();
   if (!node) { return; }
 
-  // 时域
+  // 预测时域与控制时域
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".horizon_n", rclcpp::ParameterValue(15));
   node->get_parameter(plugin_name_ + ".horizon_n", config_.horizon_n);
@@ -157,36 +157,6 @@ void MpcControllerNode::loadParameters()
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".omega_max", rclcpp::ParameterValue(6.0));
   node->get_parameter(plugin_name_ + ".omega_max", config_.omega_max);
-
-  // 轨迹生成
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".trajectory_mode", rclcpp::ParameterValue(0));
-  int mode = 0;
-  node->get_parameter(plugin_name_ + ".trajectory_mode", mode);
-  config_.trajectory_mode = static_cast<TrajectoryMode>(
-    std::clamp(mode, 0, 2));
-
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".lookahead_min", rclcpp::ParameterValue(0.2));
-  node->get_parameter(plugin_name_ + ".lookahead_min",
-                      config_.lookahead_min);
-
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".lookahead_velocity_gain",
-    rclcpp::ParameterValue(1.0));
-  node->get_parameter(plugin_name_ + ".lookahead_velocity_gain",
-                      config_.lookahead_velocity_gain);
-
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".path_max_length", rclcpp::ParameterValue(5.0));
-  node->get_parameter(plugin_name_ + ".path_max_length",
-                      config_.path_max_length);
-
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".transform_tolerance",
-    rclcpp::ParameterValue(0.5));
-  node->get_parameter(plugin_name_ + ".transform_tolerance",
-                      config_.transform_tolerance);
 }
 
 }  // namespace mpc_controller

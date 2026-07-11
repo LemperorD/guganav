@@ -59,6 +59,9 @@ private:
   // MPC控制器
   MpcWrapper mpc_wrapper_;
 
+  // Nav2路径处理器
+  NavWrapper nav_wrapper_;
+
   // 已存储的全局规划
   nav_msgs::msg::Path global_plan_;
 
