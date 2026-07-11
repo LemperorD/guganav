@@ -17,7 +17,7 @@ namespace mpc_controller {
 class NavWrapper
 {
 public:
-  NavWrapper(
+  explicit NavWrapper(
     std::shared_ptr<tf2_ros::Buffer> tf_buffer,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
     rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub,

@@ -13,6 +13,7 @@
 #include "nav_msgs/msg/path.hpp"
 
 #include "mpc_controller/core/mpc_wrapper.hpp"
+#include "mpc_controller/core/nav_wrapper.hpp"
 
 namespace mpc_controller
 {
@@ -55,12 +56,13 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   std::string name_;
+  std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> local_plan_pub_;
 
   // MPC控制器
   MpcWrapper mpc_wrapper_;
 
   // Nav2路径处理器
-  NavWrapper nav_wrapper_;
+  std::shared_ptr<NavWrapper> nav_wrapper_;
 
   // 已存储的全局规划
   nav_msgs::msg::Path global_plan_;
