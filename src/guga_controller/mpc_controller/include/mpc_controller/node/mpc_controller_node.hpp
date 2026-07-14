@@ -15,6 +15,20 @@
 #include "mpc_controller/core/mpc_wrapper.hpp"
 #include "mpc_controller/core/nav_wrapper.hpp"
 
+inline const std::vector<double>& convertPoint2Vector(const geometry_msgs::msg::PoseStamped& pose)
+{
+  std::vector<double> point(3, 0.0);
+  point[0] = pose.pose.position.x;
+  point[1] = pose.pose.position.y;
+
+  const auto & q = pose.pose.orientation;
+  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
+  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+  point[2] = std::atan2(siny, cosy);
+
+  return point;
+}
+
 namespace mpc_controller
 {
 
@@ -45,7 +59,18 @@ public:
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
 
+  
+
 private:
+  /**
+   * @brief 获取前瞻点。
+   * @param lookahead_dist 前瞻距离。
+   * @param transformed_plan 已转换的全局路径。
+   * @return 前瞻点向量 (x, y, theta)。
+   */
+  const std::vector<double>& getLookAheadPoint(
+    const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const;
+
   /** 
    * @brief 从参数服务器加载配置。
    */

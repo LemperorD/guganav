@@ -8,10 +8,10 @@ void MpcControllerNode::configure(
   std::string name,
   std::shared_ptr<tf2_ros::Buffer> tf,
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros):
-  parent_(parent),
-  name_(std::move(name)),
-  tf_buffer_(std::move(tf)),
-  costmap_ros_(std::move(costmap_ros))
+    parent_(parent),
+    name_(std::move(name)),
+    tf_buffer_(std::move(tf)),
+    costmap_ros_(std::move(costmap_ros))
 {
   auto node = parent_.lock(); if (!node) { return; }
   local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
@@ -80,7 +80,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   mpc_wrapper_->set_xinit({x0(0), x0(1), x0(2)});
   mpc_wrapper_->set_uinit({velocity.linear.x, velocity.linear.y, velocity.angular.z});
 
-  ref_point = getLookAheadPoint(lookahead_distance, global_plan_);
+  const std::vector<double>& ref_point = getLookAheadPoint(lookahead_distance, global_plan_);
   const Eigen::Vector3d u_opt = mpc_wrapper_->solve(x0, ref_point);
 
   cmd_vel.twist.linear.x = u_opt(0);
@@ -104,7 +104,7 @@ const std::vector<double>& MpcControllerNode::getLookAheadPoint(const double& lo
     goal_pose_it = std::prev(transformed_plan.poses.end());
     lookahead_point = convertPoint2Vector(goal_pose_it);
   }
-  else if (nav_wrapper_ -> use_interpolation && goal_pose_it != transformed_plan.poses.begin())
+  else if (nav_wrapper_->use_interpolation() && goal_pose_it != transformed_plan.poses.begin())
   {
     auto prev_pose_it = std::prev(goal_pose_it);
     auto point = geometry_utils::circleSegmentIntersection(
@@ -117,21 +117,7 @@ const std::vector<double>& MpcControllerNode::getLookAheadPoint(const double& lo
     lookahead_point = convertPoint2Vector(pose);
   }
 
-  return *lookahead_point;
-}
-
-inline const std::vector<double>& convertPoint2Vector(const geometry_msgs::msg::PoseStamped& pose)
-{
-  std::vector<double> point(3, 0.0);
-  point[0] = pose.pose.position.x;
-  point[1] = pose.pose.position.y;
-
-  const auto & q = pose.pose.orientation;
-  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
-  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  point[2] = std::atan2(siny, cosy);
-
-  return point;
+  return lookahead_point;
 }
 
 void MpcControllerNode::loadParameters()
@@ -141,7 +127,7 @@ void MpcControllerNode::loadParameters()
   // --- MPC参数部分 ---
   // 预测时域与控制时域
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".horizon_n", rclcpp::ParameterValue(15));
-  node->get_parameter(plugin_name_ + ".horizon_n_", config_.horizon_n);
+  node->get_parameter(plugin_name_ + ".horizon_n", config_.horizon_n);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".control_dt", rclcpp::ParameterValue(0.05));
   node->get_parameter(plugin_name_ + ".control_dt", mpc_config_.control_dt);
@@ -207,17 +193,17 @@ void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
   Eigen::Matrix3d QE = Eigen::Matrix3d::Zero();
   Eigen::Matrix3d R = Eigen::Matrix3d::Zero();
   Q <<
-      config.cost_weights.qx,0,0,
-      0,config.cost_weights.qy,0,
-      0,0,config.cost_weights.qtheta;
+    config.cost_weights.qx,0,0,
+    0,config.cost_weights.qy,0,
+    0,0,config.cost_weights.qtheta;
   QE <<
-      config.cost_weights.qx_e,0,0,
-      0,config.cost_weights.qy_e,0,
-      0,0,config.cost_weights.qtheta_e;
+    config.cost_weights.qx_e,0,0,
+    0,config.cost_weights.qy_e,0,
+    0,0,config.cost_weights.qtheta_e;
   R <<
-      config.cost_weights.rvx,0,0,
-      0,config.cost_weights.rvy,0,
-      0,0,config.cost_weights.romega;
+    config.cost_weights.rvx,0,0,
+    0,config.cost_weights.rvy,0,
+    0,0,config.cost_weights.romega;
   mpc_wrapper_->setCosts(Q, R, QE);
 
   // 设置MPC求解器的控制输入约束

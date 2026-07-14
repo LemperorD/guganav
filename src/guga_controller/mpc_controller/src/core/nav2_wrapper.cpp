@@ -7,13 +7,13 @@ NavWrapper::NavWrapper(
   std::shared_ptr<tf2_ros::Buffer> tf_buffer,
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr pub,
-  double transform_tolerance)
-  : tf_buffer_(std::move(tf_buffer)),
+  double transform_tolerance):
+    tf_buffer_(std::move(tf_buffer)),
     costmap_ros_(std::move(costmap_ros)),
     local_path_pub_(std::move(pub)),
-    transform_tolerance_(tf2::durationFromSec(transform_tolerance)),
-    max_robot_pose_search_dist_(getCostmapMaxExtent())
+    transform_tolerance_(tf2::durationFromSec(transform_tolerance))
 {
+  max_robot_pose_search_dist_ = getCostmapMaxExtent();
   std::printf("NavWrapper initialized\n");
 }
 
@@ -101,6 +101,188 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
   }
 
   return transformed_plan;
+}
+
+geometry_msgs::msg::Point NavWrapper::circleSegmentIntersection(
+  const geometry_msgs::msg::Point & p1, const geometry_msgs::msg::Point & p2, double r)
+{
+  // Formula for intersection of a line with a circle centered at the origin,
+  // modified to always return the point that is on the segment between the two points.
+  // https://mathworld.wolfram.com/Circle-LineIntersection.html
+  // This works because the poses are transformed into the robot frame.
+  // This can be derived from solving the system of equations of a line and a circle
+  // which results in something that is just a reformulation of the quadratic formula.
+  // Interactive illustration in doc/circle-segment-intersection.ipynb as well as at
+  // https://www.desmos.com/calculator/td5cwbuocd
+  double x1 = p1.x;
+  double x2 = p2.x;
+  double y1 = p1.y;
+  double y2 = p2.y;
+
+  double dx = x2 - x1;
+  double dy = y2 - y1;
+  double dr2 = dx * dx + dy * dy;
+  double d = x1 * y2 - x2 * y1;
+
+  // Augmentation to only return point within segment
+  double d1 = x1 * x1 + y1 * y1;
+  double d2 = x2 * x2 + y2 * y2;
+  double dd = d2 - d1;
+
+  geometry_msgs::msg::Point p;
+  double sqrt_term = std::sqrt(r * r * dr2 - d * d);
+  p.x = (d * dy + std::copysign(1.0, dd) * dx * sqrt_term) / dr2;
+  p.y = (-d * dx + std::copysign(1.0, dd) * dy * sqrt_term) / dr2;
+  return p;
+}
+
+double NavWrapper::calculateCurvature(
+  const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose,
+  double forward_dist, double backward_dist) const
+{
+  geometry_msgs::msg::PoseStamped backward_pose, forward_pose;
+  std::vector<double> cumulative_distances = calculateCumulativeDistances(path);
+
+  double lookahead_pose_cumulative_distance = 0.0;
+  geometry_msgs::msg::PoseStamped robot_base_frame_pose;
+  robot_base_frame_pose.pose = geometry_msgs::msg::Pose();
+  lookahead_pose_cumulative_distance =
+    nav2_util::geometry_utils::euclidean_distance(robot_base_frame_pose, lookahead_pose);
+
+  backward_pose = findPoseAtDistance(
+    path, cumulative_distances, lookahead_pose_cumulative_distance - backward_dist);
+
+  forward_pose = findPoseAtDistance(
+    path, cumulative_distances, lookahead_pose_cumulative_distance + forward_dist);
+
+  double curvature_radius = calculateCurvatureRadius(
+    backward_pose.pose.position, lookahead_pose.pose.position, forward_pose.pose.position);
+  double curvature = 1.0 / curvature_radius;
+  visualizeCurvaturePoints(backward_pose, forward_pose);
+  return curvature;
+}
+
+std::vector<double> NavWrapper::calculateCumulativeDistances(
+    const nav_msgs::msg::Path& path) {
+  std::vector<double> cumulative_distances;
+  cumulative_distances.push_back(0.0);
+
+  for (size_t i = 1; i < path.poses.size(); ++i) {
+    const auto& prev_pose = path.poses[i - 1].pose.position;
+    const auto& curr_pose = path.poses[i].pose.position;
+    double distance = std::hypot(curr_pose.x - prev_pose.x, curr_pose.y - prev_pose.y);
+    cumulative_distances.push_back(cumulative_distances.back() + distance);
+  }
+  return cumulative_distances;
+}
+
+double NavWrapper::calculateCurvatureRadius(
+  const geometry_msgs::msg::Point & near_point, const geometry_msgs::msg::Point & current_point,
+  const geometry_msgs::msg::Point & far_point) const
+{
+  double x1 = near_point.x, y1 = near_point.y;
+  double x2 = current_point.x, y2 = current_point.y;
+  double x3 = far_point.x, y3 = far_point.y;
+
+  double center_x = ((x1 * x1 + y1 * y1) * (y2 - y3) + (x2 * x2 + y2 * y2) * (y3 - y1) +
+                     (x3 * x3 + y3 * y3) * (y1 - y2)) /
+                    (2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)));
+  double center_y = ((x1 * x1 + y1 * y1) * (x3 - x2) + (x2 * x2 + y2 * y2) * (x1 - x3) +
+                     (x3 * x3 + y3 * y3) * (x2 - x1)) /
+                    (2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)));
+  double radius = std::hypot(x2 - center_x, y2 - center_y);
+  if (std::isnan(radius) || std::isinf(radius) || radius < 1e-9) {
+    return 1e9;
+  }
+  return radius;
+}
+
+void NavWrapper::visualizeCurvaturePoints(
+  const geometry_msgs::msg::PoseStamped & backward_pose,
+  const geometry_msgs::msg::PoseStamped & forward_pose) const
+{
+  visualization_msgs::msg::MarkerArray marker_array;
+
+  visualization_msgs::msg::Marker near_marker;
+  near_marker.header = backward_pose.header;
+  near_marker.ns = "curvature_points";
+  near_marker.id = 0;
+  near_marker.type = visualization_msgs::msg::Marker::SPHERE;
+  near_marker.action = visualization_msgs::msg::Marker::ADD;
+  near_marker.pose = backward_pose.pose;
+  near_marker.scale.x = near_marker.scale.y = near_marker.scale.z = 0.1;
+  near_marker.color.g = 1.0;
+  near_marker.color.a = 1.0;
+
+  visualization_msgs::msg::Marker far_marker;
+  far_marker.header = forward_pose.header;
+  far_marker.ns = "curvature_points";
+  far_marker.id = 1;
+  far_marker.type = visualization_msgs::msg::Marker::SPHERE;
+  far_marker.action = visualization_msgs::msg::Marker::ADD;
+  far_marker.pose = forward_pose.pose;
+  far_marker.scale.x = far_marker.scale.y = far_marker.scale.z = 0.1;
+  far_marker.color.r = 1.0;
+  far_marker.color.a = 1.0;
+
+  marker_array.markers.push_back(near_marker);
+  marker_array.markers.push_back(far_marker);
+
+  curvature_points_pub_->publish(marker_array);
+}
+
+std::vector<double> NavWrapper::calculateCumulativeDistances(
+  const nav_msgs::msg::Path & path) const
+{
+  std::vector<double> cumulative_distances;
+  cumulative_distances.push_back(0.0);
+
+  for (size_t i = 1; i < path.poses.size(); ++i) {
+    const auto & prev_pose = path.poses[i - 1].pose.position;
+    const auto & curr_pose = path.poses[i].pose.position;
+    double distance = hypot(curr_pose.x - prev_pose.x, curr_pose.y - prev_pose.y);
+    cumulative_distances.push_back(cumulative_distances.back() + distance);
+  }
+  return cumulative_distances;
+}
+
+geometry_msgs::msg::PoseStamped NavWrapper::findPoseAtDistance(
+  const nav_msgs::msg::Path & path, const std::vector<double> & cumulative_distances,
+  double target_distance) const
+{
+  if (path.poses.empty() || cumulative_distances.empty()) {
+    return geometry_msgs::msg::PoseStamped();
+  }
+  if (target_distance <= 0.0) {
+    return path.poses.front();
+  }
+  if (target_distance >= cumulative_distances.back()) {
+    return path.poses.back();
+  }
+  auto it =
+    std::lower_bound(cumulative_distances.begin(), cumulative_distances.end(), target_distance);
+  size_t index = std::distance(cumulative_distances.begin(), it);
+
+  if (index == 0) {
+    return path.poses.front();
+  }
+
+  double ratio = (target_distance - cumulative_distances[index - 1]) /
+                 (cumulative_distances[index] - cumulative_distances[index - 1]);
+  geometry_msgs::msg::PoseStamped pose1 = path.poses[index - 1];
+  geometry_msgs::msg::PoseStamped pose2 = path.poses[index];
+
+  geometry_msgs::msg::PoseStamped interpolated_pose;
+  interpolated_pose.header = pose2.header;
+  interpolated_pose.pose.position.x =
+    pose1.pose.position.x + ratio * (pose2.pose.position.x - pose1.pose.position.x);
+  interpolated_pose.pose.position.y =
+    pose1.pose.position.y + ratio * (pose2.pose.position.y - pose1.pose.position.y);
+  interpolated_pose.pose.position.z =
+    pose1.pose.position.z + ratio * (pose2.pose.position.z - pose1.pose.position.z);
+  interpolated_pose.pose.orientation = pose2.pose.orientation;
+
+  return interpolated_pose;
 }
 
 }  // namespace mpc_controller

@@ -38,16 +38,43 @@ public:
     const std::string& frame,
     const geometry_msgs::msg::PoseStamped& in_pose) const;
 
+  void setUseInterpolation(bool use_interpolation) { use_interpolation_ = use_interpolation; }
+
+  bool use_interpolation() const { return use_interpolation_; }
+
+  geometry_msgs::msg::Point circleSegmentIntersection(
+      const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2,
+      double r);
+
+  double calculateCurvatureRadius(
+      const geometry_msgs::msg::Point& near_point,
+      const geometry_msgs::msg::Point& current_point,
+      const geometry_msgs::msg::Point& far_point);
+
+  std::vector<double> calculateCumulativeDistances(
+      const nav_msgs::msg::Path& path);
+
+  geometry_msgs::msg::PoseStamped findPoseAtDistance(
+      const nav_msgs::msg::Path& path,
+      const std::vector<double>& cumulative_distances, double target_distance);
+
 private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   tf2::Duration transform_tolerance_;
-  rclcpp::Logger logger_{rclcpp::get_logger("MpcControllerNode")};
-  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
-      local_path_pub_;
+  rclcpp::Logger logger_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr local_path_pub_;
   double max_robot_pose_search_dist_;
+
+  bool use_interpolation_;
+  double curvature_min_;
+  double curvature_max_;
+  double reduction_ratio_at_high_curvature_;
+  double curvature_forward_dist_;
+  double curvature_backward_dist_;
+  double max_velocity_scaling_factor_rate_;          
 };
 
-}  // namespace mpc_controller
+} // namespace mpc_controller
 
-#endif  // NAV2_WRAPPER_HPP_
+#endif // NAV2_WRAPPER_HPP_
