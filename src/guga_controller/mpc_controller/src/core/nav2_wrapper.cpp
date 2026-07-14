@@ -206,9 +206,7 @@ std::vector<double> NavWrapper::calculateCumulativeDistances(
   return cumulative_distances;
 }
 
-double NavWrapper::calculateCurvatureRadius(
-  const geometry_msgs::msg::Point & near_point, const geometry_msgs::msg::Point & current_point,
-  const geometry_msgs::msg::Point & far_point) const
+double NavWrapper::calculateCurvatureRadius(const geometry_msgs::msg::Point & near_point, const geometry_msgs::msg::Point & current_point, const geometry_msgs::msg::Point & far_point) const
 {
   double x1 = near_point.x, y1 = near_point.y;
   double x2 = current_point.x, y2 = current_point.y;
@@ -227,9 +225,7 @@ double NavWrapper::calculateCurvatureRadius(
   return radius;
 }
 
-void NavWrapper::visualizeCurvaturePoints(
-  const geometry_msgs::msg::PoseStamped & backward_pose,
-  const geometry_msgs::msg::PoseStamped & forward_pose) const
+void NavWrapper::visualizeCurvaturePoints(const geometry_msgs::msg::PoseStamped & backward_pose, const geometry_msgs::msg::PoseStamped & forward_pose) const
 {
   visualization_msgs::msg::MarkerArray marker_array;
 
@@ -261,8 +257,7 @@ void NavWrapper::visualizeCurvaturePoints(
   curvature_points_pub_->publish(marker_array);
 }
 
-std::vector<double> NavWrapper::calculateCumulativeDistances(
-  const nav_msgs::msg::Path & path) const
+std::vector<double> NavWrapper::calculateCumulativeDistances(const nav_msgs::msg::Path & path) const
 {
   std::vector<double> cumulative_distances;
   cumulative_distances.push_back(0.0);
@@ -276,9 +271,7 @@ std::vector<double> NavWrapper::calculateCumulativeDistances(
   return cumulative_distances;
 }
 
-geometry_msgs::msg::PoseStamped NavWrapper::findPoseAtDistance(
-  const nav_msgs::msg::Path & path, const std::vector<double> & cumulative_distances,
-  double target_distance) const
+geometry_msgs::msg::PoseStamped NavWrapper::findPoseAtDistance(const nav_msgs::msg::Path & path, const std::vector<double> & cumulative_distances, double target_distance) const
 {
   if (path.poses.empty() || cumulative_distances.empty()) {
     return geometry_msgs::msg::PoseStamped();

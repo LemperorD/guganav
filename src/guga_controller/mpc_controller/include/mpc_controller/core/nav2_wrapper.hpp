@@ -43,25 +43,27 @@ public:
     const std::string& frame,
     const geometry_msgs::msg::PoseStamped& in_pose) const;
 
-  void setUseInterpolation(bool use_interpolation) { use_interpolation_ = use_interpolation; }
-
-  bool use_interpolation() const { return use_interpolation_; }
-
   geometry_msgs::msg::Point circleSegmentIntersection(
-      const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2,
-      double r);
+    const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2,
+    double r);
 
   double calculateCurvatureRadius(
-      const geometry_msgs::msg::Point& near_point,
-      const geometry_msgs::msg::Point& current_point,
-      const geometry_msgs::msg::Point& far_point);
+    const geometry_msgs::msg::Point& near_point,
+    const geometry_msgs::msg::Point& current_point,
+    const geometry_msgs::msg::Point& far_point);
 
-  std::vector<double> calculateCumulativeDistances(
-      const nav_msgs::msg::Path& path);
+  std::vector<double> calculateCumulativeDistances(const nav_msgs::msg::Path& path);
 
   geometry_msgs::msg::PoseStamped findPoseAtDistance(
-      const nav_msgs::msg::Path& path,
-      const std::vector<double>& cumulative_distances, double target_distance);
+    const nav_msgs::msg::Path& path, const std::vector<double>& cumulative_distances,
+    double target_distance);
+
+public: // setters and getters for configuration
+  void setUseInterpolation(bool use_interpolation) { use_interpolation_ = use_interpolation; }
+  bool use_interpolation() const { return use_interpolation_; }
+
+  void setUseCurvatureScaling(bool use_curvature_scaling) { use_curvature_scaling_ = use_curvature_scaling; }
+  bool use_curvature_scaling() const { return use_curvature_scaling_; }
 
 private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
