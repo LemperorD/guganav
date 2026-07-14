@@ -87,6 +87,10 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   cmd_vel.twist.linear.y = u_opt(1);
   cmd_vel.twist.angular.z = u_opt(2);
 
+  if (nav_wrapper_->use_curvature_limitation()) {
+    nav_wrapper_->applyCurvatureLimitation(global_plan_, pose, cmd_vel.twist.linear.x);
+  }
+
   return cmd_vel;
 }
 

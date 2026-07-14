@@ -59,8 +59,6 @@ public:
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
 
-  
-
 private:
   /**
    * @brief 获取前瞻点。
