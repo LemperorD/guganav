@@ -14,6 +14,13 @@
 
 namespace mpc_controller {
 
+struct NavWrapperConfig
+{
+  bool use_interpolation;
+
+} typedef NavConfig;
+
+
 class NavWrapper
 {
 public:

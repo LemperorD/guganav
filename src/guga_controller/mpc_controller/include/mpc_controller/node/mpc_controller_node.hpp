@@ -51,6 +51,18 @@ private:
    */
   void loadParameters();
 
+  /**
+   * @brief 配置MpcWrapper。
+   * @param config MpcWrapper配置结构体。
+   */
+  void ConfigMpcWrapper(MpcConfig & config);
+
+  /**
+   * @brief 配置NavWrapper。
+   * @param config NavWrapper配置结构体。
+   */
+  void ConfigNavWrapper(NavConfig & config);
+
   // ROS2
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -59,12 +71,12 @@ private:
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> local_plan_pub_;
 
   // MPC控制器
-  MpcWrapper mpc_wrapper_;
+  std::shared_ptr<MpcWrapper> mpc_wrapper_;
 
   // Nav2路径处理器
   std::shared_ptr<NavWrapper> nav_wrapper_;
 
-  // 已存储的全局规划
+  // 已存储的全局规划路径
   nav_msgs::msg::Path global_plan_;
 
   // 速度限制
@@ -73,6 +85,10 @@ private:
 
   // 线程安全
   std::mutex mutex_;
+
+  // 配置参数
+  MpcConfig mpc_config_;
+  NavConfig nav_config_;
 };
 
 }  // namespace mpc_controller

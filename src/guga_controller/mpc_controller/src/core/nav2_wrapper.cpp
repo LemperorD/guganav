@@ -20,22 +20,19 @@ NavWrapper::NavWrapper(
 double NavWrapper::getCostmapMaxExtent() const
 {
   const double max_costmap_dim_meters = std::max(
-      costmap_ros_->getCostmap()->getSizeInMetersX(),
-      costmap_ros_->getCostmap()->getSizeInMetersY());
+    costmap_ros_->getCostmap()->getSizeInMetersX(), costmap_ros_->getCostmap()->getSizeInMetersY());
   return max_costmap_dim_meters / 2.0;
 }
 
 std::optional<geometry_msgs::msg::PoseStamped> NavWrapper::transformPose(
-    const std::string& frame,
-    const geometry_msgs::msg::PoseStamped& in_pose) const
+  const std::string& frame, const geometry_msgs::msg::PoseStamped& in_pose) const
 {
   if (in_pose.header.frame_id == frame) {
     return in_pose;
   }
-
   try {
     geometry_msgs::msg::PoseStamped out_pose;
-    tf_->transform(in_pose, out_pose, frame, transform_tolerance_);
+    tf_buffer_->transform(in_pose, out_pose, frame, transform_tolerance_);
     return out_pose;
   } catch (tf2::TransformException& ex) {
     RCLCPP_ERROR(logger_, "Exception in transformPose: %s", ex.what());
@@ -44,8 +41,7 @@ std::optional<geometry_msgs::msg::PoseStamped> NavWrapper::transformPose(
 }
 
 nav_msgs::msg::Path NavWrapper::transformGlobalPlan(
-  const geometry_msgs::msg::PoseStamped& pose,
-  nav_msgs::msg::Path& global_plan)
+  const geometry_msgs::msg::PoseStamped& pose, nav_msgs::msg::Path& global_plan)
 {
   if (global_plan.poses.empty()) {
     throw nav2_core::PlannerException("Received plan with zero length");

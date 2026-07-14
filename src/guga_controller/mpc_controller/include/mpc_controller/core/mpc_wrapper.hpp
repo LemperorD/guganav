@@ -22,8 +22,20 @@ extern "C" {
 
 #include <Eigen/Dense>
 
-namespace mpc_controller
+namespace mpc_controller {
+
+/**
+ * @brief MPC 控制器配置结构体。
+ */
+struct MpcWrapperConfig
 {
+  int horizon_n;
+  double control_dt;
+  double vx_min, vx_max;
+  double vy_min, vy_max;
+  double omega_min, omega_max;
+} typedef MpcConfig;
+
 /**
  * @brief MPC 求解器封装类。
  */

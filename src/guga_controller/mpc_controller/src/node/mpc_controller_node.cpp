@@ -16,16 +16,14 @@ void MpcControllerNode::configure(
   auto node = parent_.lock(); if (!node) { return; }
   local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
 
-  // 初始化NavWrapper
+  // 初始化wrapper
+  mpc_wrapper_ = std::make_shared<MpcWrapper>();
   nav_wrapper_ = std::make_shared<NavWrapper>(tf_buffer_, costmap_ros_, local_plan_pub_, 0.1);
 
-  // 加载参数
-  loadParameters();
+  // 加载参数并配置wrapper
+  loadParameters(); ConfigMpcWrapper(mpc_config_); ConfigNavWrapper(nav_config_);
 
-  RCLCPP_INFO(node->get_logger(),
-    "[mpc_controller] Configured. N=%d, dt=%.3f, mode=%d",
-    config_.horizon_n, config_.control_dt,
-    static_cast<int>(config_.trajectory_mode));
+  RCLCPP_INFO(node->get_logger(), "Configured.");
 }
 
 void MpcControllerNode::activate()
@@ -83,14 +81,10 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
     robot_yaw = std::atan2(siny, cosy);
   }
 
-  const Eigen::Vector3d x0(
-    pose.pose.position.x,
-    pose.pose.position.y,
-    robot_yaw);
+  const Eigen::Vector3d x0(pose.pose.position.x, pose.pose.position.y, robot_yaw);
 
   mpc_wrapper_.setControlLimits(
-    config_.vx_min, config_.vx_max,
-    config_.vy_min, config_.vy_max,
+    config_.vx_min, config_.vx_max, config_.vy_min, config_.vy_max,
     config_.omega_min, config_.omega_max);
 
   mpc_wrapper_.set_x0({x0(0), x0(1), x0(2)});
@@ -104,6 +98,34 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
   cmd_vel.twist.angular.z = u_opt(2);
 
   return cmd_vel;
+}
+
+const std::vector<double>& MpcControllerNode::getLookAheadPoint(
+  const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const
+{
+  auto goal_pose_it = std::find_if(
+      transformed_plan.poses.begin(), transformed_plan.poses.end(),
+      [&](const auto& ps) {
+        return std::hypot(ps.pose.position.x, ps.pose.position.y)
+                >= lookahead_dist;
+      });
+
+  if (goal_pose_it == transformed_plan.poses.end()) {
+    goal_pose_it = std::prev(transformed_plan.poses.end());
+  } else if (config_.use_interpolation
+              && goal_pose_it != transformed_plan.poses.begin()) {
+    auto prev_pose_it = std::prev(goal_pose_it);
+    auto point = geometry_utils::circleSegmentIntersection(
+        prev_pose_it->pose.position, goal_pose_it->pose.position,
+        lookahead_dist);
+    geometry_msgs::msg::PoseStamped pose;
+    pose.header.frame_id = prev_pose_it->header.frame_id;
+    pose.header.stamp = goal_pose_it->header.stamp;
+    pose.pose.position = point;
+    return pose;
+  }
+
+  return *goal_pose_it;
 }
 
 void MpcControllerNode::loadParameters()
@@ -172,35 +194,19 @@ void MpcControllerNode::loadParameters()
   node->get_parameter(plugin_name_ + ".omega_max", config_.omega_max);
 }
 
-const std::vector<double>& MpcControllerNode::getLookAheadPoint(
-  const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const
+void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
 {
-  auto goal_pose_it = std::find_if(
-      transformed_plan.poses.begin(), transformed_plan.poses.end(),
-      [&](const auto& ps) {
-        return std::hypot(ps.pose.position.x, ps.pose.position.y)
-                >= lookahead_dist;
-      });
-
-  if (goal_pose_it == transformed_plan.poses.end()) {
-    goal_pose_it = std::prev(transformed_plan.poses.end());
-  } else if (config_.use_interpolation
-              && goal_pose_it != transformed_plan.poses.begin()) {
-    auto prev_pose_it = std::prev(goal_pose_it);
-    auto point = geometry_utils::circleSegmentIntersection(
-        prev_pose_it->pose.position, goal_pose_it->pose.position,
-        lookahead_dist);
-    geometry_msgs::msg::PoseStamped pose;
-    pose.header.frame_id = prev_pose_it->header.frame_id;
-    pose.header.stamp = goal_pose_it->header.stamp;
-    pose.pose.position = point;
-    return pose;
-  }
-
-  return *goal_pose_it;
+  mpc_wrapper_->setControlLimits(
+    config.vx_min, config.vx_max, config.vy_min, config.vy_max,
+    config.omega_min, config.omega_max);
 }
 
-}  // namespace mpc_controller
+void MpcControllerNode::ConfigNavWrapper(NavConfig & config)
+{
+  nav_wrapper_->setUseInterpolation(config.use_interpolation);
+}
+
+} // namespace mpc_controller
 
 // Pluginlib 注册
 #include "pluginlib/class_list_macros.hpp"
