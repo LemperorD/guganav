@@ -79,10 +79,6 @@ private:
   // 已存储的全局规划路径
   nav_msgs::msg::Path global_plan_;
 
-  // 速度限制
-  double speed_limit_{3.0};
-  bool speed_limit_percentage_{false};
-
   // 线程安全
   std::mutex mutex_;
 

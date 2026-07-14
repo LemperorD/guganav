@@ -138,32 +138,43 @@ void MpcControllerNode::loadParameters()
 {
   auto node = node_.lock(); if (!node) { return; }
 
+  // --- MPC参数部分 ---
   // 预测时域与控制时域
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".horizon_n", rclcpp::ParameterValue(15));
-  node->get_parameter(plugin_name_ + ".horizon_nmpc_", config_.horizon_n);
+  node->get_parameter(plugin_name_ + ".horizon_n_", config_.horizon_n);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".control_dt", rclcpp::ParameterValue(0.05));
   node->get_parameter(plugin_name_ + ".control_dt", mpc_config_.control_dt);
 
   // 状态权重
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qx", rclcpp::ParameterValue(10.0));
-  node->get_parameter(plugin_name_ + ".qx", mpc_config_.qx);
+  node->get_parameter(plugin_name_ + ".qx", mpc_config_.cost_weights.qx);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qy", rclcpp::ParameterValue(10.0));
-  node->get_parameter(plugin_name_ + ".qy", mpc_config_.qy);
+  node->get_parameter(plugin_name_ + ".qy", mpc_config_.cost_weights.qy);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qtheta", rclcpp::ParameterValue(2.0));
-  node->get_parameter(plugin_name_ + ".qtheta", mpc_config_.qtheta);
+  node->get_parameter(plugin_name_ + ".qtheta", mpc_config_.cost_weights.qtheta);
 
   // 控制权重
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rvx", rclcpp::ParameterValue(0.1));
-  node->get_parameter(plugin_name_ + ".rvx", mpc_config_.rvx);
+  node->get_parameter(plugin_name_ + ".rvx", mpc_config_.cost_weights.rvx);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rvy", rclcpp::ParameterValue(0.1));
-  node->get_parameter(plugin_name_ + ".rvy", mpc_config_.rvy);
+  node->get_parameter(plugin_name_ + ".rvy", mpc_config_.cost_weights.rvy);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".romega", rclcpp::ParameterValue(0.05));
-  node->get_parameter(plugin_name_ + ".romega", mpc_config_.romega);
+  node->get_parameter(plugin_name_ + ".romega", mpc_config_.cost_weights.romega);
+
+  // 终端状态权重
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qx_e", rclcpp::ParameterValue(10.0));
+  node->get_parameter(plugin_name_ + ".qx_e", mpc_config_.cost_weights.qx_e);
+
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qy_e", rclcpp::ParameterValue(10.0));
+  node->get_parameter(plugin_name_ + ".qy_e", mpc_config_.cost_weights.qy_e);
+
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qtheta_e", rclcpp::ParameterValue(2.0));
+  node->get_parameter(plugin_name_ + ".qtheta_e", mpc_config_.cost_weights.qtheta_e);
 
   // 控制约束
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".vx_min", rclcpp::ParameterValue(-3.0));
@@ -183,10 +194,33 @@ void MpcControllerNode::loadParameters()
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".omega_max", rclcpp::ParameterValue(6.0));
   node->get_parameter(plugin_name_ + ".omega_max", mpc_config_.omega_max);
+
+  // --- NAV参数部分 ---
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".use_interpolation", rclcpp::ParameterValue(true));
+  node->get_parameter(plugin_name_ + ".use_interpolation", nav_config_.use_interpolation);
 }
 
 void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
 {
+  // 设置MPC求解器的代价函数权重矩阵
+  Eigen::Matrix3d Q = Eigen::Matrix3d::Zero();
+  Eigen::Matrix3d QE = Eigen::Matrix3d::Zero();
+  Eigen::Matrix3d R = Eigen::Matrix3d::Zero();
+  Q <<
+      config.cost_weights.qx,0,0,
+      0,config.cost_weights.qy,0,
+      0,0,config.cost_weights.qtheta;
+  QE <<
+      config.cost_weights.qx_e,0,0,
+      0,config.cost_weights.qy_e,0,
+      0,0,config.cost_weights.qtheta_e;
+  R <<
+      config.cost_weights.rvx,0,0,
+      0,config.cost_weights.rvy,0,
+      0,0,config.cost_weights.romega;
+  mpc_wrapper_->setCosts(Q, R, QE);
+
+  // 设置MPC求解器的控制输入约束
   mpc_wrapper_->setControlLimits(
     config.vx_min, config.vx_max, config.vy_min, config.vy_max,
     config.omega_min, config.omega_max);

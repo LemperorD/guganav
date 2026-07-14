@@ -34,7 +34,20 @@ struct MpcWrapperConfig
   double vx_min, vx_max;
   double vy_min, vy_max;
   double omega_min, omega_max;
+  CostWeights cost_weights;
 } typedef MpcConfig;
+
+struct CostWeights
+{
+  // 状态权重
+  double qx; double qy; double qtheta;
+
+  // 控制权重
+  double rvx; double rvy; double romega;
+
+  // 终端状态权重
+  double qx_e; double qy_e; double qtheta_e;
+} typedef CostWeights;
 
 /**
  * @brief MPC 求解器封装类。
