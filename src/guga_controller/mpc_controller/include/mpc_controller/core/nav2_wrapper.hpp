@@ -42,7 +42,7 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   tf2::Duration transform_tolerance_;
-  rclcpp::Logger logger_{rclcpp::get_logger("OmniPidPursuitControllerNode")};
+  rclcpp::Logger logger_{rclcpp::get_logger("MpcControllerNode")};
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
       local_path_pub_;
   double max_robot_pose_search_dist_;

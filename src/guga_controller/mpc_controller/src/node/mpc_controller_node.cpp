@@ -7,12 +7,12 @@ void MpcControllerNode::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
   std::string name,
   std::shared_ptr<tf2_ros::Buffer> tf,
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros):
+  parent_(parent),
+  name_(std::move(name)),
+  tf_buffer_(std::move(tf)),
+  costmap_ros_(std::move(costmap_ros))
 {
-  parent_ = parent;
-  name_ = std::move(name);
-  tf_buffer_ = std::move(tf);
-  costmap_ros_ = std::move(costmap_ros);
   auto node = parent_.lock(); if (!node) { return; }
   local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
 
@@ -23,22 +23,18 @@ void MpcControllerNode::configure(
   // 加载参数并配置wrapper
   loadParameters(); ConfigMpcWrapper(mpc_config_); ConfigNavWrapper(nav_config_);
 
-  RCLCPP_INFO(node->get_logger(), "Configured.");
+  RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Configured");
 }
 
 void MpcControllerNode::activate()
 {
-  if (local_plan_pub_) {
-    local_plan_pub_->on_activate();
-  }
+  if (local_plan_pub_) { local_plan_pub_->on_activate(); }
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Activated");
 }
 
 void MpcControllerNode::deactivate()
 {
-  if (local_plan_pub_) {
-    local_plan_pub_->on_deactivate();
-  }
+  if (local_plan_pub_) { local_plan_pub_->on_deactivate(); }
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Deactivated");
 }
 
@@ -54,10 +50,7 @@ void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
   global_plan_ = path;
 }
 
-geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
-  const geometry_msgs::msg::PoseStamped & pose,
-  const geometry_msgs::msg::Twist & velocity,
-  nav2_core::GoalChecker * goal_checker)
+geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   (void)goal_checker;
@@ -71,7 +64,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
   if (global_plan_.poses.empty()) { return cmd_vel; }
 
   const double current_speed = std::hypot(velocity.linear.x, velocity.linear.y);
-  const double lookahead = nav_wrapper_->computeLookahead(std::max(current_speed, 0.1));
+  const double lookahead_distance = nav_wrapper_->computeLookahead(std::max(current_speed, 0.1));
 
   double robot_yaw = 0.0;
   {
@@ -83,15 +76,12 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
 
   const Eigen::Vector3d x0(pose.pose.position.x, pose.pose.position.y, robot_yaw);
 
-  mpc_wrapper_.setControlLimits(
-    config_.vx_min, config_.vx_max, config_.vy_min, config_.vy_max,
-    config_.omega_min, config_.omega_max);
+  mpc_wrapper_->set_x0({x0(0), x0(1), x0(2)});
+  mpc_wrapper_->set_xinit({x0(0), x0(1), x0(2)});
+  mpc_wrapper_->set_uinit({velocity.linear.x, velocity.linear.y, velocity.angular.z});
 
-  mpc_wrapper_.set_x0({x0(0), x0(1), x0(2)});
-  mpc_wrapper_.set_xinit({x0(0), x0(1), x0(2)});
-  mpc_wrapper_.set_uinit({velocity.linear.x, velocity.linear.y, velocity.angular.z});
-
-  const Eigen::Vector3d u_opt = mpc_wrapper_.solve(x0, ref_traj);
+  ref_point = getLookAheadPoint(lookahead_distance, global_plan_);
+  const Eigen::Vector3d u_opt = mpc_wrapper_->solve(x0, ref_point);
 
   cmd_vel.twist.linear.x = u_opt(0);
   cmd_vel.twist.linear.y = u_opt(1);
@@ -100,20 +90,22 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(
   return cmd_vel;
 }
 
-const std::vector<double>& MpcControllerNode::getLookAheadPoint(
-  const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const
+const std::vector<double>& MpcControllerNode::getLookAheadPoint(const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const
 {
   auto goal_pose_it = std::find_if(
-      transformed_plan.poses.begin(), transformed_plan.poses.end(),
-      [&](const auto& ps) {
-        return std::hypot(ps.pose.position.x, ps.pose.position.y)
-                >= lookahead_dist;
-      });
+    transformed_plan.poses.begin(), transformed_plan.poses.end(),
+    [&](const auto& ps) {
+      return std::hypot(ps.pose.position.x, ps.pose.position.y) >= lookahead_dist;
+    }
+  );
 
+  std::vector<double> lookahead_point(3, 0.0);
   if (goal_pose_it == transformed_plan.poses.end()) {
     goal_pose_it = std::prev(transformed_plan.poses.end());
-  } else if (config_.use_interpolation
-              && goal_pose_it != transformed_plan.poses.begin()) {
+    lookahead_point = convertPoint2Vector(goal_pose_it);
+  }
+  else if (nav_wrapper_ -> use_interpolation && goal_pose_it != transformed_plan.poses.begin())
+  {
     auto prev_pose_it = std::prev(goal_pose_it);
     auto point = geometry_utils::circleSegmentIntersection(
         prev_pose_it->pose.position, goal_pose_it->pose.position,
@@ -122,76 +114,75 @@ const std::vector<double>& MpcControllerNode::getLookAheadPoint(
     pose.header.frame_id = prev_pose_it->header.frame_id;
     pose.header.stamp = goal_pose_it->header.stamp;
     pose.pose.position = point;
-    return pose;
+    lookahead_point = convertPoint2Vector(pose);
   }
 
-  return *goal_pose_it;
+  return *lookahead_point;
+}
+
+inline const std::vector<double>& convertPoint2Vector(const geometry_msgs::msg::PoseStamped& pose)
+{
+  std::vector<double> point(3, 0.0);
+  point[0] = pose.pose.position.x;
+  point[1] = pose.pose.position.y;
+
+  const auto & q = pose.pose.orientation;
+  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
+  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+  point[2] = std::atan2(siny, cosy);
+
+  return point;
 }
 
 void MpcControllerNode::loadParameters()
 {
-  auto node = node_.lock();
-  if (!node) { return; }
+  auto node = node_.lock(); if (!node) { return; }
 
   // 预测时域与控制时域
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".horizon_n", rclcpp::ParameterValue(15));
-  node->get_parameter(plugin_name_ + ".horizon_n", config_.horizon_n);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".horizon_n", rclcpp::ParameterValue(15));
+  node->get_parameter(plugin_name_ + ".horizon_nmpc_", config_.horizon_n);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".control_dt", rclcpp::ParameterValue(0.05));
-  node->get_parameter(plugin_name_ + ".control_dt", config_.control_dt);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".control_dt", rclcpp::ParameterValue(0.05));
+  node->get_parameter(plugin_name_ + ".control_dt", mpc_config_.control_dt);
 
   // 状态权重
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".qx", rclcpp::ParameterValue(10.0));
-  node->get_parameter(plugin_name_ + ".qx", config_.qx);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qx", rclcpp::ParameterValue(10.0));
+  node->get_parameter(plugin_name_ + ".qx", mpc_config_.qx);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".qy", rclcpp::ParameterValue(10.0));
-  node->get_parameter(plugin_name_ + ".qy", config_.qy);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qy", rclcpp::ParameterValue(10.0));
+  node->get_parameter(plugin_name_ + ".qy", mpc_config_.qy);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".qtheta", rclcpp::ParameterValue(2.0));
-  node->get_parameter(plugin_name_ + ".qtheta", config_.qtheta);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".qtheta", rclcpp::ParameterValue(2.0));
+  node->get_parameter(plugin_name_ + ".qtheta", mpc_config_.qtheta);
 
   // 控制权重
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".rvx", rclcpp::ParameterValue(0.1));
-  node->get_parameter(plugin_name_ + ".rvx", config_.rvx);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rvx", rclcpp::ParameterValue(0.1));
+  node->get_parameter(plugin_name_ + ".rvx", mpc_config_.rvx);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".rvy", rclcpp::ParameterValue(0.1));
-  node->get_parameter(plugin_name_ + ".rvy", config_.rvy);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rvy", rclcpp::ParameterValue(0.1));
+  node->get_parameter(plugin_name_ + ".rvy", mpc_config_.rvy);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".romega", rclcpp::ParameterValue(0.05));
-  node->get_parameter(plugin_name_ + ".romega", config_.romega);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".romega", rclcpp::ParameterValue(0.05));
+  node->get_parameter(plugin_name_ + ".romega", mpc_config_.romega);
 
   // 控制约束
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".vx_min", rclcpp::ParameterValue(-3.0));
-  node->get_parameter(plugin_name_ + ".vx_min", config_.vx_min);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".vx_min", rclcpp::ParameterValue(-3.0));
+  node->get_parameter(plugin_name_ + ".vx_min", mpc_config_.vx_min);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".vx_max", rclcpp::ParameterValue(3.0));
-  node->get_parameter(plugin_name_ + ".vx_max", config_.vx_max);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".vx_max", rclcpp::ParameterValue(3.0));
+  node->get_parameter(plugin_name_ + ".vx_max", mpc_config_.vx_max);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".vy_min", rclcpp::ParameterValue(-3.0));
-  node->get_parameter(plugin_name_ + ".vy_min", config_.vy_min);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".vy_min", rclcpp::ParameterValue(-3.0));
+  node->get_parameter(plugin_name_ + ".vy_min", mpc_config_.vy_min);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".vy_max", rclcpp::ParameterValue(3.0));
-  node->get_parameter(plugin_name_ + ".vy_max", config_.vy_max);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".vy_max", rclcpp::ParameterValue(3.0));
+  node->get_parameter(plugin_name_ + ".vy_max", mpc_config_.vy_max);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".omega_min", rclcpp::ParameterValue(-6.0));
-  node->get_parameter(plugin_name_ + ".omega_min", config_.omega_min);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".omega_min", rclcpp::ParameterValue(-6.0));
+  node->get_parameter(plugin_name_ + ".omega_min", mpc_config_.omega_min);
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".omega_max", rclcpp::ParameterValue(6.0));
-  node->get_parameter(plugin_name_ + ".omega_max", config_.omega_max);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".omega_max", rclcpp::ParameterValue(6.0));
+  node->get_parameter(plugin_name_ + ".omega_max", mpc_config_.omega_max);
 }
 
 void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)

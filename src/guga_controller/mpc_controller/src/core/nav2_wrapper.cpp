@@ -35,13 +35,12 @@ std::optional<geometry_msgs::msg::PoseStamped> NavWrapper::transformPose(
     tf_buffer_->transform(in_pose, out_pose, frame, transform_tolerance_);
     return out_pose;
   } catch (tf2::TransformException& ex) {
-    RCLCPP_ERROR(logger_, "Exception in transformPose: %s", ex.what());
+    RCLCPP_ERROR(rclcpp::get_logger("nav2_wrapper"), "Exception in transformPose: %s", ex.what());
   }
   return std::nullopt;
 }
 
-nav_msgs::msg::Path NavWrapper::transformGlobalPlan(
-  const geometry_msgs::msg::PoseStamped& pose, nav_msgs::msg::Path& global_plan)
+nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::PoseStamped& pose, nav_msgs::msg::Path& global_plan)
 {
   if (global_plan.poses.empty()) {
     throw nav2_core::PlannerException("Received plan with zero length");
