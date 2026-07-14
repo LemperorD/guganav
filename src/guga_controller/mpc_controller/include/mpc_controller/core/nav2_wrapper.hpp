@@ -17,9 +17,14 @@ namespace mpc_controller {
 struct NavWrapperConfig
 {
   bool use_interpolation;
-
+  bool use_curvature_scaling;
+  double curvature_min;
+  double curvature_max;
+  double reduction_ratio_at_high_curvature;
+  double curvature_forward_dist;
+  double curvature_backward_dist;
+  double max_velocity_scaling_factor_rate;
 } typedef NavConfig;
-
 
 class NavWrapper
 {
@@ -67,6 +72,7 @@ private:
   double max_robot_pose_search_dist_;
 
   bool use_interpolation_;
+  bool use_curvature_scaling_;
   double curvature_min_;
   double curvature_max_;
   double reduction_ratio_at_high_curvature_;

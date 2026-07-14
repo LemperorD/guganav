@@ -103,6 +103,36 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
   return transformed_plan;
 }
 
+void NavWrapper::applyCurvatureLimitation(
+  const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose,
+  double & linear_vel)
+{
+  double curvature =
+    calculateCurvature(path, lookahead_pose, curvature_forward_dist_, curvature_backward_dist_);
+
+  double scaled_linear_vel = linear_vel;
+  if (curvature > curvature_min_) {
+    double reduction_ratio = 1.0;
+    if (curvature > curvature_max_) {
+      reduction_ratio = reduction_ratio_at_high_curvature_;
+    } else {
+      reduction_ratio = 1.0 - (curvature - curvature_min_) / (curvature_max_ - curvature_min_) *
+                                (1.0 - reduction_ratio_at_high_curvature_);
+    }
+
+    double target_scaled_vel = linear_vel * reduction_ratio;
+    scaled_linear_vel =
+      last_velocity_scaling_factor_ + std::clamp(
+                                        target_scaled_vel - last_velocity_scaling_factor_,
+                                        -max_velocity_scaling_factor_rate_ * control_duration_,
+                                        max_velocity_scaling_factor_rate_ * control_duration_);
+  }
+  scaled_linear_vel = std::max(scaled_linear_vel, 2.0 * min_approach_linear_velocity_);
+
+  linear_vel = std::min(linear_vel, scaled_linear_vel);
+  last_velocity_scaling_factor_ = linear_vel;
+}
+
 geometry_msgs::msg::Point NavWrapper::circleSegmentIntersection(
   const geometry_msgs::msg::Point & p1, const geometry_msgs::msg::Point & p2, double r)
 {
