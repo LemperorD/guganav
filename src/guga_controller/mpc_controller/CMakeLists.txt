@@ -12,15 +12,32 @@ find_package(ament_cmake_auto REQUIRED)
 # find_package(<dependency> REQUIRED)
 ament_auto_find_build_dependencies()
 
+# ---- acados paths ----
+set(ACADOS_INCLUDE_DIR $ENV{ACADOS_SOURCE_DIR}/include)
+set(ACADOS_LIB_DIR $ENV{ACADOS_SOURCE_DIR}/lib)
+
+# ---- generated solver source directory ----
+set(GENERATED_OCP_DIR ${CMAKE_SOURCE_DIR}/generated/omni/omni_ocp)
+
 ament_auto_add_library(mpc_wrapper SHARED
   src/core/mpc_wrapper.cpp
 )
+
+# ---- include directories ----
+target_include_directories(mpc_wrapper PRIVATE
+  ${ACADOS_INCLUDE_DIR}
+  ${ACADOS_INCLUDE_DIR}/acados
+  ${ACADOS_INCLUDE_DIR}/blasfeo/include
+  ${ACADOS_INCLUDE_DIR}/hpipm/include
+  ${GENERATED_OCP_DIR}
+)
+
 ament_auto_add_library(nav2_wrapper SHARED
   src/core/nav2_wrapper.cpp
 )
 
 ament_auto_add_library(${PROJECT_NAME}_node SHARED
-  src/usb_joystick_node.cpp
+  src/node/mpc_controller_node.cpp
 )
 rclcpp_components_register_node(${PROJECT_NAME}_node
   PLUGIN "mpc_controller::MpcControllerNode"
