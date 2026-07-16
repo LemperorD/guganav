@@ -5,12 +5,7 @@
 #include <cstdio>
 #include <string>
 
-#include <pangolin/display/default_font.h>
-#include <pangolin/display/view.h>
-#include <pangolin/gl/gl.h>
-#include <pangolin/gl/gldraw.h>
-
-const int UI_WIDTH = 20* pangolin::default_font().MaxWidth();
+#include "panel_const.hpp"
 
 namespace guga_ui
 {
