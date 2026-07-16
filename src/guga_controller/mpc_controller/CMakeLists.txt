@@ -24,7 +24,7 @@ ament_auto_add_library(mpc_wrapper SHARED
 )
 
 # ---- include directories ----
-target_include_directories(mpc_wrapper PRIVATE
+target_include_directories(mpc_wrapper PUBLIC
   ${ACADOS_INCLUDE_DIR}
   ${ACADOS_INCLUDE_DIR}/acados
   ${ACADOS_INCLUDE_DIR}/blasfeo/include
@@ -44,7 +44,8 @@ rclcpp_components_register_node(${PROJECT_NAME}_node
   EXECUTABLE ${PROJECT_NAME}_node_exe
 )
 target_link_libraries(${PROJECT_NAME}_node 
-  ${PROJECT_NAME}_main
+  mpc_wrapper
+  nav2_wrapper
 )
 
 if(BUILD_TESTING)

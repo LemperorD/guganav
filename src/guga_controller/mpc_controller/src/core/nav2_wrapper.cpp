@@ -11,7 +11,8 @@ NavWrapper::NavWrapper(
     tf_buffer_(std::move(tf_buffer)),
     costmap_ros_(std::move(costmap_ros)),
     local_path_pub_(std::move(pub)),
-    transform_tolerance_(tf2::durationFromSec(transform_tolerance))
+    transform_tolerance_(tf2::durationFromSec(transform_tolerance)),
+    logger_(rclcpp::get_logger("nav2_wrapper"))
 {
   max_robot_pose_search_dist_ = getCostmapMaxExtent();
   std::printf("NavWrapper initialized\n");
@@ -103,9 +104,7 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
   return transformed_plan;
 }
 
-void NavWrapper::applyCurvatureLimitation(
-  const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose,
-  double & linear_vel)
+void NavWrapper::applyCurvatureLimitation(const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose, double & linear_vel)
 {
   double curvature =
     calculateCurvature(path, lookahead_pose, curvature_forward_dist_, curvature_backward_dist_);
@@ -192,8 +191,7 @@ double NavWrapper::calculateCurvature(
   return curvature;
 }
 
-std::vector<double> NavWrapper::calculateCumulativeDistances(
-    const nav_msgs::msg::Path& path) {
+std::vector<double> NavWrapper::calculateCumulativeDistances(const nav_msgs::msg::Path& path) {
   std::vector<double> cumulative_distances;
   cumulative_distances.push_back(0.0);
 
@@ -306,6 +304,20 @@ geometry_msgs::msg::PoseStamped NavWrapper::findPoseAtDistance(const nav_msgs::m
   interpolated_pose.pose.orientation = pose2.pose.orientation;
 
   return interpolated_pose;
+}
+
+double NavWrapper::getLookAheadDistance(const geometry_msgs::msg::Twist & speed)
+{
+  // If using velocity-scaled look ahead distances, find and clamp the dist
+  // Else, use the static look ahead distance
+  double lookahead_dist = lookahead_dist_;
+
+  if (use_velocity_scaled_lookahead_dist_) {
+    lookahead_dist = hypot(speed.linear.x, speed.linear.y) * lookahead_time_;
+    lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
+  }
+
+  return lookahead_dist;
 }
 
 }  // namespace mpc_controller

@@ -5,6 +5,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "tf2_ros/buffer.h"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 #include <memory>
 #include "nav2_core/exceptions.hpp"
 #include "nav2_util/geometry_utils.hpp"
@@ -56,7 +57,27 @@ public:
 
   geometry_msgs::msg::PoseStamped findPoseAtDistance(
     const nav_msgs::msg::Path& path, const std::vector<double>& cumulative_distances,
-    double target_distance);
+    double target_distance) const;
+
+  void applyCurvatureLimitation(
+    const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose,
+    double & linear_vel);
+
+  double calculateCurvature(
+    const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & lookahead_pose,
+    double forward_dist, double backward_dist) const;
+  
+  double calculateCurvatureRadius(
+    const geometry_msgs::msg::Point & near_point,
+    const geometry_msgs::msg::Point & current_point,
+    const geometry_msgs::msg::Point & far_point) const;
+  
+  std::vector<double> calculateCumulativeDistances(const nav_msgs::msg::Path & path) const;
+
+  void visualizeCurvaturePoints(
+    const geometry_msgs::msg::PoseStamped & backward_pose, const geometry_msgs::msg::PoseStamped & forward_pose) const;
+
+  double getLookAheadDistance(const geometry_msgs::msg::Twist & speed);
 
 public: // setters and getters for configuration
   void setUseInterpolation(bool use_interpolation) { use_interpolation_ = use_interpolation; }
@@ -75,12 +96,24 @@ private:
 
   bool use_interpolation_;
   bool use_curvature_scaling_;
+  bool use_velocity_scaled_lookahead_dist_;
   double curvature_min_;
   double curvature_max_;
   double reduction_ratio_at_high_curvature_;
   double curvature_forward_dist_;
   double curvature_backward_dist_;
-  double max_velocity_scaling_factor_rate_;          
+  double min_approach_linear_velocity_;
+  double max_velocity_scaling_factor_rate_;
+  double control_duration_;
+  double lookahead_dist_;
+  double lookahead_time_;
+  double min_lookahead_dist_;
+  double max_lookahead_dist_;
+
+  double last_velocity_scaling_factor_;
+
+  rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+    curvature_points_pub_;
 };
 
 } // namespace mpc_controller
