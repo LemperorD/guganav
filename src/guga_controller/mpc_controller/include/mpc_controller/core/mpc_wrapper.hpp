@@ -1,6 +1,8 @@
 #ifndef MPC_WRAPPER_HPP_
 #define MPC_WRAPPER_HPP_
 
+#include <cstdio>
+
 // acados
 #include "acados_c/ocp_nlp_interface.h"
 #include "acados_c/external_function_interface.h"
@@ -13,16 +15,28 @@ extern "C" {
 }
 
 // import omni model dimensions
-#define NX   OMNI_NX
-#define NU   OMNI_NU
-#define N    OMNI_N
-#define NY   OMNI_NY
-#define NYN  OMNI_NYN
-#define NBX0 OMNI_NBX0
+static constexpr int kNX = OMNI_NX;
+static constexpr int kNU = OMNI_NU;
+static constexpr int kN = OMNI_N;
+static constexpr int kNY = OMNI_NY;
+static constexpr int kNYN = OMNI_NYN;
+static constexpr int kNBX0 = OMNI_NBX0;
 
 #include <Eigen/Dense>
 
 namespace mpc_controller {
+
+struct CostWeights
+{
+  // 状态权重
+  double qx; double qy; double qtheta;
+
+  // 控制权重
+  double rvx; double rvy; double romega;
+
+  // 终端状态权重
+  double qx_e; double qy_e; double qtheta_e;
+} typedef CostWeights;
 
 /**
  * @brief MPC 控制器配置结构体。
@@ -36,18 +50,6 @@ struct MpcWrapperConfig
   double omega_min, omega_max;
   CostWeights cost_weights;
 } typedef MpcConfig;
-
-struct CostWeights
-{
-  // 状态权重
-  double qx; double qy; double qtheta;
-
-  // 控制权重
-  double rvx; double rvy; double romega;
-
-  // 终端状态权重
-  double qx_e; double qy_e; double qtheta_e;
-} typedef CostWeights;
 
 /**
  * @brief MPC 求解器封装类。
@@ -71,9 +73,9 @@ public:
    * @param QE 终端状态权重矩阵 (NX x NX)
    */
   void setCosts(
-    const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> Q,
-    const Eigen::Ref<const Eigen::Matrix<double, NU, NU>> R,
-    const Eigen::Ref<const Eigen::Matrix<double, NX, NX>> QE
+    const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> Q,
+    const Eigen::Ref<const Eigen::Matrix<double, kNU, kNU>> R,
+    const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> QE
   );
 
   /**
@@ -91,13 +93,13 @@ public:
    * @brief 设置初始状态约束。
    * @param init_state 初始状态向量 (NX)
    */
-  void set_xinit(const std::vector<double>& x0);
+  void set_xinit(const std::vector<double>& xinit);
 
   /**
    * @brief 设置初始控制量。
    * @param u0 初始控制量向量 (NU)
    */
-  void set_uinit(const std::vector<double>& u0);
+  void set_uinit(const std::vector<double>& uinit);
 
   /**
    * @brief 设置参考轨迹。
@@ -144,14 +146,14 @@ private:
   int sqp_iter_;
 
   // solver data
-  // std::vector<double> x_traj_=std::vector<double>(NX * (N+1), 0.0);
-  // std::vector<double> u_traj_=std::vector<double>(NU * N,  0.0);
-  std::vector<double> x_init_=std::vector<double>(NX,  0.0);
-  std::vector<double> u_init_=std::vector<double>(NU,  0.0);
-  std::vector<double> x_ref_=std::vector<double>(NX,  0.0);
-  std::vector<double> u_ref_=std::vector<double>(NU,  0.0);
-  std::vector<double> y_ref_=std::vector<double>(NX + NU,  0.0);
-  std::vector<double> u_opt_=std::vector<double>(NU,  0.0);
+  // std::vector<double> x_traj_=std::vector<double>(kNX * (kN+1), 0.0);
+  // std::vector<double> u_traj_=std::vector<double>(kNU * kN,  0.0);
+  std::vector<double> x_init_=std::vector<double>(kNX,  0.0);
+  std::vector<double> u_init_=std::vector<double>(kNU,  0.0);
+  std::vector<double> x_ref_=std::vector<double>(kNX,  0.0);
+  std::vector<double> u_ref_=std::vector<double>(kNU,  0.0);
+  std::vector<double> y_ref_=std::vector<double>(kNX + kNU,  0.0);
+  std::vector<double> u_opt_=std::vector<double>(kNU,  0.0);
 
 };
 
