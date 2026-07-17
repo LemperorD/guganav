@@ -1,18 +1,18 @@
 FollowPath:
   plugin: "mpc_controller::MpcControllerNode"
   mpc:
-    qx: 
-    qy: 
-    qtheta:
-    rvx:
-    rvy:
-    romega:
-    qx_e:
-    qy_e:
-    qtheta_e:
+    qx: 30.0
+    qy: 30.0
+    qtheta: 15.0
+    rvx: 1.0
+    rvy: 1.0
+    romega: 0.5
+    qx_e: 10.0
+    qy_e: 10.0
+    qtheta_e: 5.0
   nav:
-    use_interpolation: true
-    use_curvature_scaling: true
+    use_interpolation: false
+    use_curvature_scaling: false
     curvature_min: 0.1
     curvature_max: 0.5
     reduction_ratio_at_high_curvature: 0.5

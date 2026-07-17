@@ -1,18 +1,3 @@
-# Copyright 2025 Lihan Chen
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -27,7 +12,7 @@ from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
-    bringup_dir = get_package_share_directory("guga_nav_bringup")
+    bringup_dir = get_package_share_directory("guga_bringup")
     launch_dir = os.path.join(bringup_dir, "launch")
 
     namespace = LaunchConfiguration("namespace")
@@ -64,13 +49,13 @@ def generate_launch_description():
     declare_slam_cmd = DeclareLaunchArgument(
         "slam",
         default_value="False",
-        description="Whether run a SLAM. If True, it will disable small_gicp and send static tf (map->odom)",
+        description="Whether to run a SLAM. If True, it will disable small_gicp and send static tf (map->odom)",
     )
 
     declare_world_cmd = DeclareLaunchArgument(
         "world",
         default_value="rmul_2025",
-        description="Select world: 'rmul_2024' or 'rmuc_2024' or 'rmul_2025' or 'rmuc_2025' or 'rmuc_2026' or 'rmul_2026'(map file share the same name as the this parameter)",
+        description="Select world: 'rmul_2024' or 'rmuc_2024' or 'rmul_2025' or 'rmuc_2025' or 'rmuc_2026' or 'rmul_2026'(map file share the same name as this parameter)",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(

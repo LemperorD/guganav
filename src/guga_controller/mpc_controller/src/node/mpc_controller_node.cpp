@@ -138,67 +138,67 @@ void MpcControllerNode::loadParameters()
 
   // --- MPC参数部分 ---
   // 预测时域与控制时域
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".horizon_n", rclcpp::ParameterValue(15));
-  node->get_parameter(name_ + ".horizon_n", mpc_config_.horizon_n);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.horizon_n", rclcpp::ParameterValue(15));
+  node->get_parameter(name_ + "mpc.horizon_n", mpc_config_.horizon_n);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".control_dt", rclcpp::ParameterValue(0.05));
-  node->get_parameter(name_ + ".control_dt", mpc_config_.control_dt);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.control_dt", rclcpp::ParameterValue(0.05));
+  node->get_parameter(name_ + "mpc.control_dt", mpc_config_.control_dt);
 
   // 状态权重
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".qx", rclcpp::ParameterValue(10.0));
-  node->get_parameter(name_ + ".qx", mpc_config_.cost_weights.qx);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.qx", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + "mpc.qx", mpc_config_.cost_weights.qx);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".qy", rclcpp::ParameterValue(10.0));
-  node->get_parameter(name_ + ".qy", mpc_config_.cost_weights.qy);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.qy", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + "mpc.qy", mpc_config_.cost_weights.qy);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".qtheta", rclcpp::ParameterValue(2.0));
-  node->get_parameter(name_ + ".qtheta", mpc_config_.cost_weights.qtheta);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.qtheta", rclcpp::ParameterValue(2.0));
+  node->get_parameter(name_ + "mpc.qtheta", mpc_config_.cost_weights.qtheta);
 
   // 控制权重
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".rvx", rclcpp::ParameterValue(0.1));
-  node->get_parameter(name_ + ".rvx", mpc_config_.cost_weights.rvx);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.rvx", rclcpp::ParameterValue(0.1));
+  node->get_parameter(name_ + "mpc.rvx", mpc_config_.cost_weights.rvx);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".rvy", rclcpp::ParameterValue(0.1));
-  node->get_parameter(name_ + ".rvy", mpc_config_.cost_weights.rvy);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.rvy", rclcpp::ParameterValue(0.1));
+  node->get_parameter(name_ + "mpc.rvy", mpc_config_.cost_weights.rvy);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".romega", rclcpp::ParameterValue(0.05));
-  node->get_parameter(name_ + ".romega", mpc_config_.cost_weights.romega);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.romega", rclcpp::ParameterValue(0.05));
+  node->get_parameter(name_ + "mpc.romega", mpc_config_.cost_weights.romega);
 
   // 终端状态权重
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".qx_e", rclcpp::ParameterValue(10.0));
-  node->get_parameter(name_ + ".qx_e", mpc_config_.cost_weights.qx_e);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.qx_e", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + "mpc.qx_e", mpc_config_.cost_weights.qx_e);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".qy_e", rclcpp::ParameterValue(10.0));
-  node->get_parameter(name_ + ".qy_e", mpc_config_.cost_weights.qy_e);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.qy_e", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + "mpc.qy_e", mpc_config_.cost_weights.qy_e);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".qtheta_e", rclcpp::ParameterValue(2.0));
-  node->get_parameter(name_ + ".qtheta_e", mpc_config_.cost_weights.qtheta_e);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.qtheta_e", rclcpp::ParameterValue(2.0));
+  node->get_parameter(name_ + "mpc.qtheta_e", mpc_config_.cost_weights.qtheta_e);
 
   // 控制约束
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".vx_min", rclcpp::ParameterValue(-3.0));
-  node->get_parameter(name_ + ".vx_min", mpc_config_.vx_min);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.vx_min", rclcpp::ParameterValue(-3.0));
+  node->get_parameter(name_ + "mpc.vx_min", mpc_config_.vx_min);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".vx_max", rclcpp::ParameterValue(3.0));
-  node->get_parameter(name_ + ".vx_max", mpc_config_.vx_max);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.vx_max", rclcpp::ParameterValue(3.0));
+  node->get_parameter(name_ + "mpc.vx_max", mpc_config_.vx_max);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".vy_min", rclcpp::ParameterValue(-3.0));
-  node->get_parameter(name_ + ".vy_min", mpc_config_.vy_min);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.vy_min", rclcpp::ParameterValue(-3.0));
+  node->get_parameter(name_ + "mpc.vy_min", mpc_config_.vy_min);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".vy_max", rclcpp::ParameterValue(3.0));
-  node->get_parameter(name_ + ".vy_max", mpc_config_.vy_max);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.vy_max", rclcpp::ParameterValue(3.0));
+  node->get_parameter(name_ + "mpc.vy_max", mpc_config_.vy_max);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".omega_min", rclcpp::ParameterValue(-6.0));
-  node->get_parameter(name_ + ".omega_min", mpc_config_.omega_min);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.omega_min", rclcpp::ParameterValue(-6.0));
+  node->get_parameter(name_ + "mpc.omega_min", mpc_config_.omega_min);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".omega_max", rclcpp::ParameterValue(6.0));
-  node->get_parameter(name_ + ".omega_max", mpc_config_.omega_max);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "mpc.omega_max", rclcpp::ParameterValue(6.0));
+  node->get_parameter(name_ + "mpc.omega_max", mpc_config_.omega_max);
 
   // --- NAV参数部分 ---
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".use_interpolation", rclcpp::ParameterValue(true));
-  node->get_parameter(name_ + ".use_interpolation", nav_config_.use_interpolation);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "nav.use_interpolation", rclcpp::ParameterValue(true));
+  node->get_parameter(name_ + "nav.use_interpolation", nav_config_.use_interpolation);
 
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".use_curvature_scaling", rclcpp::ParameterValue(true));
-  node->get_parameter(name_ + ".use_curvature_scaling", nav_config_.use_curvature_scaling);
+  nav2_util::declare_parameter_if_not_declared(node, name_ + "nav.use_curvature_scaling", rclcpp::ParameterValue(true));
+  node->get_parameter(name_ + "nav.use_curvature_scaling", nav_config_.use_curvature_scaling);
 }
  
 void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
