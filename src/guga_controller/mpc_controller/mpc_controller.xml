@@ -1,6 +1,6 @@
 <class_libraries>
-  <library path="mpc_controller">
-    <class name="mpc_controller/MpcControllerNode"
+  <library path="mpc_controller_node">
+    <class name="mpc_controller::MpcControllerNode"
            type="mpc_controller::MpcControllerNode"
            base_class_type="nav2_core::Controller">
       <description>

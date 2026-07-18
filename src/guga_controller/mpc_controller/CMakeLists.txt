@@ -19,11 +19,21 @@ set(ACADOS_LIB_DIR $ENV{ACADOS_SOURCE_DIR}/lib)
 # ---- generated solver source directory ----
 set(GENERATED_OCP_DIR ${CMAKE_SOURCE_DIR}/generated/omni/omni_ocp)
 
-ament_auto_add_library(mpc_wrapper SHARED
-  src/core/mpc_wrapper.cpp
+file(GLOB MODEL_SRC   ${GENERATED_OCP_DIR}/omni_model/*.c)
+file(GLOB COST_SRC    ${GENERATED_OCP_DIR}/omni_cost/*.c)
+file(GLOB SOLVER_SRC  ${GENERATED_OCP_DIR}/acados_solver_omni.c)
+
+set(GENERATED_SRC
+  ${MODEL_SRC}
+  ${COST_SRC}
+  ${SOLVER_SRC}
 )
 
-# ---- include directories ----
+ament_auto_add_library(mpc_wrapper SHARED
+  src/core/mpc_wrapper.cpp
+  ${GENERATED_SRC}
+)
+
 target_include_directories(mpc_wrapper PUBLIC
   ${ACADOS_INCLUDE_DIR}
   ${ACADOS_INCLUDE_DIR}/acados
@@ -31,6 +41,18 @@ target_include_directories(mpc_wrapper PUBLIC
   ${ACADOS_INCLUDE_DIR}/hpipm/include
   ${GENERATED_OCP_DIR}
 )
+
+target_link_directories(mpc_wrapper PUBLIC
+  ${ACADOS_LIB_DIR}
+)
+
+target_link_libraries(mpc_wrapper
+  acados
+  hpipm
+  blasfeo
+  m
+)
+
 
 ament_auto_add_library(nav2_wrapper SHARED
   src/core/nav2_wrapper.cpp
@@ -59,6 +81,8 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+pluginlib_export_plugin_description_file(nav2_core mpc_controller.xml)
 
 ament_auto_package(
   USE_SCOPED_HEADER_INSTALL_DIR

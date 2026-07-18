@@ -277,8 +277,8 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 100
     wait_for_service_timeout: 1000
-    default_nav_to_pose_bt_xml: $(find-pkg-share guga_nav_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
-    default_nav_through_poses_bt_xml: $(find-pkg-share guga_nav_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
+    default_nav_to_pose_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    default_nav_through_poses_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
@@ -332,7 +332,7 @@ controller_server:
   ros__parameters:
     use_sim_time: True
     odom_topic: odometry
-    controller_frequency: 20.0
+    controller_frequency: 60.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
@@ -352,15 +352,15 @@ controller_server:
     FollowPath:
       plugin: "mpc_controller::MpcControllerNode"
       mpc:
-        qx: 30.0
-        qy: 30.0
-        qtheta: 15.0
+        qx: 300.0
+        qy: 300.0
+        qtheta: 150.0
         rvx: 1.0
         rvy: 1.0
         romega: 0.5
-        qx_e: 10.0
-        qy_e: 10.0
-        qtheta_e: 5.0
+        qx_e: 100.0
+        qy_e: 100.0
+        qtheta_e: 50.0
       nav:
         use_interpolation: false
         use_curvature_scaling: false

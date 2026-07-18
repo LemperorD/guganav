@@ -14,11 +14,11 @@ MpcWrapper::MpcWrapper()
   }
 
   // 获取求解器配置和维度信息
-  ocp_nlp_config *cfg_ = omni_acados_get_nlp_config(capsule_);
-  ocp_nlp_dims  *dims_ = omni_acados_get_nlp_dims(capsule_);
-  ocp_nlp_in      *in_ = omni_acados_get_nlp_in(capsule_);
-  ocp_nlp_out    *out_ = omni_acados_get_nlp_out(capsule_);
-  ocp_nlp_solver *slv_ = omni_acados_get_nlp_solver(capsule_);
+  cfg_  = omni_acados_get_nlp_config(capsule_);
+  dims_ = omni_acados_get_nlp_dims(capsule_);
+  in_   = omni_acados_get_nlp_in(capsule_);
+  out_  = omni_acados_get_nlp_out(capsule_);
+  slv_  = omni_acados_get_nlp_solver(capsule_);
 
   std::printf("MPC Wrapper initialized successfully.\n");
 }

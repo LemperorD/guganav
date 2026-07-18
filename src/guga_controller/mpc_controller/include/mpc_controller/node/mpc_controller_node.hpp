@@ -16,7 +16,7 @@
 #include "mpc_controller/core/mpc_wrapper.hpp"
 #include "mpc_controller/core/nav2_wrapper.hpp"
 
-inline const std::vector<double>& convertPoint2Vector(const geometry_msgs::msg::PoseStamped& pose)
+inline std::vector<double> convertPoint2Vector(const geometry_msgs::msg::PoseStamped& pose)
 {
   std::vector<double> point(3, 0.0);
   point[0] = pose.pose.position.x;
@@ -71,7 +71,7 @@ private:
    * @param transformed_plan 已转换的全局路径。
    * @return 前瞻点向量 (x, y, theta)。
    */
-  const std::vector<double>& getLookAheadPoint(
+  std::vector<double> getLookAheadPoint(
     const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const;
 
   /** 
