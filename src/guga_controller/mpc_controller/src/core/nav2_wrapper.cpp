@@ -306,7 +306,7 @@ geometry_msgs::msg::PoseStamped NavWrapper::findPoseAtDistance(const nav_msgs::m
   return interpolated_pose;
 }
 
-double NavWrapper::getLookAheadDistance(const geometry_msgs::msg::Twist & speed)
+double NavWrapper::getLookAheadDist(const geometry_msgs::msg::Twist & speed)
 {
   // If using velocity-scaled look ahead distances, find and clamp the dist
   // Else, use the static look ahead distance

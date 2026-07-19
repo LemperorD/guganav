@@ -30,6 +30,17 @@ inline std::vector<double> convertPoint2Vector(const geometry_msgs::msg::PoseSta
   return point;
 }
 
+inline std::unique_ptr<geometry_msgs::msg::PointStamped> createCarrotMsg(
+  const geometry_msgs::msg::PoseStamped & carrot_pose)
+{
+  auto carrot_msg = std::make_unique<geometry_msgs::msg::PointStamped>();
+  carrot_msg->header = carrot_pose.header;
+  carrot_msg->point.x = carrot_pose.pose.position.x;
+  carrot_msg->point.y = carrot_pose.pose.position.y;
+  carrot_msg->point.z = 0.01;  // publish right over map to stand out
+  return carrot_msg;
+}
+
 namespace mpc_controller
 {
 
@@ -101,6 +112,7 @@ private:
   rclcpp::Clock::SharedPtr clock_;
 
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PointStamped>::SharedPtr carrot_pub_;
 
   // MPC控制器
   std::shared_ptr<MpcWrapper> mpc_wrapper_;

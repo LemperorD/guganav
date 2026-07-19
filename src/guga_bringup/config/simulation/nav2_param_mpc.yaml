@@ -352,24 +352,19 @@ controller_server:
     FollowPath:
       plugin: "mpc_controller::MpcControllerNode"
       mpc:
-        qx: 300.0
-        qy: 300.0
-        qtheta: 150.0
+        qx: 10.0
+        qy: 10.0
+        qtheta: 2.0
         rvx: 1.0
         rvy: 1.0
         romega: 0.5
-        qx_e: 100.0
-        qy_e: 100.0
-        qtheta_e: 50.0
+        qx_e: 50.0
+        qy_e: 50.0
+        qtheta_e: 10.0
       nav:
-        use_interpolation: false
+        use_interpolation: true
         use_curvature_scaling: false
-        curvature_min: 0.1
-        curvature_max: 0.5
-        reduction_ratio_at_high_curvature: 0.5
-        curvature_forward_dist: 1.0
-        curvature_backward_dist: 1.0
-        max_velocity_scaling_factor_rate: 0.1
+        lookahead_distance: 2.0
 
 
 local_costmap:

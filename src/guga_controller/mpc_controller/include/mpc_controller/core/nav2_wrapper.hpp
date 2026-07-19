@@ -25,6 +25,7 @@ struct NavWrapperConfig
   double curvature_forward_dist;
   double curvature_backward_dist;
   double max_velocity_scaling_factor_rate;
+  double lookahead_distance;
 } typedef NavConfig;
 
 class NavWrapper
@@ -77,7 +78,7 @@ public:
   void visualizeCurvaturePoints(
     const geometry_msgs::msg::PoseStamped & backward_pose, const geometry_msgs::msg::PoseStamped & forward_pose) const;
 
-  double getLookAheadDistance(const geometry_msgs::msg::Twist & speed);
+  double getLookAheadDist(const geometry_msgs::msg::Twist & speed);
 
 public: // setters and getters for configuration
   void setUseInterpolation(bool use_interpolation) { use_interpolation_ = use_interpolation; }
@@ -85,6 +86,9 @@ public: // setters and getters for configuration
 
   void setUseCurvatureScaling(bool use_curvature_scaling) { use_curvature_scaling_ = use_curvature_scaling; }
   bool use_curvature_scaling() const { return use_curvature_scaling_; }
+
+  void setLookaheadDistance(double lookahead_dist) { lookahead_dist_ = lookahead_dist; }
+  double getLookaheadDistance() const { return lookahead_dist_; }
 
 private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -105,7 +109,7 @@ private:
   double min_approach_linear_velocity_;
   double max_velocity_scaling_factor_rate_;
   double control_duration_;
-  double lookahead_dist_;
+  double lookahead_dist_ = 2.0;
   double lookahead_time_;
   double min_lookahead_dist_;
   double max_lookahead_dist_;
