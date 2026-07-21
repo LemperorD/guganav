@@ -1,0 +1,11 @@
+<class_libraries>
+  <library path="esdf_layer">
+    <class type="rog_map_layer::EsdfLayer"
+           base_class_type="nav2_costmap_2d::Layer">
+      <description>ESDF (Euclidean Signed Distance Field) costmap layer
+      inspired by ROG-Map. Computes distance-to-nearest-obstacle
+      for each cell and provides gradient query API for
+      optimization-based planning and control.</description>
+    </class>
+  </library>
+</class_libraries>

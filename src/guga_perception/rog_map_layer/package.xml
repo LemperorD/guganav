@@ -3,11 +3,20 @@
 <package format="3">
   <name>rog_map_layer</name>
   <version>0.0.0</version>
-  <description>build costmap inspired by ROG-Map</description>
+  <description>ESDF costmap layer plugin inspired by ROG-Map</description>
   <maintainer email="ld2382619813@163.com">ld</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>nav2_util</depend>
+  <depend>nav_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>tf2_ros</depend>
+  <depend>libtbb-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
