@@ -32,42 +32,44 @@ public:
 
   ~EsdfParallelExecutor() = default;
 
-  EsdfParallelExecutor(const EsdfParallelExecutor&) = delete;
-  EsdfParallelExecutor& operator=(const EsdfParallelExecutor&) = delete;
-  EsdfParallelExecutor(EsdfParallelExecutor&&) = default;
-  EsdfParallelExecutor& operator=(EsdfParallelExecutor&&) = default;
+  EsdfParallelExecutor(const EsdfParallelExecutor &) = delete;
+  EsdfParallelExecutor & operator=(const EsdfParallelExecutor &) = delete;
+  EsdfParallelExecutor(EsdfParallelExecutor &&) = default;
+  EsdfParallelExecutor & operator=(EsdfParallelExecutor &&) = default;
 
-  template <typename Func>
-  void parallelFor(size_t n, Func&& f)
+  template<typename Func>
+  void parallelFor(size_t n, Func && f)
   {
-    arena_.execute([&] {
-      tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, n),
-        [&](const tbb::blocked_range<size_t>& r) {
-          for (size_t i = r.begin(); i != r.end(); ++i) {
-            f(i);
-          }
-        });
-    });
-  }
-
-  template <typename Func>
-  void parallelFor2D(size_t rows, size_t cols, Func&& f)
-  {
-    arena_.execute([&] {
-      tbb::parallel_for(
-        tbb::blocked_range2d<size_t>(0, rows, 0, cols),
-        [&](const tbb::blocked_range2d<size_t>& r) {
-          for (size_t y = r.rows().begin(); y != r.rows().end(); ++y) {
-            for (size_t x = r.cols().begin(); x != r.cols().end(); ++x) {
-              f(x, y);
+    arena_.execute(
+      [&] {
+        tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, n),
+          [&](const tbb::blocked_range<size_t> & r) {
+            for (size_t i = r.begin(); i != r.end(); ++i) {
+              f(i);
             }
-          }
-        });
-    });
+          });
+      });
   }
 
-  [[nodiscard]] bool isParallel() const { return num_threads_ > 1; }
+  template<typename Func>
+  void parallelFor2D(size_t rows, size_t cols, Func && f)
+  {
+    arena_.execute(
+      [&] {
+        tbb::parallel_for(
+          tbb::blocked_range2d<size_t>(0, rows, 0, cols),
+          [&](const tbb::blocked_range2d<size_t> & r) {
+            for (size_t y = r.rows().begin(); y != r.rows().end(); ++y) {
+              for (size_t x = r.cols().begin(); x != r.cols().end(); ++x) {
+                f(x, y);
+              }
+            }
+          });
+      });
+  }
+
+  [[nodiscard]] bool isParallel() const {return num_threads_ > 1;}
 
 private:
   int num_threads_{};

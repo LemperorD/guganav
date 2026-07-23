@@ -25,11 +25,12 @@
 namespace rog_map_layer
 {
 
-void IncrementalUpdate::detectChanges(const unsigned char* current,
-                                       const unsigned char* previous,
-                                       size_t n,
-                                       std::vector<size_t>& changed_indices,
-                                       EsdfParallelExecutor* executor)
+void IncrementalUpdate::detectChanges(
+  const unsigned char * current,
+  const unsigned char * previous,
+  size_t n,
+  std::vector<size_t> & changed_indices,
+  EsdfParallelExecutor * executor)
 {
   changed_indices.clear();
 
@@ -38,12 +39,13 @@ void IncrementalUpdate::detectChanges(const unsigned char* current,
     // 使用 thread-local vector 避免锁竞争
     std::mutex merge_mutex;
 
-    executor->parallelFor(n, [&](size_t i) {
-      if (current[i] != previous[i]) {
-        std::lock_guard<std::mutex> lock(merge_mutex);
-        changed_indices.push_back(i);
-      }
-    });
+    executor->parallelFor(
+      n, [&](size_t i) {
+        if (current[i] != previous[i]) {
+          std::lock_guard<std::mutex> lock(merge_mutex);
+          changed_indices.push_back(i);
+        }
+      });
   } else {
     for (size_t i = 0; i < n; ++i) {
       if (current[i] != previous[i]) {
@@ -54,13 +56,13 @@ void IncrementalUpdate::detectChanges(const unsigned char* current,
 }
 
 void IncrementalUpdate::buildDirtyMask(
-    const std::vector<size_t>& changed_indices,
-    size_t size_x,
-    size_t size_y,
-    const EsdfConfig& config,
-    std::vector<bool>& dirty_mask,
-    size_t& dirty_count,
-    EsdfParallelExecutor* executor)
+  const std::vector<size_t> & changed_indices,
+  size_t size_x,
+  size_t size_y,
+  const EsdfConfig & config,
+  std::vector<bool> & dirty_mask,
+  size_t & dirty_count,
+  EsdfParallelExecutor * executor)
 {
   size_t n = size_x * size_y;
   dirty_mask.assign(n, false);
@@ -68,33 +70,34 @@ void IncrementalUpdate::buildDirtyMask(
 
   // 计算膨胀半径（以 cells 为单位）
   int radius = static_cast<int>(std::ceil(
-    config.max_distance / config.resolution));
+      config.max_distance / config.resolution));
 
   if (executor && executor->isParallel()) {
     std::mutex count_mutex;
 
-    executor->parallelFor(changed_indices.size(), [&](size_t i) {
-      size_t idx = changed_indices[i];
-      int cy = static_cast<int>(idx / size_x);
-      int cx = static_cast<int>(idx % size_x);
+    executor->parallelFor(
+      changed_indices.size(), [&](size_t i) {
+        size_t idx = changed_indices[i];
+        int cy = static_cast<int>(idx / size_x);
+        int cx = static_cast<int>(idx % size_x);
 
-      int y_min = std::max(0, cy - radius);
-      int y_max = std::min(static_cast<int>(size_y) - 1, cy + radius);
-      int x_min = std::max(0, cx - radius);
-      int x_max = std::min(static_cast<int>(size_x) - 1, cx + radius);
+        int y_min = std::max(0, cy - radius);
+        int y_max = std::min(static_cast<int>(size_y) - 1, cy + radius);
+        int x_min = std::max(0, cx - radius);
+        int x_max = std::min(static_cast<int>(size_x) - 1, cx + radius);
 
-      for (int ny = y_min; ny <= y_max; ++ny) {
-        for (int nx = x_min; nx <= x_max; ++nx) {
-          size_t nidx = static_cast<size_t>(ny) * size_x +
-                        static_cast<size_t>(nx);
-          if (!dirty_mask[nidx]) {
-            dirty_mask[nidx] = true;
-            std::lock_guard<std::mutex> lock(count_mutex);
-            ++dirty_count;
+        for (int ny = y_min; ny <= y_max; ++ny) {
+          for (int nx = x_min; nx <= x_max; ++nx) {
+            size_t nidx = static_cast<size_t>(ny) * size_x +
+            static_cast<size_t>(nx);
+            if (!dirty_mask[nidx]) {
+              dirty_mask[nidx] = true;
+              std::lock_guard<std::mutex> lock(count_mutex);
+              ++dirty_count;
+            }
           }
         }
-      }
-    });
+      });
   } else {
     for (size_t idx : changed_indices) {
       int cy = static_cast<int>(idx / size_x);
@@ -108,7 +111,7 @@ void IncrementalUpdate::buildDirtyMask(
       for (int ny = y_min; ny <= y_max; ++ny) {
         for (int nx = x_min; nx <= x_max; ++nx) {
           size_t nidx = static_cast<size_t>(ny) * size_x +
-                        static_cast<size_t>(nx);
+            static_cast<size_t>(nx);
           if (!dirty_mask[nidx]) {
             dirty_mask[nidx] = true;
             ++dirty_count;
@@ -120,26 +123,27 @@ void IncrementalUpdate::buildDirtyMask(
 }
 
 void IncrementalUpdate::resetDirtyOffsets(
-    std::vector<int16_t>& offset_dx,
-    std::vector<int16_t>& offset_dy,
-    const std::vector<bool>& dirty_mask,
-    const unsigned char* occupancy,
-    unsigned char obstacle_threshold,
-    size_t n,
-    EsdfParallelExecutor* executor)
+  std::vector<int16_t> & offset_dx,
+  std::vector<int16_t> & offset_dy,
+  const std::vector<bool> & dirty_mask,
+  const unsigned char * occupancy,
+  unsigned char obstacle_threshold,
+  size_t n,
+  EsdfParallelExecutor * executor)
 {
   if (executor && executor->isParallel()) {
-    executor->parallelFor(n, [&](size_t i) {
-      if (dirty_mask[i]) {
-        if (occupancy[i] >= obstacle_threshold) {
-          offset_dx[i] = 0;
-          offset_dy[i] = 0;
-        } else {
-          offset_dx[i] = INT16_MAX;
-          offset_dy[i] = INT16_MAX;
+    executor->parallelFor(
+      n, [&](size_t i) {
+        if (dirty_mask[i]) {
+          if (occupancy[i] >= obstacle_threshold) {
+            offset_dx[i] = 0;
+            offset_dy[i] = 0;
+          } else {
+            offset_dx[i] = INT16_MAX;
+            offset_dy[i] = INT16_MAX;
+          }
         }
-      }
-    });
+      });
   } else {
     for (size_t i = 0; i < n; ++i) {
       if (dirty_mask[i]) {
@@ -156,19 +160,20 @@ void IncrementalUpdate::resetDirtyOffsets(
 }
 
 void IncrementalUpdate::resetDirtyDistances(
-    std::vector<float>& distance_field,
-    const std::vector<bool>& dirty_mask,
-    const unsigned char* occupancy,
-    unsigned char obstacle_threshold,
-    size_t n,
-    EsdfParallelExecutor* executor)
+  std::vector<float> & distance_field,
+  const std::vector<bool> & dirty_mask,
+  const unsigned char * occupancy,
+  unsigned char obstacle_threshold,
+  size_t n,
+  EsdfParallelExecutor * executor)
 {
   if (executor && executor->isParallel()) {
-    executor->parallelFor(n, [&](size_t i) {
-      if (dirty_mask[i]) {
-        distance_field[i] = (occupancy[i] >= obstacle_threshold) ? 0.0f : 1e10f;
-      }
-    });
+    executor->parallelFor(
+      n, [&](size_t i) {
+        if (dirty_mask[i]) {
+          distance_field[i] = (occupancy[i] >= obstacle_threshold) ? 0.0f : 1e10f;
+        }
+      });
   } else {
     for (size_t i = 0; i < n; ++i) {
       if (dirty_mask[i]) {

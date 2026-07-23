@@ -28,37 +28,41 @@ struct EsdfConfig;
 struct IncrementalUpdate
 {
   /// @brief 并行差分检测：current vs previous occupancy，找出所有变化的 cell
-  static void detectChanges(const unsigned char* current,
-                            const unsigned char* previous,
-                            size_t n,
-                            std::vector<size_t>& changed_indices,
-                            EsdfParallelExecutor* executor = nullptr);
+  static void detectChanges(
+    const unsigned char * current,
+    const unsigned char * previous,
+    size_t n,
+    std::vector<size_t> & changed_indices,
+    EsdfParallelExecutor * executor = nullptr);
 
   /// @brief 将变化格膨胀为脏区域 mask（并行标记邻居）
-  static void buildDirtyMask(const std::vector<size_t>& changed_indices,
-                             size_t size_x,
-                             size_t size_y,
-                             const EsdfConfig& config,
-                             std::vector<bool>& dirty_mask,
-                             size_t& dirty_count,
-                             EsdfParallelExecutor* executor = nullptr);
+  static void buildDirtyMask(
+    const std::vector<size_t> & changed_indices,
+    size_t size_x,
+    size_t size_y,
+    const EsdfConfig & config,
+    std::vector<bool> & dirty_mask,
+    size_t & dirty_count,
+    EsdfParallelExecutor * executor = nullptr);
 
   /// @brief 重置脏区域内格子的偏移量为初始状态
-  static void resetDirtyOffsets(std::vector<int16_t>& offset_dx,
-                                std::vector<int16_t>& offset_dy,
-                                const std::vector<bool>& dirty_mask,
-                                const unsigned char* occupancy,
-                                unsigned char obstacle_threshold,
-                                size_t n,
-                                EsdfParallelExecutor* executor = nullptr);
+  static void resetDirtyOffsets(
+    std::vector<int16_t> & offset_dx,
+    std::vector<int16_t> & offset_dy,
+    const std::vector<bool> & dirty_mask,
+    const unsigned char * occupancy,
+    unsigned char obstacle_threshold,
+    size_t n,
+    EsdfParallelExecutor * executor = nullptr);
 
   /// @brief 重置脏区域内格子的距离值为初始状态
-  static void resetDirtyDistances(std::vector<float>& distance_field,
-                                  const std::vector<bool>& dirty_mask,
-                                  const unsigned char* occupancy,
-                                  unsigned char obstacle_threshold,
-                                  size_t n,
-                                  EsdfParallelExecutor* executor = nullptr);
+  static void resetDirtyDistances(
+    std::vector<float> & distance_field,
+    const std::vector<bool> & dirty_mask,
+    const unsigned char * occupancy,
+    unsigned char obstacle_threshold,
+    size_t n,
+    EsdfParallelExecutor * executor = nullptr);
 };
 
 }  // namespace rog_map_layer

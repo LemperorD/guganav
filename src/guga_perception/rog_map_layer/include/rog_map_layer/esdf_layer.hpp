@@ -40,25 +40,30 @@ public:
 
   // Nav2 Layer 接口
   void onInitialize() override;
-  void updateBounds(double robot_x, double robot_y, double robot_yaw,
-                    double* min_x, double* min_y,
-                    double* max_x, double* max_y) override;
-  void updateCosts(nav2_costmap_2d::Costmap2D& master_grid,
-                   int min_i, int min_j, int max_i, int max_j) override;
+  void updateBounds(
+    double robot_x, double robot_y, double robot_yaw,
+    double * min_x, double * min_y,
+    double * max_x, double * max_y) override;
+  void updateCosts(
+    nav2_costmap_2d::Costmap2D & master_grid,
+    int min_i, int min_j, int max_i, int max_j) override;
   void matchSize() override;
   void reset() override;
-  bool isClearable() override { return false; }
+  bool isClearable() override {return false;}
 
-  // ESDF 查询 API
-  [[nodiscard]] std::shared_ptr<const EsdfMap> getEsdfMap() const;
+  // ESDF query API (for external planners/controllers)
+  [[nodiscard]] const EsdfMap * getEsdfMapRaw() const;
   [[nodiscard]] float getDistance(double wx, double wy) const;
   [[nodiscard]] std::pair<float, float> getGradient(double wx, double wy) const;
 
-private:
-  static unsigned char distanceToCost(float distance, const EsdfConfig& config);
+  [[nodiscard]] const EsdfConfig & config() const {return config_;}
 
-  void writeCostsToMaster(nav2_costmap_2d::Costmap2D& master_grid,
-                          int min_i, int min_j, int max_i, int max_j);
+private:
+  static unsigned char distanceToCost(float distance, const EsdfConfig & config);
+
+  void writeCostsToMaster(
+    nav2_costmap_2d::Costmap2D & master_grid,
+    int min_i, int min_j, int max_i, int max_j);
 
   EsdfConfig config_;
   std::unique_ptr<EsdfMap> esdf_map_;

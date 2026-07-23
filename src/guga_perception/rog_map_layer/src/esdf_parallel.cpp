@@ -18,7 +18,7 @@ namespace rog_map_layer
 {
 
 EsdfParallelExecutor::EsdfParallelExecutor(int num_threads)
-  : num_threads_{std::max(1, num_threads)}
+: num_threads_{std::max(1, num_threads)}
   , arena_{num_threads_}
 {
 }
