@@ -14,7 +14,8 @@
         "autostart",
         "jps",
         "pointLIO",
-        "test"
+        "test",
+        "common"
     ],
     "ROS2.distro": "humble",
     "python.autoComplete.extraPaths": [
