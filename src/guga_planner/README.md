@@ -5,5 +5,7 @@
 ## TODOLIST
 
 - [X] 前端轨迹生成（JPS/。。。）
-- [ ] 后端轨迹优化（minco/b-spline）
+- [X] 后端轨迹优化（minco/b-spline）
+- [ ] jps引入动力学约束
+- [ ] jps使用esdf信息规划路径
 - [ ] 动态障碍物避障（点云滤波识别+轨迹预测）
