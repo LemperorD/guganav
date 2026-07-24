@@ -1,5 +1,5 @@
-#ifndef GUGA_UI_COMMON_SHM_LAYOUT_HPP
-#define GUGA_UI_COMMON_SHM_LAYOUT_HPP
+#ifndef GUGA_COMMON_SHM_LAYOUT_HPP
+#define GUGA_COMMON_SHM_LAYOUT_HPP
 /**
  * @file shm_layout.hpp
  * @brief 共享内存整体布局和工具函数。
@@ -7,13 +7,13 @@
  * 布局（从 shm 起始地址开始）：
  *
  *   ┌────────────────────────────────────────┐  ← offset 0
- *   │ ShmHeader (96 bytes)                   │
- *   │   magic / version / slot_count / _pad  │
+ *   │ ShmHeader (64 bytes)                   │
+ *   │   magic / slot_count / _pad            │
  *   ├────────────────────────────────────────┤
- *   │ ShmSlot[0] (32 bytes)                  │  ← slot 对应的 offset 相对于
+ *   │ ShmSlot[0] (64 bytes)                  │  ← slot 对应的 offset 相对于
  *   │   data_offset / data_size / seq / _pad │    shm 起始地址
  *   ├────────────────────────────────────────┤
- *   │ ShmSlot[1] (32 bytes)                  │
+ *   │ ShmSlot[1] (64 bytes)                  │
  *   ├────────────────────────────────────────┤
  *   │ ... (一共 slot_count 个)                │
  *   ├────────────────────────────────────────┤
@@ -31,28 +31,15 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
+#include <stdexcept>
 
-namespace guga_ui {
+namespace guga_common {
 
-// ==================== 内存布局常量 ====================
-
-// 共享内存默认名称
-static constexpr const char* SHM_DEFAULT_NAME{"guga_shm"};
-
-// 单个 slot 的数据区大小（与 ui_types.hpp 中全部结构体的 alignas(64) 一致）
-// 取值设为 sizeof(UiPath) 的最大值 (≈4160 → 取 4224 为 64 的整倍数)
-static constexpr size_t SHM_SLOT_DATA_SIZE{4224};
-
-// 最大 slot 数量
-static constexpr size_t SHM_MAX_SLOTS{16};
-
-// ShmHeader 中的 magic number（"GUGUGAGA" 的十六进制）
-static constexpr uint64_t SHM_MAGIC{0x4755475547414741ULL};
-
-// 当前 shm 布局版本（结构体变更时递增）
-static constexpr uint32_t SHM_VERSION{2};
-
-// ==================== 共享内存头部 ====================
+// 内存布局常量
+static constexpr const char* SHM_DEFAULT_NAME{"guga_shm"}; // 共享内存默认名称
+static constexpr size_t SHM_SLOT_DATA_SIZE{4224}; // 单个 slot 的数据区大小）
+static constexpr size_t SHM_MAX_SLOTS{16}; // 最大 slot 数量
+static constexpr uint64_t SHM_MAGIC{0x4755475547414741ULL}; // magic number（"GUGUGAGA" 的十六进制）
 
 /**
  * @brief 共享内存头部，包含版本校验和 slot 元数据表。
@@ -61,20 +48,16 @@ struct ShmHeader {
   /// 魔数: 用于校验 shm 是否由 guga_ui 创建
   uint64_t magic{SHM_MAGIC};
 
-  /// 布局版本: UI 端校验结构体兼容性
-  uint32_t version{SHM_VERSION};
-
   /// 已注册的 slot 数量
   uint32_t slot_count{};
 
   /// 保留扩展
-  uint8_t reserved[48]{};
+  uint8_t reserved[52]{};
 };
 
 // 编译期断言 ShmHeader 大小为 64 字节（一个缓存行），避免 false sharing 和未对齐访问
 static_assert(sizeof(ShmHeader) == 64, "ShmHeader must be 64 bytes (cache-line aligned)");
 
-// ==================== 槽位元数据 ====================
 
 /**
  * @brief 每个 slot 的元数据，描述数据区位置和写入进度。
@@ -99,21 +82,25 @@ struct alignas(64) ShmSlot {
 // 编译期断言 ShmSlot 大小为 64 字节（一个缓存行），确保 seq 原子变量独占一行，避免 false sharing
 static_assert(sizeof(ShmSlot) == 64, "ShmSlot must be 64 bytes for cache-line alignment");
 
-// ==================== 工具函数 ====================
+// 工具函数
 
 /**
- * @brief 计算共享内存所需的全部大小。
+ * @brief 计算整块共享内存所需的全部大小。
  *
  * @param slot_count 槽位总数，必须 ≤ SHM_MAX_SLOTS。
  * @return 共享内存总字节数。
  *
- * 布局: [ShmHeader: 64B] + [ShmSlot × slot_count: 每个 32B]
+ * 布局: [ShmHeader: 64B] + [ShmSlot × slot_count: 每个 64B]
  *        + [Data × slot_count: 每个 SHM_SLOT_DATA_SIZE]
  */
 inline constexpr size_t calcShmSize(size_t slot_count) {
+  if (slot_count > SHM_MAX_SLOTS) {
+    throw std::invalid_argument("slot_count > SHM_MAX_SLOTS");
+  }
+
   return sizeof(ShmHeader)
-       + slot_count * sizeof(ShmSlot)
-       + slot_count * SHM_SLOT_DATA_SIZE;
+       + slot_count * sizeof(ShmSlot)      // 固定槽元数据区
+       + slot_count * SHM_SLOT_DATA_SIZE;  // 第 slot_index 个数据区
 }
 
 /**
@@ -124,7 +111,7 @@ inline constexpr size_t calcShmSize(size_t slot_count) {
  */
 inline constexpr size_t calcSlotDataOffset(size_t slot_index) {
   return sizeof(ShmHeader)
-       + SHM_MAX_SLOTS * sizeof(ShmSlot)  // 固定槽元数据区
+       + SHM_MAX_SLOTS * sizeof(ShmSlot)   // 固定槽元数据区
        + slot_index * SHM_SLOT_DATA_SIZE;  // 第 slot_index 个数据区
 }
 
@@ -138,6 +125,6 @@ inline constexpr size_t calcSlotMetaOffset(size_t slot_index) {
   return sizeof(ShmHeader) + slot_index * sizeof(ShmSlot);
 }
 
-}  // namespace guga_ui
+} // namespace guga_common
 
-#endif  // GUGA_UI_COMMON_SHM_LAYOUT_HPP
+#endif // GUGA_COMMON_SHM_LAYOUT_HPP

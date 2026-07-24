@@ -48,11 +48,11 @@ target_link_libraries(your_target guga_ui_common::guga_ui_common)
     │  ShmWriter::write(&data, sizeof(data))
     ▼
 ┌─────────────────────────────────────────────────┐
-│  POSIX 共享内存 "guga_shm"                       │
-│  ┌──────────┬─────────────────┬────────────────┐ │
-│  │ ShmHeader │ ShmSlot[0..15] │ Slot Data[0..15]│ │
-│  │  (64B)    │  (64B × 16)    │  (64B × 16)    │ │
-│  └──────────┴─────────────────┴────────────────┘ │
+│  POSIX shared memory "guga_shm"                 │
+│ ┌──────────┬─────────────────┬────────────────┐ │
+│ │ShmHeader │ ShmSlot[0..15]  |Slot Data[0..15]| │
+│ │ (64B)    │  (64B × 16)     | (64B × 16)     | │
+│ └──────────┴─────────────────┴────────────────┘ │
 │  共 2112 字节，lock-free seq 协议                 │
 └─────────────────────────────────────────────────┘
     │  ShmReader::read(slot_id, &out)

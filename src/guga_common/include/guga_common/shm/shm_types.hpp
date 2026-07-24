@@ -1,5 +1,5 @@
-#ifndef GUGA_UI_COMMON_UI_TYPES_HPP
-#define GUGA_UI_COMMON_UI_TYPES_HPP
+#ifndef GUGA_COMMON_SHM_TYPES_HPP
+#define GUGA_COMMON_SHM_TYPES_HPP
 /**
  * @file ui_types.hpp
  * @brief guga_ui 共享内存中传输的所有数据类型定义。
@@ -7,13 +7,31 @@
  * 所有结构体均为 POD（Plain Old Data），可安全地 memcpy 到共享内存。
  * 每个结构体按 64 字节对齐，避免跨 cache line 的 false sharing。
  *
- * 使用时：模块端在 publish 之后调用 ShmWriter::write() 写入对应结构体；
- *        UI 端通过 ShmReader 读取并渲染。
  */
 
 #include <cstdint>
 
-namespace guga_ui {
+namespace guga_common {
+
+/**
+ * @brief 共享内存中的 slot ID 分配。
+ *
+ * 每个算法模块写入时用固定 slot_id，读取时按 slot_id 索引。
+ * 新增 slot 必须追加在末尾（不删除/重排已有值），保证向后兼容。
+ */
+enum class SlotId : uint32_t {
+  ROBOT_STATUS = 0,
+  GAME_STATUS = 1,
+  RFID_STATUS = 2,
+  DECISION = 3,
+  ENEMY = 4,
+  ODOM = 5,
+  YAW = 6,
+  PATH = 7,
+
+  /// 槽位总数（新增后必须更新此值）
+  COUNT = 8
+};
 
 // ==================== 机器人状态 ====================
 
@@ -23,7 +41,7 @@ namespace guga_ui {
  * 写入端: serial_driver_node (publishRefereeData)
  * 读取频率: UI 渲染帧率 (30–60Hz)
  */
-struct alignas(64) UiRobotStatus {
+struct alignas(64) RobotStatus {
   uint16_t current_hp{};
   uint16_t maximum_hp{};
   uint16_t shooter_17mm_1_barrel_heat{};
@@ -41,10 +59,10 @@ struct alignas(64) UiRobotStatus {
   uint8_t _pad[43]{};
 };
 
-static_assert(sizeof(UiRobotStatus) == 64,
-              "UiRobotStatus must be 64 bytes for cache-line alignment");
-static_assert(std::is_trivially_copyable_v<UiRobotStatus>,
-              "UiRobotStatus must be trivially copyable for shm memcpy");
+static_assert(sizeof(RobotStatus) == 64,
+              "RobotStatus must be 64 bytes for cache-line alignment");
+static_assert(std::is_trivially_copyable_v<RobotStatus>,
+              "RobotStatus must be trivially copyable for shm memcpy");
 
 // ==================== 比赛状态 ====================
 
@@ -53,7 +71,7 @@ static_assert(std::is_trivially_copyable_v<UiRobotStatus>,
  *
  * 写入端: serial_driver_node (publishRefereeData)
  */
-struct alignas(64) UiGameStatus {
+struct alignas(64) GameStatus {
   /// 比赛阶段: 0=未开始 1=准备 2=自检 3=倒计时 4=比赛中 5=结算
   uint8_t game_progress{};
   /// 当前阶段剩余时间，秒
@@ -64,8 +82,8 @@ struct alignas(64) UiGameStatus {
   uint8_t _pad[51]{};
 };
 
-static_assert(alignof(UiGameStatus) == 64);
-static_assert(std::is_trivially_copyable_v<UiGameStatus>);
+static_assert(alignof(GameStatus) == 64);
+static_assert(std::is_trivially_copyable_v<GameStatus>);
 
 // ==================== RFID 状态 ====================
 
@@ -74,7 +92,7 @@ static_assert(std::is_trivially_copyable_v<UiGameStatus>);
  *
  * 写入端: serial_driver_node (publishRefereeData)
  */
-struct alignas(64) UiRfidStatus {
+struct alignas(64) RfidStatus {
   bool base_gain_point{false};
   bool central_highland_gain_point{false};
   bool enemy_central_highland_gain_point{false};
@@ -103,8 +121,8 @@ struct alignas(64) UiRfidStatus {
   uint8_t _pad[40]{};
 };
 
-static_assert(alignof(UiRfidStatus) == 64);
-static_assert(std::is_trivially_copyable_v<UiRfidStatus>);
+static_assert(alignof(RfidStatus) == 64);
+static_assert(std::is_trivially_copyable_v<RfidStatus>);
 
 // ==================== 决策状态 ====================
 
@@ -113,7 +131,7 @@ static_assert(std::is_trivially_copyable_v<UiRfidStatus>);
  *
  * 写入端: simple_decision (executeAction)
  */
-struct alignas(64) UiDecision {
+struct alignas(64) Decision {
   /// 决策状态: 0=DEFAULT 1=ATTACK 2=SUPPLY
   uint8_t state{};
   /// 底盘模式: 0=CHASSIS_FOLLOWED 1=LITTLE_TES 2=GO_HOME
@@ -137,8 +155,8 @@ struct alignas(64) UiDecision {
   uint8_t _pad[15]{};
 };
 
-static_assert(alignof(UiDecision) == 64);
-static_assert(std::is_trivially_copyable_v<UiDecision>);
+static_assert(alignof(Decision) == 64);
+static_assert(std::is_trivially_copyable_v<Decision>);
 
 // ==================== 敌方信息 ====================
 
@@ -147,7 +165,7 @@ static_assert(std::is_trivially_copyable_v<UiDecision>);
  *
  * 写入端: simple_decision (onArmors / onTarget 回调)
  */
-struct alignas(64) UiEnemy {
+struct alignas(64) Enemy {
   /// 检测到的装甲板数量
   uint8_t armor_count{};
   /// 是否有追踪目标
@@ -170,8 +188,8 @@ struct alignas(64) UiEnemy {
   uint8_t _pad[30]{};
 };
 
-static_assert(alignof(UiEnemy) == 64);
-static_assert(std::is_trivially_copyable_v<UiEnemy>);
+static_assert(alignof(Enemy) == 64);
+static_assert(std::is_trivially_copyable_v<Enemy>);
 
 // ==================== 里程计 ====================
 
@@ -180,7 +198,7 @@ static_assert(std::is_trivially_copyable_v<UiEnemy>);
  *
  * 写入端: point_lio (publish_odometry)
  */
-struct alignas(64) UiOdom {
+struct alignas(64) Odom {
   double x{};
   double y{};
   double z{};
@@ -194,8 +212,8 @@ struct alignas(64) UiOdom {
   uint8_t _pad[8]{};
 };
 
-static_assert(alignof(UiOdom) == 64);
-static_assert(std::is_trivially_copyable_v<UiOdom>);
+static_assert(alignof(Odom) == 64);
+static_assert(std::is_trivially_copyable_v<Odom>);
 
 // ==================== 云台偏航 ====================
 
@@ -204,7 +222,7 @@ static_assert(std::is_trivially_copyable_v<UiOdom>);
  *
  * 写入端: serial_driver_node (decodeYaw / decodeTESspeed)
  */
-struct alignas(64) UiYaw {
+struct alignas(64) Yaw {
   /// 下位机上报的 yaw 角度差（弧度）
   double yaw_diff{};
   /// 下位机上报的 TES 角速度
@@ -213,8 +231,8 @@ struct alignas(64) UiYaw {
   uint8_t _pad[48]{};
 };
 
-static_assert(alignof(UiYaw) == 64);
-static_assert(std::is_trivially_copyable_v<UiYaw>);
+static_assert(alignof(Yaw) == 64);
+static_assert(std::is_trivially_copyable_v<Yaw>);
 
 // ==================== 导航路径 ====================
 
@@ -226,7 +244,7 @@ static constexpr size_t UI_PATH_MAX_POINTS{256};
  *
  * 写入端: 未来可接入 nav2 的 plan 回调
  */
-struct alignas(64) UiPath {
+struct alignas(64) Path {
   /// 实际路径点数量
   uint32_t count{};
   /// 时间戳
@@ -239,32 +257,10 @@ struct alignas(64) UiPath {
   uint8_t _pad[44]{};
 };
 
-static_assert(offsetof(UiPath, count) == 0);
-static_assert(offsetof(UiPath, x) % 8 == 0);
-static_assert(std::is_trivially_copyable_v<UiPath>);
+static_assert(offsetof(Path, count) == 0);
+static_assert(offsetof(Path, x) % 8 == 0);
+static_assert(std::is_trivially_copyable_v<Path>);
 
-// ==================== 槽位枚举 ====================
+} // namespace guga_common
 
-/**
- * @brief 共享内存中的 slot ID 分配。
- *
- * 每个算法模块写入时用固定 slot_id，UI 读取时按 slot_id 索引。
- * 新增 slot 必须追加在末尾（不删除/重排已有值），保证向后兼容。
- */
-enum class UiSlotId : uint32_t {
-  ROBOT_STATUS = 0,
-  GAME_STATUS = 1,
-  RFID_STATUS = 2,
-  DECISION = 3,
-  ENEMY = 4,
-  ODOM = 5,
-  YAW = 6,
-  PATH = 7,
-
-  /// 槽位总数（新增后必须更新此值）
-  COUNT = 8
-};
-
-}  // namespace guga_ui
-
-#endif  // GUGA_UI_COMMON_UI_TYPES_HPP
+#endif // GUGA_COMMON_SHM_TYPES_HPP
