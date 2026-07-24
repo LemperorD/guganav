@@ -48,7 +48,7 @@ ShmWriter& ShmWriter::operator=(ShmWriter&& other) noexcept {
   return *this;
 }
 
-bool ShmWriter::init(const std::string& name, UiSlotId slot_id) {
+bool ShmWriter::init(const std::string& name, SlotId slot_id) {
   name_ = name;
   slot_index_ = static_cast<uint32_t>(slot_id);
 
@@ -101,7 +101,6 @@ bool ShmWriter::init(const std::string& name, UiSlotId slot_id) {
   if (created) {
     // 首次创建：初始化 header 和所有 slot meta
     header->magic = SHM_MAGIC;
-    header->version = SHM_VERSION;
     header->slot_count = SHM_MAX_SLOTS;
 
     for (size_t i = 0; i < SHM_MAX_SLOTS; ++i) {
@@ -116,15 +115,6 @@ bool ShmWriter::init(const std::string& name, UiSlotId slot_id) {
       std::cerr << "[ShmWriter] shm magic mismatch: 0x" << std::hex
                 << header->magic << " != 0x" << SHM_MAGIC << std::dec
                 << std::endl;
-      munmap(base_addr_, shm_size_);
-      close(shm_fd_);
-      base_addr_ = nullptr;
-      shm_fd_ = -1;
-      return false;
-    }
-    if (header->version != SHM_VERSION) {
-      std::cerr << "[ShmWriter] shm version mismatch: " << header->version
-                << " != " << SHM_VERSION << std::endl;
       munmap(base_addr_, shm_size_);
       close(shm_fd_);
       base_addr_ = nullptr;

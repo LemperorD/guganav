@@ -103,10 +103,10 @@ private:
    */
   const ShmSlot* slotMetaAt(size_t index) const;
 
-  std::string name_;
-  int shm_fd_{-1};
-  void* base_addr_{nullptr};
-  size_t shm_size_{};
+  std::string name_;         // shm 名称
+  int shm_fd_{-1};           // shm_open 返回的文件描述符
+  void* base_addr_{nullptr}; // mmap 后的共享内存首地址
+  size_t shm_size_{};        // 共享内存大小
 
   /// 记录每个槽位上次读取时的 seq，用于 checkFresh 比较
   mutable std::array<uint64_t, SHM_MAX_SLOTS> last_seqs_{};

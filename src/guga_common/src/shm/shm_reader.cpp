@@ -3,10 +3,11 @@
 namespace guga_common {
 
 ShmReader::ShmReader(ShmReader&& other) noexcept
-    : shm_fd_(other.shm_fd_),
-      base_addr_(other.base_addr_),
-      shm_size_(other.shm_size_),
-      last_seqs_(std::move(other.last_seqs_)) {
+  : shm_fd_(other.shm_fd_),
+    base_addr_(other.base_addr_),
+    shm_size_(other.shm_size_),
+    last_seqs_(std::move(other.last_seqs_))
+{
   other.shm_fd_ = -1;
   other.base_addr_ = nullptr;
 }
@@ -48,8 +49,8 @@ bool ShmReader::open(const std::string& name) {
   // 获取 shm 大小
   struct stat sb {};
   if (fstat(shm_fd_, &sb) != 0) {
-    std::cerr << "[ShmReader] fstat failed: " << strerror(errno)
-              << std::endl;
+    std::cerr << "[ShmReader] fstat failed: "
+              << strerror(errno) << std::endl;
     close(shm_fd_);
     shm_fd_ = -1;
     return false;
@@ -77,21 +78,12 @@ bool ShmReader::open(const std::string& name) {
     return false;
   }
 
-  // 校验 magic 和 version
+  // 校验 magic
   auto* header = static_cast<const ShmHeader*>(base_addr_);
   if (header->magic != SHM_MAGIC) {
     std::cerr << "[ShmReader] shm magic mismatch: 0x" << std::hex
               << header->magic << " != 0x" << SHM_MAGIC << std::dec
               << std::endl;
-    munmap(base_addr_, shm_size_);
-    close(shm_fd_);
-    base_addr_ = nullptr;
-    shm_fd_ = -1;
-    return false;
-  }
-  if (header->version != SHM_VERSION) {
-    std::cerr << "[ShmReader] shm version mismatch: " << header->version
-              << " != " << SHM_VERSION << std::endl;
     munmap(base_addr_, shm_size_);
     close(shm_fd_);
     base_addr_ = nullptr;
@@ -113,7 +105,7 @@ bool ShmReader::isValid() const {
     return false;
   }
   auto* header = static_cast<const ShmHeader*>(base_addr_);
-  return (header->magic == SHM_MAGIC && header->version == SHM_VERSION);
+  return (header->magic == SHM_MAGIC);
 }
 
 uint32_t ShmReader::slotCount() const {
