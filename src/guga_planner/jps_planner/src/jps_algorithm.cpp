@@ -22,7 +22,7 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
 [[nodiscard]] inline unsigned char getCost(
   const JPSState & s, int x, int y)
 {
-  if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) { return UNKNOWN_COST; }
+  if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) {return UNKNOWN_COST;}
   return s.costmap_data[static_cast<size_t>(y * s.size_x + x)];
 }
 
@@ -31,7 +31,7 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
   const JPSConfig & c, const JPSState & s, int x, int y)
 {
   auto cost = getCost(s, x, y);
-  if (cost == UNKNOWN_COST && c.allow_unknown) { return false; }
+  if (cost == UNKNOWN_COST && c.allow_unknown) {return false;}
   return cost >= INSCRIBED_COST;
 }
 
@@ -109,9 +109,9 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
 [[nodiscard]] bool hasForcedNeighbor(
   const JPSConfig & c, const JPSState & s, int x, int y, int dx, int dy)
 {
-  if (dx != 0 && dy == 0) { return hasForcedNeighborHoriz(c, s, x, y, dx); }
-  if (dx == 0 && dy != 0) { return hasForcedNeighborVert(c, s, x, y, dy); }
-  if (dx != 0 && dy != 0) { return hasForcedNeighborDiag(c, s, x, y, dx, dy); }
+  if (dx != 0 && dy == 0) {return hasForcedNeighborHoriz(c, s, x, y, dx);}
+  if (dx == 0 && dy != 0) {return hasForcedNeighborVert(c, s, x, y, dy);}
+  if (dx != 0 && dy != 0) {return hasForcedNeighborDiag(c, s, x, y, dx, dy);}
   return false;
 }
 
@@ -200,7 +200,7 @@ SearchNode * jump(
   int ny = y + dy;
 
   // 第一步 — 立即检查是否阻塞
-  if (!withinLimits(s, nx, ny) || isObstacle(c, s, nx, ny)) { return nullptr; }
+  if (!withinLimits(s, nx, ny) || isObstacle(c, s, nx, ny)) {return nullptr;}
 
   // 累计此步的通行代价
   acc += traversalCost(c, getCost(s, nx, ny));
@@ -208,7 +208,7 @@ SearchNode * jump(
   // 到达终点
   if (nx == gx && ny == gy) {
     auto idx = static_cast<size_t>(ny * s.size_x + nx);
-    if (s.node_position_[idx] != nullptr) { return s.node_position_[idx]; }
+    if (s.node_position_[idx] != nullptr) {return s.node_position_[idx];}
     auto & ptr = s.nodes_.emplace_back(
       std::make_unique<SearchNode>(SearchNode{nx, ny}));
     s.node_position_[idx] = ptr.get();
@@ -222,7 +222,7 @@ SearchNode * jump(
   // 强制邻居 → 此格元为跳转点
   if (hasForcedNeighbor(c, s, nx, ny, dx, dy)) {
     auto idx = static_cast<size_t>(ny * s.size_x + nx);
-    if (s.node_position_[idx] != nullptr) { return s.node_position_[idx]; }
+    if (s.node_position_[idx] != nullptr) {return s.node_position_[idx];}
     auto & ptr = s.nodes_.emplace_back(
       std::make_unique<SearchNode>(SearchNode{nx, ny}));
     s.node_position_[idx] = ptr.get();
@@ -238,9 +238,10 @@ SearchNode * jump(
     double dummy_h{};
     double dummy_v{};
     if (jump(c, s, nx, ny, dx, 0, gx, gy, dummy_h) != nullptr ||
-        jump(c, s, nx, ny, 0, dy, gx, gy, dummy_v) != nullptr) {
+      jump(c, s, nx, ny, 0, dy, gx, gy, dummy_v) != nullptr)
+    {
       auto idx = static_cast<size_t>(ny * s.size_x + nx);
-      if (s.node_position_[idx] != nullptr) { return s.node_position_[idx]; }
+      if (s.node_position_[idx] != nullptr) {return s.node_position_[idx];}
       auto & ptr = s.nodes_.emplace_back(
         std::make_unique<SearchNode>(SearchNode{nx, ny}));
       s.node_position_[idx] = ptr.get();
@@ -289,8 +290,8 @@ void identifySuccessors(
   // 计算父节点方向 (归一化到 -1/0/1)
   int pdx = cx - current->parent->x;
   int pdy = cy - current->parent->y;
-  if (pdx != 0) { pdx = pdx > 0 ? 1 : -1; }
-  if (pdy != 0) { pdy = pdy > 0 ? 1 : -1; }
+  if (pdx != 0) {pdx = pdx > 0 ? 1 : -1;}
+  if (pdy != 0) {pdy = pdy > 0 ? 1 : -1;}
 
   pruneNeighbors(c, s, cx, cy, pdx, pdy, directions);
 
@@ -334,7 +335,7 @@ bool JPSAlgorithm::generatePath(
   path.clear();
 
   // 边界 + 起终点可通行性检查
-  if (!withinLimits(s, sx, sy) || !withinLimits(s, gx, gy)) { return false; }
+  if (!withinLimits(s, sx, sy) || !withinLimits(s, gx, gy)) {return false;}
   if (!isTraversable(c, s, sx, sy) || !isTraversable(c, s, gx, gy)) {
     return false;
   }
@@ -372,7 +373,7 @@ bool JPSAlgorithm::generatePath(
     SearchNode * current = s.open_list_.top();
     s.open_list_.pop();
 
-    if (current->closed) { continue; }
+    if (current->closed) {continue;}
     current->closed = true;
 
     // 终点检查
@@ -391,7 +392,7 @@ bool JPSAlgorithm::generatePath(
     }
 
     for (auto [succ, jump_cost] : successors) {
-      if (succ->closed) { continue; }
+      if (succ->closed) {continue;}
 
       double tentative_g = current->g + jump_cost +
         euclideanCost(c, current->x, current->y, succ->x, succ->y);
@@ -413,9 +414,9 @@ bool JPSAlgorithm::generatePath(
 bool JPSAlgorithm::isTraversable(
   const JPSConfig & c, const JPSState & s, int x, int y)
 {
-  if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) { return false; }
+  if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) {return false;}
   auto cost = getCost(s, x, y);
-  if (cost == UNKNOWN_COST) { return c.allow_unknown; }
+  if (cost == UNKNOWN_COST) {return c.allow_unknown;}
   return cost < INSCRIBED_COST;
 }
 

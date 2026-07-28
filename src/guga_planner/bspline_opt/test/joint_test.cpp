@@ -24,9 +24,9 @@ std::vector<std::pair<double, double>> readPath(const std::string & fname)
 {
   std::vector<std::pair<double, double>> out{};
   std::ifstream f(fname);
-  if (!f) { return out; }
+  if (!f) {return out;}
   double x{}, y{};
-  while (f >> x >> y) { out.emplace_back(x, y); }
+  while (f >> x >> y) {out.emplace_back(x, y);}
   return out;
 }
 
@@ -35,7 +35,9 @@ void writePath(
   const std::string & fname)
 {
   std::ofstream f(fname);
-  for (auto [x, y] : path) { f << x << " " << y << "\n"; }
+  for (auto [x, y] : path) {
+    f << x << " " << y << "\n";
+  }
 }
 
 void writeCurvature(
@@ -52,7 +54,7 @@ void writeCurvature(
 double pathMaxCurvature(
   const std::vector<std::pair<double, double>> & path)
 {
-  if (path.size() < 3) { return 0.0; }
+  if (path.size() < 3) {return 0.0;}
   double max_k{};
   for (size_t i = 1; i < path.size() - 1; ++i) {
     double dx1 = path[i].first - path[i - 1].first;
@@ -61,7 +63,7 @@ double pathMaxCurvature(
     double dy2 = path[i + 1].second - path[i].second;
     double l1 = std::hypot(dx1, dy1);
     double l2 = std::hypot(dx2, dy2);
-    if (l1 < 1e-9 || l2 < 1e-9) { continue; }
+    if (l1 < 1e-9 || l2 < 1e-9) {continue;}
     double dot = (dx1 * dx2 + dy1 * dy2) / (l1 * l2);
     double angle = std::acos(std::clamp(dot, -1.0, 1.0));
     double k = angle / (0.5 * (l1 + l2));
@@ -89,8 +91,8 @@ int main(int argc, char ** argv)
 
   std::string data_dir = "../../jps_planner/test/jps_viz_data";
   std::string out_dir = "bspline_viz_data";
-  if (argc > 1) { data_dir = argv[1]; }
-  if (argc > 2) { out_dir = argv[2]; }
+  if (argc > 1) {data_dir = argv[1];}
+  if (argc > 2) {out_dir = argv[2];}
   mkdir(out_dir.c_str(), 0755);
 
   const char * scenarios[] = {
@@ -131,7 +133,7 @@ int main(int argc, char ** argv)
         double x{}, y{};
         int c{};
         // Two-pass: first determine size, then load
-        std::vector<std::tuple<int,int,int>> cells{};
+        std::vector<std::tuple<int, int, int>> cells{};
         while (gf >> x >> y >> c) {
           int cx = static_cast<int>(x);
           int cy = static_cast<int>(y);
@@ -180,7 +182,9 @@ int main(int argc, char ** argv)
 
     double orig_max_k = pathMaxCurvature(path);
     double smooth_max_k{};
-    for (double k : result.curvature_profile) { smooth_max_k = std::max(smooth_max_k, k); }
+    for (double k : result.curvature_profile) {
+      smooth_max_k = std::max(smooth_max_k, k);
+    }
     double orig_len = pathLength(path);
     double smooth_len = pathLength(result.smoothed_path);
 

@@ -36,20 +36,20 @@ std::vector<unsigned char> makeGrid(
     for (int x = 0; x < w; ++x) {
       char ch = pattern[static_cast<size_t>(row)][static_cast<size_t>(x)];
       unsigned char val{0};
-      if (ch == '#')       val = 254;
-      else if (ch == '.')  val = 0;
-      else if (ch == 'X')  val = 253;
-      else if (ch == '?')  val = 255;
-      else if (ch >= '0' && ch <= '9')
+      if (ch == '#') {val = 254;} else if (ch == '.') {val = 0;} else if (ch == 'X') {
+        val = 253;
+      } else if (ch == '?') {val = 255;} else if (ch >= '0' && ch <= '9') {
         val = static_cast<unsigned char>((ch - '0') * 10);
+      }
       grid[static_cast<size_t>(y * w + x)] = val;
     }
   }
   return grid;
 }
 
-void initState(JPSState & s, const std::vector<unsigned char> & grid,
-               int w, int h)
+void initState(
+  JPSState & s, const std::vector<unsigned char> & grid,
+  int w, int h)
 {
   s = {};
   s.costmap_data = grid.data();
@@ -60,27 +60,36 @@ void initState(JPSState & s, const std::vector<unsigned char> & grid,
 
 // ── File writers ─────────────────────────────────────────
 
-void writeGrid(const std::vector<unsigned char> & grid, int w, int h,
-               const std::string & fname)
+void writeGrid(
+  const std::vector<unsigned char> & grid, int w, int h,
+  const std::string & fname)
 {
   std::ofstream f(fname);
-  for (int y = 0; y < h; ++y)
-    for (int x = 0; x < w; ++x)
+  for (int y = 0; y < h; ++y) {
+    for (int x = 0; x < w; ++x) {
       f << x << " " << y << " " << static_cast<int>(grid[static_cast<size_t>(y * w + x)]) << "\n";
+    }
+  }
 }
 
-void writePath(const std::vector<std::pair<double, double>> & path,
-               const std::string & fname)
+void writePath(
+  const std::vector<std::pair<double, double>> & path,
+  const std::string & fname)
 {
   std::ofstream f(fname);
-  for (auto [px, py] : path) f << px << " " << py << "\n";
+  for (auto [px, py] : path) {
+    f << px << " " << py << "\n";
+  }
 }
 
-void writeIntList(const std::vector<int> & xs, const std::vector<int> & ys,
-                  const std::string & fname)
+void writeIntList(
+  const std::vector<int> & xs, const std::vector<int> & ys,
+  const std::string & fname)
 {
   std::ofstream f(fname);
-  for (size_t i = 0; i < xs.size(); ++i) f << xs[i] << " " << ys[i] << "\n";
+  for (size_t i = 0; i < xs.size(); ++i) {
+    f << xs[i] << " " << ys[i] << "\n";
+  }
 }
 
 // ── Scenario runner ──────────────────────────────────────
@@ -116,16 +125,18 @@ ScenarioResult runScenario(
   r.time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   for (const auto & np : st.nodes_) {
-    if (np && np->closed) { r.expanded_nodes++; }
+    if (np && np->closed) {r.expanded_nodes++;}
   }
 
   std::string pfx = out_dir + "/" + name;
   writeGrid(grid, w, h, pfx + "_grid.dat");
-  if (found) writePath(path, pfx + "_path.dat");
-  writeIntList(st.debug_.expanded_x, st.debug_.expanded_y,
-               pfx + "_expanded.dat");
-  writeIntList(st.debug_.jumppoint_x, st.debug_.jumppoint_y,
-               pfx + "_jumppoints.dat");
+  if (found) {writePath(path, pfx + "_path.dat");}
+  writeIntList(
+    st.debug_.expanded_x, st.debug_.expanded_y,
+    pfx + "_expanded.dat");
+  writeIntList(
+    st.debug_.jumppoint_x, st.debug_.jumppoint_y,
+    pfx + "_jumppoints.dat");
 
   std::ofstream f(pfx + "_startgoal.dat");
   f << sx + 0.5 << " " << sy + 0.5 << " start\n";
@@ -149,7 +160,7 @@ int main(int argc, char ** argv)
   using namespace jps_planner;
 
   std::string out_dir = "jps_viz_data";
-  if (argc > 1) out_dir = argv[1];
+  if (argc > 1) {out_dir = argv[1];}
 
   // Create output directory
   mkdir(out_dir.c_str(), 0755);
@@ -160,12 +171,12 @@ int main(int argc, char ** argv)
   bench << "scenario,w,h,time_ms,nodes_created,expanded,path_len,found\n";
 
   auto saveBench = [&](const std::string & n, int w, int h,
-                       const ScenarioResult & r) {
-    bench << n << "," << w << "," << h << ","
-          << r.time_ms << "," << r.nodes_created << ","
-          << r.expanded_nodes << "," << r.path_len << ","
-          << (r.found ? 1 : 0) << "\n";
-  };
+      const ScenarioResult & r) {
+      bench << n << "," << w << "," << h << ","
+            << r.time_ms << "," << r.nodes_created << ","
+            << r.expanded_nodes << "," << r.path_len << ","
+            << (r.found ? 1 : 0) << "\n";
+    };
 
   std::cout << "=== JPS Visualization Data Export ===\n";
   std::cout << "Output: " << out_dir << "\n\n";
@@ -180,7 +191,8 @@ int main(int argc, char ** argv)
 
   // ── S2: Vertical wall with gap ──
   {
-    auto g = makeGrid(40, 25, {
+    auto g = makeGrid(
+      40, 25, {
       "........................................",
       "........................................",
       "........................................",
@@ -213,7 +225,8 @@ int main(int argc, char ** argv)
 
   // ── S3: Maze corridor ──
   {
-    auto g = makeGrid(40, 32, {
+    auto g = makeGrid(
+      40, 32, {
       "########################################",
       "#......................................#",
       "#.####################################.#",
@@ -255,15 +268,19 @@ int main(int argc, char ** argv)
   {
     constexpr int W = 50, H = 50;
     std::vector<unsigned char> g(static_cast<size_t>(W * H), 0);
-    for (int y = 5; y < 45; y += 10)
-      for (int x = 5; x < 45; x += 11)
-        for (int dy = 0; dy < 4; ++dy)
+    for (int y = 5; y < 45; y += 10) {
+      for (int x = 5; x < 45; x += 11) {
+        for (int dy = 0; dy < 4; ++dy) {
           for (int dx = 0; dx < 4; ++dx) {
             int py = y + dy + ((x / 11) % 2 == 0 ? 3 : -3);
             int px = x + dx;
-            if (px >= 0 && px < W && py >= 0 && py < H)
+            if (px >= 0 && px < W && py >= 0 && py < H) {
               g[static_cast<size_t>(py * W + px)] = 254;
+            }
           }
+        }
+      }
+    }
     auto r = runScenario("s4_obstaclefield", cfg, g, W, H, 2, 2, 47, 47, out_dir);
     saveBench("s4_obstaclefield", W, H, r);
   }
@@ -280,10 +297,14 @@ int main(int argc, char ** argv)
   {
     constexpr int W = 60, H = 60;
     std::vector<unsigned char> g(static_cast<size_t>(W * H), 0);
-    for (int x = 0; x < W; ++x)
-      for (int y = 0; y < H; ++y)
-        if (std::abs(x - y) < 6)
-          g[static_cast<size_t>(y * W + x)] = static_cast<unsigned char>(200 + std::abs(x - y) * 10);
+    for (int x = 0; x < W; ++x) {
+      for (int y = 0; y < H; ++y) {
+        if (std::abs(x - y) < 6) {
+          g[static_cast<size_t>(y * W +
+            x)] = static_cast<unsigned char>(200 + std::abs(x - y) * 10);
+        }
+      }
+    }
     auto r = runScenario("s6_costband", cfg, g, W, H, 5, 5, 55, 55, out_dir);
     saveBench("s6_costband", W, H, r);
   }
@@ -301,7 +322,7 @@ int main(int argc, char ** argv)
       double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
       size_t closed = 0;
       for (const auto & np : st.nodes_) {
-        if (np && np->closed) closed++;
+        if (np && np->closed) {closed++;}
       }
       bench << "scale_" << sz << "," << sz << "," << sz << ","
             << ms << "," << st.nodes_.size() << "," << closed << ","

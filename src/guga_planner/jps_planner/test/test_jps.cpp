@@ -87,19 +87,20 @@ TEST_F(JPSSearchTest, GridWithWall_FindsPathAround)
 {
   // 20x10 grid. A vertical wall at x=10 leaves a gap at y=0 (bottom).
   // Start (5,5) → goal (15,5). Path must go through the gap.
-  auto grid = makeGrid({
-  // 01234567890123456789
-    "....................", // y=9
-    "....................", // y=8
-    "..........#.........", // y=7  wall starts
-    "..........#.........", // y=6
-    "..........#.........", // y=5
-    "..........#.........", // y=4
-    "..........#.........", // y=3
-    "..........#.........", // y=2
-    "..........#.........", // y=1
-    "....................", // y=0  gap here
-  });
+  auto grid = makeGrid(
+    {
+      // 01234567890123456789
+      "....................", // y=9
+      "....................", // y=8
+      "..........#.........", // y=7  wall starts
+      "..........#.........", // y=6
+      "..........#.........", // y=5
+      "..........#.........", // y=4
+      "..........#.........", // y=3
+      "..........#.........", // y=2
+      "..........#.........", // y=1
+      "....................", // y=0  gap here
+    });
   constexpr int W = 20, H = 10;
   JPSState state{};
   initState(state, grid, W, H);
@@ -123,12 +124,13 @@ TEST_F(JPSSearchTest, GridWithWall_FindsPathAround)
 
 TEST_F(JPSSearchTest, BlockedStart_ReturnsFalse)
 {
-  auto grid = makeGrid({
-    "#...",
-    "....",
-    "....",
-    "....",
-  });
+  auto grid = makeGrid(
+    {
+      "#...",
+      "....",
+      "....",
+      "....",
+    });
   constexpr int W = 4, H = 4;
   JPSState state{};
   initState(state, grid, W, H);
@@ -142,12 +144,13 @@ TEST_F(JPSSearchTest, BlockedStart_ReturnsFalse)
 
 TEST_F(JPSSearchTest, BlockedGoal_ReturnsFalse)
 {
-  auto grid = makeGrid({
-    "...#",
-    "....",
-    "....",
-    "....",
-  });
+  auto grid = makeGrid(
+    {
+      "...#",
+      "....",
+      "....",
+      "....",
+    });
   constexpr int W = 4, H = 4;
   JPSState state{};
   initState(state, grid, W, H);
@@ -161,13 +164,14 @@ TEST_F(JPSSearchTest, BlockedGoal_ReturnsFalse)
 TEST_F(JPSSearchTest, NoPath_EnclosedGoal)
 {
   // Goal at (1,1) is completely enclosed by walls
-  auto grid = makeGrid({
-    ".....",
-    ".###.",
-    ".#.#.",
-    ".###.",
-    ".....",
-  });
+  auto grid = makeGrid(
+    {
+      ".....",
+      ".###.",
+      ".#.#.",
+      ".###.",
+      ".....",
+    });
   constexpr int W = 5, H = 5;
   JPSState state{};
   initState(state, grid, W, H);
@@ -181,19 +185,20 @@ TEST_F(JPSSearchTest, NoPath_EnclosedGoal)
 TEST_F(JPSSearchTest, NarrowCorridor_FindsPath)
 {
   // 1-cell wide corridor from left to right at y=5
-  auto grid = makeGrid({
-    "####################",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "..................#", // y=5 corridor
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "####################",
-  });
+  auto grid = makeGrid(
+    {
+      "####################",
+      "#..................#",
+      "#..................#",
+      "#..................#",
+      "#..................#",
+      "..................#", // y=5 corridor
+      "#..................#",
+      "#..................#",
+      "#..................#",
+      "#..................#",
+      "####################",
+    });
   constexpr int W = 20, H = 11;
   JPSState state{};
   initState(state, grid, W, H);
@@ -226,14 +231,15 @@ TEST_F(JPSBehaviorTest, Jump_HitsObstacle_StopsBefore)
 {
   // Wall spanning the full height at x=4, with a gap at y=0
   // Start left, goal right → must go down through gap
-  auto grid = makeGrid({
-    "....#.........",
-    "....#.........",
-    "....#.........",
-    "....#.........",
-    "....#.........",
-    ".............",
-  });
+  auto grid = makeGrid(
+    {
+      "....#.........",
+      "....#.........",
+      "....#.........",
+      "....#.........",
+      "....#.........",
+      ".............",
+    });
   constexpr int W = 13, H = 6;
   JPSState state{};
   initState(state, grid, W, H);
@@ -291,11 +297,12 @@ TEST_F(JPSBehaviorTest, ForcedNeighbor_TriggersJumpPoint)
   //  ..#  <- diagonal movement: obstacle at (1,0) and (2,1)
   //  ...
   // Start at (0,2), goal at (2,0). Forced neighbor at (1,1).
-  auto grid = makeGrid({
-    ".#.",  // y=2
-    "..#",  // y=1
-    "...",  // y=0
-  });
+  auto grid = makeGrid(
+    {
+      ".#.", // y=2
+      "..#", // y=1
+      "...", // y=0
+    });
   constexpr int W = 3, H = 3;
   JPSState state{};
   initState(state, grid, W, H);
@@ -474,13 +481,14 @@ TEST_F(JPSCostTest, HighCostRegion_PathPrefersFree)
 TEST_F(JPSCostTest, AllowUnknown_PathThroughUnknown)
 {
   config_.allow_unknown = true;
-  auto grid = makeGrid({
-    "..........",
-    "..........",
-    "??????????", // unknown row
-    "..........",
-    "..........",
-  });
+  auto grid = makeGrid(
+    {
+      "..........",
+      "..........",
+      "??????????", // unknown row
+      "..........",
+      "..........",
+    });
   constexpr int W = 10, H = 5;
   JPSState state{};
   initState(state, grid, W, H);
@@ -494,13 +502,14 @@ TEST_F(JPSCostTest, AllowUnknown_PathThroughUnknown)
 TEST_F(JPSCostTest, DisallowUnknown_NoPath)
 {
   config_.allow_unknown = false;
-  auto grid = makeGrid({
-    "..........",
-    "..........",
-    "??????????",
-    "..........",
-    "..........",
-  });
+  auto grid = makeGrid(
+    {
+      "..........",
+      "..........",
+      "??????????",
+      "..........",
+      "..........",
+    });
   constexpr int W = 10, H = 5;
   JPSState state{};
   initState(state, grid, W, H);
@@ -514,11 +523,12 @@ TEST_F(JPSCostTest, DisallowUnknown_NoPath)
 TEST_F(JPSCostTest, InscribedCost_TreatedAsObstacle)
 {
   // Cell with cost 253 should be treated as obstacle
-  auto grid = makeGrid({
-    "..........",
-    ".X........", // y=1, x=1 is inscribed
-    "..........",
-  });
+  auto grid = makeGrid(
+    {
+      "..........",
+      ".X........", // y=1, x=1 is inscribed
+      "..........",
+    });
   constexpr int W = 10, H = 3;
   JPSState state{};
   initState(state, grid, W, H);

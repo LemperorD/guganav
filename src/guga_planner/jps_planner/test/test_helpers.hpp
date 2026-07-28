@@ -49,7 +49,7 @@ inline std::vector<unsigned char> makeGrid(
     int y = h - 1 - row;  // pattern[0] is top → highest y
     for (int x = 0; x < w; ++x) {
       char ch = pattern[static_cast<size_t>(row)]
-                      [static_cast<size_t>(x)];
+        [static_cast<size_t>(x)];
       unsigned char val{0};
       switch (ch) {
         case '#': val = 254; break;  // LETHAL_OBSTACLE

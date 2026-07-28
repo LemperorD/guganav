@@ -493,12 +493,15 @@ void EsdfMap::computeGradients(EsdfParallelExecutor * executor)
   auto compute_cell = [&](size_t y) {
       for (size_t x = 1; x < w - 1; ++x) {
         size_t idx = y * w + x;
-        float dx = (distance_field_[y * w + (x + 1)] -
+
+        // centre difference (cell units); gradient = change in distance per cell
+        float gx = (distance_field_[y * w + (x + 1)] -
           distance_field_[y * w + (x - 1)]) * 0.5f;
-        float dy = (distance_field_[(y + 1) * w + x] -
+        float gy = (distance_field_[(y + 1) * w + x] -
           distance_field_[(y - 1) * w + x]) * 0.5f;
-        gradient_x_[idx] = dx;
-        gradient_y_[idx] = dy;
+
+        gradient_x_[idx] = gx;
+        gradient_y_[idx] = gy;
       }
     };
 

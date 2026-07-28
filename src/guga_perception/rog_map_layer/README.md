@@ -195,6 +195,25 @@ for (auto& plugin : *layered->getPlugins()) {
 }
 ```
 
+### JPS Planner 集成
+
+在 `nav2_params.yaml` 中配置 `enable_esdf: true`：
+
+```yaml
+planner_server:
+  ros__parameters:
+    GridBased:
+      plugin: "jps_planner/JPSPlanner"
+      enable_bspline: true
+      enable_esdf: true        # 启用 ESDF 梯度优化
+      esdf_weight: 100.0        # ESDF 避障权重
+      esdf_safe_distance: 0.3   # 安全距离 (m)
+```
+
+集成流程：JPS 搜索 → B-spline 拟合 → 查找 `EsdfLayer` → 注入 ESDF 距离场 → 梯度下降优化控制点位置。
+
+ESDF 代价函数：`w_esdf * Σ max(0, safe_dist - interpolated_distance)²`，产生平滑连续的避障梯度。
+
 ### 可视化 Topic
 
 当 `publish_esdf_grid: true` 时，发布：

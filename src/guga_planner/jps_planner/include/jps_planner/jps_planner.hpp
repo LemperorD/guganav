@@ -14,6 +14,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "tf2_ros/buffer.h"
+#include "rog_map_layer/esdf_layer.hpp"
+#include "rog_map_layer/esdf_map.hpp"
 
 #include "guga_ui_common/shm_writer.hpp"
 #include "guga_ui_common/ui_types.hpp"
@@ -82,9 +84,13 @@ private:
   JPSConfig config_{};
 
   bspline_opt::BSplineConfig bspline_config_{};
-  bool enable_bspline_{true};  // true = 启用 B-spline 平滑
+  bool enable_bspline_{true};   // enable B-spline smoothing
+  bool enable_esdf_{false};     // enable ESDF gradient optimisation
+  double esdf_weight_{100.0};   // ESDF distance field obstacle-avoidance weight
+  double esdf_safe_distance_{0.3}; // ESDF safe distance
 
-private: // 使用共享内存进行性能监控
+private:
+  // 使用共享内存进行性能监控
   /**
    * @brief 将规划结果写入共享内存 PATH 槽位, 供 UI 渲染。
    *

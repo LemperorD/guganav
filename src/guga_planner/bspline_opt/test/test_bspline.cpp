@@ -17,8 +17,9 @@ namespace bspline_opt
 inline std::vector<std::pair<double, double>> makeLine(int n)
 {
   std::vector<std::pair<double, double>> p;
-  for (int i = 0; i < n; ++i)
+  for (int i = 0; i < n; ++i) {
     p.emplace_back(static_cast<double>(i), static_cast<double>(i));
+  }
   return p;
 }
 
@@ -27,10 +28,12 @@ inline std::vector<std::pair<double, double>> makeCorner(int n)
   // Straight from (0,0) to (n/2, 0), then turn 90° to (n/2, n/2)
   std::vector<std::pair<double, double>> p;
   int half = n / 2;
-  for (int i = 0; i <= half; ++i)
+  for (int i = 0; i <= half; ++i) {
     p.emplace_back(static_cast<double>(i), 0.0);
-  for (int i = 1; i <= half; ++i)
+  }
+  for (int i = 1; i <= half; ++i) {
     p.emplace_back(static_cast<double>(half), static_cast<double>(i));
+  }
   return p;
 }
 
@@ -61,7 +64,9 @@ TEST_F(BSplineFittingTest, DiagonalLine_FitsExactly)
 TEST_F(BSplineFittingTest, StraightHorizontal_FitsCollinear)
 {
   std::vector<std::pair<double, double>> path;
-  for (int i = 0; i < 10; ++i) path.emplace_back(static_cast<double>(i), 5.0);
+  for (int i = 0; i < 10; ++i) {
+    path.emplace_back(static_cast<double>(i), 5.0);
+  }
   ASSERT_TRUE(opt_.fit(path));
   // Mid path
   double curv = opt_.curvatureAt(0.5);
@@ -72,7 +77,9 @@ TEST_F(BSplineFittingTest, Validation_SufficientPoints)
 {
   // Exactly degree+1 = 6 points → should work
   std::vector<std::pair<double, double>> path;
-  for (int i = 0; i < 6; ++i) path.emplace_back(static_cast<double>(i), 0.0);
+  for (int i = 0; i < 6; ++i) {
+    path.emplace_back(static_cast<double>(i), 0.0);
+  }
   EXPECT_TRUE(opt_.fit(path));
 }
 
@@ -141,8 +148,9 @@ TEST_F(BSplineOptimizationTest, StraightPath_StaysStraight)
   auto result = opt.optimize(50);
 
   double max_curv{};
-  for (size_t i = 0; i < result.curvature_profile.size(); ++i)
+  for (size_t i = 0; i < result.curvature_profile.size(); ++i) {
     max_curv = std::max(max_curv, std::abs(result.curvature_profile[i]));
+  }
   EXPECT_LT(max_curv, 1e-3)
     << "Straight path should remain nearly straight after optimization";
 }

@@ -15,6 +15,8 @@
 #include "nav_msgs/msg/path.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rog_map_layer/esdf_layer.hpp"
+#include "rog_map_layer/esdf_map.hpp"
 
 namespace jps_planner
 {
@@ -62,11 +64,27 @@ void JPSPlanner::configure(
   node->get_parameter(name_ + ".allow_unknown", config_.allow_unknown);
   node->get_parameter(name_ + ".enable_bspline", enable_bspline_);
 
+  // ESDF 参数
+  nav2_util::declare_parameter_if_not_declared(
+    node, name_ + ".enable_esdf",
+    rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(
+    node, name_ + ".esdf_weight",
+    rclcpp::ParameterValue(100.0));
+  nav2_util::declare_parameter_if_not_declared(
+    node, name_ + ".esdf_safe_distance",
+    rclcpp::ParameterValue(0.3));
+
+  node->get_parameter(name_ + ".enable_esdf", enable_esdf_);
+  node->get_parameter(name_ + ".esdf_weight", esdf_weight_);
+  node->get_parameter(name_ + ".esdf_safe_distance", esdf_safe_distance_);
+
   RCLCPP_INFO(
     logger_, "JPSPlanner configured: w_traversal=%.2f w_euc=%.2f "
-    "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d",
+    "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d enable_esdf=%d",
     config_.w_traversal_cost, config_.w_euc_cost,
-    config_.w_heuristic_cost, config_.allow_unknown, enable_bspline_);
+    config_.w_heuristic_cost, config_.allow_unknown, enable_bspline_,
+    enable_esdf_);
 
   // 构建共享内存结构体来传输路径信息
   shm_ready_ = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
@@ -120,7 +138,8 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
   // 将起点转换为地图坐标
   unsigned int mx_start{}, my_start{};
   if (!costmap_->worldToMap(
-        start.pose.position.x, start.pose.position.y, mx_start, my_start)) {
+      start.pose.position.x, start.pose.position.y, mx_start, my_start))
+  {
     RCLCPP_ERROR(
       logger_, "JPSPlanner: start pose (%.2f, %.2f) out of costmap bounds",
       start.pose.position.x, start.pose.position.y);
@@ -130,7 +149,8 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
   // 将终点转换为地图坐标
   unsigned int mx_goal{}, my_goal{};
   if (!costmap_->worldToMap(
-        goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal)) {
+      goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal))
+  {
     RCLCPP_ERROR(
       logger_, "JPSPlanner: goal pose (%.2f, %.2f) out of costmap bounds",
       goal.pose.position.x, goal.pose.position.y);
@@ -166,12 +186,14 @@ nav_msgs::msg::Path JPSPlanner::createPlan(
 
   // ── B-spline 平滑 (默认启用) ──
   if (enable_bspline_ && map_path.size() >= 8) {
-    plan = bsplineSmooth(map_path, costmap_->getCharMap(),
-                         static_cast<int>(costmap_->getSizeInCellsX()),
-                         static_cast<int>(costmap_->getSizeInCellsY()),
-                         costmap_->getResolution());
-    RCLCPP_INFO(logger_, "JPSPlanner: B-spline smooth applied, %zu poses",
-                plan.poses.size());
+    plan = bsplineSmooth(
+      map_path, costmap_->getCharMap(),
+      static_cast<int>(costmap_->getSizeInCellsX()),
+      static_cast<int>(costmap_->getSizeInCellsY()),
+      costmap_->getResolution());
+    RCLCPP_INFO(
+      logger_, "JPSPlanner: B-spline smooth applied, %zu poses",
+      plan.poses.size());
   } else {
     // 回退到线性插值 (路径点太少或 B-spline 被禁用)
     if (enable_bspline_) {
@@ -209,7 +231,8 @@ nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
   // 创建 B-spline 优化器并拟合原始 JPS 路径
   bspline_opt::BSplineOptimizer opt(bspline_config_);
   if (!opt.fit(map_path)) {
-    RCLCPP_WARN(logger_, "JPSPlanner: B-spline fit failed, using linear interpolation");
+    RCLCPP_WARN(
+      logger_, "JPSPlanner: B-spline fit failed, using linear interpolation");
     std::vector<std::pair<double, double>> world_path{};
     world_path.reserve(map_path.size());
     for (const auto & [mx, my] : map_path) {
@@ -225,6 +248,53 @@ nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
   opt.state().costmap_data = costmap_data;
   opt.state().costmap_w = cm_w;
   opt.state().costmap_h = cm_h;
+
+  // ── 注入 ESDF 数据用于连续避障梯度优化 ──
+  if (enable_esdf_) {
+    auto * layered_costmap = costmap_ros_->getLayeredCostmap();
+    if (layered_costmap) {
+      auto plugins = layered_costmap->getPlugins();
+      if (plugins) {
+        for (auto & plugin : *plugins) {
+          auto esdf_layer = std::dynamic_pointer_cast<rog_map_layer::EsdfLayer>(
+            plugin);
+          if (esdf_layer) {
+            const auto * esdf_map = esdf_layer->getEsdfMapRaw();
+            if (esdf_map) {
+              const auto & esdf_cfg = esdf_layer->config();
+              opt.state().esdf_distance = esdf_map->distanceField().data();
+              opt.state().esdf_gradient_x = esdf_map->gradientX().data();
+              opt.state().esdf_gradient_y = esdf_map->gradientY().data();
+              opt.state().esdf_w = static_cast<int>(esdf_map->sizeX());
+              opt.state().esdf_h = static_cast<int>(esdf_map->sizeY());
+              opt.state().esdf_resolution = esdf_map->resolution();
+              opt.state().esdf_origin_x = esdf_map->originX();
+              opt.state().esdf_origin_y = esdf_map->originY();
+              opt.state().esdf_max_distance = esdf_cfg.max_distance;
+
+              bspline_config_.enable_esdf = true;
+              bspline_config_.enable_gradient_descent = true;
+              bspline_config_.esdf_weight = esdf_weight_;
+              bspline_config_.esdf_safe_distance = esdf_safe_distance_;
+
+              RCLCPP_INFO(
+                logger_,
+                "JPSPlanner: ESDF layer found, enabling gradient descent "
+                "with w_esdf=%.1f safe_dist=%.2f",
+                esdf_weight_, esdf_safe_distance_);
+            }
+            break;
+          }
+        }
+      }
+    }
+    if (!bspline_config_.enable_esdf) {
+      RCLCPP_WARN(
+        logger_,
+        "JPSPlanner: ESDF enabled but EsdfLayer not found in costmap plugins, "
+        "falling back to binary obstacle avoidance.");
+    }
+  }
 
   // 运行优化 (默认仅做障碍物投射, 不做梯度下降)
   int num_samples = std::max(100, static_cast<int>(map_path.size()) * 5);
@@ -246,9 +316,9 @@ nav_msgs::msg::Path JPSPlanner::bsplineSmooth(
     double yaw{};
     if (i + 1 < result.smoothed_path.size()) {
       double dx = result.smoothed_path[i + 1].first -
-                  result.smoothed_path[i].first;
+        result.smoothed_path[i].first;
       double dy = result.smoothed_path[i + 1].second -
-                  result.smoothed_path[i].second;
+        result.smoothed_path[i].second;
       yaw = std::atan2(dy, dx);
     }
     pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(yaw);
@@ -262,7 +332,7 @@ nav_msgs::msg::Path JPSPlanner::linearInterpolation(
   const std::vector<std::pair<double, double>> & raw_path, double resolution)
 {
   nav_msgs::msg::Path plan;
-  if (raw_path.empty()) { return plan; }
+  if (raw_path.empty()) {return plan;}
   if (raw_path.size() == 1) {
     geometry_msgs::msg::PoseStamped pose;
     pose.pose.position.x = raw_path[0].first;
@@ -310,18 +380,18 @@ nav_msgs::msg::Path JPSPlanner::linearInterpolation(
 
 void JPSPlanner::writePathToShm(const nav_msgs::msg::Path & plan)
 {
-  if (!shm_ready_) return;
+  if (!shm_ready_) {return;}
 
   const size_t n = plan.poses.size();
-  if (n == 0) return;
+  if (n == 0) {return;}
 
   guga_ui::UiPath ui_path{};
   ui_path.stamp_sec = clock_->now().seconds();
 
   // 降采样: 每 stride 个点取 1 个 (目标 ≤ UI_PATH_MAX_POINTS)
-  size_t stride = (n <= guga_ui::UI_PATH_MAX_POINTS)
-                    ? 1
-                    : (n / guga_ui::UI_PATH_MAX_POINTS + 1);
+  size_t stride = (n <= guga_ui::UI_PATH_MAX_POINTS) ?
+    1 :
+    (n / guga_ui::UI_PATH_MAX_POINTS + 1);
   ui_path.count = static_cast<uint32_t>((n + stride - 1) / stride);
   if (ui_path.count > guga_ui::UI_PATH_MAX_POINTS) {
     ui_path.count = guga_ui::UI_PATH_MAX_POINTS;

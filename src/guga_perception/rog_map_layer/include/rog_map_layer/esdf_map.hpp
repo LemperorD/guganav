@@ -59,6 +59,8 @@ public:
   [[nodiscard]] bool worldToMap(double wx, double wy, size_t & mx, size_t & my) const;
 
   [[nodiscard]] const std::vector<float> & distanceField() const {return distance_field_;}
+  [[nodiscard]] const std::vector<float> & gradientX() const {return gradient_x_;}
+  [[nodiscard]] const std::vector<float> & gradientY() const {return gradient_y_;}
   [[nodiscard]] size_t sizeX() const {return size_x_;}
   [[nodiscard]] size_t sizeY() const {return size_y_;}
   [[nodiscard]] double resolution() const {return resolution_;}

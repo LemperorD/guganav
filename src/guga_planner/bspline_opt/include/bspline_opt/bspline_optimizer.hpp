@@ -21,14 +21,17 @@ struct BSplineConfig
 {
   int degree{7};                   // 阶数, 与 Eigen Spline 类型固定匹配
 
-  // ── 优化权重 (仅在启用梯度下降时使用) ──
+  // ── 优化权重 ──
   double smoothness_weight{0.1};    // 低: 不主导插值精度
   double distance_weight{10.0};     // 低: 样条已精确插值
   double obstacle_weight{50000.0};  // 高: 严格障碍物避让
+  double esdf_weight{100.0};        // ESDF distance field obstacle-avoidance weight
 
   // ── 调校参数 ──
   int max_iterations{200};          // 梯度下降最大迭代次数
   bool enable_gradient_descent{false}; // 默认关闭 — 插值已是最优
+  bool enable_esdf{false};          // enable ESDF distance-field gradient optimization
+  double esdf_safe_distance{0.3};   // ESDF safe distance (m, min dist from path to obstacle)
   double corridor_halfwidth{2.5};   // 可移动走廊半宽度 (格元)
   int max_control_points{200};      // 默认使用全部插值控制点
 };
@@ -64,6 +67,18 @@ struct BSplineState
   const unsigned char * costmap_data{nullptr};
   int costmap_w{};
   int costmap_h{};
+
+  /** @brief ESDF distance field (rog_map_layer::EsdfMap), for continuous
+   *  obstacle-avoidance gradients. Pointer not owned. nullptr = no ESDF. */
+  const float * esdf_distance{nullptr};
+  const float * esdf_gradient_x{nullptr};
+  const float * esdf_gradient_y{nullptr};
+  int esdf_w{};
+  int esdf_h{};
+  double esdf_resolution{0.05};
+  double esdf_origin_x{};
+  double esdf_origin_y{};
+  double esdf_max_distance{2.0};
 };
 
 /**
@@ -146,12 +161,12 @@ public:
   [[nodiscard]] double curvatureAt(double u) const;
 
   /** @brief fit() 是否成功。 */
-  [[nodiscard]] bool isFitted() const { return fitted_; }
+  [[nodiscard]] bool isFitted() const {return fitted_;}
 
   /** @brief 访问内部状态 (只读 / 可变)。 */
-  [[nodiscard]] const BSplineState & state() const { return state_; }
-  [[nodiscard]] BSplineState & state() { return state_; }
-  [[nodiscard]] const BSplineConfig & config() const { return config_; }
+  [[nodiscard]] const BSplineState & state() const {return state_;}
+  [[nodiscard]] BSplineState & state() {return state_;}
+  [[nodiscard]] const BSplineConfig & config() const {return config_;}
 
   /** @brief 计算积分曲率能量 ∫₀¹ ‖C''(u)‖² du (数值求积)。 */
   [[nodiscard]] double computeCurvatureEnergy() const;

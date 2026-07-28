@@ -27,7 +27,10 @@ ament_auto_add_library(jps_planner SHARED
 target_include_directories(jps_planner
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../guga_perception/rog_map_layer/include
     ${EIGEN3_INCLUDE_DIRS})
+target_link_libraries(jps_planner
+  ${CMAKE_CURRENT_BINARY_DIR}/../rog_map_layer/libesdf_layer.so)
 
 pluginlib_export_plugin_description_file(nav2_core jps_planner_plugin.xml)
 
@@ -51,6 +54,7 @@ if(BUILD_TESTING)
 
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
+  set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 

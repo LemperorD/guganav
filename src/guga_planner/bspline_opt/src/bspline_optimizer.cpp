@@ -21,7 +21,7 @@ namespace
 inline unsigned char cellCost(
   const unsigned char * cmap, int w, int h, int cx, int cy)
 {
-  if (!cmap || cx < 0 || cx >= w || cy < 0 || cy >= h) { return 255; }
+  if (!cmap || cx < 0 || cx >= w || cy < 0 || cy >= h) {return 255;}
   return cmap[static_cast<size_t>(cy * w + cx)];
 }
 
@@ -41,12 +41,12 @@ inline bool projectPointToFree(
 {
   int ix = static_cast<int>(px);
   int iy = static_cast<int>(py);
-  if (!inObstacle(cmap, w, h, px, py)) { return true; }
+  if (!inObstacle(cmap, w, h, px, py)) {return true;}
 
   for (int r = 1; r <= 8; ++r) {
     for (int dy = -r; dy <= r; ++dy) {
       for (int dx = -r; dx <= r; ++dx) {
-        if (std::abs(dx) < r && std::abs(dy) < r) { continue; }
+        if (std::abs(dx) < r && std::abs(dy) < r) {continue;}
         int tx = ix + dx;
         int ty = iy + dy;
         if (cellCost(cmap, w, h, tx, ty) < 253) {
@@ -61,8 +61,48 @@ inline bool projectPointToFree(
 }
 
 // ══════════════════════════════════════════════════════════
-// 梯度下降 (仅在 config 启用时编译)
+// ESDF 查询辅助函数
 // ══════════════════════════════════════════════════════════
+
+// 双线性插值从 ESDF 距离场查询世界坐标处的距离
+inline float esdfDistanceAt(
+  const float * esdf_dist, int esdf_w, int esdf_h,
+  double resolution, double origin_x, double origin_y,
+  double wx, double wy, double max_dist)
+{
+  if (!esdf_dist) {return static_cast<float>(max_dist);}
+
+  double fx = (wx - origin_x) / resolution;
+  double fy = (wy - origin_y) / resolution;
+
+  int ix = static_cast<int>(fx);
+  int iy = static_cast<int>(fy);
+
+  if (ix < 0 || ix + 1 >= esdf_w || iy < 0 || iy + 1 >= esdf_h) {
+    return static_cast<float>(max_dist);
+  }
+
+  double dx = fx - static_cast<double>(ix);
+  double dy = fy - static_cast<double>(iy);
+
+  size_t idx00 = static_cast<size_t>(iy) * static_cast<size_t>(esdf_w) +
+    static_cast<size_t>(ix);
+  size_t idx10 = idx00 + 1;
+  size_t idx01 = idx00 + static_cast<size_t>(esdf_w);
+  size_t idx11 = idx01 + 1;
+
+  float d00 = esdf_dist[idx00];
+  float d10 = esdf_dist[idx10];
+  float d01 = esdf_dist[idx01];
+  float d11 = esdf_dist[idx11];
+
+  float d0 = static_cast<float>(static_cast<double>(d00) * (1.0 - dx) +
+    static_cast<double>(d10) * dx);
+  float d1 = static_cast<float>(static_cast<double>(d01) * (1.0 - dx) +
+    static_cast<double>(d11) * dx);
+
+  return d0 * static_cast<float>(1.0 - dy) + d1 * static_cast<float>(dy);
+}
 
 static double evalCost(
   const std::vector<double> & params, const Eigen::VectorXd & knots,
@@ -70,7 +110,10 @@ static double evalCost(
   const Eigen::VectorXd & orig_params,
   double first_x, double first_y, double last_x, double last_y,
   int M, double w_smooth, double w_dist, double w_obs,
-  const unsigned char * costmap, int cm_w, int cm_h)
+  const unsigned char * costmap, int cm_w, int cm_h,
+  const float * esdf_dist, int esdf_w, int esdf_h,
+  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
+  double esdf_safe_dist, double w_esdf)
 {
   Eigen::MatrixXd ctrl(2, M);
   ctrl(0, 0) = first_x;  ctrl(1, 0) = first_y;
@@ -124,6 +167,23 @@ static double evalCost(
     }
   }
 
+  // ESDF distance-based obstacle cost (smooth gradient-aware)
+  if (w_esdf > 0.0 && esdf_dist) {
+    constexpr int K = 200;
+    for (int i = 0; i <= K; ++i) {
+      double u = static_cast<double>(i) / static_cast<double>(K);
+      Eigen::Vector2d p = spl(u);
+      double wx = p.x() * esdf_res + esdf_ox;
+      double wy = p.y() * esdf_res + esdf_oy;
+      float dist = esdfDistanceAt(
+        esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, wx, wy, esdf_max);
+      if (dist < static_cast<float>(esdf_safe_dist)) {
+        double violation = esdf_safe_dist - static_cast<double>(dist);
+        cost += w_esdf * violation * violation;
+      }
+    }
+  }
+
   return cost;
 }
 
@@ -135,20 +195,27 @@ static std::vector<double> gradientDescent(
   double first_x, double first_y, double last_x, double last_y,
   int M, double w_smooth, double w_dist, double w_obs,
   const unsigned char * costmap, int cm_w, int cm_h,
+  const float * esdf_dist, int esdf_w, int esdf_h,
+  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
+  double esdf_safe_dist, double w_esdf,
   int max_iters, double corridor_hw, bool & converged)
 {
   std::vector<double> x = init_params;
   const int N = static_cast<int>(x.size());
-  if (N == 0) { converged = true; return x; }
+  if (N == 0) {converged = true; return x;}
 
   double alpha{1e-3};
   constexpr double h = 0.5;  // half-cell step to detect obstacle boundaries
   constexpr double gtol = 1e-8;
   constexpr int patience = 20;
 
-  double f_best = evalCost(x, knots, orig_points, orig_params,
-                           first_x, first_y, last_x, last_y,
-                           M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
+  double f_best = evalCost(
+    x, knots, orig_points, orig_params,
+    first_x, first_y, last_x, last_y,
+    M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
+    esdf_dist, esdf_w, esdf_h,
+    esdf_res, esdf_ox, esdf_oy, esdf_max,
+    esdf_safe_dist, w_esdf);
   int no_improve{};
 
   std::vector<double> grad(N);
@@ -158,21 +225,31 @@ static std::vector<double> gradientDescent(
     for (int i = 0; i < N; ++i) {
       double orig = x[i];
       x[i] = orig + h;
-      double fp = evalCost(x, knots, orig_points, orig_params,
-                           first_x, first_y, last_x, last_y,
-                           M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
+      double fp = evalCost(
+        x, knots, orig_points, orig_params,
+        first_x, first_y, last_x, last_y,
+        M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
+        esdf_dist, esdf_w, esdf_h,
+        esdf_res, esdf_ox, esdf_oy, esdf_max,
+        esdf_safe_dist, w_esdf);
       x[i] = orig - h;
-      double fm = evalCost(x, knots, orig_points, orig_params,
-                           first_x, first_y, last_x, last_y,
-                           M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
+      double fm = evalCost(
+        x, knots, orig_points, orig_params,
+        first_x, first_y, last_x, last_y,
+        M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
+        esdf_dist, esdf_w, esdf_h,
+        esdf_res, esdf_ox, esdf_oy, esdf_max,
+        esdf_safe_dist, w_esdf);
       x[i] = orig;
       grad[i] = (fp - fm) / (2.0 * h);
     }
 
     double g_norm{};
-    for (int i = 0; i < N; ++i) { g_norm += grad[i] * grad[i]; }
+    for (int i = 0; i < N; ++i) {
+      g_norm += grad[i] * grad[i];
+    }
     g_norm = std::sqrt(g_norm);
-    if (g_norm < gtol) { converged = true; break; }
+    if (g_norm < gtol) {converged = true; break;}
 
     alpha = std::min(alpha * 2.0, 0.1);
     bool found{};
@@ -180,12 +257,17 @@ static std::vector<double> gradientDescent(
       for (int i = 0; i < N; ++i) {
         x_try[i] = x[i] - alpha * grad[i];
         // 走廊约束: 限制在初始位置 ± corridor_hw 范围内
-        x_try[i] = std::clamp(x_try[i], init_params[i] - corridor_hw,
-                              init_params[i] + corridor_hw);
+        x_try[i] = std::clamp(
+          x_try[i], init_params[i] - corridor_hw,
+          init_params[i] + corridor_hw);
       }
-      double f_try = evalCost(x_try, knots, orig_points, orig_params,
-                              first_x, first_y, last_x, last_y,
-                              M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h);
+      double f_try = evalCost(
+        x_try, knots, orig_points, orig_params,
+        first_x, first_y, last_x, last_y,
+        M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
+        esdf_dist, esdf_w, esdf_h,
+        esdf_res, esdf_ox, esdf_oy, esdf_max,
+        esdf_safe_dist, w_esdf);
       if (f_try < f_best) {
         x = x_try; f_best = f_try; found = true; no_improve = 0; break;
       }
@@ -193,7 +275,7 @@ static std::vector<double> gradientDescent(
     }
     if (!found) {
       no_improve++;
-      if (no_improve >= patience) { converged = true; break; }
+      if (no_improve >= patience) {converged = true; break;}
     }
   }
   converged = true;
@@ -207,7 +289,7 @@ static std::vector<double> gradientDescent(
 // ══════════════════════════════════════════════════════════
 
 BSplineOptimizer::BSplineOptimizer(const BSplineConfig & config)
-    : config_(config)
+: config_(config)
 {
 }
 
@@ -219,7 +301,7 @@ bool BSplineOptimizer::fit(
   spline_.reset();
 
   const int n_pts = static_cast<int>(path.size());
-  if (n_pts < 2) { return false; }
+  if (n_pts < 2) {return false;}
 
   // ── 短路径回退 (线性) ──
   if (n_pts < 8) {
@@ -254,7 +336,7 @@ bool BSplineOptimizer::fit(
     arc_lengths[i] = arc_lengths[i - 1] + std::hypot(dx, dy);
   }
   state_.total_arc_length = arc_lengths.back();
-  if (state_.total_arc_length < 1e-9) { return false; }
+  if (state_.total_arc_length < 1e-9) {return false;}
 
   state_.parameters.resize(n_pts);
   for (int i = 0; i < n_pts; ++i) {
@@ -285,8 +367,8 @@ bool BSplineOptimizer::fit(
 
   // ── 第2步: 确定控制点数量 ──
   int M = std::min(config_.max_control_points, n_pts);
-  if (M < 8) { M = 8; }
-  if (M > n_pts) { M = n_pts; }
+  if (M < 8) {M = 8;}
+  if (M > n_pts) {M = n_pts;}
 
   // ── 第3步: 在 chord-length 参数处重新采样 M 个控制点 ──
   // 不使用均匀间距, 而是沿 ARC LENGTH 均匀选取原始航点子集对应的参数。
@@ -299,7 +381,7 @@ bool BSplineOptimizer::fit(
     double best_dist = 1e9;
     for (int j = 0; j < n_pts; ++j) {
       double d = std::abs(state_.parameters(j) - target_arc_frac);
-      if (d < best_dist) { best_dist = d; best_idx = j; }
+      if (d < best_dist) {best_dist = d; best_idx = j;}
     }
     // 在此航点的 chord-length 参数处对密集样条求值
     double u = state_.parameters(best_idx);
@@ -333,17 +415,17 @@ bool BSplineOptimizer::fit(
 
 void BSplineOptimizer::rebuildSpline()
 {
-  if (state_.control_points.cols() < state_.effective_degree + 1) { return; }
+  if (state_.control_points.cols() < state_.effective_degree + 1) {return;}
   spline_ = std::make_unique<Spline2D>(state_.knots, state_.control_points);
 }
 
 std::vector<std::pair<double, double>> BSplineOptimizer::sample(int N) const
 {
   std::vector<std::pair<double, double>> out{};
-  if (!fitted_) { return out; }
+  if (!fitted_) {return out;}
   if (!spline_) {
     // Linear fallback: 端点间线性插值
-    if (state_.original_points.empty()) { return out; }
+    if (state_.original_points.empty()) {return out;}
     out.reserve(N);
     double x0 = state_.original_points.front().x();
     double y0 = state_.original_points.front().y();
@@ -366,20 +448,20 @@ std::vector<std::pair<double, double>> BSplineOptimizer::sample(int N) const
 
 double BSplineOptimizer::curvatureAt(double u) const
 {
-  if (!fitted_ || !spline_) { return 0.0; }
+  if (!fitted_ || !spline_) {return 0.0;}
   Eigen::Matrix<double, 2, 3> derivs = spline_->derivatives<2>(u);
   double dx = derivs(0, 1);
   double dy = derivs(1, 1);
   double ddx = derivs(0, 2);
   double ddy = derivs(1, 2);
   double denom = dx * dx + dy * dy;
-  if (denom < 1e-12) { return 0.0; }
+  if (denom < 1e-12) {return 0.0;}
   return std::abs(dx * ddy - dy * ddx) / (denom * std::sqrt(denom));
 }
 
 double BSplineOptimizer::computeCurvatureEnergy() const
 {
-  if (!fitted_ || !spline_) { return 0.0; }
+  if (!fitted_ || !spline_) {return 0.0;}
   double energy{};
   constexpr int K = 200;
   for (int i = 0; i <= K; ++i) {
@@ -395,7 +477,7 @@ double BSplineOptimizer::computeCurvatureEnergy() const
 BSplineResult BSplineOptimizer::optimize(int num_samples)
 {
   BSplineResult result{};
-  if (!fitted_ || !spline_) { return result; }
+  if (!fitted_ || !spline_) {return result;}
 
   const int M = static_cast<int>(state_.control_points.cols());
   if (M < 3) {
@@ -434,6 +516,10 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
       config_.smoothness_weight, config_.distance_weight,
       config_.obstacle_weight,
       state_.costmap_data, state_.costmap_w, state_.costmap_h,
+      state_.esdf_distance, state_.esdf_w, state_.esdf_h,
+      state_.esdf_resolution, state_.esdf_origin_x, state_.esdf_origin_y,
+      state_.esdf_max_distance,
+      config_.esdf_safe_distance, config_.esdf_weight,
       config_.max_iterations, config_.corridor_halfwidth, converged);
 
     for (int i = 0; i < n_interior; ++i) {
@@ -447,8 +533,9 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     for (int i = 1; i < M - 1; ++i) {
       double & cx = state_.control_points(0, i);
       double & cy = state_.control_points(1, i);
-      projectPointToFree(state_.costmap_data, state_.costmap_w,
-                         state_.costmap_h, cx, cy);
+      projectPointToFree(
+        state_.costmap_data, state_.costmap_w,
+        state_.costmap_h, cx, cy);
     }
   }
 
@@ -458,8 +545,9 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
   auto path = sample(num_samples);
   if (state_.costmap_data != nullptr) {
     for (auto & [px, py] : path) {
-      projectPointToFree(state_.costmap_data, state_.costmap_w,
-                         state_.costmap_h, px, py);
+      projectPointToFree(
+        state_.costmap_data, state_.costmap_w,
+        state_.costmap_h, px, py);
     }
   }
 

@@ -24,6 +24,7 @@
   <depend>eigen</depend>
 
   <depend>guga_ui_common</depend>
+  <depend>rog_map_layer</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
