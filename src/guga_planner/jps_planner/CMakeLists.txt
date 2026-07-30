@@ -29,8 +29,10 @@ target_include_directories(jps_planner
     ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../guga_perception/rog_map_layer/include
     ${EIGEN3_INCLUDE_DIRS})
-target_link_libraries(jps_planner
-  ${CMAKE_CURRENT_BINARY_DIR}/../rog_map_layer/libesdf_layer.so)
+target_link_directories(jps_planner
+  PRIVATE
+    ${rog_map_layer_DIR}/../../../lib)
+target_link_libraries(jps_planner esdf_layer)
 
 pluginlib_export_plugin_description_file(nav2_core jps_planner_plugin.xml)
 

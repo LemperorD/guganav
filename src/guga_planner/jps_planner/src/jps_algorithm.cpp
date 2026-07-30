@@ -7,18 +7,24 @@
 namespace jps_planner
 {
 
-// ══════════════════════════════════════════════════════════
-// 匿名 namespace — 辅助自由函数 (模式 A)
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// 匿名 namespace — 辅助自由函数 (模式 A: 函数式数据流)
+//
+// 所有 JPS 核心算法都在匿名 namespace 中作为纯函数实现,
+// 参数通过 (const Config&, State&) 显式传递, 无全局状态。
+// ══════════════════════════════════════════════════════════════════════════════
 namespace
 {
 
-constexpr unsigned char UNKNOWN_COST = 255;
-constexpr unsigned char LETHAL_COST = 254;
-constexpr unsigned char INSCRIBED_COST = 253;
-constexpr unsigned char MAX_NON_OBSTACLE = 252;
+// ── Costmap 常量 ──
+constexpr unsigned char UNKNOWN_COST = 255;           // 未知空间
+constexpr unsigned char LETHAL_COST = 254;            // 致命障碍物
+constexpr unsigned char INSCRIBED_COST = 253;         // 膨胀后的内切障碍物
+constexpr unsigned char MAX_NON_OBSTACLE = 252;       // 最高非障碍物代价值
 
-/** @brief 带边界检查的代价地图原始查询。 */
+// ── 代价地图查询 ──
+
+/** @brief 带边界检查的代价地图原始查询。越界返回 UNKNOWN_COST。 */
 [[nodiscard]] inline unsigned char getCost(
   const JPSState & s, int x, int y)
 {
@@ -26,7 +32,8 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
   return s.costmap_data[static_cast<size_t>(y * s.size_x + x)];
 }
 
-/** @brief 该格元是否被阻塞 (障碍物或膨胀区域)。 */
+/** @brief 判断格元是否被阻塞 (cost ≥ 253 = 障碍物或膨胀区域)。
+ *  allow_unknown=true 时, 未知空间 (255) 视为可通行。 */
 [[nodiscard]] inline bool isObstacle(
   const JPSConfig & c, const JPSState & s, int x, int y)
 {
@@ -35,28 +42,34 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
   return cost >= INSCRIBED_COST;
 }
 
-/** @brief 是否在网格边界内 (含边界)。 */
+/** @brief 判断坐标是否在网格边界内 (含边界)。 */
 [[nodiscard]] inline bool withinLimits(
   const JPSState & s, int x, int y)
 {
   return x >= 0 && x < s.size_x && y >= 0 && y < s.size_y;
 }
 
-/** @brief 原始 costmap 值映射到缩放代价值 (ThetaStar 公式)。 */
+// ── 代价函数 ──
+
+/** @brief 将原始 costmap 值映射为缩放代价值。
+ *  使用 Theta* 论文中的公式: s(c) = (26 + 0.9c)² / 252²
+ *  此映射使代价差异在高值区域更平滑, 避免障碍物附近代价突变过大。 */
 [[nodiscard]] inline double scaledCost(unsigned char raw)
 {
   double sc = 26.0 + 0.9 * static_cast<double>(raw);
   return sc * sc / (MAX_NON_OBSTACLE * MAX_NON_OBSTACLE);
 }
 
-/** @brief 单个格元的加权通行代价。 */
+/** @brief 单个格元的加权通行代价: t(c) = w_t · s(c)。
+ *  以跳转点为单位的跳跃路径累计此代价。 */
 [[nodiscard]] inline double traversalCost(
   const JPSConfig & c, unsigned char raw)
 {
   return c.w_traversal_cost * scaledCost(raw);
 }
 
-/** @brief 加权欧几里得距离启发函数。 */
+/** @brief 加权欧几里得距离启发函数: h = w_h · √((Δx)² + (Δy)²)。
+ *  使用欧几里得距离 (而非曼哈顿), 在 8 连通网格上保证 admissible。 */
 [[nodiscard]] inline double heuristic(
   const JPSConfig & c, int x1, int y1, int x2, int y2)
 {
@@ -64,7 +77,8 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
     static_cast<double>(x2 - x1), static_cast<double>(y2 - y1));
 }
 
-/** @brief 两格元间的加权欧几里得距离。 */
+/** @brief 两格元间的加权欧几里得距离: d = w_e · √((Δx)² + (Δy)²)。
+ *  在 g 值更新时作为跳转点间的候选距离代价。 */
 [[nodiscard]] inline double euclideanCost(
   const JPSConfig & c, int ax, int ay, int bx, int by)
 {
@@ -72,12 +86,22 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
     static_cast<double>(ax - bx), static_cast<double>(ay - by));
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 强制邻居检测 (Forced Neighbour Detection)
+//
+// JPS 的核心创新之一。当跳跃方向旁边的格元被阻塞、但其对角位置
+// 空闲时, 当前格元成为"强制邻居"——跳过它会导致一条更优路径被遗漏。
+// 三个方向的检测函数分别处理水平、垂直和对角线情况。
+//
+// 形式化条件 (详见 DESIGN.md §1.4):
+//   水平: obs(x, y±1) ∧ ¬obs(x+dx, y±1)
+//   垂直: obs(x±1, y) ∧ ¬obs(x±1, y+dy)
+//   对角: obs(x-dx, y) ∧ ¬obs(x-dx, y+dy) ∨ obs(x, y-dy) ∧ ¬obs(x+dx, y-dy)
+// ══════════════════════════════════════════════════════════════════════════════
+
 /**
  * @brief 检测水平直行方向 (dx = ±1, dy = 0) 的强制邻居。
- *
- * 当跳跃方向旁边的格元被阻塞、但其对角线远处格元空闲时,
- * 该节点成为强制邻居 —— 因为跳过它会导致被阻塞格元不可达。
- */
+ * 当跳跃方向旁边的格元被阻塞、但其对角线远处格元空闲时触发。 */
 [[nodiscard]] bool hasForcedNeighborHoriz(
   const JPSConfig & c, const JPSState & s, int x, int y, int dx)
 {
@@ -95,9 +119,7 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
 
 /**
  * @brief 检测对角线方向 (dx = ±1, dy = ±1) 的强制邻居。
- *
- * 对角线背后的两个格元中, 其中一个被阻塞而远处格元空闲时触发。
- */
+ * 对角线背后的两个格元中, 其中一个被阻塞而远处格元空闲时触发。 */
 [[nodiscard]] bool hasForcedNeighborDiag(
   const JPSConfig & c, const JPSState & s, int x, int y, int dx, int dy)
 {
@@ -115,31 +137,30 @@ constexpr unsigned char MAX_NON_OBSTACLE = 252;
   return false;
 }
 
-// ══════════════════════════════════════════════════════════
-// JPS 后继节点识别
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// JPS 邻居裁剪 (Neighbour Pruning)
+//
+// 给定父节点方向, 裁剪非自然邻居, 只保留可能产生更优路径的方向。
+//
+// 自然邻居规则:
+//   水平(±1,0):  {(±1, 0)}
+//   垂直(0,±1):  {(0, ±1)}
+//   对角(±1,±1): {(±1, ±1), (±1, 0), (0, ±1)}
+//
+// 同时检查被裁剪方向上是否存在强制邻居, 有则加入方向集合。
+// ══════════════════════════════════════════════════════════════════════════════
 
-/**
- * @brief 根据父节点方向裁剪非自然邻居。
- *
- * 返回从 (x, y) 出发、父节点方向为 (dx, dy) 时的"自然"方向集合。
- * 同时检查被裁剪方向上是否存在强制邻居。
- *
- * @param dx        父节点到当前节点的 x 方向分量。
- * @param dy        父节点到当前节点的 y 方向分量。
- * @param c, s, x, y  当前位置与状态。
- * @param directions 输出: 自然方向 + 强制邻接方向集合。
- */
 void pruneNeighbors(
   const JPSConfig & c, const JPSState & s, int x, int y, int dx, int dy,
   std::vector<std::pair<int, int>> & directions)
 {
   directions.clear();
 
-  // ── 水平直行父方向 ──
+  // 水平直行父方向 (dx = ±1, dy = 0)
   if (dx != 0 && dy == 0) {
     directions.emplace_back(dx, 0);  // 自然方向: 继续直行
 
+    // 检查上方/下方是否存在强制邻居
     if (isObstacle(c, s, x, y + 1) && !isObstacle(c, s, x + dx, y + 1)) {
       directions.emplace_back(dx, 1);
     }
@@ -149,10 +170,11 @@ void pruneNeighbors(
     return;
   }
 
-  // ── 垂直直行父方向 ──
+  // 垂直直行父方向 (dx = 0, dy = ±1)
   if (dx == 0 && dy != 0) {
     directions.emplace_back(0, dy);  // 自然方向: 继续直行
 
+    // 检查左方/右方是否存在强制邻居
     if (isObstacle(c, s, x + 1, y) && !isObstacle(c, s, x + 1, y + dy)) {
       directions.emplace_back(1, dy);
     }
@@ -162,9 +184,9 @@ void pruneNeighbors(
     return;
   }
 
-  // ── 对角线父方向 ──
+  // 对角线父方向 (dx = ±1, dy = ±1)
   if (dx != 0 && dy != 0) {
-    // 自然方向: 继续对角线 + 两个分量方向
+    // 自然方向: 对角线 + 两个轴分量方向
     directions.emplace_back(dx, dy);
     directions.emplace_back(dx, 0);
     directions.emplace_back(0, dy);
@@ -180,18 +202,19 @@ void pruneNeighbors(
   }
 }
 
-/**
- * @brief 递归 JPS 跳跃。
- *
- * 从 (x, y) 沿方向 (dx, dy) 移动, 累计通行代价。
- * 遇到障碍物 / 强制邻居 / 终点时停止。
- *
- * @param x, y    当前格元 (尚未评估, 跳跃的起点)。
- * @param dx, dy  跳跃方向。
- * @param gx, gy  终点坐标。
- * @param acc     [入/出] 从调用跳转点开始的累计通行代价。
- * @return        目的地跳转点 SearchNode 的指针; 如果跳跃立即撞到障碍物则返回 nullptr。
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// 递归跳跃 (Recursive Jump)
+//
+// JPS 的核心: 沿 (dx, dy) 方向递归前进, 跳过中间节点,
+// 只在以下位置停止:
+//   1. 越界或遇到障碍物 → 返回 nullptr
+//   2. 到达终点 → 返回跳转点
+//   3. 检测到强制邻居 → 返回跳转点
+//   4. 对角线跳跃时, 分量方向存在跳转点 → 返回跳转点
+//
+// 跳跃路径上的通行代价通过 acc 累计传出。
+// ══════════════════════════════════════════════════════════════════════════════
+
 SearchNode * jump(
   const JPSConfig & c, JPSState & s, int x, int y, int dx, int dy,
   int gx, int gy, double & acc)
@@ -199,13 +222,13 @@ SearchNode * jump(
   int nx = x + dx;
   int ny = y + dy;
 
-  // 第一步 — 立即检查是否阻塞
+  // 终止条件 1: 越界或撞墙
   if (!withinLimits(s, nx, ny) || isObstacle(c, s, nx, ny)) {return nullptr;}
 
-  // 累计此步的通行代价
+  // 累计当前格元的通行代价
   acc += traversalCost(c, getCost(s, nx, ny));
 
-  // 到达终点
+  // 终止条件 2: 到达终点 → 此格元为跳转点
   if (nx == gx && ny == gy) {
     auto idx = static_cast<size_t>(ny * s.size_x + nx);
     if (s.node_position_[idx] != nullptr) {return s.node_position_[idx];}
@@ -219,7 +242,7 @@ SearchNode * jump(
     return ptr.get();
   }
 
-  // 强制邻居 → 此格元为跳转点
+  // 终止条件 3: 检测到强制邻居 → 此格元为跳转点
   if (hasForcedNeighbor(c, s, nx, ny, dx, dy)) {
     auto idx = static_cast<size_t>(ny * s.size_x + nx);
     if (s.node_position_[idx] != nullptr) {return s.node_position_[idx];}
@@ -233,7 +256,7 @@ SearchNode * jump(
     return ptr.get();
   }
 
-  // ── 对角跳跃: 还须检查两个分量方向 ──
+  // 终止条件 4 (仅对角线): 分量方向存在跳转点 → 当前格元为跳转点
   if (dx != 0 && dy != 0) {
     double dummy_h{};
     double dummy_v{};
@@ -253,16 +276,20 @@ SearchNode * jump(
     }
   }
 
-  // 继续跳跃
+  // 不满足任何终止条件 → 继续沿方向跳跃
   return jump(c, s, nx, ny, dx, dy, gx, gy, acc);
 }
 
-/**
- * @brief 识别当前节点的所有跳转点后继。
- *
- * 无父节点 (起点) 时, 探索全部 8 个方向。
- * 有父节点时, 使用邻居裁剪规则。
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// 后继节点识别 (Successor Identification)
+//
+// 对当前节点, 找出所有可能的跳转点后继:
+//   - 起点 (无父节点): 探索全部 8 个方向
+//   - 有父节点: 使用 pruneNeighbors 裁剪后的方向集合
+//
+// 每个后继附带从当前节点到该后继的跳跃累计代价 acc_cost。
+// ══════════════════════════════════════════════════════════════════════════════
+
 void identifySuccessors(
   const JPSConfig & c, JPSState & s, const SearchNode * current,
   int gx, int gy, std::vector<std::pair<SearchNode *, double>> & successors)
@@ -274,7 +301,7 @@ void identifySuccessors(
   std::vector<std::pair<int, int>> directions{};
 
   if (current->parent == nullptr) {
-    // 起点 — 检查全部 8 个方向
+    // 起点: 探索全部 8 个方向
     static constexpr int all_dirs[8][2] = {
       {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}};
     for (auto [dx, dy] : all_dirs) {
@@ -287,7 +314,7 @@ void identifySuccessors(
     return;
   }
 
-  // 计算父节点方向 (归一化到 -1/0/1)
+  // 有父节点: 计算归一化父方向, 应用邻居裁剪规则
   int pdx = cx - current->parent->x;
   int pdy = cy - current->parent->y;
   if (pdx != 0) {pdx = pdx > 0 ? 1 : -1;}
@@ -304,29 +331,37 @@ void identifySuccessors(
   }
 }
 
-/**
- * @brief 从终点沿父指针回溯到起点, 构建路径。
- * @param goal  终点搜索节点。
- * @param path  输出路径 (地图坐标, 格元中心)。
- */
+/** @brief 从终点沿父指针回溯到起点, 构建路径 (格元中心坐标)。 */
 void backtracePath(
   const SearchNode * goal, std::vector<std::pair<double, double>> & path)
 {
   path.clear();
   const SearchNode * n = goal;
   while (n != nullptr) {
+    // 输出格元中心: (x + 0.5, y + 0.5)
     path.emplace_back(
       static_cast<double>(n->x) + 0.5, static_cast<double>(n->y) + 0.5);
     n = n->parent;
   }
+  // 反转: 从起点到终点
   std::reverse(path.begin(), path.end());
 }
 
 }  // namespace
 
-// ══════════════════════════════════════════════════════════
-// 公开 API
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// 公开 API — generatePath
+//
+// 主 A* + JPS 搜索循环:
+//   1. 验证起终点合法
+//   2. 重置 state (nodes_, open_list_, node_position_)
+//   3. 创建起点, 初始化 f = g + h = 0 + heuristic(start, goal)
+//   4. 主循环: 从 open_list_ 弹出最优 f 值节点
+//      - 到达终点 → backtracePath 构建路径
+//      - 展开节点 → identifySuccessors 查找跳转点后继
+//      - 对每个后继: 计算 tentative_g, 更新最优路径
+//   5. 若 open_list_ 耗尽 → 无路径 (返回 false)
+// ══════════════════════════════════════════════════════════════════════════════
 
 bool JPSAlgorithm::generatePath(
   const JPSConfig & c, JPSState & s, int sx, int sy, int gx, int gy,
@@ -334,29 +369,30 @@ bool JPSAlgorithm::generatePath(
 {
   path.clear();
 
-  // 边界 + 起终点可通行性检查
+  // Step 1: 边界和可通行性验证
   if (!withinLimits(s, sx, sy) || !withinLimits(s, gx, gy)) {return false;}
   if (!isTraversable(c, s, sx, sy) || !isTraversable(c, s, gx, gy)) {
     return false;
   }
 
-  // 平凡情况: 起点 == 终点
+  // Step 2: 平凡情况 (起点即终点)
   if (sx == gx && sy == gy) {
     path.emplace_back(
       static_cast<double>(sx) + 0.5, static_cast<double>(sy) + 0.5);
     return true;
   }
 
-  // 重置状态, 准备一次新的搜索
+  // Step 3: 重置搜索状态
   s.nodes_.clear();
   s.open_list_ = {};
   s.node_position_.assign(
     static_cast<size_t>(s.size_x * s.size_y), nullptr);
 
   const size_t total_cells = static_cast<size_t>(s.size_x * s.size_y);
-  s.nodes_.reserve(total_cells / 4);  // 经验值: 约 25% 格元被访问
+  s.nodes_.reserve(total_cells / 4);  // 经验: 约 25% 格元会被访问
 
-  // 创建起始节点
+  // Step 4: 创建起始节点
+  // start.g = 0, start.h = heuristic(start, goal), start.f = start.h
   auto & start_ptr = s.nodes_.emplace_back(
     std::make_unique<SearchNode>(SearchNode{sx, sy}));
   SearchNode * start = start_ptr.get();
@@ -367,8 +403,9 @@ bool JPSAlgorithm::generatePath(
   s.open_list_.push(start);
 
   std::vector<std::pair<SearchNode *, double>> successors{};
-  successors.reserve(8);
+  successors.reserve(8);  // 最多 8 个后继 (8 连通)
 
+  // Step 5: 主 A* + JPS 循环
   while (!s.open_list_.empty()) {
     SearchNode * current = s.open_list_.top();
     s.open_list_.pop();
@@ -382,15 +419,17 @@ bool JPSAlgorithm::generatePath(
       return true;
     }
 
-    // 展开节点
+    // 找出所有跳转点后继
     identifySuccessors(c, s, current, gx, gy, successors);
 
-    // 调试: 记录已展开节点
+    // 记录展开节点用于调试
     if (s.debug_.enabled) {
       s.debug_.expanded_x.push_back(current->x);
       s.debug_.expanded_y.push_back(current->y);
     }
 
+    // 对每个后继节点尝试更新 g 值
+    // tentative_g = current.g + jump_cost + euclideanCost(current, succ)
     for (auto [succ, jump_cost] : successors) {
       if (succ->closed) {continue;}
 
@@ -411,12 +450,18 @@ bool JPSAlgorithm::generatePath(
   return false;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// isTraversable — 单格元可通行性检查
+// ══════════════════════════════════════════════════════════════════════════════
+
 bool JPSAlgorithm::isTraversable(
   const JPSConfig & c, const JPSState & s, int x, int y)
 {
   if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) {return false;}
   auto cost = getCost(s, x, y);
+  // 未知空间: 由 allow_unknown 决定
   if (cost == UNKNOWN_COST) {return c.allow_unknown;}
+  // 代价值 < 253 的格元可通行
   return cost < INSCRIBED_COST;
 }
 
