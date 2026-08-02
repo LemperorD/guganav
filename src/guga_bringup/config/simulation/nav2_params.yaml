@@ -445,6 +445,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
+        num_threads: 4
       always_send_full_costmap: False
 
 global_costmap:
@@ -505,6 +506,7 @@ global_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
+        num_threads: 4
       always_send_full_costmap: False
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
@@ -536,7 +538,7 @@ planner_server:
       enable_bspline: true
       enable_esdf: true
       esdf_weight: 100.0
-      esdf_safe_distance: 0.3
+      esdf_safe_distance: 0.5
 
 smoother_server:
   ros__parameters:

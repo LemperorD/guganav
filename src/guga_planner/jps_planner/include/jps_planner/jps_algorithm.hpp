@@ -6,12 +6,13 @@
 #include <queue>
 #include <utility>
 #include <vector>
+#include <limits>
 
 namespace jps_planner
 {
 
 /// 无穷大代价 (初始值, 用于 A* 的 g/h/f)
-constexpr double INF_COST = 1e308;
+constexpr double INF_COST = std::numeric_limits<double>::infinity();
 
 // ────────────────────────────────────────────────────────────
 // 数据结构

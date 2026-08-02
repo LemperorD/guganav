@@ -27,10 +27,8 @@ namespace jps_planner
  * @class JPSPlanner
  * @brief 使用 Jump Point Search + B-spline 平滑的 Nav2 全局规划器插件。
  *
- * 实现 nav2_core::GlobalPlanner 接口, 用 ROS2 生命周期管理
- * 和代价地图访问封装无状态 JPSAlgorithm。
- * JPS 搜索得到稀疏跳转点后, 通过 BSplineOptimizer 将折线
- * 平滑为 C2 连续的 B-spline 曲线。
+ * 实现 nav2_core::GlobalPlanner 接口, 用 ROS2 生命周期管理和代价地图访问封装无状态 JPSAlgorithm。
+ * JPS 搜索得到稀疏跳转点后, 通过 BSplineOptimizer 将折线平滑为 C2 连续的 B-spline 曲线。
  */
 class JPSPlanner : public nav2_core::GlobalPlanner
 {
