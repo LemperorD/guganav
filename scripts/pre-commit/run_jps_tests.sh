@@ -20,7 +20,7 @@ source_setup "$WS/install/setup.bash"
 cd "$WS"
 
 echo ">>> Building jps_planner with tests ..."
-colcon build --symlink-install --packages-select jps_planner \
+colcon build --symlink-install --packages-up-to jps_planner \
   --event-handlers console_direct+ \
   --cmake-args \
     -DBUILD_TESTING=ON \

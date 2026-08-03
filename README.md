@@ -1,9 +1,9 @@
 # 北航Transistor战队27赛季哨兵工作空间🐧
 ## 🐧GUGANAV🐧
+![Static Badge](https://img.shields.io/badge/gugugaga-%F0%9F%90%A7-blue)
 
 
-北航 Transistor 战队 RoboMaster 27 赛季哨兵机器人导航工作空间。项目基于
-ROS 2 Humble实现。
+北航 Transistor 战队 RoboMaster 27 赛季哨兵机器人导航工作空间。项目基于ROS 2 Humble实现。
 
 致力于打造🐧咕咕嘎嘎🐧也能学会的导航代码仓库！
 
@@ -20,6 +20,7 @@ ROS 2 Humble实现。
   - [仓库结构](#仓库结构)
   - [环境要求](#环境要求)
   - [安装依赖](#安装依赖)
+    - [准备仿真 PCD 地图](#准备仿真-pcd-地图)
   - [构建](#构建)
   - [使用方法](#使用方法)
     - [仿真导航](#仿真导航)
@@ -112,6 +113,43 @@ rosdep install --from-paths src --ignore-src --rosdistro humble -r -y
 ```
 
 `rosdep` 不能处理本地 SDK、手动编译库或队内私有依赖。遇到这类依赖时，请按对应包说明或队内环境文档安装。
+
+### 准备仿真 PCD 地图
+
+仿真导航的非 SLAM 模式会启动 `small_gicp_relocalization`，需要提前准备与 `world`
+同名的先验点云地图：
+
+```text
+src/guga_bringup/pcd/simulation/<world>.pcd
+```
+
+例如 `rmul_2025` 场景对应：
+
+```text
+src/guga_bringup/pcd/simulation/rmul_2025.pcd
+```
+
+PCD 文件通常较大，不随仓库提交。复制或下载 PCD 后，建议重新构建 `guga_bringup`
+让 `install/` 中的资源链接同步：
+
+```bash
+cd ~/guganav
+colcon build --symlink-install --packages-select guga_bringup
+source install/setup.bash
+```
+
+也可以在启动时显式传入 PCD 路径：
+
+```bash
+scripts/simulation.sh nav rmul_2025 \
+  prior_pcd_file:=$HOME/guganav/src/guga_bringup/pcd/simulation/rmul_2025.pcd
+```
+
+如果只是建图或暂时不使用先验 PCD，可以运行 SLAM 模式：
+
+```bash
+scripts/simulation.sh map rmul_2025
+```
 
 ## 构建
 
