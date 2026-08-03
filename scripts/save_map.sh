@@ -2,8 +2,8 @@
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source ./install/setup.bash
 
-mkdir -p src/guga_nav_bringup/map/reality
-cd src/guga_nav_bringup/map/reality
+mkdir -p src/guga_bringup/map/reality
+cd src/guga_bringup/map/reality
 
 TIME_STR=$(date +"%Y-%m-%d_%H-%M-%S")
 MAP_NAME="map_real_${TIME_STR}"

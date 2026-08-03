@@ -1,6 +1,8 @@
 #!/bin/bash
 # guganav构建脚本
 
+WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+
 show_help() {
 cat << EOF
 Usage:
@@ -49,15 +51,15 @@ echo "Clean      : $CLEAN"
 
 if $CLEAN; then
   echo "[warn]maybe need ur password"
-  sudo rm -rf build/ log/ install/
+  sudo rm -rf "$WS/build" "$WS/log" "$WS/install"
   echo "Cleaning..."
 fi
 
 echo "Building..."
 
-cd ~/guganav
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-if [ ! -L /home/ld/guganav/compile_commands.json ]; then
-  ln -s  ~/guganav/build/compile_commands.json ~/guganav/compile_commands.json
+cd "$WS"
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+if [ ! -L "$WS/compile_commands.json" ]; then
+  ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
   echo "已创建compile_commands.json的软链接, 请设置vscode的c_cpp_properties.json以启用代码补全和跳转功能。"
 fi

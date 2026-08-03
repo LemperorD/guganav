@@ -1,41 +1,5 @@
 # 编码规范
 
-两类模式，分别在两个包中形成范例。新功能根据场景选择其中一种。
-
-## 模式 A：函数式数据流（terrain_analysis）
-
-**适用场景：单帧处理，算法无跨帧状态，输入→处理→输出为纯数据变换, 管道设计模式**
-
-| 维度         | 规范                                                                      |
-| ------------ | ------------------------------------------------------------------------- |
-| **Config**   | `struct` 公开所有字段，含 `static constexpr` 编译期常量 + 运行期参数      |
-| **State**    | `struct` 公开所有可变状态，点云、数组、时间戳全透明                       |
-| **算法**     | 纯静态方法类 `class TerrainAlgorithm { static void run(config, state); }` |
-| **参数传递** | `(const Config&, State&)` 显式传递，不藏隐式依赖                          |
-| **Helper**   | 匿名 namespace 自由函数，按功能域组合                                     |
-| **测试**     | 直接构造 Config/State struct，设字段 → 调函数 → 断言字段                  |
-| **抽象层数** | 2 层：Config+State struct → Algorithm func                                |
-| **适用判定** | 算法不需要跨帧记忆、"输入点云→输出点云"类管线                             |
-
-**范例**：`src/guga_perception/terrainanalysis/terrain_analysis/`
-
-## 模式 B：对象式封装（simple_decision）
-
-**适用场景：有跨帧状态管理、多线程读写、需要不可变快照的决策系统**
-
-| 维度         | 规范                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------ |
-| **Config**   | `struct` 公开字段，构造时传入 **不可变对象** 内部存储为 `const Config config_`       |
-| **State**    | 私有成员，藏在 `Context` 内部，外部只通过 `Snapshot` 只读快照访问                    |
-| **Snapshot** | 每次 tick 从 Context 构建的值类型，传给决策函数，构造后不应变                        |
-| **算法**     | 实例方法类 `class Decision { DecisionAction computeAction(const Snapshot&) const; }` |
-| **参数传递** | Config 构造时绑定，State 通过 Snapshot 隔离，不直接暴露                              |
-| **Helper**   | 优先私有成员方法（`supplyAction`/`attackAction`），仅纯工具函数放匿名 namespace      |
-| **测试**     | 构造 Config → 构造 Context → 调方法 → 从 Context 取值验证，Snapshot 提供可控输入     |
-| **抽象层数** | 3 层：Config → Context(State→Snapshot) → Decision                                    |
-| **适用判定** | 算法有跨帧记忆（门状态、冷却）、多线程读写、需要外部不可变性保证                     |
-
-**范例**：`src/guga_decision/simple_decision/`
 
 ## 通用规范
 
@@ -86,5 +50,5 @@
 
 ### 注释
 
-- 默认不写注释，只在 WHY 非明显时添加
+- 默认不写注释，只在原因非明显时添加
 - 不使用 Doxygen `///`，不使用 `// ...` 分区注释段

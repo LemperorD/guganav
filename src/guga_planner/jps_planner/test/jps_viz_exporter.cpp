@@ -17,137 +17,133 @@
 #include <utility>
 #include <vector>
 
-namespace jps_planner
-{
+namespace jps_planner {
 
-// ── Grid builders ────────────────────────────────────────
+  // ── Grid builders ────────────────────────────────────────
 
-std::vector<unsigned char> makeEmptyGrid(int w, int h)
-{
-  return std::vector<unsigned char>(static_cast<size_t>(w * h), 0);
-}
+  std::vector<unsigned char> makeEmptyGrid(int w, int h) {
+    return std::vector<unsigned char>(static_cast<size_t>(w * h), 0);
+  }
 
-std::vector<unsigned char> makeGrid(
-  int w, int h, const std::vector<std::string> & pattern)
-{
-  std::vector<unsigned char> grid(static_cast<size_t>(w * h), 0);
-  for (int row = 0; row < h; ++row) {
-    int y = h - 1 - row;
-    for (int x = 0; x < w; ++x) {
-      char ch = pattern[static_cast<size_t>(row)][static_cast<size_t>(x)];
-      unsigned char val{0};
-      if (ch == '#') {val = 254;} else if (ch == '.') {val = 0;} else if (ch == 'X') {
-        val = 253;
-      } else if (ch == '?') {val = 255;} else if (ch >= '0' && ch <= '9') {
-        val = static_cast<unsigned char>((ch - '0') * 10);
+  std::vector<unsigned char> makeGrid(int w, int h,
+                                      const std::vector<std::string>& pattern) {
+    std::vector<unsigned char> grid(static_cast<size_t>(w * h), 0);
+    for (int row = 0; row < h; ++row) {
+      int y = h - 1 - row;
+      for (int x = 0; x < w; ++x) {
+        char ch = pattern[static_cast<size_t>(row)][static_cast<size_t>(x)];
+        unsigned char val{0};
+        if (ch == '#') {
+          val = 254;
+        } else if (ch == '.') {
+          val = 0;
+        } else if (ch == 'X') {
+          val = 253;
+        } else if (ch == '?') {
+          val = 255;
+        } else if (ch >= '0' && ch <= '9') {
+          val = static_cast<unsigned char>((ch - '0') * 10);
+        }
+        grid[static_cast<size_t>(y * w + x)] = val;
       }
-      grid[static_cast<size_t>(y * w + x)] = val;
+    }
+    return grid;
+  }
+
+  void initState(JPSState& s, const std::vector<unsigned char>& grid, int w,
+                 int h) {
+    s = {};
+    s.costmap_data = grid.data();
+    s.size_x = w;
+    s.size_y = h;
+    s.debug_.enabled = true;
+  }
+
+  // ── File writers ─────────────────────────────────────────
+
+  void writeGrid(const std::vector<unsigned char>& grid, int w, int h,
+                 const std::string& fname) {
+    std::ofstream f(fname);
+    for (int y = 0; y < h; ++y) {
+      for (int x = 0; x < w; ++x) {
+        f << x << " " << y << " "
+          << static_cast<int>(grid[static_cast<size_t>(y * w + x)]) << "\n";
+      }
     }
   }
-  return grid;
-}
 
-void initState(
-  JPSState & s, const std::vector<unsigned char> & grid,
-  int w, int h)
-{
-  s = {};
-  s.costmap_data = grid.data();
-  s.size_x = w;
-  s.size_y = h;
-  s.debug_.enabled = true;
-}
-
-// ── File writers ─────────────────────────────────────────
-
-void writeGrid(
-  const std::vector<unsigned char> & grid, int w, int h,
-  const std::string & fname)
-{
-  std::ofstream f(fname);
-  for (int y = 0; y < h; ++y) {
-    for (int x = 0; x < w; ++x) {
-      f << x << " " << y << " " << static_cast<int>(grid[static_cast<size_t>(y * w + x)]) << "\n";
+  void writePath(const std::vector<std::pair<double, double>>& path,
+                 const std::string& fname) {
+    std::ofstream f(fname);
+    for (auto [px, py] : path) {
+      f << px << " " << py << "\n";
     }
   }
-}
 
-void writePath(
-  const std::vector<std::pair<double, double>> & path,
-  const std::string & fname)
-{
-  std::ofstream f(fname);
-  for (auto [px, py] : path) {
-    f << px << " " << py << "\n";
-  }
-}
-
-void writeIntList(
-  const std::vector<int> & xs, const std::vector<int> & ys,
-  const std::string & fname)
-{
-  std::ofstream f(fname);
-  for (size_t i = 0; i < xs.size(); ++i) {
-    f << xs[i] << " " << ys[i] << "\n";
-  }
-}
-
-// ── Scenario runner ──────────────────────────────────────
-
-struct ScenarioResult
-{
-  std::string name;
-  bool found{};
-  size_t nodes_created{};
-  size_t expanded_nodes{};
-  size_t path_len{};
-  double time_ms{};
-};
-
-ScenarioResult runScenario(
-  const std::string & name, const JPSConfig & cfg,
-  const std::vector<unsigned char> & grid, int w, int h,
-  int sx, int sy, int gx, int gy, const std::string & out_dir)
-{
-  JPSState st{};
-  initState(st, grid, w, h);
-
-  auto t0 = std::chrono::high_resolution_clock::now();
-  std::vector<std::pair<double, double>> path{};
-  bool found = JPSAlgorithm::generatePath(cfg, st, sx, sy, gx, gy, path);
-  auto t1 = std::chrono::high_resolution_clock::now();
-
-  ScenarioResult r{};
-  r.name = name;
-  r.found = found;
-  r.nodes_created = st.nodes_.size();
-  r.path_len = path.size();
-  r.time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-  for (const auto & np : st.nodes_) {
-    if (np && np->closed) {r.expanded_nodes++;}
+  void writeIntList(const std::vector<int>& xs, const std::vector<int>& ys,
+                    const std::string& fname) {
+    std::ofstream f(fname);
+    for (size_t i = 0; i < xs.size(); ++i) {
+      f << xs[i] << " " << ys[i] << "\n";
+    }
   }
 
-  std::string pfx = out_dir + "/" + name;
-  writeGrid(grid, w, h, pfx + "_grid.dat");
-  if (found) {writePath(path, pfx + "_path.dat");}
-  writeIntList(
-    st.debug_.expanded_x, st.debug_.expanded_y,
-    pfx + "_expanded.dat");
-  writeIntList(
-    st.debug_.jumppoint_x, st.debug_.jumppoint_y,
-    pfx + "_jumppoints.dat");
+  // ── Scenario runner ──────────────────────────────────────
 
-  std::ofstream f(pfx + "_startgoal.dat");
-  f << sx + 0.5 << " " << sy + 0.5 << " start\n";
-  f << gx + 0.5 << " " << gy + 0.5 << " goal\n";
+  struct ScenarioResult {
+    std::string name;
+    bool found{};
+    size_t nodes_created{};
+    size_t expanded_nodes{};
+    size_t path_len{};
+    double time_ms{};
+  };
 
-  std::cout << "  " << name << ": " << (found ? "OK" : "FAIL")
-            << "  t=" << r.time_ms << "ms"
-            << "  expanded=" << r.expanded_nodes
-            << "  path=" << r.path_len << "\n";
-  return r;
-}
+  ScenarioResult runScenario(const std::string& name, const JPSConfig& cfg,
+                             const std::vector<unsigned char>& grid, int w,
+                             int h, int sx, int sy, int gx, int gy,
+                             const std::string& out_dir) {
+    JPSState st{};
+    initState(st, grid, w, h);
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+    std::vector<std::pair<double, double>> path{};
+    bool found = JPSAlgorithm::generatePath(cfg, st, sx, sy, gx, gy, path);
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    ScenarioResult r{};
+    r.name = name;
+    r.found = found;
+    r.nodes_created = st.nodes_.size();
+    r.path_len = path.size();
+    r.time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    for (const auto& np : st.nodes_) {
+      if (np && np->closed) {
+        r.expanded_nodes++;
+      }
+    }
+
+    std::string pfx = out_dir + "/" + name;
+    writeGrid(grid, w, h, pfx + "_grid.dat");
+    if (found) {
+      writePath(path, pfx + "_path.dat");
+    }
+    writeIntList(st.debug_.expanded_x, st.debug_.expanded_y,
+                 pfx + "_expanded.dat");
+    writeIntList(st.debug_.jumppoint_x, st.debug_.jumppoint_y,
+                 pfx + "_jumppoints.dat");
+
+    std::ofstream f(pfx + "_startgoal.dat");
+    f << sx + 0.5 << " " << sy + 0.5 << " start\n";
+    f << gx + 0.5 << " " << gy + 0.5 << " goal\n";
+
+    std::cout << "  " << name << ": " << (found ? "OK" : "FAIL")
+              << "  t=" << r.time_ms << "ms"
+              << "  expanded=" << r.expanded_nodes << "  path=" << r.path_len
+              << "\n";
+    return r;
+  }
 
 }  // namespace jps_planner
 
@@ -155,12 +151,13 @@ ScenarioResult runScenario(
 // Main
 // ──────────────────────────────────────────────────────────
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char** argv) {
   using namespace jps_planner;
 
   std::string out_dir = "jps_viz_data";
-  if (argc > 1) {out_dir = argv[1];}
+  if (argc > 1) {
+    out_dir = argv[1];
+  }
 
   // Create output directory
   mkdir(out_dir.c_str(), 0755);
@@ -170,13 +167,12 @@ int main(int argc, char ** argv)
   std::ofstream bench(out_dir + "/benchmark.csv");
   bench << "scenario,w,h,time_ms,nodes_created,expanded,path_len,found\n";
 
-  auto saveBench = [&](const std::string & n, int w, int h,
-      const ScenarioResult & r) {
-      bench << n << "," << w << "," << h << ","
-            << r.time_ms << "," << r.nodes_created << ","
-            << r.expanded_nodes << "," << r.path_len << ","
-            << (r.found ? 1 : 0) << "\n";
-    };
+  auto saveBench = [&](const std::string& n, int w, int h,
+                       const ScenarioResult& r) {
+    bench << n << "," << w << "," << h << "," << r.time_ms << ","
+          << r.nodes_created << "," << r.expanded_nodes << "," << r.path_len
+          << "," << (r.found ? 1 : 0) << "\n";
+  };
 
   std::cout << "=== JPS Visualization Data Export ===\n";
   std::cout << "Output: " << out_dir << "\n\n";
@@ -191,75 +187,75 @@ int main(int argc, char ** argv)
 
   // ── S2: Vertical wall with gap ──
   {
-    auto g = makeGrid(
-      40, 25, {
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "....................#...................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-      "........................................",
-    });
+    auto g = makeGrid(40, 25,
+                      {
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "....................#...................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                          "........................................",
+                      });
     auto r = runScenario("s2_wall_gap", cfg, g, 40, 25, 5, 12, 35, 12, out_dir);
     saveBench("s2_wall_gap", 40, 25, r);
   }
 
   // ── S3: Maze corridor ──
   {
-    auto g = makeGrid(
-      40, 32, {
-      "########################################",
-      "#......................................#",
-      "#.####################################.#",
-      "#.#..................................#.#",
-      "#.#.################################.#.#",
-      "#.#.#............................#.#.#.#",
-      "#.#.#.##########################.#.#.#.#",
-      "#.#.#.#........................#.#.#.#.#",
-      "#.#.#.#.######################.#.#.#.#.#",
-      "#.#.#.#.#..................#.#.#.#.#.#.#",
-      "#.#.#.#.#.################.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#............#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.##########.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.#......#.#.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.#.####.#.#.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.#.#..#.#.#.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.#.#..#.#.#.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.#.####.#.#.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.#......#.#.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#.##########.#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.#............#.#.#.#.#.#.#.#.#",
-      "#.#.#.#.#.################.#.#.#.#.#.#.#",
-      "#.#.#.#.#..................#.#.#.#.#.#.#",
-      "#.#.#.#.######################.#.#.#.#.#",
-      "#.#.#.#........................#.#.#.#.#",
-      "#.#.#.##########################.#.#.#.#",
-      "#.#.#............................#.#.#.#",
-      "#.#.################################.#.#",
-      "#.#..................................#.#",
-      "#.####################################.#",
-      "#......................................#",
-      "########################################",
-    });
+    auto g = makeGrid(40, 32,
+                      {
+                          "########################################",
+                          "#......................................#",
+                          "#.####################################.#",
+                          "#.#..................................#.#",
+                          "#.#.################################.#.#",
+                          "#.#.#............................#.#.#.#",
+                          "#.#.#.##########################.#.#.#.#",
+                          "#.#.#.#........................#.#.#.#.#",
+                          "#.#.#.#.######################.#.#.#.#.#",
+                          "#.#.#.#.#..................#.#.#.#.#.#.#",
+                          "#.#.#.#.#.################.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#............#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.##########.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.#......#.#.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.#.####.#.#.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.#.#..#.#.#.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.#.#..#.#.#.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.#.####.#.#.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.#......#.#.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#.##########.#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.#............#.#.#.#.#.#.#.#.#",
+                          "#.#.#.#.#.################.#.#.#.#.#.#.#",
+                          "#.#.#.#.#..................#.#.#.#.#.#.#",
+                          "#.#.#.#.######################.#.#.#.#.#",
+                          "#.#.#.#........................#.#.#.#.#",
+                          "#.#.#.##########################.#.#.#.#",
+                          "#.#.#............................#.#.#.#",
+                          "#.#.################################.#.#",
+                          "#.#..................................#.#",
+                          "#.####################################.#",
+                          "#......................................#",
+                          "########################################",
+                      });
     auto r = runScenario("s3_maze", cfg, g, 40, 32, 1, 1, 38, 30, out_dir);
     saveBench("s3_maze", 40, 32, r);
   }
@@ -281,7 +277,8 @@ int main(int argc, char ** argv)
         }
       }
     }
-    auto r = runScenario("s4_obstaclefield", cfg, g, W, H, 2, 2, 47, 47, out_dir);
+    auto r = runScenario("s4_obstaclefield", cfg, g, W, H, 2, 2, 47, 47,
+                         out_dir);
     saveBench("s4_obstaclefield", W, H, r);
   }
 
@@ -289,7 +286,8 @@ int main(int argc, char ** argv)
   {
     constexpr int W = 200, H = 200;
     auto g = makeEmptyGrid(W, H);
-    auto r = runScenario("s5_large_empty", cfg, g, W, H, 10, 10, 190, 190, out_dir);
+    auto r = runScenario("s5_large_empty", cfg, g, W, H, 10, 10, 190, 190,
+                         out_dir);
     saveBench("s5_large_empty", W, H, r);
   }
 
@@ -300,8 +298,8 @@ int main(int argc, char ** argv)
     for (int x = 0; x < W; ++x) {
       for (int y = 0; y < H; ++y) {
         if (std::abs(x - y) < 6) {
-          g[static_cast<size_t>(y * W +
-            x)] = static_cast<unsigned char>(200 + std::abs(x - y) * 10);
+          g[static_cast<size_t>(y * W + x)] = static_cast<unsigned char>(
+              200 + std::abs(x - y) * 10);
         }
       }
     }
@@ -321,15 +319,17 @@ int main(int argc, char ** argv)
       auto t1 = std::chrono::high_resolution_clock::now();
       double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
       size_t closed = 0;
-      for (const auto & np : st.nodes_) {
-        if (np && np->closed) {closed++;}
+      for (const auto& np : st.nodes_) {
+        if (np && np->closed) {
+          closed++;
+        }
       }
-      bench << "scale_" << sz << "," << sz << "," << sz << ","
-            << ms << "," << st.nodes_.size() << "," << closed << ","
-            << p.size() << "," << (found ? 1 : 0) << "\n";
+      bench << "scale_" << sz << "," << sz << "," << sz << "," << ms << ","
+            << st.nodes_.size() << "," << closed << "," << p.size() << ","
+            << (found ? 1 : 0) << "\n";
       std::cout << "  scale " << sz << "x" << sz << ": t=" << ms << "ms"
-                << " nodes=" << st.nodes_.size()
-                << " expanded=" << closed << "\n";
+                << " nodes=" << st.nodes_.size() << " expanded=" << closed
+                << "\n";
     }
   }
 

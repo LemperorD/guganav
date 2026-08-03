@@ -8,6 +8,8 @@ import os
 from model.unicycle_model import export_cycle_model
 
 dir_path = os.path.dirname(__file__)
+package_root = os.path.abspath(os.path.join(dir_path, "..", "..", ".."))
+generated_root = os.path.join(package_root, "generated")
 print(f"当前文件路径: {dir_path}")
 
 class MPCSolver:
@@ -93,7 +95,8 @@ class MPCSolver:
         self.ocp.acados_lib_path = acados_path + "/lib"
 
         # C代码导出目录，根据自身情况修改
-        self.ocp.code_export_directory = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{self.model.name}/{self.model.name}_ocp"
+        self.ocp.code_export_directory = os.path.join(
+            generated_root, self.model.name, f"{self.model.name}_ocp")
 
 class MPCSim: # 仿真测试使用
     def __init__(self):
@@ -116,7 +119,8 @@ class MPCSim: # 仿真测试使用
         self.sim.solver_options.collocation_type = "GAUSS_RADAU_IIA"
 
         # C代码导出目录，根据自身情况修改
-        self.sim.code_export_directory = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{self.model.name}/{self.model.name}_sim"
+        self.sim.code_export_directory = os.path.join(
+            generated_root, self.model.name, f"{self.model.name}_sim")
         
 if __name__ == "__main__":
     mpc_solver = MPCSolver()
@@ -124,11 +128,11 @@ if __name__ == "__main__":
 	
     solver = AcadosOcpSolver(
         mpc_solver.ocp,
-        json_file = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{mpc_solver.model.name}/{mpc_solver.model.name}_ocp.json"
+        json_file = f"{mpc_solver.ocp.code_export_directory}.json"
     )
     sim = AcadosSimSolver(
         mpc_sim.sim,
-        json_file = f"/home/ld/guganav/src/guga_controller/mpc_controller/generated/{mpc_solver.model.name}/{mpc_sim.sim.model.name}_sim.json"
+        json_file = f"{mpc_sim.sim.code_export_directory}.json"
     )
 
     print("=======================================")

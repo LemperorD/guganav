@@ -1,4 +1,4 @@
-# guga_nav_bringup launch
+# guga_bringup launch
 
 本目录按启动层级组织导航 launch，根目录只保留对外入口。
 

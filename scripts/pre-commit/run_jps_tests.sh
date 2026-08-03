@@ -1,28 +1,32 @@
 #!/bin/bash
 set -euo pipefail
 
-# ── Source ROS 2 Humble ──
-source /opt/ros/humble/setup.bash
+WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)
 
-# ── Optionally source a Nav2 workspace if it exists ──
-if [ -f "$HOME/nav2_ws/install/setup.bash" ]; then
-  source "$HOME/nav2_ws/install/setup.bash"
-fi
+source_setup() {
+  local setup_file=$1
+  if [ -f "$setup_file" ]; then
+    set +u
+    source "$setup_file"
+    set -u
+  fi
+}
 
-# ── Source the current workspace ──
-WS="$(dirname "$(dirname "$(readlink -f "$0")")")"
-if [ -f "$WS/install/setup.bash" ]; then
-  source "$WS/install/setup.bash"
+if [ -z "${ROS_DISTRO:-}" ]; then
+  source_setup /opt/ros/humble/setup.bash
 fi
+source_setup "$HOME/nav2_ws/install/setup.bash"
+source_setup "$WS/install/setup.bash"
+cd "$WS"
 
 echo ">>> Building jps_planner with tests ..."
-cd "$WS"
 colcon build --symlink-install --packages-select jps_planner \
   --event-handlers console_direct+ \
-  --cmake-args -DBUILD_TESTING=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-  2>&1 | tail -5
+  --cmake-args \
+    -DBUILD_TESTING=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-source "$WS/install/setup.bash"
+source_setup "$WS/install/setup.bash"
 
 echo ">>> Running test_jps ..."
 cd "$WS/build/jps_planner"

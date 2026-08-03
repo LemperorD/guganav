@@ -6,7 +6,7 @@ livox_ros_driver2:
     publish_freq: 50.0                                  # frequency of publish, 5.0, 10.0, 20.0, 50.0, etc.
     output_data_type: 0
     frame_id: front_mid360
-    user_config_path: $(find-pkg-share guga_nav_bringup)/config/reality/mid360_user_config.json
+    user_config_path: $(find-pkg-share guga_bringup)/config/reality/mid360_user_config.json
     cmdline_input_bd_code: livox0000000001
     lvx_file_path: ""
 
@@ -280,8 +280,8 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 100
     wait_for_service_timeout: 1000
-    default_nav_to_pose_bt_xml: $(find-pkg-share guga_nav_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
-    default_nav_through_poses_bt_xml: $(find-pkg-share guga_nav_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
+    default_nav_to_pose_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    default_nav_through_poses_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
