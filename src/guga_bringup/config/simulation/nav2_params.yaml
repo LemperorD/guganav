@@ -334,7 +334,7 @@ controller_server:
     odom_topic: odometry
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
+    min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugins: ["progress_checker"]
@@ -364,7 +364,10 @@ controller_server:
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 1.0
       min_lookahead_dist: 0.5
-      max_lookahead_dist: 1.0
+      max_lookahead_dist: 1.2
+      lateral_error_gain: 1.0
+      max_lateral_velocity: 0.6
+      lateral_error_deadband: 0.03
       use_interpolation: true
       use_rotate_to_heading: false
       use_rotate_to_heading_treshold: 0.0
@@ -537,8 +540,9 @@ planner_server:
       allow_unknown: false
       enable_bspline: true
       enable_esdf: true
-      esdf_weight: 100.0
-      esdf_safe_distance: 0.5
+      esdf_weight: 250.0
+      esdf_safe_distance: 1.2
+      corridor_halfwidth: 12.0
 
 smoother_server:
   ros__parameters:
@@ -548,7 +552,7 @@ smoother_server:
     SmoothPath:
       plugin: "nav2_constrained_smoother/ConstrainedSmoother"
       reversing_enabled: true       # whether to detect forward/reverse direction and cusps. Should be set to false for paths without orientations assigned
-      path_downsampling_factor: 3   # every n-th node of the path is taken. Useful for speed-up
+      path_downsampling_factor: 2   # every n-th node of the path is taken. Useful for speed-up
       path_upsampling_factor: 1     # 0 - path remains downsampled, 1 - path is upsampled back to original granularity using cubic bezier, 2... - more upsampling
       keep_start_orientation: true  # whether to prevent the start orientation from being smoothed
       keep_goal_orientation: true   # whether to prevent the gpal orientation from being smoothed
@@ -569,7 +573,7 @@ smoother_server:
       # cost_check_points: [-0.185, 0.0, 1.0]
 
       optimizer:
-        max_iterations: 70            # max iterations of smoother
+        max_iterations: 100            # max iterations of smoother
         debug_optimizer: false        # print debug info
         gradient_tol: 5.0e+3
         fn_tol: 1.0e-15

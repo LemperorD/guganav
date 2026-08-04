@@ -90,6 +90,15 @@ namespace pb_omni_pid_pursuit_controller {
         node, plugin_name_ + ".lookahead_time",
         rclcpp::ParameterValue(config_.lookahead_time));
     declare_parameter_if_not_declared(
+        node, plugin_name_ + ".lateral_error_gain",
+        rclcpp::ParameterValue(config_.lateral_error_gain));
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".max_lateral_velocity",
+        rclcpp::ParameterValue(config_.max_lateral_velocity));
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".lateral_error_deadband",
+        rclcpp::ParameterValue(config_.lateral_error_deadband));
+    declare_parameter_if_not_declared(
         node, plugin_name_ + ".use_interpolation",
         rclcpp::ParameterValue(config_.use_interpolation));
     declare_parameter_if_not_declared(
@@ -166,6 +175,12 @@ namespace pb_omni_pid_pursuit_controller {
                         config_.max_lookahead_dist);
     node->get_parameter(plugin_name_ + ".lookahead_time",
                         config_.lookahead_time);
+    node->get_parameter(plugin_name_ + ".lateral_error_gain",
+                        config_.lateral_error_gain);
+    node->get_parameter(plugin_name_ + ".max_lateral_velocity",
+                        config_.max_lateral_velocity);
+    node->get_parameter(plugin_name_ + ".lateral_error_deadband",
+                        config_.lateral_error_deadband);
     node->get_parameter(plugin_name_ + ".use_interpolation",
                         config_.use_interpolation);
     node->get_parameter(plugin_name_ + ".use_rotate_to_heading",
@@ -292,8 +307,8 @@ namespace pb_omni_pid_pursuit_controller {
     geometry_msgs::msg::TwistStamped cmd_vel;
     cmd_vel.header = pose.header;
     if (!checkCollision(transformed_plan)) {
-      cmd_vel = assembleCmdVel(pose, lin_vel, angular_vel, theta_distance,
-                               path_yaw);
+      cmd_vel = assembleCmdVel(pose, lin_vel, angular_vel, linear_distance,
+                               theta_distance, path_yaw);
     } else {
       throw nav2_core::PlannerException(
           "Collision detected in the trajectory. Stopping the robot!");
@@ -304,12 +319,51 @@ namespace pb_omni_pid_pursuit_controller {
 
   geometry_msgs::msg::TwistStamped OmniPidPursuitControllerNode::assembleCmdVel(
       const geometry_msgs::msg::PoseStamped& pose, double lin_vel,
-      double angular_vel, double theta_dist, double path_yaw) const {
+      double angular_vel, double linear_distance, double theta_dist,
+      double path_yaw) const {
     geometry_msgs::msg::TwistStamped cmd_vel;
     cmd_vel.header = pose.header;
     if (config_.enable_rotation) {
-      cmd_vel.twist.linear.x = lin_vel * std::cos(path_yaw);
-      cmd_vel.twist.linear.y = lin_vel * std::sin(path_yaw);
+      const double tangent_x = std::cos(path_yaw);
+      const double tangent_y = std::sin(path_yaw);
+      const double normal_x = -tangent_y;
+      const double normal_y = tangent_x;
+      if (config_.lateral_error_gain <= 0.0
+          || config_.max_lateral_velocity <= 0.0) {
+        cmd_vel.twist.linear.x = lin_vel * tangent_x;
+        cmd_vel.twist.linear.y = lin_vel * tangent_y;
+        cmd_vel.twist.angular.z = angular_vel;
+        return cmd_vel;
+      }
+
+      const double carrot_x = linear_distance * std::cos(theta_dist);
+      const double carrot_y = linear_distance * std::sin(theta_dist);
+      const double forward_distance = carrot_x * tangent_x
+                                      + carrot_y * tangent_y;
+      const double forward_ratio =
+          linear_distance > 1e-6
+              ? std::clamp(forward_distance / linear_distance, 0.0, 1.0)
+              : 0.0;
+      const double forward_vel = lin_vel * forward_ratio;
+
+      double lateral_error = carrot_x * normal_x + carrot_y * normal_y;
+      if (std::fabs(lateral_error) < config_.lateral_error_deadband) {
+        lateral_error = 0.0;
+      }
+      const double lateral_vel = std::clamp(
+          config_.lateral_error_gain * lateral_error,
+          -config_.max_lateral_velocity, config_.max_lateral_velocity);
+
+      cmd_vel.twist.linear.x = forward_vel * tangent_x + lateral_vel * normal_x;
+      cmd_vel.twist.linear.y = forward_vel * tangent_y + lateral_vel * normal_y;
+
+      const double linear_speed = std::hypot(cmd_vel.twist.linear.x,
+                                             cmd_vel.twist.linear.y);
+      if (linear_speed > config_.v_linear_max && linear_speed > 1e-6) {
+        const double scale = config_.v_linear_max / linear_speed;
+        cmd_vel.twist.linear.x *= scale;
+        cmd_vel.twist.linear.y *= scale;
+      }
     } else {
       cmd_vel.twist.linear.x = lin_vel * std::cos(theta_dist);
       cmd_vel.twist.linear.y = lin_vel * std::sin(theta_dist);

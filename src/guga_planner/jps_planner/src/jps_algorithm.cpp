@@ -16,7 +16,6 @@ namespace jps_planner {
 
     // ── Costmap 常量 ──
     constexpr unsigned char UNKNOWN_COST = 255;    // 未知空间
-    constexpr unsigned char LETHAL_COST = 254;     // 致命障碍物
     constexpr unsigned char INSCRIBED_COST = 253;  // 膨胀后的内切障碍物
     constexpr unsigned char MAX_NON_OBSTACLE = 252;  // 最高非障碍物代价值
 
@@ -28,7 +27,7 @@ namespace jps_planner {
       if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) {
         return UNKNOWN_COST;
       }
-      return s.costmap_data[static_cast<size_t>(y * s.size_x + x)];
+      return s.costmap_data[static_cast<size_t>((y * s.size_x) + x)];
     }
 
     /** @brief 判断格元是否被阻塞 (cost ≥ 253 = 障碍物或膨胀区域)。

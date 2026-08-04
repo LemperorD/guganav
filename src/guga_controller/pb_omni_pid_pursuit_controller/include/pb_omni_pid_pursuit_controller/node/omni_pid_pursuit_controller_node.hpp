@@ -82,7 +82,8 @@ namespace pb_omni_pid_pursuit_controller {
                          double& linear_vel, double& angular_vel);
     [[nodiscard]] geometry_msgs::msg::TwistStamped assembleCmdVel(
         const geometry_msgs::msg::PoseStamped& pose, double lin_vel,
-        double angular_vel, double theta_dist, double path_yaw) const;
+        double angular_vel, double linear_distance, double theta_dist,
+        double path_yaw) const;
 
     void applyVelocityLimits(const nav_msgs::msg::Path& transformed_plan,
                              const geometry_msgs::msg::PoseStamped& carrot_pose,

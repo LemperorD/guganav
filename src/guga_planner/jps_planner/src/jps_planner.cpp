@@ -1,6 +1,7 @@
 #include "jps_planner/jps_planner.hpp"
 
 #include <cmath>
+#include <guga_ui_common/ui_types.hpp>
 #include <memory>
 #include <string>
 #include <utility>
@@ -76,18 +77,24 @@ namespace jps_planner {
     nav2_util::declare_parameter_if_not_declared(node, name_ + ".esdf_weight",
                                                  rclcpp::ParameterValue(100.0));
     nav2_util::declare_parameter_if_not_declared(
-        node, name_ + ".esdf_safe_distance", rclcpp::ParameterValue(0.3));
+        node, name_ + ".esdf_safe_distance", rclcpp::ParameterValue(0.6));
+    nav2_util::declare_parameter_if_not_declared(
+        node, name_ + ".corridor_halfwidth", rclcpp::ParameterValue(8.0));
 
     node->get_parameter(name_ + ".enable_esdf", enable_esdf_);
     node->get_parameter(name_ + ".esdf_weight", esdf_weight_);
     node->get_parameter(name_ + ".esdf_safe_distance", esdf_safe_distance_);
+    node->get_parameter(name_ + ".corridor_halfwidth", corridor_halfwidth_);
+    bspline_config_.corridor_halfwidth = corridor_halfwidth_;
 
     RCLCPP_INFO(
         logger_,
         "JPSPlanner configured: w_traversal=%.2f w_euc=%.2f "
-        "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d enable_esdf=%d",
+        "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d enable_esdf=%d "
+        "esdf_safe_distance=%.2f corridor_halfwidth=%.1f",
         config_.w_traversal_cost, config_.w_euc_cost, config_.w_heuristic_cost,
-        config_.allow_unknown, enable_bspline_, enable_esdf_);
+        config_.allow_unknown, enable_bspline_, enable_esdf_,
+        esdf_safe_distance_, corridor_halfwidth_);
 
     // 初始化共享内存写入端 — 将规划结果推送给 Pangolin UI 渲染
     shm_ready_ = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
@@ -157,7 +164,8 @@ namespace jps_planner {
     }
 
     // 将起点/终点从世界坐标转换到代价地图格元坐标
-    unsigned int mx_start{}, my_start{};
+    unsigned int mx_start{};
+    unsigned int my_start{};
     if (!costmap_->worldToMap(start.pose.position.x, start.pose.position.y,
                               mx_start, my_start)) {
       RCLCPP_ERROR(logger_,
@@ -166,7 +174,8 @@ namespace jps_planner {
       return plan;
     }
 
-    unsigned int mx_goal{}, my_goal{};
+    unsigned int mx_goal{};
+    unsigned int my_goal{};
     if (!costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y,
                               mx_goal, my_goal)) {
       RCLCPP_ERROR(logger_,
@@ -223,7 +232,8 @@ namespace jps_planner {
       std::vector<std::pair<double, double>> world_path{};
       world_path.reserve(map_path.size());
       for (const auto& [mx, my] : map_path) {
-        double wx{}, wy{};
+        double wx{};
+        double wy{};
         costmap_->mapToWorld(static_cast<unsigned int>(mx),
                              static_cast<unsigned int>(my), wx, wy);
         world_path.emplace_back(wx, wy);
@@ -265,11 +275,59 @@ namespace jps_planner {
       const unsigned char* costmap_data, int cm_w, int cm_h,
       double resolution) {
     nav_msgs::msg::Path plan;
+    bspline_opt::BSplineConfig runtime_config = bspline_config_;
+    runtime_config.corridor_halfwidth = corridor_halfwidth_;
+    const rog_map_layer::EsdfMap* esdf_map = nullptr;
+    double esdf_max_distance = 0.0;
 
-    // ── 第 1 步: 创建 B-spline 优化器并拟合 JPS 路径 ──
+    // ════════════════════════════════════════════════════════════════════════
+    // 第 1 步: 查找 ESDF 数据 (启用时)
+    //
+    // BSplineOptimizer 在构造时复制配置, 所以必须先确定本次规划是否
+    // 能拿到 EsdfLayer, 再创建 optimizer。否则当前规划会漏掉 ESDF 代价。
+    // ════════════════════════════════════════════════════════════════════════
+    if (enable_esdf_) {
+      auto* layered_costmap = costmap_ros_->getLayeredCostmap();
+      if (layered_costmap != nullptr) {
+        auto* plugins = layered_costmap->getPlugins();
+        if (plugins != nullptr) {
+          for (auto& plugin : *plugins) {
+            auto esdf_layer =
+                std::dynamic_pointer_cast<rog_map_layer::EsdfLayer>(plugin);
+            if (esdf_layer) {
+              esdf_map = esdf_layer->getEsdfMapRaw();
+              if (esdf_map != nullptr) {
+                const auto& esdf_cfg = esdf_layer->config();
+                esdf_max_distance = esdf_cfg.max_distance;
+                runtime_config.enable_esdf = true;
+                runtime_config.enable_gradient_descent = true;
+                runtime_config.esdf_weight = esdf_weight_;
+                runtime_config.esdf_safe_distance = esdf_safe_distance_;
+
+                RCLCPP_INFO(
+                    logger_,
+                    "JPSPlanner: ESDF layer found, enabling gradient descent "
+                    "with w_esdf=%.1f safe_dist=%.2f corridor=%.1f cells",
+                    esdf_weight_, esdf_safe_distance_,
+                    runtime_config.corridor_halfwidth);
+              }
+              break;
+            }
+          }
+        }
+      }
+      if (!runtime_config.enable_esdf) {
+        RCLCPP_WARN(logger_,
+                    "JPSPlanner: ESDF enabled but EsdfLayer not found in "
+                    "costmap plugins, "
+                    "falling back to binary obstacle avoidance.");
+      }
+    }
+
+    // ── 第 2 步: 创建 B-spline 优化器并拟合 JPS 路径 ──
     // fit() 使用 chord-length 参数化 + Eigen SplineFitting::Interpolate,
     // 将 JPS 航点精确插值为 7 阶 C2 连续 B-spline 曲线
-    bspline_opt::BSplineOptimizer opt(bspline_config_);
+    bspline_opt::BSplineOptimizer opt(runtime_config);
     if (!opt.fit(map_path)) {
       RCLCPP_WARN(
           logger_,
@@ -277,7 +335,8 @@ namespace jps_planner {
       std::vector<std::pair<double, double>> world_path{};
       world_path.reserve(map_path.size());
       for (const auto& [mx, my] : map_path) {
-        double wx{}, wy{};
+        double wx{};
+        double wy{};
         costmap_->mapToWorld(static_cast<unsigned int>(mx),
                              static_cast<unsigned int>(my), wx, wy);
         world_path.emplace_back(wx, wy);
@@ -291,7 +350,7 @@ namespace jps_planner {
     opt.state().costmap_h = cm_h;
 
     // ════════════════════════════════════════════════════════════════════════
-    // 第 2 步: 注入 ESDF 数据 (启用时)
+    // 第 3 步: 注入 ESDF 数据 (启用时)
     //
     // 通过 costmap_ros_->getLayeredCostmap() → getPlugins() 查找 EsdfLayer,
     // 获取其内部 EsdfMap 的距离场和梯度场数据指针。
@@ -303,57 +362,22 @@ namespace jps_planner {
     // 计算 J_esdf = w_e * Σ [max(0, d_safe - d_esdf(p))]²,
     // 产生平滑连续的避障梯度。
     // ════════════════════════════════════════════════════════════════════════
-    if (enable_esdf_) {
-      auto* layered_costmap = costmap_ros_->getLayeredCostmap();
-      if (layered_costmap) {
-        auto plugins = layered_costmap->getPlugins();
-        if (plugins) {
-          for (auto& plugin : *plugins) {
-            auto esdf_layer =
-                std::dynamic_pointer_cast<rog_map_layer::EsdfLayer>(plugin);
-            if (esdf_layer) {
-              const auto* esdf_map = esdf_layer->getEsdfMapRaw();
-              if (esdf_map) {
-                const auto& esdf_cfg = esdf_layer->config();
-                // 将 ESDF 数据指针注入 BSplineState
-                // 指针非拥有 — BSplineOptimizer 不负责释放
-                opt.state().esdf_distance = esdf_map->distanceField().data();
-                opt.state().esdf_gradient_x = esdf_map->gradientX().data();
-                opt.state().esdf_gradient_y = esdf_map->gradientY().data();
-                opt.state().esdf_w = static_cast<int>(esdf_map->sizeX());
-                opt.state().esdf_h = static_cast<int>(esdf_map->sizeY());
-                opt.state().esdf_resolution = esdf_map->resolution();
-                opt.state().esdf_origin_x = esdf_map->originX();
-                opt.state().esdf_origin_y = esdf_map->originY();
-                opt.state().esdf_max_distance = esdf_cfg.max_distance;
-
-                // 启用 ESDF 模式并自动开启梯度下降
-                bspline_config_.enable_esdf = true;
-                bspline_config_.enable_gradient_descent = true;
-                bspline_config_.esdf_weight = esdf_weight_;
-                bspline_config_.esdf_safe_distance = esdf_safe_distance_;
-
-                RCLCPP_INFO(
-                    logger_,
-                    "JPSPlanner: ESDF layer found, enabling gradient descent "
-                    "with w_esdf=%.1f safe_dist=%.2f",
-                    esdf_weight_, esdf_safe_distance_);
-              }
-              break;
-            }
-          }
-        }
-      }
-      if (!bspline_config_.enable_esdf) {
-        RCLCPP_WARN(logger_,
-                    "JPSPlanner: ESDF enabled but EsdfLayer not found in "
-                    "costmap plugins, "
-                    "falling back to binary obstacle avoidance.");
-      }
+    if (esdf_map != nullptr) {
+      // 将 ESDF 数据指针注入 BSplineState
+      // 指针非拥有 — BSplineOptimizer 不负责释放
+      opt.state().esdf_distance = esdf_map->distanceField().data();
+      opt.state().esdf_gradient_x = esdf_map->gradientX().data();
+      opt.state().esdf_gradient_y = esdf_map->gradientY().data();
+      opt.state().esdf_w = static_cast<int>(esdf_map->sizeX());
+      opt.state().esdf_h = static_cast<int>(esdf_map->sizeY());
+      opt.state().esdf_resolution = esdf_map->resolution();
+      opt.state().esdf_origin_x = esdf_map->originX();
+      opt.state().esdf_origin_y = esdf_map->originY();
+      opt.state().esdf_max_distance = esdf_max_distance;
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // 第 3 步: 运行优化
+    // 第 4 步: 运行优化
     //
     // (a) 梯度下降 (仅 enabled):
     //     变量 = 内部控制点 [2*(M-2) 维]
@@ -371,10 +395,11 @@ namespace jps_planner {
     int num_samples = std::max(100, static_cast<int>(map_path.size()) * 5);
     auto result = opt.optimize(num_samples);
 
-    // ── 第 4 步: 地图坐标 → 世界坐标 ──
+    // ── 第 5 步: 地图坐标 → 世界坐标 ──
     plan.poses.reserve(result.smoothed_path.size());
     for (size_t i = 0; i < result.smoothed_path.size(); ++i) {
-      double wx{}, wy{};
+      double wx{};
+      double wy{};
       costmap_->mapToWorld(
           static_cast<unsigned int>(result.smoothed_path[i].first),
           static_cast<unsigned int>(result.smoothed_path[i].second), wx, wy);
@@ -430,8 +455,8 @@ namespace jps_planner {
       for (int s = 0; s < steps; ++s) {
         double t = static_cast<double>(s) / static_cast<double>(steps);
         geometry_msgs::msg::PoseStamped pose;
-        pose.pose.position.x = x0 + t * (x1 - x0);
-        pose.pose.position.y = y0 + t * (y1 - y0);
+        pose.pose.position.x = x0 + (t * (x1 - x0));
+        pose.pose.position.y = y0 + (t * (y1 - y0));
         pose.pose.position.z = 0.0;
         // 简单的朝向: 指向下一个航点
         double yaw = std::atan2(y1 - y0, x1 - x0);
@@ -468,11 +493,9 @@ namespace jps_planner {
     // 降采样: 每 stride 个点取 1 个 (目标 ≤ UI_PATH_MAX_POINTS)
     size_t stride = (n <= guga_ui::UI_PATH_MAX_POINTS)
                         ? 1
-                        : (n / guga_ui::UI_PATH_MAX_POINTS + 1);
-    ui_path.count = static_cast<uint32_t>((n + stride - 1) / stride);
-    if (ui_path.count > guga_ui::UI_PATH_MAX_POINTS) {
-      ui_path.count = guga_ui::UI_PATH_MAX_POINTS;
-    }
+                        : ((n / guga_ui::UI_PATH_MAX_POINTS) + 1);
+    ui_path.count = std::min((n + stride - 1) / stride,
+                             guga_ui::UI_PATH_MAX_POINTS);
 
     for (uint32_t i = 0; i < ui_path.count; ++i) {
       size_t src = i * stride;

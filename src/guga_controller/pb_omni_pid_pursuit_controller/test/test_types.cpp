@@ -27,6 +27,9 @@ namespace pb_omni_pid_pursuit_controller {
       EXPECT_DOUBLE_EQ(cfg.min_lookahead_dist, 0.2);
       EXPECT_DOUBLE_EQ(cfg.max_lookahead_dist, 1.0);
       EXPECT_DOUBLE_EQ(cfg.lookahead_time, 1.0);
+      EXPECT_DOUBLE_EQ(cfg.lateral_error_gain, 1.0);
+      EXPECT_DOUBLE_EQ(cfg.max_lateral_velocity, 0.8);
+      EXPECT_DOUBLE_EQ(cfg.lateral_error_deadband, 0.02);
       EXPECT_TRUE(cfg.use_rotate_to_heading);
       EXPECT_DOUBLE_EQ(cfg.use_rotate_to_heading_threshold, 0.1);
       EXPECT_DOUBLE_EQ(cfg.v_linear_min, -3.0);

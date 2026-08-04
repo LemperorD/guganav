@@ -536,7 +536,7 @@ $h = 0.5$ 的选择使数值梯度能跨格元"感知"到障碍物边界和 ESDF
 
 $$x_{\text{try}}^j \in \big[x_{\text{init}}^j - d_{\text{corr}}, \; x_{\text{init}}^j + d_{\text{corr}}\big], \quad \forall j$$
 
-其中 $d_{\text{corr}} = 2.5$ 格元（默认 `corridor_halfwidth`）。
+其中 $d_{\text{corr}} = 8.0$ 格元（JPSPlanner 默认 `corridor_halfwidth`）。
 
 **走廊约束的目的**：
 
@@ -686,7 +686,7 @@ bspline_config_.esdf_safe_distance = esdf_safe_distance_; // d_safe (默认 0.3 
 | `smoothness_weight` | 0.1 | 曲率平滑权重 |
 | `distance_weight` | 10.0 | 到原始路径的距离权重 |
 | `obstacle_weight` | 50000.0 | 二元障碍物惩罚权重 |
-| `corridor_halfwidth` | 2.5 | 走廊约束半宽度（格元） |
+| `corridor_halfwidth` | 8.0 | 走廊约束半宽度（格元） |
 | `max_iterations` | 200 | 梯度下降最大迭代次数 |
 | `max_control_points` | 200 | 控制点数量上限 |
 
@@ -696,7 +696,7 @@ bspline_config_.esdf_safe_distance = esdf_safe_distance_; // d_safe (默认 0.3 
 |------|--------|------|
 | `enable_esdf` | false | 是否启用 ESDF 梯度优化 |
 | `esdf_weight` | 100.0 | ESDF 距离惩罚权重 |
-| `esdf_safe_distance` | 0.3 | ESDF 安全距离（米） |
+| `esdf_safe_distance` | 0.6 | ESDF 安全距离（米） |
 
 启用 ESDF 时会自动开启 `enable_gradient_descent`。
 

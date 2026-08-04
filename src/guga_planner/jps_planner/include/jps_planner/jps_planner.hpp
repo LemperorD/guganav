@@ -86,7 +86,8 @@ namespace jps_planner {
     bool enable_esdf_{false};    // enable ESDF gradient optimisation
     double esdf_weight_{
         100.0};  // ESDF distance field obstacle-avoidance weight
-    double esdf_safe_distance_{0.3};  // ESDF safe distance
+    double esdf_safe_distance_{0.6};  // ESDF safe distance
+    double corridor_halfwidth_{8.0};  // B-spline control point movement bound
 
   private:
     // 使用共享内存进行性能监控
