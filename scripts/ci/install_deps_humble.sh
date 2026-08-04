@@ -110,6 +110,9 @@ install_apt_dependencies() {
   fi
 
   run_root apt-get update
+  run_root apt-get install -y software-properties-common
+  run_root add-apt-repository -y universe
+  run_root apt-get update
   run_root apt-get install -y "${packages[@]}"
 }
 
