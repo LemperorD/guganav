@@ -97,24 +97,6 @@ TEST_F(ContextTest, OnLaserCloud_FiltersPointsBeyondVoxelRange) {
   EXPECT_EQ(context_.state.laser_cloud_crop->points.size(), 1U);
 }
 
-// ── onJoystick ──
-// joystick 按钮按下时触发清除模式，重置 no_data 状态
-TEST_F(ContextTest, OnJoystick_ButtonPressed_TriggersClearing) {
-  context_.onJoystick(true);
-
-  EXPECT_EQ(context_.state.no_data_inited,
-            TerrainState::NoDataState::UNINITIALIZED);
-  EXPECT_TRUE(context_.state.clearing_cloud);
-}
-
-// 按钮松开时 clearing_cloud 状态不变
-TEST_F(ContextTest, OnJoystick_ButtonReleased_NoChange) {
-  context_.state.clearing_cloud = false;
-  context_.onJoystick(false);
-
-  EXPECT_FALSE(context_.state.clearing_cloud);
-}
-
 // ── onClearing ──
 // 接收清除距离后更新 clearing_distance 并触发清除标志
 TEST_F(ContextTest, OnClearing_SetsDistanceAndTriggersClearing) {

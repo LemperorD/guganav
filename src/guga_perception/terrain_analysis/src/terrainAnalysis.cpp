@@ -151,11 +151,6 @@ void TerrainAnalysis::initialize(const std::string& output_topic,
               context_.onLaserCloud(pcl_cloud, t);
             });
 
-    sub_joystick_ = node_->create_subscription<sensor_msgs::msg::Joy>(
-        "joy", 5, [this](sensor_msgs::msg::Joy::ConstSharedPtr msg) {
-          context_.onJoystick(msg->buttons[5] > 0.5);
-        });
-
     sub_clearing_ = node_->create_subscription<std_msgs::msg::Float32>(
         "map_clearing", 5, [this](std_msgs::msg::Float32::ConstSharedPtr msg) {
           context_.onClearing(msg->data);

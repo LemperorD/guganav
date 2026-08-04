@@ -26,7 +26,7 @@ jobs:
       SMALL_GICP_SOURCE_DIR: ${{ github.workspace }}/.cache/small_gicp
       INSTALL_ACADOS_PYTHON: "1"
       COLCON_SKIP_PACKAGES: hik_driver guga_ui_pangolin
-      ROSDEP_SKIP_KEYS: pb2025_sentry_nav pb_teleop_twist_joy
+      ROSDEP_SKIP_KEYS: pb2025_sentry_nav
 
     steps:
       - name: Checkout
