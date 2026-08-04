@@ -1,0 +1,60 @@
+name: Fresh Install CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/fresh-install.yml"
+      - "scripts/ci/install_deps_humble.sh"
+      - "scripts/ci/env_humble.sh"
+      - "src/**/package.xml"
+      - "src/**/CMakeLists.txt"
+      - "README.md"
+
+jobs:
+  fresh-install:
+    name: Verify clean ROS 2 Humble install
+    runs-on: ubuntu-22.04
+    container: ros:humble-ros-base
+    timeout-minutes: 90
+
+    env:
+      ROS_DISTRO: humble
+      ACADOS_SOURCE_DIR: ${{ github.workspace }}/.cache/acados
+      COLCON_SKIP_PACKAGES: hik_driver guga_ui_pangolin
+      ROSDEP_SKIP_KEYS: pb2025_sentry_nav pb_teleop_twist_joy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trust checkout directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Cache acados
+        uses: actions/cache@v4
+        with:
+          path: .cache/acados
+          key: acados-${{ runner.os }}-${{ hashFiles('scripts/ci/install_deps_humble.sh') }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/install_deps_humble.sh
+
+      - name: Build workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +u
+          source scripts/ci/env_humble.sh
+          set -u
+          colcon build --symlink-install \
+            --packages-skip ${COLCON_SKIP_PACKAGES} \
+            --cmake-args \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON

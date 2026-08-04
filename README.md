@@ -103,16 +103,28 @@ python3 -m pip install --user -e ~/tools/acados/interfaces/acados_template
 
 ## 安装依赖
 
-初始化 ROS 环境并安装 rosdep 能解析的依赖：
+推荐直接使用仓库脚本安装公开 apt/rosdep 依赖和 acados：
 
 ```bash
-source /opt/ros/humble/setup.bash
 cd ~/guganav
-rosdep update
-rosdep install --from-paths src --ignore-src --rosdistro humble -r -y
+bash scripts/ci/install_deps_humble.sh
+source scripts/ci/env_humble.sh
 ```
 
 `rosdep` 不能处理本地 SDK、手动编译库或队内私有依赖。遇到这类依赖时，请按对应包说明或队内环境文档安装。
+国内网络如果访问 GitHub/rosdep 不稳定，可以改用 `rosdepc`：
+
+```bash
+USE_ROSDEPC=1 bash scripts/ci/install_deps_humble.sh
+source scripts/ci/env_humble.sh
+```
+
+acados 路径可以由环境变量覆盖，避免硬编码用户目录：
+
+```bash
+ACADOS_SOURCE_DIR=/data/tools/acados bash scripts/ci/install_deps_humble.sh
+source scripts/ci/env_humble.sh
+```
 
 ### 准备仿真 PCD 地图
 
