@@ -23,14 +23,14 @@ computeVelocityCommands (目标 20Hz)
   ├─ computeVelocity      — PID(lin_dist, 0) → lin_vel, PID(angle, 0) → angular_vel
   ├─ applyVelocityLimits  — 曲率减速（含速率限制） + 接近减速
   ├─ checkCollision       — 采样 N 点转全局坐标 → costmap 查代价
-  └─ assembleCmdVel       — 组装 vx/vy/wz
+  └─ assembleCmdVel       — 路径切向速度 + 横向误差捕获，组装 vx/vy/wz
 ```
 
 ## ChassisMode
 
 | 值  | 模式             | enable_rotation | 行为                                    |
 | --- | ---------------- | --------------- | --------------------------------------- |
-| 1   | CHASSIS_FOLLOWED | true            | vx/vy 沿路径方向分解 + wz 旋转跟踪      |
+| 1   | CHASSIS_FOLLOWED | true            | vx/vy 按路径切向和横向误差分解 + wz 旋转跟踪 |
 | 2   | LITTLE_TES       | false           | vx/vy 沿 carrot 方向分解 + wz=0，纯平移 |
 | 3   | GO_HOME          | —               | 已定义，暂未处理                        |
 
@@ -54,6 +54,9 @@ computeVelocityCommands (目标 20Hz)
 | `min_lookahead_dist`                 | 0.2  | 最小前视 (m)           |
 | `max_lookahead_dist`                 | 1.0  | 最大前视 (m)           |
 | `lookahead_time`                     | 1.0  | 前视时间 (s)           |
+| `lateral_error_gain`                 | 1.0  | 横向误差捕获增益       |
+| `max_lateral_velocity`               | 0.8  | 最大横向修正速度 (m/s) |
+| `lateral_error_deadband`             | 0.02 | 横向误差死区 (m)       |
 | `use_interpolation`                  | true | 圆-线段交点插值 carrot |
 | `use_rotate_to_heading`              | true | 终点原地旋转对齐朝向   |
 | `use_rotate_to_heading_threshold`    | 0.1  | 旋转阈值 (rad)         |

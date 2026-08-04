@@ -20,6 +20,10 @@
 
 **障碍物判定**：$c(x,y) \ge 253$ 视为不可通行（`allow_unknown=false` 时 $255$ 也视为障碍物）。
 
+对角移动还会额外检查两个相邻边格。若从 $(x,y)$ 走向 $(x+dx,y+dy)$，
+其中 $dx \ne 0$ 且 $dy \ne 0$，则至少需要 $(x+dx,y)$ 或 $(x,y+dy)$ 中有一个
+可通行。这样可以禁止路径从两个阻断格之间斜穿。
+
 ### 1.2 A\* 基础
 
 JPS 是 A\* 的扩展。A\* 的代价函数：
@@ -99,7 +103,7 @@ $$\text{obs}(x-dx, y) \land \neg\text{obs}(x-dx, y+dy) \quad\lor\quad \text{obs}
 function JUMP(x, y, dx, dy, gx, gy):
     nx, ny = x + dx, y + dy
 
-    if 越界 or 障碍物(nx, ny): return null
+    if 越界 or 障碍物(nx, ny) or 非法对角切角: return null
     acc += traversalCost(nx, ny)
 
     if (nx, ny) == (gx, gy): return (nx, ny)  // 到达终点
@@ -167,7 +171,11 @@ $$u_{j+k} = \frac{1}{k} \sum_{i=j}^{j+k-1} \tau_i, \quad j = 1, \dots, M-k$$
 
 此节点向量保证 B-spline 的端点插值性质：$\mathbf{C}(0) = \mathbf{p}_0$（起点），$\mathbf{C}(1) = \mathbf{p}_{M-1}$（终点）。
 
-**路径点不足时的回退**：当 $N < 8$ 时，降级为 1 阶（线性）B-spline，仅保留首尾两个控制点。
+**路径点不足时的处理**：7 阶 B-spline 至少需要 8 个输入点。JPS 在开阔区域常只输出
+2 到 3 个跳点，因此 `JPSPlanner::createPlan()` 会先用 `densifyMapPath()` 在地图坐标下
+补密短路径，再调用 `BSplineOptimizer::fit()`。如果补密后仍不足 8 点，或拟合失败，才回退
+为线性插值。`BSplineOptimizer::fit()` 内部仍保留 $N < 8$ 的线性 B-spline 兜底，但正常
+planner 流程会优先补密以避免输出 8 邻域折线。
 
 ### 2.3 曲率计算
 
@@ -536,7 +544,7 @@ $h = 0.5$ 的选择使数值梯度能跨格元"感知"到障碍物边界和 ESDF
 
 $$x_{\text{try}}^j \in \big[x_{\text{init}}^j - d_{\text{corr}}, \; x_{\text{init}}^j + d_{\text{corr}}\big], \quad \forall j$$
 
-其中 $d_{\text{corr}} = 2.5$ 格元（默认 `corridor_halfwidth`）。
+其中 $d_{\text{corr}} = 8.0$ 格元（JPSPlanner 默认 `corridor_halfwidth`）。
 
 **走廊约束的目的**：
 
@@ -546,7 +554,9 @@ $$x_{\text{try}}^j \in \big[x_{\text{init}}^j - d_{\text{corr}}, \; x_{\text{ini
 
 3. **数值稳定性**：限制搜索域为紧致集，保证线搜索候选点始终在合理区间内，避免控制点飞入无效区域导致 spline 求值异常。
 
-**走廊宽度选择**：$d_{\text{corr}} = 2.5$ 格元（$0.125$ m 在 $0.05$ m 分辨率下）是一个经验平衡：足够宽以允许 ESDF 梯度将路径推开障碍物（一般需要 $1\sim 2$ 格元的位移），但不够宽到改变路径的拓扑连通性。
+**走廊宽度选择**：`BSplineOptimizer` 独立默认值为 $2.5$ 格元；`JPSPlanner` 插件默认值为
+$8.0$ 格元；当前仿真配置使用 $15.0$ 格元。分辨率为 $0.05$ m 时，$15.0$ 格元约为
+$0.75$ m。较大的走廊允许 ESDF 把贴墙路径推得更远，但也更容易偏离原始 JPS 通道。
 
 ### 4.6 障碍物投射后处理
 
@@ -593,7 +603,10 @@ projectPointToFree(p_i.x, p_i.y)
   输出: map_path (跳转点, 格元中心, N 个航点)
   │
   ▼
-3. BSplineOptimizer::fit()
+3. 短路径补密 (JPSPlanner::densifyMapPath)
+  │  └─ 若 N < 8, 在地图坐标按弧长插入中间点
+  ▼
+4. BSplineOptimizer::fit()
   │  ├─ chord-length 参数化 τ_i = s_i / s_{N-1}
   │  ├─ Eigen::SplineFitting::Interpolate(pts, 7)
   │  ├─ 弧长等分处重采样 M 个控制点
@@ -602,14 +615,14 @@ projectPointToFree(p_i.x, p_i.y)
   输出: fitted B-spline (C^6 连续, 精确穿过 JPS 航点)
   │
   ▼
-4. ESDF 数据注入 (JPSPlanner::bsplineSmooth)
+5. ESDF 数据注入 (JPSPlanner::bsplineSmooth)
   │  ┌─ 查找 LayeredCostmap 中的 EsdfLayer
   │  └─ 提取 EsdfMap 的 distance[], gradient_x[], gradient_y[]
   ▼
   opt.state().esdf_distance = ...  (指针注入)
   │
   ▼
-5. BSplineOptimizer::optimize(num_samples)
+6. BSplineOptimizer::optimize(num_samples)
   │
   ├─ [若 enable_gradient_descent = true] ──────────────────────┐
   │  │                                                         │
@@ -638,13 +651,17 @@ projectPointToFree(p_i.x, p_i.y)
   └─ 计算曲率 profile                                          │
   │
   ▼
-6. 地图坐标 → 世界坐标 (costmap_->mapToWorld)
+7. 连续地图坐标 → 世界坐标 (mapContinuousToWorld)
   │
   ▼
-输出: nav_msgs::Path (C^6 连续平滑路径, 障碍物安全保证)
+输出: nav_msgs::Path (C^6 连续平滑路径)
   │
   ▼
-7. writePathToShm() → 推送到共享内存 (Pangolin UI 渲染)
+8. isPathCollisionFree()
+  │  ├─ 平滑路径碰撞: 回退线性 JPS 路径
+  │  └─ 最终路径碰撞: 返回空路径
+  ▼
+9. writePathToShm() → 推送到共享内存 (Pangolin UI 渲染)
 ```
 
 ### 4.8 启用 ESDF 时的参数覆盖
@@ -686,7 +703,7 @@ bspline_config_.esdf_safe_distance = esdf_safe_distance_; // d_safe (默认 0.3 
 | `smoothness_weight` | 0.1 | 曲率平滑权重 |
 | `distance_weight` | 10.0 | 到原始路径的距离权重 |
 | `obstacle_weight` | 50000.0 | 二元障碍物惩罚权重 |
-| `corridor_halfwidth` | 2.5 | 走廊约束半宽度（格元） |
+| `corridor_halfwidth` | 8.0 | 走廊约束半宽度（格元） |
 | `max_iterations` | 200 | 梯度下降最大迭代次数 |
 | `max_control_points` | 200 | 控制点数量上限 |
 
@@ -696,7 +713,7 @@ bspline_config_.esdf_safe_distance = esdf_safe_distance_; // d_safe (默认 0.3 
 |------|--------|------|
 | `enable_esdf` | false | 是否启用 ESDF 梯度优化 |
 | `esdf_weight` | 100.0 | ESDF 距离惩罚权重 |
-| `esdf_safe_distance` | 0.3 | ESDF 安全距离（米） |
+| `esdf_safe_distance` | 0.6 | ESDF 安全距离（米） |
 
 启用 ESDF 时会自动开启 `enable_gradient_descent`。
 
@@ -724,6 +741,9 @@ bspline_config_.esdf_safe_distance = esdf_safe_distance_; // d_safe (默认 0.3 
 转换关系：
 $$\text{world} = \text{origin} + \text{map\_coord} \times \text{resolution}$$
 $$\text{map\_coord} = \text{cell\_center} = (\text{ix} + 0.5, \text{iy} + 0.5)$$
+
+B-spline 采样输出是连续地图坐标，因此转换到世界坐标时不能先转成整数格元索引。
+如果在转换前取整，平滑后的路径会被重新量化到格子中心，表现为 45 度或水平/竖直折线。
 
 ---
 

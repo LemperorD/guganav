@@ -27,6 +27,9 @@ namespace pb_omni_pid_pursuit_controller {
     double min_lookahead_dist{0.2};
     double max_lookahead_dist{1.0};
     double lookahead_time{1.0};
+    double lateral_error_gain{1.0};
+    double max_lateral_velocity{0.8};
+    double lateral_error_deadband{0.02};
     bool use_rotate_to_heading{true};
     double use_rotate_to_heading_threshold{0.1};
     double v_linear_min{-3.0};

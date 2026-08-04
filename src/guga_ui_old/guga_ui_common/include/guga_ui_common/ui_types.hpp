@@ -1,5 +1,4 @@
-#ifndef GUGA_UI_COMMON_UI_TYPES_HPP
-#define GUGA_UI_COMMON_UI_TYPES_HPP
+#pragma once
 /**
  * @file ui_types.hpp
  * @brief guga_ui 共享内存中传输的所有数据类型定义。
@@ -12,6 +11,9 @@
  */
 
 #include <cstdint>
+#include <cstddef>
+#include <type_traits>
+#include <array>
 
 namespace guga_ui {
 
@@ -38,7 +40,7 @@ struct alignas(64) UiRobotStatus {
   bool is_hp_deduced{false};
 
   // 填充至 64 字节对齐
-  uint8_t _pad[43]{};
+  std::array<uint8_t, 43> _pad{};
 };
 
 static_assert(sizeof(UiRobotStatus) == 64,
@@ -61,7 +63,7 @@ struct alignas(64) UiGameStatus {
   /// 已比赛时长，秒（上位机推算）
   double elapsed_sec{};
 
-  uint8_t _pad[51]{};
+  std::array<uint8_t, 51> _pad{};
 };
 
 static_assert(alignof(UiGameStatus) == 64);
@@ -100,7 +102,7 @@ struct alignas(64) UiRfidStatus {
   bool enemy_big_resource_island{false};
   bool center_gain_point{false};
 
-  uint8_t _pad[40]{};
+  std::array<uint8_t, 40> _pad{};
 };
 
 static_assert(alignof(UiRfidStatus) == 64);
@@ -134,7 +136,7 @@ struct alignas(64) UiDecision {
   /// 决策计算耗时 (微秒)
   int64_t compute_us{};
 
-  uint8_t _pad[15]{};
+  std::array<uint8_t, 15> _pad{};
 };
 
 static_assert(alignof(UiDecision) == 64);
@@ -167,7 +169,7 @@ struct alignas(64) UiEnemy {
   /// 敌方最后一次出现时间 (秒)
   double last_seen_sec{};
 
-  uint8_t _pad[30]{};
+  std::array<uint8_t, 30> _pad{};
 };
 
 static_assert(alignof(UiEnemy) == 64);
@@ -191,7 +193,7 @@ struct alignas(64) UiOdom {
   double vy{};
   double vz{};
 
-  uint8_t _pad[8]{};
+  std::array<uint8_t, 8> _pad{};
 };
 
 static_assert(alignof(UiOdom) == 64);
@@ -210,7 +212,7 @@ struct alignas(64) UiYaw {
   /// 下位机上报的 TES 角速度
   double tes_angular_z{};
 
-  uint8_t _pad[48]{};
+  std::array<uint8_t, 48> _pad{};
 };
 
 static_assert(alignof(UiYaw) == 64);
@@ -219,7 +221,7 @@ static_assert(std::is_trivially_copyable_v<UiYaw>);
 // ==================== 导航路径 ====================
 
 /// 单条导航路径最多存储的点数
-static constexpr size_t UI_PATH_MAX_POINTS{256};
+static constexpr std::size_t UI_PATH_MAX_POINTS{256};
 
 /**
  * @brief 导航规划路径，最多 256 个路径点。
@@ -233,10 +235,10 @@ struct alignas(64) UiPath {
   double stamp_sec{};
 
   /// 路径点坐标数组
-  double x[UI_PATH_MAX_POINTS]{};
-  double y[UI_PATH_MAX_POINTS]{};
+  std::array<double, UI_PATH_MAX_POINTS> x{};
+  std::array<double, UI_PATH_MAX_POINTS> y{};
 
-  uint8_t _pad[44]{};
+  std::array<uint8_t, 44> _pad{};
 };
 
 static_assert(offsetof(UiPath, count) == 0);
@@ -251,7 +253,7 @@ static_assert(std::is_trivially_copyable_v<UiPath>);
  * 每个算法模块写入时用固定 slot_id，UI 读取时按 slot_id 索引。
  * 新增 slot 必须追加在末尾（不删除/重排已有值），保证向后兼容。
  */
-enum class UiSlotId : uint32_t {
+enum class UiSlotId : uint8_t {
   ROBOT_STATUS = 0,
   GAME_STATUS = 1,
   RFID_STATUS = 2,
@@ -266,5 +268,3 @@ enum class UiSlotId : uint32_t {
 };
 
 }  // namespace guga_ui
-
-#endif  // GUGA_UI_COMMON_UI_TYPES_HPP

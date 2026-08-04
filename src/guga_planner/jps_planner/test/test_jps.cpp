@@ -168,7 +168,7 @@ namespace jps_planner {
         "#..................#",
         "#..................#",
         "#..................#",
-        "..................#",  // y=5 corridor
+        "....................",  // y=5 corridor
         "#..................#",
         "#..................#",
         "#..................#",
@@ -257,23 +257,41 @@ namespace jps_planner {
     // (may be just 2: start and goal)
   }
 
-  TEST_F(JPSBehaviorTest, ForcedNeighbor_TriggersJumpPoint) {
-    // Create a configuration that triggers forced neighbor:
-    //  .#.
-    //  ..#  <- diagonal movement: obstacle at (1,0) and (2,1)
-    //  ...
-    // Start at (0,2), goal at (2,0). Forced neighbor at (1,1).
+  TEST_F(JPSBehaviorTest, DiagonalCornerCutting_IsBlocked) {
+    // Start (0,0) cannot move diagonally into (1,1) when both side cells
+    // (1,0) and (0,1) are blocked.
     auto grid = makeGrid({
-        ".#.",  // y=2
-        "..#",  // y=1
-        "...",  // y=0
+        "...",
+        "#..",
+        ".#.",
     });
     constexpr int W = 3, H = 3;
     JPSState state{};
     initState(state, grid, W, H);
 
     std::vector<std::pair<double, double>> path{};
-    bool ok = JPSAlgorithm::generatePath(config_, state, 0, 0, 2, 2, path);
+    bool ok = JPSAlgorithm::generatePath(config_, state, 0, 0, 1, 1, path);
+    EXPECT_FALSE(ok);
+    EXPECT_TRUE(path.empty());
+  }
+
+  TEST_F(JPSBehaviorTest, ForcedNeighbor_TriggersJumpPoint) {
+    // Create a configuration that triggers forced neighbor:
+    //  .#..
+    //  ....
+    //  ....
+    // Moving east through (1,1) exposes a legal forced neighbor at (2,2).
+    auto grid = makeGrid({
+        ".#..",  // y=2
+        "....",  // y=1
+        "....",  // y=0
+    });
+    constexpr int W = 4, H = 3;
+    JPSState state{};
+    initState(state, grid, W, H);
+
+    std::vector<std::pair<double, double>> path{};
+    bool ok = JPSAlgorithm::generatePath(config_, state, 0, 1, 3, 2, path);
     EXPECT_TRUE(ok);
   }
 

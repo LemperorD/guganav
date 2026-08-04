@@ -11,6 +11,7 @@ USE_ROSDEPC="${USE_ROSDEPC:-0}"
 INSTALL_ACADOS="${INSTALL_ACADOS:-1}"
 INSTALL_ACADOS_PYTHON="${INSTALL_ACADOS_PYTHON:-1}"
 INSTALL_SMALL_GICP="${INSTALL_SMALL_GICP:-1}"
+INSTALL_HIK_MVS="${INSTALL_HIK_MVS:-0}"
 ACADOS_SOURCE_DIR="${ACADOS_SOURCE_DIR:-${HOME}/tools/acados}"
 ACADOS_REPO="${ACADOS_REPO:-https://github.com/acados/acados.git}"
 ACADOS_CLONE_DEPTH="${ACADOS_CLONE_DEPTH:-1}"
@@ -19,6 +20,8 @@ SMALL_GICP_SOURCE_DIR="${SMALL_GICP_SOURCE_DIR:-${HOME}/tools/small_gicp}"
 SMALL_GICP_REPO="${SMALL_GICP_REPO:-https://github.com/koide3/small_gicp.git}"
 SMALL_GICP_CLONE_DEPTH="${SMALL_GICP_CLONE_DEPTH:-1}"
 SMALL_GICP_JOBS="${SMALL_GICP_JOBS:-$(nproc)}"
+HIK_MVS_ROOT="${HIK_MVS_ROOT:-/opt/MVS}"
+HIK_MVS_SOURCE_DIR="${HIK_MVS_SOURCE_DIR:-}"
 ROSDEP_SKIP_KEYS="${ROSDEP_SKIP_KEYS:-pb2025_sentry_nav pb_teleop_twist_joy}"
 DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 
@@ -106,6 +109,9 @@ install_apt_dependencies() {
     packages+=(${APT_EXTRA_PACKAGES})
   fi
 
+  run_root apt-get update
+  run_root apt-get install -y software-properties-common
+  run_root add-apt-repository -y universe
   run_root apt-get update
   run_root apt-get install -y "${packages[@]}"
 }
@@ -212,9 +218,55 @@ install_small_gicp() {
   run_root make install
 }
 
+install_hik_mvs() {
+  local hik_header="${HIK_MVS_ROOT}/include/MvCameraControl.h"
+  local hik_lib="${HIK_MVS_ROOT}/lib/64/libMvCameraControl.so"
+
+  if [ -f "${hik_header}" ] && [ -e "${hik_lib}" ]; then
+    echo "Hikrobot MVS SDK found at ${HIK_MVS_ROOT}"
+    return
+  fi
+
+  if [ "${INSTALL_HIK_MVS}" != "1" ]; then
+    echo "Skipping Hikrobot MVS SDK because INSTALL_HIK_MVS=${INSTALL_HIK_MVS}"
+    return
+  fi
+
+  if [ -z "${HIK_MVS_SOURCE_DIR}" ]; then
+    cat >&2 <<EOF
+Hikrobot MVS SDK is not available at ${HIK_MVS_ROOT}.
+Download the Linux SDK from the official Hikrobot download center, install or
+extract it locally, then rerun with:
+  INSTALL_HIK_MVS=1 HIK_MVS_SOURCE_DIR=/path/to/MVS bash scripts/ci/install_deps_humble.sh
+EOF
+    exit 1
+  fi
+
+  if [ ! -f "${HIK_MVS_SOURCE_DIR}/include/MvCameraControl.h" ] || \
+     [ ! -e "${HIK_MVS_SOURCE_DIR}/lib/64/libMvCameraControl.so" ]; then
+    echo "HIK_MVS_SOURCE_DIR does not look like a valid MVS SDK root: ${HIK_MVS_SOURCE_DIR}" >&2
+    exit 1
+  fi
+
+  if [ -L "${HIK_MVS_ROOT}" ]; then
+    run_root ln -sfn "${HIK_MVS_SOURCE_DIR}" "${HIK_MVS_ROOT}"
+  elif [ ! -e "${HIK_MVS_ROOT}" ]; then
+    run_root mkdir -p "$(dirname "${HIK_MVS_ROOT}")"
+    run_root ln -s "${HIK_MVS_SOURCE_DIR}" "${HIK_MVS_ROOT}"
+  fi
+
+  if [ ! -f "${hik_header}" ] || [ ! -e "${hik_lib}" ]; then
+    echo "Hikrobot MVS SDK is present at ${HIK_MVS_SOURCE_DIR}, but ${HIK_MVS_ROOT} does not expose the expected files." >&2
+    exit 1
+  fi
+
+  echo "Hikrobot MVS SDK available at ${HIK_MVS_ROOT}"
+}
+
 install_apt_dependencies
 install_rosdep_dependencies
 install_small_gicp
+install_hik_mvs
 install_acados
 
 cat <<EOF

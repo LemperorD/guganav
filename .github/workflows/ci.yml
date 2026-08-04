@@ -24,6 +24,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y software-properties-common
+          add-apt-repository -y universe
           apt-get update
           apt-get install -y \
             clang-format \
@@ -37,6 +41,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          apt-get update
+          apt-cache policy ros-humble-nav2-core ros-humble-pcl-ros
           if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
             rosdep init
           fi
