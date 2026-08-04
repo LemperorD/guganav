@@ -17,7 +17,7 @@ static constexpr uint8_t FRAME_HEADER1{0x42};
 static constexpr uint8_t FRAME_HEADER2{0x52};
 
 // 自定义命令码：下位机与上位机统一
-// 0xCD: 运动控制帧  0xD1: 裁判系统帧
+// 0xCD: 运动控制帧 ; 0xD1: 裁判系统帧
 static constexpr uint8_t COMMAND_CODE_MOTION{0xCD};
 static constexpr uint8_t COMMAND_CODE_REFEREE{0xD1};
 
@@ -86,13 +86,13 @@ class SerialDriverMain {
    * @return 指向 frame_buffer_ 的指针，数据在每次收到有效运动帧时更新。
    * @note 调用者不应持有此指针超过下一次 timerCallback。
    */
-  [[nodiscard]] uint8_t* receiveDataFrame();
+  [[nodiscard]] const uint8_t* receiveDataFrame();
 
   /**
    * @brief 获取最新裁判系统帧的 payload 指针（13 字节缓冲区）。
    * @return 指向 referee_frame_buffer_ 的指针。
    */
-  [[nodiscard]] uint8_t* receiveRefereeFrame();
+  [[nodiscard]] const uint8_t* receiveRefereeFrame();
 
   /**
    * @brief 查询是否有新的裁判系统帧到达。

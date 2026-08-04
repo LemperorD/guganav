@@ -35,11 +35,11 @@ bool SerialDriverMain::isSupportedCommand(uint8_t cmd) {
 
 // ==================== 对外接收接口 ====================
 
-uint8_t* SerialDriverMain::receiveDataFrame() {
+const uint8_t* SerialDriverMain::receiveDataFrame() {
   return frame_buffer_.data();
 }
 
-uint8_t* SerialDriverMain::receiveRefereeFrame() {
+const uint8_t* SerialDriverMain::receiveRefereeFrame() {
   return referee_frame_buffer_.data();
 }
 
