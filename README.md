@@ -103,16 +103,22 @@ python3 -m pip install --user -e ~/tools/acados/interfaces/acados_template
 
 ## 安装依赖
 
-初始化 ROS 环境并安装 rosdep 能解析的依赖：
+推荐直接使用仓库脚本安装公开 apt/rosdep 依赖和 acados：
 
 ```bash
-source /opt/ros/humble/setup.bash
 cd ~/guganav
-rosdep update
-rosdep install --from-paths src --ignore-src --rosdistro humble -r -y
+bash scripts/ci/install_deps_humble.sh
+source scripts/ci/env_humble.sh
 ```
 
 `rosdep` 不能处理本地 SDK、手动编译库或队内私有依赖。遇到这类依赖时，请按对应包说明或队内环境文档安装。
+国内网络如果访问 GitHub/rosdep 不稳定，可以改用 `rosdepc`：
+
+```bash
+USE_ROSDEPC=1 bash scripts/ci/install_deps_humble.sh
+source scripts/ci/env_humble.sh
+```
+
 
 ### 准备仿真 PCD 地图
 
@@ -136,13 +142,6 @@ PCD 文件通常较大，不随仓库提交。复制或下载 PCD 后，建议�
 cd ~/guganav
 colcon build --symlink-install --packages-select guga_bringup
 source install/setup.bash
-```
-
-也可以在启动时显式传入 PCD 路径：
-
-```bash
-scripts/simulation.sh nav rmul_2025 \
-  prior_pcd_file:=$HOME/guganav/src/guga_bringup/pcd/simulation/rmul_2025.pcd
 ```
 
 如果只是建图或暂时不使用先验 PCD，可以运行 SLAM 模式：
