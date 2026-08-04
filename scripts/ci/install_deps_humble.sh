@@ -114,33 +114,35 @@ install_rosdep_dependencies() {
   source_ros
   cd "${REPO_ROOT}"
 
-  local rosdep_skip_args=()
-  if [ -n "${ROSDEP_SKIP_KEYS}" ]; then
-    local rosdep_skip_keys=()
-    # shellcheck disable=SC2206
-    rosdep_skip_keys=(${ROSDEP_SKIP_KEYS})
-    rosdep_skip_args=(--skip-keys "${rosdep_skip_keys[@]}")
-  fi
-
   if [ "${USE_ROSDEPC}" = "1" ]; then
     python3 -m pip install rosdepc -i https://pypi.tuna.tsinghua.edu.cn/simple
     rosdepc init || true
     rosdepc update
-    rosdepc install \
-      --from-paths src \
-      --ignore-src \
-      --rosdistro "${ROS_DISTRO}" \
-      "${rosdep_skip_args[@]}" \
+    local rosdepc_cmd=(
+      rosdepc install
+      --from-paths src
+      --ignore-src
+      --rosdistro "${ROS_DISTRO}"
       -r -y
+    )
+    if [ -n "${ROSDEP_SKIP_KEYS}" ]; then
+      rosdepc_cmd+=(--skip-keys "${ROSDEP_SKIP_KEYS}")
+    fi
+    "${rosdepc_cmd[@]}"
   else
     rosdep init || true
     rosdep update --rosdistro "${ROS_DISTRO}"
-    rosdep install \
-      --from-paths src \
-      --ignore-src \
-      --rosdistro "${ROS_DISTRO}" \
-      "${rosdep_skip_args[@]}" \
+    local rosdep_cmd=(
+      rosdep install
+      --from-paths src
+      --ignore-src
+      --rosdistro "${ROS_DISTRO}"
       -r -y
+    )
+    if [ -n "${ROSDEP_SKIP_KEYS}" ]; then
+      rosdep_cmd+=(--skip-keys "${ROSDEP_SKIP_KEYS}")
+    fi
+    "${rosdep_cmd[@]}"
   fi
 }
 
