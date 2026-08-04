@@ -1,8 +1,6 @@
 #!/bin/bash
 # guganav构建脚本
 
-WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
-
 show_help() {
 cat << EOF
 Usage:
@@ -15,6 +13,9 @@ Options:
     -d / --debug         Debug编译
 EOF
 }
+
+# 获取当前脚本所在的工作空间路径
+WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
 
 # 默认参数
 CLEAN=false
@@ -46,11 +47,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+echo "Workspace  : $WS"
 echo "Build type : $BUILD_TYPE"
 echo "Clean      : $CLEAN"
 
 if $CLEAN; then
-  echo "[warn]maybe need ur password"
+  echo "[Warn] maybe need your password"
   sudo rm -rf "$WS/build" "$WS/log" "$WS/install"
   echo "Cleaning..."
 fi
