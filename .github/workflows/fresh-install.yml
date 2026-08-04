@@ -1,6 +1,14 @@
 name: Fresh Install CI
 
 on:
+  push:
+    paths:
+      - ".github/workflows/fresh-install.yml"
+      - "scripts/ci/install_deps_humble.sh"
+      - "scripts/ci/env_humble.sh"
+      - "src/**/package.xml"
+      - "src/**/CMakeLists.txt"
+      - "README.md"
   workflow_dispatch:
   pull_request:
     paths:
