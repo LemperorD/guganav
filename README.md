@@ -126,6 +126,13 @@ ACADOS_SOURCE_DIR=/data/tools/acados bash scripts/ci/install_deps_humble.sh
 source scripts/ci/env_humble.sh
 ```
 
+`small_gicp` 默认安装到 `$HOME/tools/small_gicp` 并执行 `make install`。路径同样可以覆盖：
+
+```bash
+SMALL_GICP_SOURCE_DIR=/data/tools/small_gicp bash scripts/ci/install_deps_humble.sh
+source scripts/ci/env_humble.sh
+```
+
 ### 准备仿真 PCD 地图
 
 仿真导航的非 SLAM 模式会启动 `small_gicp_relocalization`，需要提前准备与 `world`

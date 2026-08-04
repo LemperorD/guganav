@@ -21,6 +21,7 @@ jobs:
     env:
       ROS_DISTRO: humble
       ACADOS_SOURCE_DIR: ${{ github.workspace }}/.cache/acados
+      SMALL_GICP_SOURCE_DIR: ${{ github.workspace }}/.cache/small_gicp
       COLCON_SKIP_PACKAGES: hik_driver guga_ui_pangolin
       ROSDEP_SKIP_KEYS: pb2025_sentry_nav pb_teleop_twist_joy
 
@@ -39,6 +40,12 @@ jobs:
         with:
           path: .cache/acados
           key: acados-${{ runner.os }}-${{ hashFiles('scripts/ci/install_deps_humble.sh') }}
+
+      - name: Cache small_gicp
+        uses: actions/cache@v4
+        with:
+          path: .cache/small_gicp
+          key: small-gicp-${{ runner.os }}-${{ hashFiles('scripts/ci/install_deps_humble.sh') }}
 
       - name: Install dependencies
         shell: bash

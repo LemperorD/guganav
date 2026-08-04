@@ -10,10 +10,15 @@ RUN_ROSDEP="${RUN_ROSDEP:-1}"
 USE_ROSDEPC="${USE_ROSDEPC:-0}"
 INSTALL_ACADOS="${INSTALL_ACADOS:-1}"
 INSTALL_ACADOS_PYTHON="${INSTALL_ACADOS_PYTHON:-0}"
+INSTALL_SMALL_GICP="${INSTALL_SMALL_GICP:-1}"
 ACADOS_SOURCE_DIR="${ACADOS_SOURCE_DIR:-${HOME}/tools/acados}"
 ACADOS_REPO="${ACADOS_REPO:-https://github.com/acados/acados.git}"
 ACADOS_CLONE_DEPTH="${ACADOS_CLONE_DEPTH:-1}"
 ACADOS_JOBS="${ACADOS_JOBS:-$(nproc)}"
+SMALL_GICP_SOURCE_DIR="${SMALL_GICP_SOURCE_DIR:-${HOME}/tools/small_gicp}"
+SMALL_GICP_REPO="${SMALL_GICP_REPO:-https://github.com/koide3/small_gicp.git}"
+SMALL_GICP_CLONE_DEPTH="${SMALL_GICP_CLONE_DEPTH:-1}"
+SMALL_GICP_JOBS="${SMALL_GICP_JOBS:-$(nproc)}"
 ROSDEP_SKIP_KEYS="${ROSDEP_SKIP_KEYS:-pb2025_sentry_nav pb_teleop_twist_joy}"
 DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 
@@ -182,8 +187,34 @@ install_acados() {
   fi
 }
 
+install_small_gicp() {
+  if [ "${INSTALL_SMALL_GICP}" != "1" ]; then
+    echo "Skipping small_gicp because INSTALL_SMALL_GICP=${INSTALL_SMALL_GICP}"
+    return
+  fi
+
+  mkdir -p "$(dirname "${SMALL_GICP_SOURCE_DIR}")"
+
+  if [ ! -d "${SMALL_GICP_SOURCE_DIR}/.git" ]; then
+    git clone --depth "${SMALL_GICP_CLONE_DEPTH}" "${SMALL_GICP_REPO}" "${SMALL_GICP_SOURCE_DIR}"
+  fi
+
+  cd "${SMALL_GICP_SOURCE_DIR}"
+  mkdir -p build
+  cd build
+  cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_BENCHMARKS=OFF \
+    -DBUILD_PYTHON_BINDINGS=OFF
+  make -j"${SMALL_GICP_JOBS}"
+  run_root make install
+}
+
 install_apt_dependencies
 install_rosdep_dependencies
+install_small_gicp
 install_acados
 
 cat <<EOF
