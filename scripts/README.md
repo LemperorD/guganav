@@ -27,7 +27,7 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | ------------------------ | ---------------------------------------------------------------------- |
 | `scripts/colconBuild.sh` | 使用 Release 配置执行 `colcon build`，并导出 `compile_commands.json`。 |
 | `scripts/ci/env_humble.sh` | 加载 ROS Humble 和 acados 环境变量，供本地构建与 CI 复用。 |
-| `scripts/ci/install_deps_humble.sh` | 在干净 ROS Humble 环境中安装公开 apt/rosdep 依赖和 acados。 |
+| `scripts/ci/install_deps_humble.sh` | 在干净 ROS Humble 环境中安装公开 apt/rosdep 依赖、small_gicp 和 acados，可选接入本地 MVS SDK。 |
 
 ## Git 辅助
 

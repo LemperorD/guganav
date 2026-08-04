@@ -20,6 +20,7 @@
   - [仓库结构](#仓库结构)
   - [环境要求](#环境要求)
   - [安装依赖](#安装依赖)
+    - [海康 MVS SDK](#海康-mvs-sdk)
     - [准备仿真 PCD 地图](#准备仿真-pcd-地图)
   - [构建](#构建)
   - [使用方法](#使用方法)
@@ -117,6 +118,52 @@ source scripts/ci/env_humble.sh
 ```bash
 USE_ROSDEPC=1 bash scripts/ci/install_deps_humble.sh
 source scripts/ci/env_humble.sh
+```
+
+### 海康 MVS SDK
+
+`hik_driver` 直接依赖海康/Hikrobot MVS SDK。当前 CMake 固定查找：
+
+```text
+/opt/MVS/include/MvCameraControl.h
+/opt/MVS/lib/64/libMvCameraControl.so
+```
+
+所以相机机器需要先从海康机器视觉下载中心下载 Linux 版 MVS SDK：
+
+```text
+https://www.hikrobotics.com/en/machinevision/service/download/
+```
+
+解压或安装官方包后，确认 SDK 位于 `/opt/MVS`：
+
+```bash
+test -f /opt/MVS/include/MvCameraControl.h
+test -e /opt/MVS/lib/64/libMvCameraControl.so
+sudo ldconfig
+```
+
+如果 SDK 被安装或解压到了别的目录，可以让安装脚本把它挂到 `/opt/MVS`：
+
+```bash
+cd ~/guganav
+INSTALL_HIK_MVS=1 HIK_MVS_SOURCE_DIR=/实际/MVS/目录 \
+  bash scripts/ci/install_deps_humble.sh
+```
+
+也可以手动创建软链接：
+
+```bash
+sudo ln -sfn /实际/MVS/目录 /opt/MVS
+sudo ldconfig
+```
+
+然后重新编译相机驱动：
+
+```bash
+cd ~/guganav
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select hik_driver
 ```
 
 
