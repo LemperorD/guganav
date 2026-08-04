@@ -7,6 +7,8 @@ on:
       - ".github/workflows/fresh-install.yml"
       - "scripts/ci/install_deps_humble.sh"
       - "scripts/ci/env_humble.sh"
+      - "scripts/ci/generate_acados_mpc.sh"
+      - "src/guga_controller/mpc_controller/test/py_sim/**"
       - "src/**/package.xml"
       - "src/**/CMakeLists.txt"
       - "README.md"
@@ -22,6 +24,7 @@ jobs:
       ROS_DISTRO: humble
       ACADOS_SOURCE_DIR: ${{ github.workspace }}/.cache/acados
       SMALL_GICP_SOURCE_DIR: ${{ github.workspace }}/.cache/small_gicp
+      INSTALL_ACADOS_PYTHON: "1"
       COLCON_SKIP_PACKAGES: hik_driver guga_ui_pangolin
       ROSDEP_SKIP_KEYS: pb2025_sentry_nav pb_teleop_twist_joy
 
@@ -52,6 +55,12 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci/install_deps_humble.sh
+
+      - name: Generate acados MPC solver
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/generate_acados_mpc.sh
 
       - name: Build workspace
         shell: bash

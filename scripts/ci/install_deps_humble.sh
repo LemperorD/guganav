@@ -9,7 +9,7 @@ RUN_APT="${RUN_APT:-1}"
 RUN_ROSDEP="${RUN_ROSDEP:-1}"
 USE_ROSDEPC="${USE_ROSDEPC:-0}"
 INSTALL_ACADOS="${INSTALL_ACADOS:-1}"
-INSTALL_ACADOS_PYTHON="${INSTALL_ACADOS_PYTHON:-0}"
+INSTALL_ACADOS_PYTHON="${INSTALL_ACADOS_PYTHON:-1}"
 INSTALL_SMALL_GICP="${INSTALL_SMALL_GICP:-1}"
 ACADOS_SOURCE_DIR="${ACADOS_SOURCE_DIR:-${HOME}/tools/acados}"
 ACADOS_REPO="${ACADOS_REPO:-https://github.com/acados/acados.git}"
@@ -219,6 +219,9 @@ install_acados
 
 cat <<EOF
 Dependency installation finished.
+
+Generate the MPC solver before the first workspace build:
+  bash ${REPO_ROOT}/scripts/ci/generate_acados_mpc.sh
 
 Use this before building:
   source ${REPO_ROOT}/scripts/ci/env_humble.sh
