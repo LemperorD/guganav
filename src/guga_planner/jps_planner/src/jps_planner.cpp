@@ -1,5 +1,6 @@
 #include "jps_planner/jps_planner.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <guga_ui_common/ui_types.hpp>
 #include <memory>
@@ -20,6 +21,151 @@
 #include "rog_map_layer/esdf_map.hpp"
 
 namespace jps_planner {
+
+  namespace {
+
+    constexpr unsigned char UNKNOWN_COST = 255;
+    constexpr unsigned char INSCRIBED_COST = 253;
+    constexpr size_t MIN_BSPLINE_WAYPOINTS = 8;
+    constexpr double BSPLINE_DENSIFY_STEP_CELLS = 2.0;
+    constexpr double MIN_DENSIFY_STEP_CELLS = 0.5;
+
+    [[nodiscard]] double pathLengthCells(
+        const std::vector<std::pair<double, double>>& path) {
+      double length{};
+      for (size_t i = 1; i < path.size(); ++i) {
+        length += std::hypot(path[i].first - path[i - 1].first,
+                             path[i].second - path[i - 1].second);
+      }
+      return length;
+    }
+
+    [[nodiscard]] std::vector<std::pair<double, double>> densifyMapPath(
+        const std::vector<std::pair<double, double>>& path,
+        double max_step_cells, size_t target_min_points) {
+      if (path.size() < 2) {
+        return path;
+      }
+
+      const double total_length = pathLengthCells(path);
+      if (total_length < 1e-9) {
+        return path;
+      }
+
+      double step = max_step_cells;
+      if (target_min_points > path.size()) {
+        step = std::min(
+            step, total_length / static_cast<double>(target_min_points - 1));
+      }
+      step = std::max(step, MIN_DENSIFY_STEP_CELLS);
+
+      std::vector<std::pair<double, double>> dense_path{};
+      dense_path.reserve(
+          std::max(path.size(),
+                   static_cast<size_t>(std::ceil(total_length / step)) + 1));
+      dense_path.push_back(path.front());
+
+      for (size_t i = 1; i < path.size(); ++i) {
+        const double x0 = path[i - 1].first;
+        const double y0 = path[i - 1].second;
+        const double x1 = path[i].first;
+        const double y1 = path[i].second;
+        const double dx = x1 - x0;
+        const double dy = y1 - y0;
+        const double segment_length = std::hypot(dx, dy);
+        if (segment_length < 1e-9) {
+          continue;
+        }
+
+        const int steps = std::max(
+            1, static_cast<int>(std::ceil(segment_length / step)));
+        for (int s = 1; s <= steps; ++s) {
+          const double t = static_cast<double>(s) / static_cast<double>(steps);
+          dense_path.emplace_back(x0 + (t * dx), y0 + (t * dy));
+        }
+      }
+
+      return dense_path;
+    }
+
+    [[nodiscard]] std::pair<double, double> mapContinuousToWorld(
+        const nav2_costmap_2d::Costmap2D& costmap, double mx, double my) {
+      return {costmap.getOriginX() + (mx * costmap.getResolution()),
+              costmap.getOriginY() + (my * costmap.getResolution())};
+    }
+
+    [[nodiscard]] std::vector<std::pair<double, double>> mapPathToWorld(
+        const nav2_costmap_2d::Costmap2D& costmap,
+        const std::vector<std::pair<double, double>>& map_path) {
+      std::vector<std::pair<double, double>> world_path{};
+      world_path.reserve(map_path.size());
+      for (const auto& [mx, my] : map_path) {
+        world_path.emplace_back(mapContinuousToWorld(costmap, mx, my));
+      }
+      return world_path;
+    }
+
+    [[nodiscard]] bool isWorldPointAllowed(
+        const nav2_costmap_2d::Costmap2D& costmap, double wx, double wy,
+        bool allow_unknown) {
+      unsigned int mx{};
+      unsigned int my{};
+      if (!costmap.worldToMap(wx, wy, mx, my)) {
+        return false;
+      }
+
+      unsigned char cost = costmap.getCost(mx, my);
+      if (cost == UNKNOWN_COST) {
+        return allow_unknown;
+      }
+      return cost < INSCRIBED_COST;
+    }
+
+    [[nodiscard]] bool isWorldSegmentAllowed(
+        const nav2_costmap_2d::Costmap2D& costmap, double x0, double y0,
+        double x1, double y1, bool allow_unknown) {
+      double length = std::hypot(x1 - x0, y1 - y0);
+      double step = std::max(costmap.getResolution() * 0.5, 1e-3);
+      int samples = std::max(1, static_cast<int>(std::ceil(length / step)));
+
+      for (int i = 0; i <= samples; ++i) {
+        double t = static_cast<double>(i) / static_cast<double>(samples);
+        double wx = x0 + (t * (x1 - x0));
+        double wy = y0 + (t * (y1 - y0));
+        if (!isWorldPointAllowed(costmap, wx, wy, allow_unknown)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    [[nodiscard]] bool isPathCollisionFree(
+        const nav_msgs::msg::Path& plan,
+        const nav2_costmap_2d::Costmap2D& costmap, bool allow_unknown) {
+      if (plan.poses.empty()) {
+        return false;
+      }
+
+      for (size_t i = 0; i < plan.poses.size(); ++i) {
+        const auto& point = plan.poses[i].pose.position;
+        if (!isWorldPointAllowed(costmap, point.x, point.y, allow_unknown)) {
+          return false;
+        }
+
+        if (i == 0) {
+          continue;
+        }
+
+        const auto& prev = plan.poses[i - 1].pose.position;
+        if (!isWorldSegmentAllowed(costmap, prev.x, prev.y, point.x, point.y,
+                                   allow_unknown)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+  }  // namespace
 
   // ══════════════════════════════════════════════════════════════════════════════
   // configure — 读取 ROS 参数, 初始化状态
@@ -141,7 +287,7 @@ namespace jps_planner {
   //     │  ├ ESDF 注入                   — 从 LayeredCostmap 查找 EsdfLayer
   //     │  └ BSplineOptimizer::optimize() — 梯度下降 (可选) + 障碍物投射
   //     │
-  //     ▼ costmap_->mapToWorld()
+  //     ▼ mapContinuousToWorld()
   //   world path (nav_msgs::Path)
   // ══════════════════════════════════════════════════════════════════════════════
 
@@ -212,37 +358,64 @@ namespace jps_planner {
     RCLCPP_INFO(logger_, "JPSPlanner: path found with %zu waypoints",
                 map_path.size());
 
+    auto make_linear_plan =
+        [&](const std::vector<std::pair<double, double>>& linear_map_path) {
+          auto world_path = mapPathToWorld(*costmap_, linear_map_path);
+          return linearInterpolation(world_path, costmap_->getResolution());
+        };
+
     // ── 第 2 步: B-spline 平滑 + (可选) ESDF 梯度优化 ──
-    // 需要 ≥ 8 个航点才能使用完整 7 阶 B-spline
-    if (enable_bspline_ && map_path.size() >= 8) {
-      plan = bsplineSmooth(map_path, costmap_->getCharMap(),
-                           static_cast<int>(costmap_->getSizeInCellsX()),
-                           static_cast<int>(costmap_->getSizeInCellsY()),
-                           costmap_->getResolution());
-      RCLCPP_INFO(logger_, "JPSPlanner: B-spline smooth applied, %zu poses",
-                  plan.poses.size());
+    // 7 阶 B-spline 需要 ≥ 8 个输入点；JPS 跳点太少时先在地图坐标补密。
+    if (enable_bspline_) {
+      auto spline_path = map_path;
+      if (spline_path.size() < MIN_BSPLINE_WAYPOINTS) {
+        spline_path = densifyMapPath(map_path, BSPLINE_DENSIFY_STEP_CELLS,
+                                     MIN_BSPLINE_WAYPOINTS);
+        if (spline_path.size() > map_path.size()) {
+          RCLCPP_INFO(
+              logger_,
+              "JPSPlanner: densified path from %zu to %zu waypoints for "
+              "B-spline",
+              map_path.size(), spline_path.size());
+        }
+      }
+
+      if (spline_path.size() >= MIN_BSPLINE_WAYPOINTS) {
+        plan = bsplineSmooth(spline_path, costmap_->getCharMap(),
+                             static_cast<int>(costmap_->getSizeInCellsX()),
+                             static_cast<int>(costmap_->getSizeInCellsY()),
+                             costmap_->getResolution());
+        RCLCPP_INFO(logger_, "JPSPlanner: B-spline smooth applied, %zu poses",
+                    plan.poses.size());
+        if (!isPathCollisionFree(plan, *costmap_, config_.allow_unknown)) {
+          RCLCPP_WARN(logger_,
+                      "JPSPlanner: smoothed path collides with costmap, "
+                      "falling back to linear JPS path");
+          plan = make_linear_plan(map_path);
+        }
+      } else {
+        RCLCPP_INFO(logger_,
+                    "JPSPlanner: too few waypoints (%zu, densified to %zu) for "
+                    "B-spline, linear fallback",
+                    map_path.size(), spline_path.size());
+        plan = make_linear_plan(map_path);
+      }
     } else {
-      // 路径点太少或 B-spline 被禁用 → 线性插值
-      if (enable_bspline_) {
-        RCLCPP_INFO(
-            logger_,
-            "JPSPlanner: too few waypoints (%zu) for B-spline, linear fallback",
-            map_path.size());
-      }
-      std::vector<std::pair<double, double>> world_path{};
-      world_path.reserve(map_path.size());
-      for (const auto& [mx, my] : map_path) {
-        double wx{};
-        double wy{};
-        costmap_->mapToWorld(static_cast<unsigned int>(mx),
-                             static_cast<unsigned int>(my), wx, wy);
-        world_path.emplace_back(wx, wy);
-      }
-      plan = linearInterpolation(world_path, costmap_->getResolution());
+      plan = make_linear_plan(map_path);
+    }
+
+    if (!isPathCollisionFree(plan, *costmap_, config_.allow_unknown)) {
+      RCLCPP_ERROR(logger_,
+                   "JPSPlanner: final path collides with costmap, "
+                   "returning empty plan");
+      plan.poses.clear();
     }
 
     plan.header.stamp = clock_->now();
     plan.header.frame_id = global_frame_;
+    for (auto& pose : plan.poses) {
+      pose.header = plan.header;
+    }
 
     // 推送路径到共享内存供 UI 渲染
     writePathToShm(plan);
@@ -332,15 +505,7 @@ namespace jps_planner {
       RCLCPP_WARN(
           logger_,
           "JPSPlanner: B-spline fit failed, using linear interpolation");
-      std::vector<std::pair<double, double>> world_path{};
-      world_path.reserve(map_path.size());
-      for (const auto& [mx, my] : map_path) {
-        double wx{};
-        double wy{};
-        costmap_->mapToWorld(static_cast<unsigned int>(mx),
-                             static_cast<unsigned int>(my), wx, wy);
-        world_path.emplace_back(wx, wy);
-      }
+      auto world_path = mapPathToWorld(*costmap_, map_path);
       return linearInterpolation(world_path, resolution);
     }
 
@@ -398,11 +563,9 @@ namespace jps_planner {
     // ── 第 5 步: 地图坐标 → 世界坐标 ──
     plan.poses.reserve(result.smoothed_path.size());
     for (size_t i = 0; i < result.smoothed_path.size(); ++i) {
-      double wx{};
-      double wy{};
-      costmap_->mapToWorld(
-          static_cast<unsigned int>(result.smoothed_path[i].first),
-          static_cast<unsigned int>(result.smoothed_path[i].second), wx, wy);
+      const auto [wx, wy] = mapContinuousToWorld(
+          *costmap_, result.smoothed_path[i].first,
+          result.smoothed_path[i].second);
       geometry_msgs::msg::PoseStamped pose;
       pose.pose.position.x = wx;
       pose.pose.position.y = wy;

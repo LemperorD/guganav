@@ -46,6 +46,36 @@ namespace jps_planner {
       return x >= 0 && x < s.size_x && y >= 0 && y < s.size_y;
     }
 
+    /** @brief 判断格元是否可作为移动落点。越界始终不可通行。 */
+    [[nodiscard]] inline bool isTraversableCell(const JPSConfig& c,
+                                                const JPSState& s, int x,
+                                                int y) {
+      return withinLimits(s, x, y) && !isObstacle(c, s, x, y);
+    }
+
+    /** @brief 判断格元是否阻断移动。越界视为阻断, 不受 allow_unknown 影响。 */
+    [[nodiscard]] inline bool isBlockedCell(const JPSConfig& c,
+                                            const JPSState& s, int x, int y) {
+      return !isTraversableCell(c, s, x, y);
+    }
+
+    /** @brief 判断从 (x,y) 沿 (dx,dy) 前进一步是否合法。 */
+    [[nodiscard]] inline bool canStep(const JPSConfig& c, const JPSState& s,
+                                      int x, int y, int dx, int dy) {
+      int nx = x + dx;
+      int ny = y + dy;
+      if (!isTraversableCell(c, s, nx, ny)) {
+        return false;
+      }
+      if (dx == 0 || dy == 0) {
+        return true;
+      }
+
+      // 禁止从两个阻断格之间斜穿；允许贴着单个阻断格绕角。
+      return isTraversableCell(c, s, x + dx, y)
+             || isTraversableCell(c, s, x, y + dy);
+    }
+
     // ── 代价函数 ──
 
     /** @brief 将原始 costmap 值映射为缩放代价值。
@@ -100,18 +130,20 @@ namespace jps_planner {
     [[nodiscard]] bool hasForcedNeighborHoriz(const JPSConfig& c,
                                               const JPSState& s, int x, int y,
                                               int dx) {
-      return (isObstacle(c, s, x, y + 1) && !isObstacle(c, s, x + dx, y + 1))
-             || (isObstacle(c, s, x, y - 1)
-                 && !isObstacle(c, s, x + dx, y - 1));
+      return (isBlockedCell(c, s, x, y + 1)
+              && isTraversableCell(c, s, x + dx, y + 1))
+             || (isBlockedCell(c, s, x, y - 1)
+                 && isTraversableCell(c, s, x + dx, y - 1));
     }
 
     /** @brief 检测垂直直行方向 (dx = 0, dy = ±1) 的强制邻居。 */
     [[nodiscard]] bool hasForcedNeighborVert(const JPSConfig& c,
                                              const JPSState& s, int x, int y,
                                              int dy) {
-      return (isObstacle(c, s, x + 1, y) && !isObstacle(c, s, x + 1, y + dy))
-             || (isObstacle(c, s, x - 1, y)
-                 && !isObstacle(c, s, x - 1, y + dy));
+      return (isBlockedCell(c, s, x + 1, y)
+              && isTraversableCell(c, s, x + 1, y + dy))
+             || (isBlockedCell(c, s, x - 1, y)
+                 && isTraversableCell(c, s, x - 1, y + dy));
     }
 
     /**
@@ -120,9 +152,10 @@ namespace jps_planner {
     [[nodiscard]] bool hasForcedNeighborDiag(const JPSConfig& c,
                                              const JPSState& s, int x, int y,
                                              int dx, int dy) {
-      return (isObstacle(c, s, x - dx, y) && !isObstacle(c, s, x - dx, y + dy))
-             || (isObstacle(c, s, x, y - dy)
-                 && !isObstacle(c, s, x + dx, y - dy));
+      return (isBlockedCell(c, s, x - dx, y)
+              && isTraversableCell(c, s, x - dx, y + dy))
+             || (isBlockedCell(c, s, x, y - dy)
+                 && isTraversableCell(c, s, x + dx, y - dy));
     }
 
     /** @brief 统一的强制邻居检测, 根据方向分量分发到对应检测函数。 */
@@ -163,10 +196,12 @@ namespace jps_planner {
         directions.emplace_back(dx, 0);  // 自然方向: 继续直行
 
         // 检查上方/下方是否存在强制邻居
-        if (isObstacle(c, s, x, y + 1) && !isObstacle(c, s, x + dx, y + 1)) {
+        if (isBlockedCell(c, s, x, y + 1)
+            && isTraversableCell(c, s, x + dx, y + 1)) {
           directions.emplace_back(dx, 1);
         }
-        if (isObstacle(c, s, x, y - 1) && !isObstacle(c, s, x + dx, y - 1)) {
+        if (isBlockedCell(c, s, x, y - 1)
+            && isTraversableCell(c, s, x + dx, y - 1)) {
           directions.emplace_back(dx, -1);
         }
         return;
@@ -177,10 +212,12 @@ namespace jps_planner {
         directions.emplace_back(0, dy);  // 自然方向: 继续直行
 
         // 检查左方/右方是否存在强制邻居
-        if (isObstacle(c, s, x + 1, y) && !isObstacle(c, s, x + 1, y + dy)) {
+        if (isBlockedCell(c, s, x + 1, y)
+            && isTraversableCell(c, s, x + 1, y + dy)) {
           directions.emplace_back(1, dy);
         }
-        if (isObstacle(c, s, x - 1, y) && !isObstacle(c, s, x - 1, y + dy)) {
+        if (isBlockedCell(c, s, x - 1, y)
+            && isTraversableCell(c, s, x - 1, y + dy)) {
           directions.emplace_back(-1, dy);
         }
         return;
@@ -194,10 +231,12 @@ namespace jps_planner {
         directions.emplace_back(0, dy);
 
         // 对角线裁剪产生的强制邻居
-        if (isObstacle(c, s, x - dx, y) && !isObstacle(c, s, x - dx, y + dy)) {
+        if (isBlockedCell(c, s, x - dx, y)
+            && isTraversableCell(c, s, x - dx, y + dy)) {
           directions.emplace_back(-dx, dy);
         }
-        if (isObstacle(c, s, x, y - dy) && !isObstacle(c, s, x + dx, y - dy)) {
+        if (isBlockedCell(c, s, x, y - dy)
+            && isTraversableCell(c, s, x + dx, y - dy)) {
           directions.emplace_back(dx, -dy);
         }
         return;
@@ -222,8 +261,8 @@ namespace jps_planner {
       int nx = x + dx;
       int ny = y + dy;
 
-      // 终止条件 1: 越界或撞墙
-      if (!withinLimits(s, nx, ny) || isObstacle(c, s, nx, ny)) {
+      // 终止条件 1: 越界、撞墙或非法对角切角
+      if (!canStep(c, s, x, y, dx, dy)) {
         return nullptr;
       }
 

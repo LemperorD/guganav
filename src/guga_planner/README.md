@@ -21,9 +21,14 @@
 
 当前仿真里常调的三个值是：
 
-- `esdf_weight: 250.0`
-- `esdf_safe_distance: 1.0`
-- `corridor_halfwidth: 12.0`
+- `esdf_weight: 200.0`
+- `esdf_safe_distance: 1.5`
+- `corridor_halfwidth: 15.0`
+
+为了让障碍周围的不可通行区域更保守，仿真参数中还调大了机器人半径：
+
+- local costmap: `robot_radius: 0.30`
+- global costmap: `robot_radius: 0.40`
 
 代码默认值分别是：
 
@@ -60,7 +65,8 @@ planner_server:
 - `corridor_halfwidth`
 
 路径贴墙时优先调大 `esdf_safe_distance` 和 `corridor_halfwidth`。
-`corridor_halfwidth` 的单位是 costmap 格元；仿真分辨率 0.05m 时，`12.0` 约等于允许控制点横向移动 0.6m。
+`corridor_halfwidth` 的单位是 costmap 格元；仿真分辨率 0.05m 时，`15.0` 约等于允许控制点横向移动 0.75m。
+如果路径呈现明显 45 度/水平/竖直分段，优先看 JPS 日志是否进入了短路径补密后的 B-spline。
 
 ### 如果要换 planner
 
