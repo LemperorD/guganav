@@ -119,19 +119,6 @@ USE_ROSDEPC=1 bash scripts/ci/install_deps_humble.sh
 source scripts/ci/env_humble.sh
 ```
 
-acados 路径可以由环境变量覆盖，避免硬编码用户目录：
-
-```bash
-ACADOS_SOURCE_DIR=/data/tools/acados bash scripts/ci/install_deps_humble.sh
-source scripts/ci/env_humble.sh
-```
-
-`small_gicp` 默认安装到 `$HOME/tools/small_gicp` 并执行 `make install`。路径同样可以覆盖：
-
-```bash
-SMALL_GICP_SOURCE_DIR=/data/tools/small_gicp bash scripts/ci/install_deps_humble.sh
-source scripts/ci/env_humble.sh
-```
 
 ### 准备仿真 PCD 地图
 
@@ -155,13 +142,6 @@ PCD 文件通常较大，不随仓库提交。复制或下载 PCD 后，建议�
 cd ~/guganav
 colcon build --symlink-install --packages-select guga_bringup
 source install/setup.bash
-```
-
-也可以在启动时显式传入 PCD 路径：
-
-```bash
-scripts/simulation.sh nav rmul_2025 \
-  prior_pcd_file:=$HOME/guganav/src/guga_bringup/pcd/simulation/rmul_2025.pcd
 ```
 
 如果只是建图或暂时不使用先验 PCD，可以运行 SLAM 模式：
