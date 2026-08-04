@@ -2,6 +2,9 @@
 
 #include <oneapi/tbb.h>
 
+// 获取可执行文件路径需要引用此头文件
+#include <unistd.h>
+
 #include <iostream>
 
 /**
@@ -18,6 +21,16 @@ struct PipelineData
 
 int main()
 {
+    // 测试：获取可执行文件路径    
+    char exec_path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exec_path, sizeof(exec_path) - 1);
+    if (len == -1) {
+        perror("readlink");
+        exit(1);
+    }
+    exec_path[len] = '\0';
+    std::cout << "Executable path: " << exec_path << std::endl;
+
     // fetch环节
     std::cout << "Hardware concurrency: " << std::thread::hardware_concurrency() << std::endl;
     std::cout << "Default concurrency: " << oneapi::tbb::info::default_concurrency() << std::endl;
