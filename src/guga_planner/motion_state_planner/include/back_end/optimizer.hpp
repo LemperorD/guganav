@@ -1,7 +1,5 @@
 /**
- * ================================================================
  * optimizer.h — MSPlanner: 基于 MINCO S3NU 的轨迹优化器
- * ================================================================
  *
  * MSPlanner (MINCO S3NU Planner) 是一个两阶段轨迹优化器：
  *
@@ -41,15 +39,6 @@
  *   增广拉格朗日: L(x,lambda) = f(x) + lambda^T h(x) + rho/2 * ||h(x)||^2
  */
 
-#include <ros/ros.h>
-#include <ros/console.h>
-#include <geometry_msgs/Point.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <nav_msgs/Path.h>
-#include "ros/publisher.h"
-#include "tf/transform_datatypes.h"
-
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -58,42 +47,30 @@
 #include <chrono>
 #include <random>
 
-#include "plan_env/sdf_map.h"
-#include "front_end/traj_representation.h"
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <rclcpp/rclcpp.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <nav_msgs/msg/path.hpp>
 
-#include "gcopter/trajectory.hpp"
-#include "gcopter/minco.hpp"
-#include "gcopter/lbfgs.hpp"
+#include <visualization_msgs/msg/marker_array.hpp>
 
+#include "minco/trajectory.hpp"
+#include "minco/minco.hpp"
+#include "minco/lbfgs.hpp"
 
-/**
- * 运动学约束配置结构体
- * ======================
- * 从 ROS 参数服务器读取各运动学约束的上界
- * if_directly_constrain_v_omega_: true 时直接约束 v 和 omega（独立约束）
- *                                false 时使用驱动轮扭矩多边形约束（耦合约束）
- */
-struct Config
+// 配置参数结构体
+struct Config {
     double max_vel_;
     double min_vel_;
     double max_acc_;
     double max_omega_;
     double max_domega_;
     double max_centripetal_acc_;
-
-    bool if_directly_constrain_v_omega_;
     
-    Config(const ros::NodeHandle &nh_)
+    Config()
     {
-        nh_.param<double>(ros::this_node::getName()+ "/max_vel",max_vel_,5);
-        nh_.param<double>(ros::this_node::getName()+ "/min_vel",min_vel_,-5);
-        nh_.param<double>(ros::this_node::getName()+ "/max_acc",max_acc_,5);
-        nh_.param<double>(ros::this_node::getName()+ "/max_domega",max_domega_,50);
-        nh_.param<double>(ros::this_node::getName()+ "/max_centripetal_acc",max_centripetal_acc_,10000);
-        nh_.param<double>(ros::this_node::getName()+ "/max_omega",max_omega_,1);
-        nh_.param<bool>(ros::this_node::getName()+ "/if_directly_constrain_v_omega", if_directly_constrain_v_omega_, false);
+
     }
 };
 
@@ -109,6 +86,15 @@ struct Config
  * - cen_acc_weight: 向心加速度 (omega^2 * v) 约束惩罚
  */
 struct PenaltyWeights{
+    double time_weight;
+    double time_weight_backup_for_replan;
+    double acc_weight;
+    double domega_weight;
+    double collision_weight;
+    double moment_weight;
+    double mean_time_weight;
+    double cen_acc_weight;
+};
 
 // For trajectory pre-processing
 /**
@@ -174,7 +160,6 @@ class MSPlanner
 {
 private:
     Config config_;
-    ros::NodeHandle nh_;
     std::shared_ptr<SDFmap> map_;
     
     ros::Publisher mincoinitPath;

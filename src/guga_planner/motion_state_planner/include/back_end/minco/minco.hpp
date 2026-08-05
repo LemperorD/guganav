@@ -1,37 +1,8 @@
-/*
-    MIT License
-
-    Copyright (c) 2021 Zhepei Wang (wangzhepei@live.com)
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
-*/
-
 /**
- * ================================================================
  * minco.hpp — MINCO (MINimum COntrol) 多项式轨迹求解器
- * ================================================================
  *
  * MINCO 是一种将轨迹优化问题转化为无约束优化问题的方法。
- * 核心思想：
- *   给定起始/终止条件 (PVA/J) 和中间路点 (Q) 及段时间 (T)，
- *   以控制量（snap/jerk）平方积分最小为目标，通过求解带状线性
- *   系统得到唯一的多项式系数。
+ * 核心思想：给定起始/终止条件 (PVA/J) 和中间路点 (Q) 及段时间 (T)，以控制量（snap/jerk）平方积分最小为目标，通过求解带状线性系统得到唯一的多项式系数。
  *
  * 本文件包含：
  * - BandedSystem: 带状矩阵的 LU 分解和求解（O(N) 复杂度）
@@ -40,9 +11,7 @@
  *   (本项目主要使用 MINCO_S3NU，对应 D=5, Freedom=2 的轨迹)
  *
  * 梯度传播：
- *   通过求伴随系统 (adjoint system) 将 partialGradByCoeffs
- *   和 partialGradByTimes 反向传播到优化变量 gradByPoints
- *   和 gradByTimes。
+ *   通过求伴随系统 (adjoint system) 将 partialGradByCoeffs 和 partialGradByTimes 反向传播到优化变量 gradByPoints 和 gradByTimes。
  *
  * 变量说明：
  *   sigma = [theta, s]^T  — 偏航角 + 弧长
@@ -50,18 +19,10 @@
  *   T     = [T_1, ..., T_N] — 各段时长
  */
 
-#include "gcopter/trajectory.hpp"
-
-#include <Eigen/Eigen>
-
-#include <cmath>
-#include <vector>
-
-
 #ifndef MINCO_HPP
 #define MINCO_HPP
 
-#include "gcopter/trajectory.hpp"
+#include "trajectory.hpp"
 
 #include <Eigen/Eigen>
 

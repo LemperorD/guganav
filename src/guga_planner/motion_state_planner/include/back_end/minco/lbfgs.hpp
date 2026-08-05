@@ -1,26 +1,5 @@
-/**
- * ================================================================
- * lbfgs.hpp — 有限内存 BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) 优化器
- * ================================================================
- *
- * 本实现适合大规模无约束非线性优化问题：
- * - 不存储完整的 Hessian 矩阵，而是用最近 m 次迭代的
- *   s_k = x_{k+1} - x_k 和 y_k = g_{k+1} - g_k 来近似
- * - 使用 Lewis-Overton 线搜索（同时满足 Armijo 和弱 Wolfe 条件），
- *   适用于光滑和非光滑（分段光滑）函数
- * - 支持 cautious update 机制以保证非凸函数的全局收敛性
- * - 提供多种回调接口：评估函数、步长上界、进度监控、提前退出
- *
- * 在本项目中用于：MSPlanner 的两阶段优化（预处理 + 正式优化）的底层求解器
- *
- * 主要参数：
- *   mem_size: 存储的修正向量对数量（默认 8）
- *   g_epsilon: 梯度收敛判定阈值
- *   past/delta: 基于历史目标值下降速率的停止准则
- *   max_iterations: 最大迭代次数
- *   max_linesearch: 线搜索最大评估次数
- *   cautious_factor: 谨慎更新因子以保证全局收敛
- */
+#ifndef LBFGS_HPP
+#define LBFGS_HPP
 
 #include <Eigen/Eigen>
 #include <cmath>

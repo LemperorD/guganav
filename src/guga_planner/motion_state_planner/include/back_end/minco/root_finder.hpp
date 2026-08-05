@@ -1,31 +1,5 @@
-/*
-    MIT License
-
-    Copyright (c) 2020 Zhepei Wang (wangzhepei@live.com)
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
-*/
-
 /**
- * ================================================================
  * root_finder.hpp — 多项式求根工具集
- * ================================================================
  *
  * 提供多项式根求解的多种算法，用于轨迹约束检查中的极值点求解：
  *
@@ -40,8 +14,7 @@
  * - countRoots: 利用 Sturm 定理计算区间内实根数量
  *
  * 在本项目中的用途：
- *   轨迹类 (Piece) 使用这些工具计算最大速度/加速度，
- *   并通过 countRoots 检查是否违反运动学约束。
+ *   轨迹类 (Piece) 使用这些工具计算最大速度/加速度，并通过 countRoots 检查是否违反运动学约束。
  *
  * 算法细节：
  *   Sturm 序列：由多项式 f(x) 和其导数 f'(x) 开始，
@@ -52,6 +25,9 @@
  *   三次/四次方程求解 -> 标准数学公式
  *   高次方程求解 -> Sturm 定理 + 安全牛顿法 (safeNewton)
  */
+
+#ifndef ROOT_FINDER_HPP
+#define ROOT_FINDER_HPP
 
 #define _USE_MATH_DEFINES
 #include <cfloat>

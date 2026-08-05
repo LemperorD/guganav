@@ -24,9 +24,7 @@
  */
 
 /**
- * ================================================================
  * sdlp.hpp — Seidel 随机化线性规划算法 (Small-Dimensional LP)
- * ================================================================
  *
  * 基于 R. Seidel (1991) 的随机化增量算法，用于求解小维度线性规划问题。
  * 核心思想：随机排列约束，逐个加入，如果当前最优解违反新约束，
@@ -51,9 +49,11 @@
  *   用于 ICR 模型的驱动轮扭矩约束（对称四边形约束）。
  *
  * 注意：
- *   随机化是通过 rand_permutation 打乱约束顺序实现的，
- *   使用 Mersenne Twister 19937 随机数生成器。
+ *   随机化是通过 rand_permutation 打乱约束顺序实现的，使用 Mersenne Twister 19937 随机数生成器。
  */
+
+#ifndef SDLP_HPP
+#define SDLP_HPP
 
 #include <Eigen/Eigen>
 #include <cmath>
