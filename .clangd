@@ -2,7 +2,7 @@ CompileFlags:
   CompilationDatabase: build
   Add:
     - -xc++
-    - -std=gnu++17
+    - -std=gnu++20
     - -I/usr/include/c++/11
     - -I/usr/include/x86_64-linux-gnu/c++/11
 

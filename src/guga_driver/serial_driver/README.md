@@ -9,23 +9,22 @@
 ```bash
 ├── CMakeLists.txt
 ├── config
-│   └── communication.yaml
+│   └── serial_driver.yaml
 ├── include
 │   └── serial_driver
-│       ├── bridge.hpp
-│       ├── Com.hpp
 │       ├── ros_serial_bridge.hpp
-│       └── termcolor.hpp
+│       ├── serial_driver_main.hpp
+│       └── serial_driver_node.hpp
 ├── launch
 │   └── communication.launch.py
 ├── package.xml
 ├── README.md
 └── src
-    ├── bridge.cpp
-    └── Com.cpp
+    ├── serial_driver_main.cpp
+    └── serial_driver_node.cpp
 ```
 
-> 因为是从之前的项目copy过来的，目前代码内命名空间不规范，亟待修改
+> 该包是重构后的串口通信入口，旧版 `communication_OLD` 已废弃。
 
 ## 2. 设计模式简述
 

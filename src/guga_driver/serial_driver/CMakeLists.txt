@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 project(serial_driver)
 
-# C++17 标准
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
-endif()
+# C++20 标准
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 编译器警告（编码规范要求 Wall/Wextra/Wpedantic）
