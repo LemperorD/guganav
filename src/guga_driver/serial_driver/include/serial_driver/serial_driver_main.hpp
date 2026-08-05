@@ -17,7 +17,7 @@ namespace serial_driver {
   static constexpr uint8_t FRAME_HEADER2{0x52};
 
   // 自定义命令码：下位机与上位机统一
-  // 0xCD: 运动控制帧  0xD1: 裁判系统帧
+  // 0xCD: 运动控制帧 ; 0xD1: 裁判系统帧
   static constexpr uint8_t COMMAND_CODE_MOTION{0xCD};
   static constexpr uint8_t COMMAND_CODE_REFEREE{0xD1};
 
@@ -88,12 +88,23 @@ namespace serial_driver {
      * @note 调用者不应持有此指针超过下一次 timerCallback。
      */
     [[nodiscard]] uint8_t* receiveDataFrame();
+    /**
+     * @brief 获取最新运动控制帧的 payload 指针（26 字节缓冲区）。
+     * @return 指向 frame_buffer_ 的指针，数据在每次收到有效运动帧时更新。
+     * @note 调用者不应持有此指针超过下一次 timerCallback。
+     */
+    [[nodiscard]] const uint8_t* receiveDataFrame();
 
     /**
      * @brief 获取最新裁判系统帧的 payload 指针（13 字节缓冲区）。
      * @return 指向 referee_frame_buffer_ 的指针。
      */
     [[nodiscard]] uint8_t* receiveRefereeFrame();
+    /**
+     * @brief 获取最新裁判系统帧的 payload 指针（13 字节缓冲区）。
+     * @return 指向 referee_frame_buffer_ 的指针。
+     */
+    [[nodiscard]] const uint8_t* receiveRefereeFrame();
 
     /**
      * @brief 查询是否有新的裁判系统帧到达。
