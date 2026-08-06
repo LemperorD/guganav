@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
-#include <dirent.h>
 #include <fcntl.h>
+#include <filesystem>
+#include <poll.h>
 #include <termios.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace serial_driver {
@@ -21,7 +23,7 @@ namespace serial_driver {
 
   // ==================== CRC8 ====================
 
-  uint8_t SerialDriverMain::crc8_calc(const uint8_t* p, size_t len) {
+  uint8_t SerialDriverMain::crc8Calc(const uint8_t* p, size_t len) {
     uint8_t crc{CRC8_INIT};
     while (len-- != 0) {
       crc = CRC8_TABLE[crc ^ *p++];
@@ -35,27 +37,24 @@ namespace serial_driver {
 
   // ==================== 对外接收接口 ====================
 
-  const uint8_t* SerialDriverMain::receiveDataFrame() {
-    return frame_buffer_.data();
+  MotionPayload
+  SerialDriverMain::receiveDataFrameSnapshot() const {
+    const std::lock_guard<std::mutex> lock(frame_mutex_);
+    return frame_buffer_;
   }
 
-  const uint8_t* SerialDriverMain::receiveRefereeFrame() {
-    return referee_frame_buffer_.data();
+  std::optional<RefereePayload>
+  SerialDriverMain::takeRefereeFrameSnapshot() {
+    const std::lock_guard<std::mutex> lock(frame_mutex_);
+    if (!referee_frame_ready_) {
+      return std::nullopt;
+    }
+    referee_frame_ready_ = false;
+    return referee_frame_buffer_;
   }
 
-  bool SerialDriverMain::hasNewRefereeFrame() const {
-    return referee_frame_ready_.load();
-  }
-
-  void SerialDriverMain::clearRefereeFrameFlag() {
-    referee_frame_ready_.store(false);
-  }
-
-  // ==================== 构造/析构 ====================
-
-  SerialDriverMain::SerialDriverMain(const std::string& serial_port,
-                                     int baud_rate)
-      : serial_port_(serial_port), baud_rate_(baud_rate) {
+  SerialDriverMain::SerialDriverMain(std::string serial_port, int baud_rate)
+      : serial_port_(std::move(serial_port)), baud_rate_(baud_rate) {
     // 打开或自动探测串口
     if (!serial_port_.empty()) {
       openSerialPort(serial_port_, baud_rate_);
@@ -93,40 +92,39 @@ namespace serial_driver {
   }
 
   // ==================== 串口打开与配置 ====================
-  // TODO 去除c风格
   void SerialDriverMain::openSerialPort(const std::string& port_name,
                                         int baud_rate) {
     // O_RDWR | O_NOCTTY | O_NDELAY: 读写模式，不成为控制终端，非阻塞打开
     fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd_ == -1) {
-      std::cerr << termcolor::RED
-                << "Failed to open serial port: " << strerror(errno)
+      const int saved_errno = errno;
+      std::array<char, 256> errbuf{};
+      std::cerr << termcolor::RED << "Failed to open serial port: "
+                << strerror_r(saved_errno, errbuf.data(), errbuf.size())
                 << termcolor::RESET << '\n';
-    } else {
-      printf("\033[32mSerial port opened: %s\033[0m\n", port_name.c_str());
-      configureSerialPort(baud_rate);
-      printf("\033[32mSerial initialized: %s\033[0m\n", port_name.c_str());
+      return;
     }
+
+    std::cout << termcolor::GREEN << "Serial port opened: " << port_name
+              << termcolor::RESET << '\n';
+    configureSerialPort(baud_rate);
+    std::cout << termcolor::GREEN << "Serial initialized: " << port_name
+              << termcolor::RESET << '\n';
   }
 
   std::string SerialDriverMain::findSerialPort() {
-    DIR* dir = opendir("/dev");
-    if (dir == nullptr) {
-      std::cerr << termcolor::RED << "Failed to open /dev directory"
-                << termcolor::RESET << '\n';
-      return "";
-    }
-
-    // 按目录顺序返回第一个匹配的 ttyUSB 或 ttyACM 设备
-    struct dirent* entry{};
-    while ((entry = readdir(dir)) != nullptr) {
-      if (strstr(entry->d_name, "ttyUSB") != nullptr
-          || strstr(entry->d_name, "ttyACM") != nullptr) {
-        closedir(dir);
-        return std::string("/dev/") + entry->d_name;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator("/dev", ec)) {
+      const std::string name = entry.path().filename().string();
+      if (name.find("ttyUSB") != std::string::npos
+          || name.find("ttyACM") != std::string::npos) {
+        return entry.path().string();
       }
     }
-    closedir(dir);
+    if (ec) {
+      std::cerr << termcolor::RED << "Failed to enumerate /dev: "
+                << ec.message() << termcolor::RESET << '\n';
+    }
     return "";
   }
 
@@ -208,6 +206,7 @@ namespace serial_driver {
   // ==================== 发送 ====================
 
   void SerialDriverMain::sendDataFrame(const uint8_t* data, size_t len) const {
+    const std::lock_guard<std::mutex> lock(serial_mutex_);
     if (fd_ < 0) {
       std::cerr << termcolor::RED << "Serial port not available"
                 << termcolor::RESET << '\n';
@@ -225,11 +224,57 @@ namespace serial_driver {
     std::memcpy(&frame[4], data, len);
 
     // CRC8 校验覆盖 SOF + CMD + LEN + PAYLOAD
-    frame[frame_len - 1] = crc8_calc(frame.data(), 4 + len);
+    frame[frame_len - 1] = crc8Calc(frame.data(), 4 + len);
 
-    const ssize_t written = write(fd_, frame.data(), frame_len);
-    if (written != static_cast<ssize_t>(frame_len)) {
-      std::cerr << termcolor::RED << "TX failed " << written << "/" << frame_len
+    constexpr auto write_timeout = std::chrono::milliseconds(100);
+    const auto deadline = std::chrono::steady_clock::now() + write_timeout;
+    size_t total_written{};
+
+    while (total_written < frame_len) {
+      const ssize_t written =
+          write(fd_, frame.data() + total_written, frame_len - total_written);
+      if (written > 0) {
+        total_written += static_cast<size_t>(written);
+        continue;
+      }
+      if (written < 0 && errno == EINTR) {
+        continue;
+      }
+      if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        break;
+      }
+
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        errno = ETIMEDOUT;
+        break;
+      }
+      const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+          deadline - now);
+      pollfd descriptor{fd_, POLLOUT, 0};
+      const int poll_result =
+          poll(&descriptor, 1, std::max(1, static_cast<int>(remaining.count())));
+      if (poll_result < 0 && errno == EINTR) {
+        continue;
+      }
+      if (poll_result <= 0) {
+        if (poll_result == 0) {
+          errno = ETIMEDOUT;
+        }
+        break;
+      }
+      if ((descriptor.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+        errno = EIO;
+        break;
+      }
+    }
+
+    if (total_written != frame_len) {
+      const int saved_errno = errno;
+      std::array<char, 256> errbuf{};
+      std::cerr << termcolor::RED << "TX failed " << total_written << "/"
+                << frame_len << ": "
+                << strerror_r(saved_errno, errbuf.data(), errbuf.size())
                 << termcolor::RESET << '\n';
     }
   }
@@ -301,7 +346,7 @@ namespace serial_driver {
       }
 
       // ---- CRC8 校验 ----
-      const uint8_t calc = crc8_calc(buffer_.data(), 4 + len);
+      const uint8_t calc = crc8Calc(buffer_.data(), 4 + len);
       if (calc != buffer_[frame_len - 1]) {
         std::cout << termcolor::YELLOW << "CRC8 failed: calc=0x" << std::hex
                   << static_cast<int>(calc) << ", recv=0x"
@@ -327,17 +372,18 @@ namespace serial_driver {
     }
   }
 
-  void SerialDriverMain::processFrame(const uint8_t* data) {
-    const uint8_t cmd = data[2];
-    const uint8_t len = data[3];
-    const uint8_t* pl = &data[4];  // payload 起始
+  void SerialDriverMain::processFrame(const uint8_t* frame) {
+    const uint8_t cmd = frame[2];
+    const uint8_t len = frame[3];
+    const uint8_t* pl = &frame[4];  // payload 起始
 
     // 裁判系统帧 → referee_frame_buffer_
     if (cmd == COMMAND_CODE_REFEREE) {
       if (len == referee_frame_buffer_.size()) {
+        const std::lock_guard<std::mutex> lock(frame_mutex_);
         std::memcpy(referee_frame_buffer_.data(), pl,
                     referee_frame_buffer_.size());
-        referee_frame_ready_.store(true);
+        referee_frame_ready_ = true;
       } else {
         std::cout << termcolor::YELLOW
                   << "Referee frame len mismatch: " << static_cast<int>(len)
@@ -350,6 +396,7 @@ namespace serial_driver {
     // 运动控制帧 → frame_buffer_
     if (cmd == COMMAND_CODE_MOTION) {
       if (len <= frame_buffer_.size()) {
+        const std::lock_guard<std::mutex> lock(frame_mutex_);
         std::memcpy(frame_buffer_.data(), pl, len);
       } else {
         std::cout << termcolor::YELLOW
@@ -412,7 +459,7 @@ namespace serial_driver {
     if (n > 0) {
       last_received_time_ = std::chrono::steady_clock::now();
 
-      // 环形缓冲溢出检查
+      // 缓冲区溢出检查
       if (buffer_index_ + static_cast<size_t>(n) > BUFFER_SIZE) {
         std::cout << termcolor::RED << "Buffer overflow, drop"
                   << termcolor::RESET << '\n';
@@ -420,7 +467,7 @@ namespace serial_driver {
         return;
       }
 
-      // 追加到环形缓冲并触发帧解析
+      // 追加到接收字节缓存并触发帧解析
       std::memcpy(buffer_.data() + buffer_index_, temp.data(),
                   static_cast<size_t>(n));
       buffer_index_ += static_cast<size_t>(n);
@@ -431,6 +478,7 @@ namespace serial_driver {
   // ==================== 重连机制 ====================
 
   void SerialDriverMain::tryReconnect() {
+    const std::lock_guard<std::mutex> serial_lock(serial_mutex_);
     last_reconnect_time_ = std::chrono::steady_clock::now();
 
     // 关闭旧文件描述符
@@ -441,7 +489,10 @@ namespace serial_driver {
 
     // 重置接收状态
     buffer_index_ = 0;
-    referee_frame_ready_.store(false);
+    {
+      const std::lock_guard<std::mutex> lock(frame_mutex_);
+      referee_frame_ready_ = false;
+    }
 
     // 重新打开串口
     if (!serial_port_.empty()) {
@@ -463,7 +514,7 @@ namespace serial_driver {
     last_received_time_ = std::chrono::steady_clock::now();
   }
 
-  void SerialDriverMain::writeFloatLE(uint8_t* dst, const float value) {
+  void SerialDriverMain::writeFloatLE(uint8_t* dst, float value) {
     uint32_t bits{};
     std::memcpy(&bits, &value, sizeof(float));
 
@@ -482,6 +533,18 @@ namespace serial_driver {
     float value{};
     std::memcpy(&value, &bits, sizeof(float));
     return value;
+  }
+
+  int16_t SerialDriverMain::readInt16LE(const uint8_t* src) {
+    return static_cast<int16_t>(
+        (static_cast<uint16_t>(src[0]))
+        | (static_cast<uint16_t>(src[1]) << 8));
+  }
+
+  void SerialDriverMain::writeInt16LE(uint8_t* dst, int16_t value) {
+    const auto bits = static_cast<uint16_t>(value);
+    dst[0] = static_cast<uint8_t>(bits);
+    dst[1] = static_cast<uint8_t>(bits >> 8);
   }
 
 }  // namespace serial_driver

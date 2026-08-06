@@ -8,6 +8,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 
+#include "serial_driver/br_protocol_types.hpp"
+
 namespace serial_driver {
 
   /**
@@ -27,10 +29,9 @@ namespace serial_driver {
   template <typename RosMsgT>
   class RosMcuBridge {
   public:
-    using Payload = std::array<uint8_t, 26>;
-
     /** @brief 编码回调：ROS 消息 → 串口 payload 字节数组。 */
-    using EncoderFunc = std::function<Payload(const RosMsgT&)>;
+    using EncoderFunc =
+        std::function<MotionPayload(const RosMsgT&)>;
 
     /** @brief 解码回调：串口 payload 字节数组 → ROS 消息。 */
     using DecoderFunc = std::function<RosMsgT(const uint8_t*)>;
@@ -38,9 +39,8 @@ namespace serial_driver {
     /** @brief 串口发送回调：payload + 长度 → 写入串口。 */
     using SerialSendFunc = std::function<void(const uint8_t*, size_t)>;
 
-    /** @brief 串口接收回调：无参，返回最新的 payload 指针（可能为 nullptr）。
-     */
-    using SerialRecvFunc = std::function<const uint8_t*()>;
+    /** @brief 串口接收回调：无参，返回最新 payload 的值快照。 */
+    using SerialRecvFunc = std::function<MotionPayload()>;
 
     /**
      * @brief 构造并启动桥接通道。
@@ -78,11 +78,9 @@ namespace serial_driver {
         recv_thread_ = std::thread([this, recv_hz]() {
           rclcpp::Rate rate(recv_hz);
           while (rclcpp::ok()) {
-            const uint8_t* payload = serial_receiver_();
-            if (payload != nullptr) {
-              RosMsgT msg = decoder_(payload);
-              pub_->publish(msg);
-            }
+            const auto payload = serial_receiver_();
+            RosMsgT msg = decoder_(payload.data());
+            pub_->publish(msg);
             rate.sleep();
           }
         });

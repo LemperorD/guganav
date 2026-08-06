@@ -1,7 +1,5 @@
 #pragma once
 
-#include <array>
-#include <deque>
 #include <memory>
 #include <string>
 
@@ -21,25 +19,11 @@
 #include "guga_interfaces/msg/rfid_status.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
 
+#include "serial_driver/br_protocol_types.hpp"
 #include "serial_driver/ros_serial_bridge.hpp"
 #include "serial_driver/serial_driver_main.hpp"
 
 namespace serial_driver {
-
-  enum Payload : uint8_t {
-    // 26 字节运动帧 payload 布局：
-    // [0] 底盘模式  [1-4] angle_init (float LE)
-    // [5] 标志位    [6-9] vx_Y (float LE)  [10-13] vy_Y (float LE)
-    // [14-17] vx (float LE)  [18-21] vy (float LE)  [22-25] -wz (float LE)
-    OFFSET_CHASSIS_MODE = 0,
-    OFFSET_ANGLE_INIT = 1,
-    OFFSET_FLAG = 5,
-    OFFSET_VX_Y = 6,
-    OFFSET_VY_Y = 10,
-    OFFSET_VX = 14,
-    OFFSET_VY = 18,
-    OFFSET_WZ_NEG = 22
-  };
 
   /**
    * @brief ROS2 节点层，封装 SerialDriverMain
@@ -72,16 +56,12 @@ namespace serial_driver {
     void onConfigure();
 
     // ---- 编解码（供 RosMcuBridge 回调使用） ----
-
     /**
      * @brief 将 Twist 消息编码为 26 字节运动帧 payload。
      * @param msg 输入速度指令。
      * @return 26 字节 payload，按值返回避免堆分配和悬垂指针。
      */
-    static constexpr int PAYLOAD_SIZE = 26;  // 串口运动帧 payload 长度
-
-    std::array<uint8_t, SerialDriverNode::PAYLOAD_SIZE> encodeTwist(
-        const geometry_msgs::msg::Twist& msg) const;
+    MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg) const;
 
     /**
      * @brief 从运动帧 payload 解码 yaw 角度差。
@@ -102,7 +82,7 @@ namespace serial_driver {
      * @param payload 运动帧 payload 指针。
      * @return 包含 x, y 坐标的 Point 消息。
      */
-    geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
+    static geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
 
     // ---- tf 广播 ----
 
@@ -114,22 +94,7 @@ namespace serial_driver {
      */
     void publishTransformGimbalVision();
 
-    /**
-     * @brief 根据云台 yaw 角度广播 gimbal_yaw_odom→gimbal_yaw tf。
-     * @param yaw 云台 yaw 角度（弧度）。
-     */
-    void publishTransformGimbalYaw(double yaw);
-
     // ---- 工具方法 ----
-
-    /**
-     * @brief 滑动窗口滤波器（DWA = Dynamic Window Average）。
-     * @param sample 新样本值。
-     * @return 滤波后的平均值。
-     *
-     * 使用 max_dwa_size_ 控制窗口长度，新样本入队、最旧样本出队后取均值。
-     */
-    double dwaFilter(double sample);
 
     /**
      * @brief 将速度从 gimbal_yaw 坐标系变换到 chassis 坐标系。
@@ -141,7 +106,6 @@ namespace serial_driver {
         const geometry_msgs::msg::Twist& twist_in, double yaw_diff);
 
     // ---- 裁判系统 ----
-
     /**
      * @brief 定时（20ms）从串口读取裁判系统帧并发布
      * RobotStatus/GameStatus/RfidStatus。
@@ -161,19 +125,16 @@ namespace serial_driver {
      * @brief 通过 TCP 连接检测 Livox MID360 雷达是否在线。
      * @return true 表示雷达可达。
      *
-     * 从配置文件读取雷达 IP 和点云端口，尝试 TCP connect（0.5 秒超时）。
+     * 使用参数 lidar_ip / lidar_port 尝试 TCP connect（0.5 秒超时）。
      */
-    [[nodiscard]] static bool isLidarConnected();
+    [[nodiscard]] bool isLidarConnected() const;
 
     // 串口参数
     std::string port_name_{"/dev/ttyACM0"};
     int baud_rate_{115200};
 
-    // 云台 yaw 相关
-    double yaw_bias_{};
+    // MCU 上传的云台 yaw 差值
     double yaw_diff_{};
-    int max_dwa_size_{15};
-    std::deque<double> dwa_;
 
     // 速度变换
     double vel_trans_scale_{40.0};
@@ -182,8 +143,9 @@ namespace serial_driver {
     // 底盘模式
     uint8_t chassis_mode_{1};  // 默认 chassisFollowed
 
-    // 雷达在线标志
-    bool lidar_connected_{false};
+    // 雷达连接参数
+    std::string lidar_ip_{"192.168.1.2"};
+    int lidar_port_{56360};
 
     // 串口底层
     std::shared_ptr<SerialDriverMain> serial_driver_main_;

@@ -1,36 +1,26 @@
-#ifndef SERIAL_DRIVER_MAIN_HPP
-#define SERIAL_DRIVER_MAIN_HPP
+#pragma once
 
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
+#include "serial_driver/br_protocol_types.hpp"
+
 namespace serial_driver {
 
-  // ================= BR 串口协议常量 =================
-  // SOF = 'B' 'R'  (0x42 0x52) (Beihang Robotics)
-  static constexpr uint8_t FRAME_HEADER1{0x42};
-  static constexpr uint8_t FRAME_HEADER2{0x52};
-
-  // 自定义命令码：下位机与上位机统一
-  // 0xCD: 运动控制帧 ; 0xD1: 裁判系统帧
-  static constexpr uint8_t COMMAND_CODE_MOTION{0xCD};
-  static constexpr uint8_t COMMAND_CODE_REFEREE{0xD1};
-
-  // 缓冲与帧尺寸（最小帧 = 2B SOF + 1B CMD + 1B LEN + 1B CRC8 = 5）
+  // ================= 串口驱动实现参数 =================
   static constexpr size_t BUFFER_SIZE{256};
-  static constexpr size_t FRAME_MIN_SIZE{5};
   static constexpr size_t MAX_FRAME_LEN{128};
   // 避免长时间占用：单次 timer 回调最多处理10帧
   static constexpr size_t MAX_FRAMES_PER_LOOP{10};
 
-  // CRC8 参数：RoboMaster 电控常用表驱动, poly=0x31, init=0xFF
-  static constexpr uint8_t CRC8_INIT{0xFF};
-  static const uint8_t CRC8_TABLE[256]{
+  // CRC8 查表是算法实现细节；协议参数 CRC8_INIT 位于 br_protocol_types.hpp。
+  static const std::array<uint8_t, 256> CRC8_TABLE{
       0x00, 0x5e, 0xbc, 0xe2, 0x61, 0x3f, 0xdd, 0x83, 0xc2, 0x9c, 0x7e, 0x20,
       0xa3, 0xfd, 0x1f, 0x41, 0x9d, 0xc3, 0x21, 0x7f, 0xfc, 0xa2, 0x40, 0x1e,
       0x5f, 0x01, 0xe3, 0xbd, 0x3e, 0x60, 0x82, 0xdc, 0x23, 0x7d, 0x9f, 0xc1,
@@ -60,10 +50,9 @@ namespace serial_driver {
    * 职责：串口打开/配置/关闭、数据帧收发、CRC8 校验、帧缓冲管理、断线自动重连。
    * 不依赖任何 ROS2 类型，可独立复用。
    *
-   * 帧协议（BR 协议）：
-   *   - 帧头: 0x42 0x52 ("BR" = Beihang Robotics)
+   * BR 帧协议定义见 br_protocol_types.hpp：
    *   - 格式: SOF(2B) | CMD(1B) | LEN(1B) | PAYLOAD(nB) | CRC8(1B)
-   *   - 命令码: 0xCD = 运动控制帧, 0xD1 = 裁判系统帧
+   *   - 当前命令码: 0xCD = 运动控制帧, 0xD1 = 裁判系统帧
    *   - CRC8: poly=0x31, init=0xFF, 查表驱动
    */
   class SerialDriverMain {
@@ -74,8 +63,12 @@ namespace serial_driver {
      * ttyUSB/ttyACM。
      * @param baud_rate 波特率，支持 9600/19200/38400/57600/115200/230400。
      */
-    explicit SerialDriverMain(const std::string& serial_port = "",
+    explicit SerialDriverMain(std::string serial_port = "",
                               int baud_rate = 115200);
+    SerialDriverMain(const SerialDriverMain&) = delete;
+    SerialDriverMain(SerialDriverMain&&) = delete;
+    SerialDriverMain& operator=(const SerialDriverMain&) = delete;
+    SerialDriverMain& operator=(SerialDriverMain&&) = delete;
 
     /** @brief 析构函数，停止轮询线程并关闭串口。 */
     ~SerialDriverMain();
@@ -83,37 +76,16 @@ namespace serial_driver {
     // ---- MCU → PC 接收接口 ----
 
     /**
-     * @brief 获取最新运动控制帧的 payload 指针（26 字节缓冲区）。
-     * @return 指向 frame_buffer_ 的指针，数据在每次收到有效运动帧时更新。
-     * @note 调用者不应持有此指针超过下一次 timerCallback。
+     * @brief 获取最新运动控制帧的 payload 快照。
+     * @return 线程安全复制出的 26 字节 payload。
      */
-    [[nodiscard]] uint8_t* receiveDataFrame();
-    /**
-     * @brief 获取最新运动控制帧的 payload 指针（26 字节缓冲区）。
-     * @return 指向 frame_buffer_ 的指针，数据在每次收到有效运动帧时更新。
-     * @note 调用者不应持有此指针超过下一次 timerCallback。
-     */
-    [[nodiscard]] const uint8_t* receiveDataFrame();
+    [[nodiscard]] MotionPayload receiveDataFrameSnapshot() const;
 
     /**
-     * @brief 获取最新裁判系统帧的 payload 指针（13 字节缓冲区）。
-     * @return 指向 referee_frame_buffer_ 的指针。
+     * @brief 原子地获取并消费最新裁判系统帧。
+     * @return 有新帧时返回 13 字节 payload 快照，否则返回 std::nullopt。
      */
-    [[nodiscard]] uint8_t* receiveRefereeFrame();
-    /**
-     * @brief 获取最新裁判系统帧的 payload 指针（13 字节缓冲区）。
-     * @return 指向 referee_frame_buffer_ 的指针。
-     */
-    [[nodiscard]] const uint8_t* receiveRefereeFrame();
-
-    /**
-     * @brief 查询是否有新的裁判系统帧到达。
-     * @return true 表示有新帧等待消费。
-     */
-    [[nodiscard]] bool hasNewRefereeFrame() const;
-
-    /** @brief 清除裁判系统帧的"新帧到达"标志，消费后调用。 */
-    void clearRefereeFrameFlag();
+    [[nodiscard]] std::optional<RefereePayload> takeRefereeFrameSnapshot();
 
     // ---- PC → MCU 发送接口 ----
 
@@ -122,25 +94,39 @@ namespace serial_driver {
      * @param data 指向 payload 数据的指针。
      * @param len payload 字节数。
      *
-     * 自动添加帧头(0x42 0x52)、命令码(0xCD)、长度字段、CRC8 尾部。
+     * 自动添加 BR 帧头、运动命令码、长度字段和 CRC8 尾部。
      */
     void sendDataFrame(const uint8_t* data, size_t len) const;
 
-    // ---- 浮点编解码（小端序） ----
+    // ---- 小端序编解码 ----
 
     /**
      * @brief 将 float 按小端序写入 4 字节缓冲区。
      * @param dst 目标缓冲区（至少 4 字节）。
      * @param value 要写入的浮点数。
      */
-    static void writeFloatLE(uint8_t* dst, const float value);
+    static void writeFloatLE(uint8_t* dst, float value);
 
     /**
      * @brief 从 4 字节小端序缓冲区读取 float。
      * @param src 源缓冲区（至少 4 字节，小端序）。
      * @return 解码后的浮点数。
      */
-    [[nodiscard]] static float readFloatLE(const uint8_t* const src);
+    [[nodiscard]] static float readFloatLE(const uint8_t* src);
+
+    /**
+     * @brief 从 2 字节小端序缓冲区读取 int16_t。
+     * @param src 源缓冲区（至少 2 字节，小端序）。
+     * @return 解码后的 int16_t。
+     */
+    [[nodiscard]] static int16_t readInt16LE(const uint8_t* src);
+
+    /**
+     * @brief 将 int16_t 按小端序写入 2 字节缓冲区。
+     * @param dst 目标缓冲区（至少 2 字节）。
+     * @param value 要写入的值。
+     */
+    static void writeInt16LE(uint8_t* dst, int16_t value);
 
   private:
     // ---- 轮询线程 ----
@@ -149,7 +135,7 @@ namespace serial_driver {
     void timerThread();
 
     /**
-     * @brief 单次轮询回调：从串口读取数据填入环形缓冲，触发帧解析。
+     * @brief 单次轮询回调：从串口读取数据填入接收缓冲，触发帧解析。
      *
      * 同时负责超时检测（3 秒无数据则重连）和缓冲区溢出保护。
      */
@@ -158,7 +144,7 @@ namespace serial_driver {
     // ---- 帧缓冲解析 ----
 
     /**
-     * @brief 从接收环形缓冲区中搜索并解析完整的 BR 协议帧。
+     * @brief 从接收字节缓存中搜索并解析完整的 BR 协议帧。
      *
      * 搜索帧头 0x42 0x52 → 校验命令码 → 确认长度 → CRC8 校验 → 分发有效帧。
      * 单次调用最多处理 MAX_FRAMES_PER_LOOP 帧以避免长时间阻塞。
@@ -167,13 +153,12 @@ namespace serial_driver {
 
     /**
      * @brief 将已校验的有效帧按命令码分发到对应的 payload 缓冲区。
-     * @param data 指向完整帧起始位置（含 SOF）的指针。
+     * @param frame 指向完整帧起始位置（含 SOF）的指针。
      *
-     * - COMMAND_CODE_REFEREE → referee_frame_buffer_，同时置
-     * referee_frame_ready_ 标志
+     * - COMMAND_CODE_REFEREE → referee_frame_buffer_，同时置新帧标志
      * - COMMAND_CODE_MOTION → frame_buffer_
      */
-    void processFrame(const uint8_t* data);
+    void processFrame(const uint8_t* frame);
 
     // ---- 串口操作 ----
 
@@ -209,7 +194,7 @@ namespace serial_driver {
      * @param len 参与校验的数据长度（不含 CRC 字节自身）。
      * @return CRC8 校验值。
      */
-    [[nodiscard]] static uint8_t crc8_calc(const uint8_t* p, size_t len);
+    [[nodiscard]] static uint8_t crc8Calc(const uint8_t* p, size_t len);
 
     /**
      * @brief 判断命令码是否为已支持的指令类型。
@@ -218,25 +203,26 @@ namespace serial_driver {
      */
     [[nodiscard]] static bool isSupportedCommand(uint8_t cmd);
 
-  private:
     // 文件描述符，-1 表示未打开
     int fd_{-1};
     bool running_{false};
+    mutable std::mutex serial_mutex_;
 
     // 串口参数
     std::string serial_port_{"/dev/ttyACM0"};
     int baud_rate_{115200};
 
-    // 接收环形缓冲
+    // 接收字节缓存；processBuffer() 通过移动剩余字节消费完整帧
     std::array<uint8_t, BUFFER_SIZE> buffer_{};
     size_t buffer_index_{};
 
-    // 运动控制帧 payload 缓冲（25 字节有效载荷 + 1 字节余量）
-    std::array<uint8_t, 26> frame_buffer_{};
+    // 最新运动控制帧 payload 缓冲（26 字节）
+    MotionPayload frame_buffer_{};
 
     // 裁判系统帧 payload 缓冲（13 字节）
-    std::array<uint8_t, 13> referee_frame_buffer_{};
-    std::atomic_bool referee_frame_ready_{false};
+    RefereePayload referee_frame_buffer_{};
+    bool referee_frame_ready_{false};
+    mutable std::mutex frame_mutex_;
 
     // 轮询线程
     std::thread timer_thread_;
@@ -247,5 +233,3 @@ namespace serial_driver {
   };
 
 }  // namespace serial_driver
-
-#endif  // SERIAL_DRIVER_MAIN_HPP

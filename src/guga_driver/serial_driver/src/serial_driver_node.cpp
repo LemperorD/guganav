@@ -1,27 +1,26 @@
 #include "serial_driver/serial_driver_node.hpp"
 
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <array>
+#include <algorithm>
+#include <cerrno>
+#include <chrono>
 #include <cstring>
-#include <fstream>
 #include <iostream>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include <nlohmann/json.hpp>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
-
-using json = nlohmann::json;
 
 namespace serial_driver {
 
   SerialDriverNode::SerialDriverNode(const rclcpp::NodeOptions& options)
-      : Node("serial_driver_node", options),
-        lidar_connected_(isLidarConnected()) {
+      : Node("serial_driver_node", options) {
     onConfigure();
 
     serial_driver_main_ = std::make_shared<SerialDriverMain>(port_name_,
@@ -31,58 +30,50 @@ namespace serial_driver {
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
-    std::cout << "Lidar connected: " << std::boolalpha << lidar_connected_
+    const bool lidar_connected = isLidarConnected();
+    std::cout << "Lidar connected: " << std::boolalpha << lidar_connected
               << '\n';
 
-    // TODO 话题名是否正确待检查
     bridge_twist_pc_ =
         std::make_shared<RosMcuBridge<geometry_msgs::msg::Twist>>(
-            this, "/cmd_vel", true,  // ros_to_serial = PC → MCU
+            this, "/cmd_vel", true,
             [this](const geometry_msgs::msg::Twist& msg) {
               return encodeTwist(msg);
             },
-            nullptr,  // 不需要 decoder（PC→MCU 方向）
+            nullptr,
             [this](const uint8_t* data, size_t len) {
               serial_driver_main_->sendDataFrame(data, len);
             },
-            nullptr);  // 不需要 receiver（PC→MCU 方向）
+            nullptr);
 
-    // --- /serial/Yaw (MCU → PC): 从下位机接收云台 yaw 角度差 ---
     bridge_yaw_mcu_ = std::make_shared<RosMcuBridge<std_msgs::msg::Float32>>(
-        this, "/serial/Yaw", false,  // ros_to_serial = MCU → PC
-        nullptr,                     // encoder 不需要（MCU→PC 方向）
+        this, "/serial/Yaw", false, nullptr,
         [this](const uint8_t* payload) -> std_msgs::msg::Float32 {
           return decodeYaw(payload);
         },
-        nullptr,  // sender 不需要（MCU→PC 方向）
-        [this]() -> const uint8_t* {
-          return serial_driver_main_->receiveDataFrame();
-        });
+        nullptr,
+        [this]() { return serial_driver_main_->receiveDataFrameSnapshot(); });
 
-    // --- /serial/TES_speed (MCU → PC): 从下位机接收 TES 速度 ---
     bridge_tes_speed_mcu_ =
         std::make_shared<RosMcuBridge<geometry_msgs::msg::Twist>>(
-            this, "/serial/TES_speed", false,  // MCU → PC
-            nullptr,
+            this, "/serial/TES_speed", false, nullptr,
             [](const uint8_t* payload) -> geometry_msgs::msg::Twist {
               return decodeTESspeed(payload);
             },
             nullptr,
-            [this]() -> const uint8_t* {
-              return serial_driver_main_->receiveDataFrame();
+            [this]() {
+              return serial_driver_main_->receiveDataFrameSnapshot();
             });
 
-    // --- /serial/EnemyPos (MCU → PC): 从下位机接收敌方坐标 ---
     bridge_enemy_pos_mcu_ =
         std::make_shared<RosMcuBridge<geometry_msgs::msg::Point>>(
-            this, "/serial/EnemyPos", false,  // MCU → PC
-            nullptr,
-            [this](const uint8_t* payload) -> geometry_msgs::msg::Point {
+            this, "/serial/EnemyPos", false, nullptr,
+            [](const uint8_t* payload) -> geometry_msgs::msg::Point {
               return decodeEnemyPos(payload);
             },
             nullptr,
-            [this]() -> const uint8_t* {
-              return serial_driver_main_->receiveDataFrame();
+            [this]() {
+              return serial_driver_main_->receiveDataFrameSnapshot();
             });
 
     gimbal_vision_timer_ = this->create_wall_timer(
@@ -108,23 +99,19 @@ namespace serial_driver {
   SerialDriverNode::~SerialDriverNode() {
     std::cout << "Shutting down SerialDriverNode..." << '\n';
 
-    // 先停止定时器
     gimbal_vision_timer_.reset();
     referee_rx_timer_.reset();
 
-    // 清理桥接器（停止接收线程）
     bridge_twist_pc_.reset();
     bridge_yaw_mcu_.reset();
     bridge_tes_speed_mcu_.reset();
     bridge_enemy_pos_mcu_.reset();
 
-    // 清理订阅和发布者
     chassis_mode_sub_.reset();
     robot_status_pub_.reset();
     game_status_pub_.reset();
     rfid_status_pub_.reset();
 
-    // 最后清理串口底层
     serial_driver_main_.reset();
 
     std::cout << "SerialDriverNode shutdown complete." << '\n';
@@ -135,18 +122,18 @@ namespace serial_driver {
   void SerialDriverNode::onConfigure() {
     this->declare_parameter<std::string>("port_name", "/dev/ttyACM0");
     this->declare_parameter<int>("baud_rate", 115200);
-    this->declare_parameter<double>("Yaw_bias", 0.0);
-    this->declare_parameter<int>("max_dwa_size", 15);
     this->declare_parameter<double>("vel_trans_scale", 40.0);
+    this->declare_parameter<std::string>("lidar_ip", "192.168.1.2");
+    this->declare_parameter<int>("lidar_port", 56360);
 
     this->get_parameter("port_name", port_name_);
     this->get_parameter("baud_rate", baud_rate_);
-    this->get_parameter("Yaw_bias", yaw_bias_);
-    this->get_parameter("max_dwa_size", max_dwa_size_);
     this->get_parameter("vel_trans_scale", vel_trans_scale_);
+    this->get_parameter("lidar_ip", lidar_ip_);
+    this->get_parameter("lidar_port", lidar_port_);
   }
 
-  std::array<uint8_t, SerialDriverNode::PAYLOAD_SIZE>
+  MotionPayload
   SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
     geometry_msgs::msg::Twist twist_chassis = transformVelocityToChassis(
         msg, yaw_diff_ * M_PI / 180.0);
@@ -159,47 +146,43 @@ namespace serial_driver {
     const auto vy_y = static_cast<float>(vel_trans_scale_
                                          * twist_chassis.linear.y);
 
-    std::array<uint8_t, SerialDriverNode::PAYLOAD_SIZE> payload{};
-    payload[OFFSET_CHASSIS_MODE] = chassis_mode_;
-    SerialDriverMain::writeFloatLE(&payload[OFFSET_ANGLE_INIT],
+    MotionPayload payload{};
+    payload[downlink_offset::CHASSIS_MODE] = chassis_mode_;
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::ANGLE_INIT],
                                    static_cast<float>(angle_init_));
-    payload[OFFSET_FLAG] = 1;
-    SerialDriverMain::writeFloatLE(&payload[OFFSET_VX_Y], vx_y);
-    SerialDriverMain::writeFloatLE(&payload[OFFSET_VY_Y], vy_y);
-    SerialDriverMain::writeFloatLE(&payload[OFFSET_VX], vx);
-    SerialDriverMain::writeFloatLE(&payload[OFFSET_VY], vy);
-    SerialDriverMain::writeFloatLE(&payload[OFFSET_WZ_NEG], -wz);
+    payload[downlink_offset::FLAG] = 1;
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX_Y], vx_y);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY_Y], vy_y);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], -wz);
 
     return payload;
   }
-  // TODO 串口协议
+
   std_msgs::msg::Float32 SerialDriverNode::decodeYaw(const uint8_t* payload) {
-    // payload[7..10] 存储 yaw 角度差（float LE）
     std_msgs::msg::Float32 msg;
-    std::memcpy(&yaw_diff_, payload + 7, sizeof(float));
-    msg.data = static_cast<float>(yaw_diff_);
+    msg.data =
+        SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
+    yaw_diff_ = static_cast<double>(msg.data);
     return msg;
   }
 
   geometry_msgs::msg::Twist SerialDriverNode::decodeTESspeed(
       const uint8_t* payload) {
-    // payload[3..6] 存储角速度 z（float LE，由 readFloatLE 解析）
     geometry_msgs::msg::Twist msg;
     msg.angular.z = static_cast<double>(
-        SerialDriverMain::readFloatLE(&payload[3]));
+        SerialDriverMain::readFloatLE(&payload[uplink_offset::TES_ANGULAR_Z]));
     return msg;
   }
 
   geometry_msgs::msg::Point SerialDriverNode::decodeEnemyPos(
       const uint8_t* payload) {
-    // payload[11..12] int16_t x, payload[13..14] int16_t y（小端序）
     geometry_msgs::msg::Point msg;
-    int16_t x{};
-    int16_t y{};
-    std::memcpy(&x, payload + 11, sizeof(int16_t));
-    std::memcpy(&y, payload + 13, sizeof(int16_t));
-    msg.x = static_cast<double>(x);
-    msg.y = static_cast<double>(y);
+    msg.x = static_cast<double>(
+        SerialDriverMain::readInt16LE(&payload[uplink_offset::ENEMY_X]));
+    msg.y = static_cast<double>(
+        SerialDriverMain::readInt16LE(&payload[uplink_offset::ENEMY_Y]));
     return msg;
   }
 
@@ -251,43 +234,7 @@ namespace serial_driver {
     tf_broadcaster_->sendTransform(gimbal_tf);
   }
 
-  void SerialDriverNode::publishTransformGimbalYaw(double yaw) {
-    geometry_msgs::msg::TransformStamped tf_msg;
-
-    tf_msg.header.stamp = this->get_clock()->now();
-    tf_msg.header.frame_id = "gimbal_yaw_odom";
-    tf_msg.child_frame_id = "gimbal_yaw";
-
-    tf_msg.transform.translation.x = 0.0;
-    tf_msg.transform.translation.y = 0.0;
-    tf_msg.transform.translation.z = 0.0;
-
-    // DWA 滤波 + yaw 偏置补偿
-    tf2::Quaternion q;
-    q.setRPY(0.0, 0.0, -dwaFilter(yaw) + yaw_bias_);
-
-    tf_msg.transform.rotation.x = q.x();
-    tf_msg.transform.rotation.y = q.y();
-    tf_msg.transform.rotation.z = q.z();
-    tf_msg.transform.rotation.w = q.w();
-
-    tf_broadcaster_->sendTransform(tf_msg);
-  }
-
   // ==================== 工具方法 ====================
-
-  double SerialDriverNode::dwaFilter(double sample) {
-    dwa_.push_back(sample);
-    if (dwa_.size() > static_cast<size_t>(max_dwa_size_)) {
-      dwa_.pop_front();
-    }
-
-    double sum{};
-    for (double x : dwa_) {
-      sum += x;
-    }
-    return dwa_.empty() ? sample : (sum / static_cast<double>(dwa_.size()));
-  }
 
   geometry_msgs::msg::Twist SerialDriverNode::transformVelocityToChassis(
       const geometry_msgs::msg::Twist& twist_in, double yaw_diff) {
@@ -303,81 +250,103 @@ namespace serial_driver {
 
   // ==================== 雷达检测 ====================
 
-  bool SerialDriverNode::isLidarConnected() {
-    // 读取 MID360 配置文件
-    // TODO 硬编码处理
-    std::ifstream f("/home/ld/nav2_ws/config/mid360_user_config.json");
-    if (!f.is_open()) {
-      std::cerr << "Cannot open Lidar config file\n";
-      return false;
-    }
-
-    json config;
-    try {
-      f >> config;
-    } catch (...) {
-      std::cerr << "JSON parse failed\n";
-      return false;
-    }
-
-    std::string lidar_ip = config["lidar_configs"][0]["ip"];
-    int point_port = config["MID360"]["lidar_net_info"]["point_data_port"];
-
-    // 通过 TCP connect 测试雷达可达性
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
+  bool SerialDriverNode::isLidarConnected() const {
+    const int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
       std::cerr << "Socket creation failed\n";
       return false;
     }
 
-    // 0.5 秒超时
-    struct timeval timeout{};
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 500000;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(point_port);
-
-    if (inet_pton(AF_INET, lidar_ip.c_str(), &addr.sin_addr) <= 0) {
-      std::cerr << "Invalid IP address\n";
+    const int flags = fcntl(sock, F_GETFL, 0);
+    if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+      std::cerr << "Failed to configure nonblocking socket\n";
       close(sock);
       return false;
     }
 
-    int ret = connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    close(sock);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(lidar_port_);
 
-    return (ret == 0);
+    if (inet_pton(AF_INET, lidar_ip_.c_str(), &addr.sin_addr) <= 0) {
+      std::cerr << "Invalid IP address: " << lidar_ip_ << '\n';
+      close(sock);
+      return false;
+    }
+
+    const int connect_result = connect(sock, reinterpret_cast<sockaddr*>(&addr),
+                                       sizeof(addr));
+    if (connect_result == 0) {
+      close(sock);
+      return true;
+    }
+    if (errno != EINPROGRESS) {
+      close(sock);
+      return false;
+    }
+
+    constexpr auto connect_timeout = std::chrono::milliseconds(500);
+    const auto deadline = std::chrono::steady_clock::now() + connect_timeout;
+    pollfd descriptor{sock, POLLOUT, 0};
+    int poll_result{};
+    do {
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        close(sock);
+        return false;
+      }
+      const auto remaining =
+          std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      poll_result = poll(&descriptor, 1,
+                         std::max(1, static_cast<int>(remaining.count())));
+    } while (poll_result < 0 && errno == EINTR);
+
+    if (poll_result <= 0) {
+      close(sock);
+      return false;
+    }
+
+    int socket_error{};
+    socklen_t error_length = sizeof(socket_error);
+    const bool connected = getsockopt(sock, SOL_SOCKET, SO_ERROR, &socket_error,
+                                      &error_length)
+                               == 0
+                           && socket_error == 0;
+    close(sock);
+    return connected;
   }
 
   // ==================== 裁判系统 ====================
 
   void SerialDriverNode::publishRefereeData() {
-    const uint8_t* payload = serial_driver_main_->receiveRefereeFrame();
-    if (payload == nullptr) {
-      std::cerr << "Failed to receive referee frame." << '\n';
+    const auto payload_snapshot =
+        serial_driver_main_->takeRefereeFrameSnapshot();
+    if (!payload_snapshot.has_value()) {
       return;
     }
+    const uint8_t* payload = payload_snapshot->data();
 
     // ---- 解析比赛进程（payload[0] 的高 4 位） ----
     uint8_t game_progress{};
-    std::memcpy(&game_progress, payload, sizeof(uint8_t));
+    std::memcpy(&game_progress, &payload[referee_offset::GAME_PROGRESS],
+                sizeof(uint8_t));
     game_progress = (game_progress >> 4);  // 取高 4 位
 
     // ---- 解析机器人状态 ----
     uint16_t current_hp{};
     uint16_t ammo17{};
     uint16_t heat1{};
-    std::memcpy(&current_hp, payload + 1, sizeof(uint16_t));
-    std::memcpy(&ammo17, payload + 3, sizeof(uint16_t));
-    std::memcpy(&heat1, payload + 5, sizeof(uint16_t));
+    std::memcpy(&current_hp, &payload[referee_offset::CURRENT_HP],
+                sizeof(uint16_t));
+    std::memcpy(&ammo17, &payload[referee_offset::AMMO_17MM],
+                sizeof(uint16_t));
+    std::memcpy(&heat1, &payload[referee_offset::BARREL_HEAT],
+                sizeof(uint16_t));
 
     // ---- 解析 RFID ----
     uint32_t rfid{};
-    std::memcpy(&rfid, payload + 9, sizeof(uint32_t));
+    std::memcpy(&rfid, &payload[referee_offset::RFID_STATUS],
+                sizeof(uint32_t));
 
     // ---- 发布机器人状态 ----
     guga_interfaces::msg::RobotStatus robot_status;
@@ -395,9 +364,6 @@ namespace serial_driver {
     guga_interfaces::msg::RfidStatus rfid_status;
     rfid_status = rfid2ros(rfid);
     rfid_status_pub_->publish(rfid_status);
-
-    // 消费帧标志
-    serial_driver_main_->clearRefereeFrameFlag();
   }
 
   guga_interfaces::msg::RfidStatus SerialDriverNode::rfid2ros(uint32_t rfid) {
@@ -434,6 +400,5 @@ namespace serial_driver {
 
 }  // namespace serial_driver
 
-// 注册为 rclcpp component，可通过 composition 加载
 #include "rclcpp_components/register_node_macro.hpp"
 RCLCPP_COMPONENTS_REGISTER_NODE(serial_driver::SerialDriverNode)
