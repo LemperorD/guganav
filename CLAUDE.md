@@ -286,7 +286,7 @@ ros2 run guga_ui_pangolin guga_ui
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| `serial_driver` | 代码完成，待实车测试 | 已拆分为 SerialDriverMain + RosMcuBridge + SerialDriverNode |
+| `serial_driver` | 代码完成，待实车测试 | 已拆分为 SerialDriverMain + RosToSerialBridge/SerialToRosBridge + SerialDriverNode |
 | `guga_ui_common` | 代码完成 | 共享内存通信库，待模块集成 |
 | `guga_ui_pangolin` | 代码完成 | Pangolin UI 进程，待编译验证 |
 | `hik_driver` | 早期开发 | 海康相机新版驱动 |

@@ -154,7 +154,7 @@ Offset  Size  字段              类型          说明
 ## 6. 话题桥接架构
 
 ```
-ROS2 话题                        RosMcuBridge                        串口帧
+ROS2 话题                   RosToSerialBridge/SerialToRosBridge        串口帧
 ──────────                      ────────────                        ──────
 /cmd_vel         ──encodeTwist──▶ bridge_twist_pc_     ──sendDataFrame──▶ 0xCD → MCU
 /serial/Yaw      ◀─decodeYaw────  bridge_yaw_mcu_      ◀─receiveDataFrameSnapshot─ 0xCD ← MCU
