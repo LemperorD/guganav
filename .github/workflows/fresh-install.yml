@@ -22,11 +22,10 @@ jobs:
 
     env:
       ROS_DISTRO: humble
-      ACADOS_SOURCE_DIR: ${{ github.workspace }}/.cache/acados
-      SMALL_GICP_SOURCE_DIR: ${{ github.workspace }}/.cache/small_gicp
+      ACADOS_SOURCE_DIR: ${{ github.workspace }}/.deps/acados
+      SMALL_GICP_SOURCE_DIR: ${{ github.workspace }}/.deps/small_gicp
+      SMALL_GICP_INSTALL_PREFIX: /usr/local
       INSTALL_ACADOS_PYTHON: "1"
-      COLCON_SKIP_PACKAGES: hik_driver guga_ui_pangolin
-      ROSDEP_SKIP_KEYS: pb2025_sentry_nav
 
     steps:
       - name: Checkout
@@ -38,19 +37,13 @@ jobs:
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Cache acados
-        uses: actions/cache@v4
-        with:
-          path: .cache/acados
-          key: acados-${{ runner.os }}-${{ hashFiles('scripts/ci/install_deps_humble.sh') }}
+      - name: Install dependencies from a clean workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/install_deps_humble.sh
 
-      - name: Cache small_gicp
-        uses: actions/cache@v4
-        with:
-          path: .cache/small_gicp
-          key: small-gicp-${{ runner.os }}-${{ hashFiles('scripts/ci/install_deps_humble.sh') }}
-
-      - name: Install dependencies
+      - name: Verify dependency installation is repeatable
         shell: bash
         run: |
           set -euo pipefail
@@ -69,8 +62,53 @@ jobs:
           set +u
           source scripts/ci/env_humble.sh
           set -u
+          rosdep check --from-paths src --ignore-src --rosdistro humble
+          package_args=()
+          if [ "${HIK_MVS_AVAILABLE:-0}" != "1" ]; then
+            # Public runners cannot download the closed-source MVS SDK.
+            package_args+=(--packages-skip hik_driver)
+          fi
           colcon build --symlink-install \
-            --packages-skip ${COLCON_SKIP_PACKAGES} \
+            "${package_args[@]}" \
             --cmake-args \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Verify installed tools and runtime imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +u
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          set -u
+          python3 -c "import acados_template, xmacro"
+          python3 -c 'import pathlib, os, acados_template; assert pathlib.Path(acados_template.__file__).resolve().is_relative_to(pathlib.Path(os.environ["ACADOS_SOURCE_DIR"]).resolve())'
+          test -f "${ACADOS_SOURCE_DIR}/lib/libacados.so"
+          test -x "${ACADOS_SOURCE_DIR}/bin/t_renderer"
+          test -d "${SMALL_GICP_INSTALL_PREFIX}/include/small_gicp"
+          test -f "${SMALL_GICP_INSTALL_PREFIX}/lib/libsmall_gicp.so"
+          test -f "${SMALL_GICP_INSTALL_PREFIX}/lib/cmake/small_gicp/small_gicp-config.cmake"
+          ros2 pkg prefix guga_ui_pangolin
+          ros2 pkg prefix serial_driver
+          if [ "${HIK_MVS_AVAILABLE:-0}" = "1" ]; then
+            ros2 pkg prefix hik_driver
+          fi
+          ros2 launch pb2025_robot_description robot_description_launch.py --show-args >/dev/null
+
+      - name: Run workspace tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +u
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          set -u
+          package_args=()
+          if [ "${HIK_MVS_AVAILABLE:-0}" != "1" ]; then
+            package_args+=(--packages-skip hik_driver)
+          fi
+          colcon test \
+            "${package_args[@]}" \
+            --event-handlers console_direct+
+          colcon test-result --all --verbose
