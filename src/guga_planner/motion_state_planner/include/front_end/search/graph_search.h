@@ -11,7 +11,7 @@
 #include <limits>                         // std::numeric_limits 无穷大常量
 #include <vector>                         // std::vector 动态数组
 #include <unordered_map>                  // std::unordered_map 哈希表
-#include <plan_env/sdf_map.h>             // 符号距离场地图
+#include <rog_map_layer/esdf_map.hpp>            // SDFmap 地图类定义
 
 namespace JPS
 {
@@ -19,13 +19,6 @@ namespace JPS
 /**
  * @struct compare_state
  * @brief 优先队列的比较函数对象
- *
- * A* 搜索使用 f = g + h 作为优先级键值，优先扩展 f 值最小的节点。
- * 当两个节点的 f 值在容差范围内相等时（浮点比较），优先比较 g 值:
- * g 值更大者更优先（即 tie-breaking 策略，倾向于先扩展已行进更远的节点）
- *
- * 注意: 该比较器返回 true 表示 a1 优先级低于 a2（即 a1 后弹出），
- * 因此 f1 > f2 时返回 true（更大的 f 后处理）。
  */
 template <class T>
 struct compare_state
@@ -41,18 +34,12 @@ struct compare_state
   }
 };
 
-
 /// 定义优先队列类型
 struct State; // 前向声明
 /// State 的共享指针类型别名
 using StatePtr = std::shared_ptr<State>;
 /**
  * @brief 优先队列类型定义
- *
- * 使用 boost::d_ary_heap 实现二叉堆（arity=2），支持:
- * - mutable_: 允许在堆中更新已存在元素的键值（用于 decrease-key 操作）
- * - 当发现到某个节点的更优路径时，通过 heapkey 句柄直接更新其在堆中的位置
- * - 这避免了对已关闭节点的重新插入，是 A* 高效实现的关键
  */
 using priorityQueue = boost::heap::d_ary_heap<StatePtr, boost::heap::mutable_<true>,
                       boost::heap::arity<2>, boost::heap::compare< compare_state<StatePtr> >>;
@@ -60,16 +47,6 @@ using priorityQueue = boost::heap::d_ary_heap<StatePtr, boost::heap::mutable_<tr
 /**
  * @struct State
  * @brief 图搜索中的节点（栅格单元）
- *
- * 每个 State 对应栅格地图中的一个离散点，存储:
- * - 空间位置: 整数栅格坐标 (x, y, z)
- * - 运动方向: 单位方向向量 (dx, dy, dz)，用于 JPS 确定搜索方向
- * - A* 代价: g（已行进距离）和 h（到目标的启发式估计）
- * - 状态标记: opened/closed，用于跟踪 A* 搜索进度
- *
- * JPS 特有的设计:
- * - 方向向量 (dx,dy,dz) 不是简单的邻接关系，而是记录当前搜索的"动量方向"
- * - parentId 用于路径回溯，而非直接存储父节点指针（节省内存）
  */
 struct State
 {
@@ -226,144 +203,140 @@ struct JPS3DNeib {
  */
 class GraphSearch
 {
-  public:
-  // 原始栅格地图版本的构造函数（已废弃，改用 SDFmap 版本）
-  //   GraphSearch(const char* cMap, int xDim, int yDim, double eps = 1, bool verbose = false);
-  //   GraphSearch(const char* cMap, int xDim, int yDim, int zDim, double eps = 1, bool verbose = false);
+public:
+  /**
+   * @brief 图搜索构造函数（使用 SDF 地图）
+   * @param Map 共享的 ESDF 地图指针
+   * @param safe_dis 安全距离：在此距离内有障碍物则视为不可通行
+   */
+  GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis);
 
-    /**
-     * @brief 图搜索构造函数（使用 SDF 地图）
-     * @param Map 共享的 SDF 地图指针（SDF = Signed Distance Field，符号距离场）
-     * @param safe_dis 安全距离：在此距离内有障碍物则视为不可通行
-     */
-    GraphSearch(std::shared_ptr<SDFmap> Map, const double &safe_dis);
+  /**
+   * @brief 启动 2D 路径规划
+   *
+   * @param xStart 起点 x 坐标（栅格索引）
+   * @param yStart 起点 y 坐标（栅格索引）
+   * @param xGoal  目标 x 坐标（栅格索引）
+   * @param yGoal  目标 y 坐标（栅格索引）
+   * @param useJps true 时使用 JPS 跳点搜索，false 时使用标准 A*
+   * @param maxExpand 最大扩展节点数，默认 -1 表示无限制
+   * @return true 找到路径，false 搜索失败
+   */
+  bool plan(int xStart, int yStart, int xGoal, int yGoal, bool useJps, int maxExpand = -1);
+  /**
+   * @brief 启动 3D 路径规划（当前未启用）
+   */
+  bool plan(int xStart, int yStart, int zStart, int xGoal, int yGoal, int zGoal, bool useJps, int maxExpand = -1);
 
-    /**
-     * @brief 启动 2D 路径规划
-     *
-     * @param xStart 起点 x 坐标（栅格索引）
-     * @param yStart 起点 y 坐标（栅格索引）
-     * @param xGoal  目标 x 坐标（栅格索引）
-     * @param yGoal  目标 y 坐标（栅格索引）
-     * @param useJps true 时使用 JPS 跳点搜索，false 时使用标准 A*
-     * @param maxExpand 最大扩展节点数，默认 -1 表示无限制
-     * @return true 找到路径，false 搜索失败
-     */
-    bool plan(int xStart, int yStart, int xGoal, int yGoal, bool useJps, int maxExpand = -1);
-    /**
-     * @brief 启动 3D 路径规划（当前未启用）
-     */
-    bool plan(int xStart, int yStart, int zStart, int xGoal, int yGoal, int zGoal, bool useJps, int maxExpand = -1);
+  /// 获取最优路径（从起点到目标的有序节点序列）
+  std::vector<StatePtr> getPath() const;
 
-    /// 获取最优路径（从起点到目标的有序节点序列）
-    std::vector<StatePtr> getPath() const;
+  /// 获取开放集（opened=true, closed=false，尚未扩展的边界节点）
+  std::vector<StatePtr> getOpenSet() const;
 
-    /// 获取开放集（opened=true, closed=false，尚未扩展的边界节点）
-    std::vector<StatePtr> getOpenSet() const;
+  /// 获取关闭集（closed=true，已扩展完毕的节点）
+  std::vector<StatePtr> getCloseSet() const;
 
-    /// 获取关闭集（closed=true，已扩展完毕的节点）
-    std::vector<StatePtr> getCloseSet() const;
+  /// 获取哈希表中所有已发现的节点
+  std::vector<StatePtr> getAllSet() const;
 
-    /// 获取哈希表中所有已发现的节点
-    std::vector<StatePtr> getAllSet() const;
+  /// 设置/获取安全距离（可动态调整碰撞检测阈值）
+  void SetSafeDis(const double &safe_dis);
+  double GetSafeDis();
 
-    /// 设置/获取安全距离（可动态调整碰撞检测阈值）
-    void SetSafeDis(const double &safe_dis);
-    double GetSafeDis();
+private:
+  /**
+   * @brief 主规划循环
+   *
+   * 实现 A*/JPS 的标准主循环:
+    * while(open集非空) {
+    *   取出f值最小的节点 -> 标记为closed
+    *   如果是目标 -> 成功退出
+    *   扩展后继节点 -> 更新g值和父节点
+    * }
+    *
+    * @param currNode_ptr 起始节点（入参/出参，循环结束后指向目标节点）
+    * @param max_expand 最大扩展次数限制
+    * @param start_id 起点的哈希ID
+    * @param goal_id 目标的哈希ID
+    */
+  bool plan(StatePtr& currNode_ptr, int max_expand, int start_id, int goal_id);
+  /// A* 后继生成: 遍历8邻域，过滤不可通行区域
+  void getSucc(const StatePtr& curr, std::vector<int>& succ_ids, std::vector<double>& succ_costs);
+  /// JPS 后继生成: 按方向查找表进行跳点搜索，跳过冗余节点
+  void getJpsSucc(const StatePtr& curr, std::vector<int>& succ_ids, std::vector<double>& succ_costs);
+  /// 从目标节点回溯到起点，重建完整路径
+  std::vector<StatePtr> recoverPath(StatePtr node, int id);
 
-  private:
-    /**
-     * @brief 主规划循环
-     *
-     * 实现 A*/JPS 的标准主循环:
-      * while(open集非空) {
-      *   取出f值最小的节点 -> 标记为closed
-      *   如果是目标 -> 成功退出
-      *   扩展后继节点 -> 更新g值和父节点
-      * }
-      *
-      * @param currNode_ptr 起始节点（入参/出参，循环结束后指向目标节点）
-      * @param max_expand 最大扩展次数限制
-      * @param start_id 起点的哈希ID
-      * @param goal_id 目标的哈希ID
-      */
-    bool plan(StatePtr& currNode_ptr, int max_expand, int start_id, int goal_id);
-    /// A* 后继生成: 遍历8邻域，过滤不可通行区域
-    void getSucc(const StatePtr& curr, std::vector<int>& succ_ids, std::vector<double>& succ_costs);
-    /// JPS 后继生成: 按方向查找表进行跳点搜索，跳过冗余节点
-    void getJpsSucc(const StatePtr& curr, std::vector<int>& succ_ids, std::vector<double>& succ_costs);
-    /// 从目标节点回溯到起点，重建完整路径
-    std::vector<StatePtr> recoverPath(StatePtr node, int id);
+  /// 将 (x, y) 栅格坐标转换为一维哈希ID
+  int coordToId(int x, int y) const;
 
-    /// 将 (x, y) 栅格坐标转换为一维哈希ID
-    int coordToId(int x, int y) const;
+  /// 检查 (x, y) 是否可通行（在地图范围内且 SDF 距离 >= safe_dis_）
+  bool isFree(int x, int y) const;
 
-    /// 检查 (x, y) 是否可通行（在地图范围内且 SDF 距离 >= safe_dis_）
-    bool isFree(int x, int y) const;
+  /// 检查 (x, y) 是否未被占用（用于 JPS 中检查更宽松的条件）
+  bool isUnoccupied(int x, int y) const;
 
-    /// 检查 (x, y) 是否未被占用（用于 JPS 中检查更宽松的条件）
-    bool isUnoccupied(int x, int y) const;
+  /// 检查 (x, y) 是否被障碍物占用（边界外也视为被占用）
+  bool isOccupied(int x, int y) const;
 
-    /// 检查 (x, y) 是否被障碍物占用（边界外也视为被占用）
-    bool isOccupied(int x, int y) const;
+  /// 计算启发式代价 h = eps_ * sqrt((x-xgoal)^2 + (y-ygoal)^2)
+  /// eps_ > 1 时变为加权A*（有界次优，搜索更快但路径可能非最优）
+  double getHeur(int x, int y) const;
 
-    /// 计算启发式代价 h = eps_ * sqrt((x-xgoal)^2 + (y-ygoal)^2)
-    /// eps_ > 1 时变为加权A*（有界次优，搜索更快但路径可能非最优）
-    double getHeur(int x, int y) const;
+  /**
+   * @brief 检查 (x,y) 沿 (dx,dy) 方向是否存在强制邻居
+   *
+   * 强制邻居的定义（JPS算法的核心概念）:
+   * 对于直线移动方向 (dx,dy)，如果侧方的某个栅格被障碍物占用，
+   * 且从父节点的更短路径无法到达该侧方附近的空白栅格，
+   * 则该空白栅格就是一个"跳点"（因为经过它才能到达被阻塞的区域）
+   *
+   * @return true 如果存在强制邻居（即当前点是一个跳点）
+   */
+  bool hasForced(int x, int y, int dx, int dy);
 
-    /**
-     * @brief 检查 (x,y) 沿 (dx,dy) 方向是否存在强制邻居
-     *
-     * 强制邻居的定义（JPS算法的核心概念）:
-     * 对于直线移动方向 (dx,dy)，如果侧方的某个栅格被障碍物占用，
-     * 且从父节点的更短路径无法到达该侧方附近的空白栅格，
-     * 则该空白栅格就是一个"跳点"（因为经过它才能到达被阻塞的区域）
-     *
-     * @return true 如果存在强制邻居（即当前点是一个跳点）
-     */
-    bool hasForced(int x, int y, int dx, int dy);
+  /**
+   * @brief JPS 核心: 沿 (dx,dy) 方向递归跳跃
+   *
+   * 跳点搜索的递归规则:
+   * 1. 前进一格: new = current + (dx,dy)
+   * 2. 如果 new 不可通行 -> 返回 false（跳跃失败）
+   * 3. 如果 new 是目标 -> 返回 true（找到目标）
+   * 4. 如果 new 有强制邻居 -> 返回 true（new 是一个跳点）
+   * 5. 对角线移动时: 递归检查两个轴向分量 -> 如果任一找到跳点则 new 是跳点
+   * 6. 继续沿原方向递归跳跃
+   *
+   * @param[out] new_x, new_y 输出找到的跳点坐标
+   * @return true 如果找到目标或跳点
+   */
+  bool jump(int x, int y, int dx, int dy, int& new_x, int& new_y);
 
-    /**
-     * @brief JPS 核心: 沿 (dx,dy) 方向递归跳跃
-     *
-     * 跳点搜索的递归规则:
-     * 1. 前进一格: new = current + (dx,dy)
-     * 2. 如果 new 不可通行 -> 返回 false（跳跃失败）
-     * 3. 如果 new 是目标 -> 返回 true（找到目标）
-     * 4. 如果 new 有强制邻居 -> 返回 true（new 是一个跳点）
-     * 5. 对角线移动时: 递归检查两个轴向分量 -> 如果任一找到跳点则 new 是跳点
-     * 6. 继续沿原方向递归跳跃
-     *
-     * @param[out] new_x, new_y 输出找到的跳点坐标
-     * @return true 如果找到目标或跳点
-     */
-    bool jump(int x, int y, int dx, int dy, int& new_x, int& new_y);
+  /// 初始化 2D JPS 邻居查找表（当前在构造时通过 JPS2DNeib 构造函数完成）
+  void init2DJps();
 
-    /// 初始化 2D JPS 邻居查找表（当前在构造时通过 JPS2DNeib 构造函数完成）
-    void init2DJps();
+  // --- 数据成员 ---
+  std::shared_ptr<EsdfMap> map_;        // SDF 地图（符号距离场）
+  int xDim_, yDim_, zDim_;             // 地图尺寸（栅格数）
+  double eps_;                         // 启发式权重（1.0=最优A*，>1=加权A*）
+  bool verbose_;                       // 详细输出开关
 
-    // --- 数据成员 ---
-    std::shared_ptr<SDFmap> map_;        // SDF 地图（符号距离场）
-    int xDim_, yDim_, zDim_;             // 地图尺寸（栅格数）
-    double eps_;                         // 启发式权重（1.0=最优A*，>1=加权A*）
-    bool verbose_;                       // 详细输出开关
+  double safe_dis_;                    // 安全距离阈值（碰撞检测时膨胀障碍物）
 
-    double safe_dis_;                    // 安全距离阈值（碰撞检测时膨胀障碍物）
+  const char val_free_ = 0;            // 空闲栅格值（用于原始栅格地图，当前废弃）
+  int xGoal_, yGoal_, zGoal_;          // 目标点坐标
+  bool use_2d_;                        // 2D/3D 模式标志
+  bool use_jps_ = false;               // A*/JPS 模式标志
 
-    const char val_free_ = 0;            // 空闲栅格值（用于原始栅格地图，当前废弃）
-    int xGoal_, yGoal_, zGoal_;          // 目标点坐标
-    bool use_2d_;                        // 2D/3D 模式标志
-    bool use_jps_ = false;               // A*/JPS 模式标志
+  priorityQueue pq_;                   // 优先队列（开放集），按 f=g+h 排序
+  std::vector<StatePtr> hm_;           // 哈希映射（大小 = xDim*yDim），id->StatePtr
+  std::vector<bool> seen_;             // 标记向量，记录某ID是否已被访问过
 
-    priorityQueue pq_;                   // 优先队列（开放集），按 f=g+h 排序
-    std::vector<StatePtr> hm_;           // 哈希映射（大小 = xDim*yDim），id->StatePtr
-    std::vector<bool> seen_;             // 标记向量，记录某ID是否已被访问过
+  std::vector<StatePtr> path_;         // 最终路径（从起点到目标）
 
-    std::vector<StatePtr> path_;         // 最终路径（从起点到目标）
-
-    std::vector<std::vector<int>> ns_;   // A*的邻居偏移量（8邻域）
-    std::shared_ptr<JPS2DNeib> jn2d_;    // 2D JPS 邻居查找表
-    std::shared_ptr<JPS3DNeib> jn3d_;    // 3D JPS 邻居查找表
+  std::vector<std::vector<int>> ns_;   // A*的邻居偏移量（8邻域）
+  std::shared_ptr<JPS2DNeib> jps_neib_2d_;    // 2D JPS 邻居查找表
+  std::shared_ptr<JPS3DNeib> jps_neib_3d_;    // 3D JPS 邻居查找表
 };
 
 } // namespace JPS

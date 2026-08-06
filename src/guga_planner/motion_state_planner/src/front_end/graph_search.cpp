@@ -20,11 +20,11 @@ using namespace JPS;
  *
  * eps_ 固定为 1，使用标准 A*（而非加权 A*）
  */
-GraphSearch::GraphSearch(std::shared_ptr<SDFmap> Map, const double &safe_dis):map_(Map), safe_dis_(safe_dis)
+GraphSearch::GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis):map_(Map), safe_dis_(safe_dis)
 {
   verbose_ = false;                               // 默认不输出调试信息
-  xDim_ = map_->GLX_SIZE_;                        // 地图 X 方向栅格数
-  yDim_ = map_->GLY_SIZE_;                        // 地图 Y 方向栅格数
+  xDim_ = map_->sizeX();                        // 地图 X 方向栅格数
+  yDim_ = map_->sizeY();                        // 地图 Y 方向栅格数
   eps_ = 1;                                       // 启发式权重 = 1.0 (标准A*)
 
   hm_.resize(xDim_ * yDim_);                      // 哈希映射: id -> StatePtr
@@ -38,7 +38,7 @@ GraphSearch::GraphSearch(std::shared_ptr<SDFmap> Map, const double &safe_dis):ma
     }
   }
 
-  jn2d_ = std::make_shared<JPS2DNeib>();          // 预计算 JPS 2D 邻居查找表
+  jps_neib_2d_ = std::make_shared<JPS2DNeib>();          // 预计算 JPS 2D 邻居查找表
 }
 
 // ======================== 坐标哈希函数 ========================

@@ -1,14 +1,6 @@
 /**
  * @file traj_representation.h
  * @brief 轨迹表示数据结构定义
- *
- * 本文件定义了前端路径规划模块中的核心数据结构:
- * - PathNode: 用于混合A*（Hybrid A*）等搜索算法中的路径节点，包含离散索引和连续状态
- * - FlatTrajData: 平坦化轨迹数据，存储经过时间参数化和平坦输出的完整轨迹信息
- *
- * 设计意图:
- * - 将栅格地图中的离散搜索（整数索引）与连续空间中的运动规划（浮点坐标+偏航角）解耦
- * - 通过 FlatTrajData 将前端的参考路径传递给后端优化器（如 NMPC/轨迹优化）
  */
 
 #ifndef _TRAJ_REPRESENTATION_H
@@ -19,9 +11,8 @@
 #include <Eigen/Geometry>
 #include <Eigen/Eigenvalues>
 
-#include <ros/ros.h>
-#include <ros/package.h>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <sstream>
 #include <vector>
@@ -32,8 +23,8 @@
 #define IN_OPEN_SET 'b'   // 节点等待扩展，在open集合中
 #define NOT_EXPAND 'c'    // 节点尚未被扩展
 
-// 无穷大常量（注意: 1>>30 = 0，这里可能是一个遗留bug，实际应使用更大的值或 std::numeric_limits）
-#define inf 1 >> 30
+// 无穷大常量
+#define inf std::numeric_limits<double>::infinity()
 
 /**
  * @class PathNode

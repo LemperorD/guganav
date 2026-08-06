@@ -25,8 +25,7 @@
 #include <plan_env/sdf_map.h>
 #include <front_end/jps_planner/graph_search.h>
 #include <front_end/traj_representation.h>
-#include <ros/ros.h>
-#include <ros/package.h>
+
 #include <nav_msgs/Path.h>                // ROS 标准路径消息
 #include <visualization_msgs/Marker.h>    // ROS 可视化标记消息
 #include <tf/tf.h>                        // TF 坐标变换库
@@ -72,7 +71,6 @@ namespace JPS
 
             bool if_first_point_cut_;        // 标记首点是否被截断
 
-            ros::NodeHandle nh_;                    // ROS 节点句柄
             std::shared_ptr<SDFmap> map_util_;      // SDF 地图工具类
             std::shared_ptr<GraphSearch> graph_search_;  // JPS/A* 图搜索引擎
 
@@ -95,9 +93,6 @@ namespace JPS
             std::vector<Eigen::Vector2i> small_resolution_path_;  // 高分辨率栅格路径（用于碰撞检测）
 
             // --- ROS 发布器 ---
-            ros::Publisher path_pub_;           // 最终简化路径发布
-            ros::Publisher init_path_pub_;      // 初始 JPS 路径发布（用于可视化对比）
-            ros::Publisher normal_vector_pub_;  // 法向量发布
 
         public:
 
