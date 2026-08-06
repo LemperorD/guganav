@@ -83,13 +83,6 @@ void TerrainAnalysisContext::onLaserCloud(
   state.new_laser_cloud = true;
 }
 
-void TerrainAnalysisContext::onJoystick(bool button5) {
-  if (button5) {
-    state.no_data_inited = TerrainState::NoDataState::UNINITIALIZED;
-    state.clearing_cloud = true;
-  }
-}
-
 void TerrainAnalysisContext::onClearing(double distance_clearing) {
   state.no_data_inited = TerrainState::NoDataState::UNINITIALIZED;
   state.clearing_distance = distance_clearing;

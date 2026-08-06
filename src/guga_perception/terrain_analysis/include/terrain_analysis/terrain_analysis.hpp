@@ -4,7 +4,6 @@
 
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/joy.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/float32.hpp>
 
@@ -43,7 +42,6 @@ private:
       sub_laser_cloud_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
       sub_local_terrain_;
-  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_joystick_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_clearing_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_terrain_map_;
 };

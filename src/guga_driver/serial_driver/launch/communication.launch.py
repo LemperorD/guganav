@@ -21,14 +21,14 @@ def generate_launch_description():
     declare_communication_cfg_dir = DeclareLaunchArgument(
         "communication_cfg_dir",
         default_value=PathJoinSubstitution(
-            [communication_dir, "config", "communication.yaml"]
+            [communication_dir, "config", "serial_driver.yaml"]
         ),
         description="Path to the communication config file",
     )
 
     start_communication_node = Node(
         package="serial_driver",
-        executable="serial_driver_node",
+        executable="serial_driver_node_exe",
         namespace=namespace,
         parameters=[communication_cfg_dir],
         output="screen",

@@ -20,6 +20,9 @@ Checks:          '-*,
                   -readability-magic-numbers,
                   -cppcoreguidelines-avoid-magic-numbers,
                   -readability-identifier-length,
+                  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+                  -cppcoreguidelines-pro-bounds-constant-array-index,
+                  -hicpp-signed-bitwise,
                   '
 HeaderFilterRegex: ''
 CheckOptions:

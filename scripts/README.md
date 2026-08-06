@@ -25,9 +25,9 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 
 | 脚本                     | 用途                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |
-| `scripts/colconBuild.sh` | 使用 Release 配置执行 `colcon build`，并导出 `compile_commands.json`。 |
+| `scripts/colconBuild.sh` | 使用 Release 配置执行 `colcon build`，自动检测 MVS SDK 以纳入或跳过 `hik_driver`，并导出 `compile_commands.json`。 |
 | `scripts/ci/env_humble.sh` | 加载 ROS Humble 和 acados 环境变量，供本地构建与 CI 复用。 |
-| `scripts/ci/install_deps_humble.sh` | 在干净 ROS Humble 环境中安装公开 apt/rosdep 依赖、small_gicp 和 acados，可选接入本地 MVS SDK。 |
+| `scripts/ci/install_deps_humble.sh` | 安装并校验 ROS Humble 公开依赖、固定版本的 small_gicp/acados、acados t_renderer、Pangolin 和 xmacro；MVS SDK 需要在相机/硬件环境单独接入。 |
 
 ## Git 辅助
 
