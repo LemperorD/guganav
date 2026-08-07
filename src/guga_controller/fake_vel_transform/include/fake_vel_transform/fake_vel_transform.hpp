@@ -91,6 +91,7 @@ private:
   std::string output_cmd_vel_topic_;
   std::string chassis_mode_topic_;
   float spin_speed_;
+  bool invert_angular_velocity_{false};
   uint8_t chassis_mode_=1;
   double chassis_followed_yaw_=0.0;
 

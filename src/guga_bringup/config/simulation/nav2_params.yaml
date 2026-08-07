@@ -446,6 +446,7 @@ local_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: false
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
         num_threads: 4
@@ -507,6 +508,7 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: false
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
         num_threads: 4

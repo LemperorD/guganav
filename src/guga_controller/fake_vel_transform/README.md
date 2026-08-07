@@ -29,3 +29,4 @@ Related issue: [Switch from Twist to TwistStamped for cmd_vel #1594](https://git
 * `input_cmd_vel_topic` (`string`, default: "") - 输入速度指令的话题
 * `output_cmd_vel_topic` (`string`, default: "") - 输出速度指令的话题。将原本基于 `fake_robot_base_frame` 的速度变换到 `robot_base_frame` 后发布
 * `init_spin_speed` (`double`, default: 0.0) - 若没有接收 `cmd_spin_topic`，则使用该值作为固定旋转速度
+* `invert_angular_velocity` (`bool`, default: false) - 调试旋转方向时反转最终输出的 `angular.z`

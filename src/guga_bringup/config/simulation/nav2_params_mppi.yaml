@@ -158,7 +158,8 @@ fake_vel_transform:
     input_cmd_vel_topic: "cmd_vel_nav2_result"
     output_cmd_vel_topic: "cmd_vel"
     cmd_spin_topic: "cmd_spin"
-    init_spin_speed: 3.14
+    init_spin_speed: 0.0
+    invert_angular_velocity: true
 
 small_gicp_relocalization:
   ros__parameters:
@@ -340,14 +341,14 @@ controller_server:
       vy_std: 1.0
       wz_std: 1.0
       vx_max: 0.5
-      vx_min: -0.4
+      vx_min: -0.5
       vy_max: 1.0
       wz_max: 2.0
       iteration_count: 1
       temperature: 0.3
       gamma: 0.015
       motion_model: "Omni"
-      visualize: true
+      visualize: false
       TrajectoryVisualizer:
         trajectory_step: 5
         time_step: 3
@@ -369,12 +370,12 @@ controller_server:
         cost_weight: 5.0
         threshold_to_consider: 1.4
       GoalAngleCritic:
-        enabled: true
+        enabled: false
         cost_power: 1
         cost_weight: 3.0
         threshold_to_consider: 0.5
       PreferForwardCritic:
-        enabled: true
+        enabled: false
         cost_power: 1
         cost_weight: 5.0
         threshold_to_consider: 0.5
@@ -413,13 +414,13 @@ controller_server:
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
-        enabled: true
+        enabled: false
         cost_power: 1
         cost_weight: 2.0
         offset_from_furthest: 4
         threshold_to_consider: 0.5
         max_angle_to_furthest: 1.0
-        forward_preference: true
+        forward_preference: false
       # VelocityDeadbandCritic:
       #   enabled: true
       #   cost_power: 1
@@ -489,8 +490,9 @@ local_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: false
         cost_scaling_factor: 4.0
-        inflation_radius: 0.7
+        inflation_radius: 0.4
         num_threads: 4
       always_send_full_costmap: False
 
@@ -550,8 +552,9 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: false
         cost_scaling_factor: 4.0
-        inflation_radius: 0.7
+        inflation_radius: 0.4
         num_threads: 4
       always_send_full_costmap: False
 

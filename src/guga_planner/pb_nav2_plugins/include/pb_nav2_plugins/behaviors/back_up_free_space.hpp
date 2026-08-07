@@ -83,6 +83,10 @@ protected:
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float start_angle,
     float end_angle, float radius, float angle_increment);
 
+  bool isOmniCollisionFree(
+    const double & distance, geometry_msgs::msg::Twist * cmd_vel,
+    geometry_msgs::msg::Pose2D & pose2d);
+
   void visualize(
     geometry_msgs::msg::Pose2D pose, float radius, float first_safe_angle, float last_unsafe_angle);
 

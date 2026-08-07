@@ -15,6 +15,9 @@
 
 #include "pb_nav2_plugins/behaviors/back_up_free_space.hpp"
 
+#include <cmath>
+#include <limits>
+
 namespace pb_nav2_behaviors
 {
 
@@ -87,9 +90,22 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   // Find the best direction to back up
   float best_angle = findBestDirection(costmap, pose, -M_PI, M_PI, max_radius_, M_PI / 32.0);
 
+  if (!std::isfinite(best_angle)) {
+    stopRobot();
+    RCLCPP_ERROR(
+      logger_, "No collision-free backup direction found; refusing to drive toward an obstacle");
+    return nav2_behaviors::Status::FAILED;
+  }
+
   // Calculate move command
-  twist_x_ = std::cos(best_angle) * command->speed;
-  twist_y_ = std::sin(best_angle) * command->speed;
+  // findBestDirection returns an angle in global_frame_. DriveOnHeading expects
+  // velocity components in robot_base_frame_, so rotate the vector into the
+  // current robot frame before publishing it.
+  const double global_vx = std::cos(best_angle) * command->speed;
+  const double global_vy = std::sin(best_angle) * command->speed;
+  const double robot_yaw = tf2::getYaw(initial_pose_.pose.orientation);
+  twist_x_ = global_vx * std::cos(robot_yaw) + global_vy * std::sin(robot_yaw);
+  twist_y_ = -global_vx * std::sin(robot_yaw) + global_vy * std::cos(robot_yaw);
   command_x_ = command->target.x;
   command_time_allowance_ = command->time_allowance;
 
@@ -146,7 +162,7 @@ nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
   pose.y = current_pose.pose.position.y;
   pose.theta = tf2::getYaw(current_pose.pose.orientation);
 
-  if (!isCollisionFree(distance, cmd_vel.get(), pose)) {
+  if (!isOmniCollisionFree(distance, cmd_vel.get(), pose)) {
     stopRobot();
     RCLCPP_WARN(logger_, "Collision Ahead - Exiting DriveOnHeading");
     return nav2_behaviors::Status::FAILED;
@@ -155,6 +171,38 @@ nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
   vel_pub_->publish(std::move(cmd_vel));
 
   return nav2_behaviors::Status::RUNNING;
+}
+
+bool BackUpFreeSpace::isOmniCollisionFree(
+  const double & distance, geometry_msgs::msg::Twist * cmd_vel, geometry_msgs::msg::Pose2D & pose2d)
+{
+  const double remaining_distance = std::max(0.0, std::fabs(command_x_) - distance);
+  const int max_cycle_count = static_cast<int>(this->cycle_frequency_ * this->simulate_ahead_time_);
+  const geometry_msgs::msg::Pose2D initial_pose = pose2d;
+  const double heading = initial_pose.theta;
+  const double world_vx = cmd_vel->linear.x * std::cos(heading) -
+    cmd_vel->linear.y * std::sin(heading);
+  const double world_vy = cmd_vel->linear.x * std::sin(heading) +
+    cmd_vel->linear.y * std::cos(heading);
+  const double speed = std::hypot(world_vx, world_vy);
+  bool fetch_data = true;
+
+  for (int cycle = 1; cycle <= max_cycle_count; ++cycle) {
+    const double elapsed = static_cast<double>(cycle) / this->cycle_frequency_;
+    const double traveled = std::min(speed * elapsed, remaining_distance);
+    pose2d.x = initial_pose.x + world_vx * elapsed;
+    pose2d.y = initial_pose.y + world_vy * elapsed;
+    pose2d.theta = initial_pose.theta + cmd_vel->angular.z * elapsed;
+
+    if (!this->collision_checker_->isCollisionFree(pose2d, fetch_data)) {
+      return false;
+    }
+    fetch_data = false;
+    if (traveled >= remaining_distance) {
+      break;
+    }
+  }
+  return true;
 }
 
 float BackUpFreeSpace::findBestDirection(
@@ -168,6 +216,7 @@ float BackUpFreeSpace::findBestDirection(
 
   float final_safe_angle = 0.0f;
   float final_unsafe_angle = 0.0f;
+  bool has_final_sector = false;
 
   float resolution = costmap.metadata.resolution;
   float origin_x = costmap.metadata.origin.position.x;
@@ -218,10 +267,32 @@ float BackUpFreeSpace::findBestDirection(
       first_safe_angle != -1.0f && last_unsafe_angle != -1.0f) {
       final_safe_angle = first_safe_angle;
       final_unsafe_angle = last_unsafe_angle;
+      has_final_sector = true;
       first_safe_angle = -1.0f;
       last_unsafe_angle = -1.0f;
     }
   }
+
+  // A safe sector may extend to the end of the scan and therefore have no
+  // unsafe sample after it. Keep it instead of silently falling back to angle 0.
+  if (first_safe_angle != -1.0f) {
+    const float sector_end = end_angle;
+    if (
+      sector_end - first_safe_angle > final_unsafe_angle - final_safe_angle ||
+      !has_final_sector) {
+      final_safe_angle = first_safe_angle;
+      final_unsafe_angle = sector_end;
+      has_final_sector = true;
+    }
+  }
+
+  if (!has_final_sector) {
+    if (visualize_) {
+      visualize(pose, radius, 0.0f, 0.0f);
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+  }
+
   best_angle = (final_safe_angle + final_unsafe_angle) / 2.0f;
 
   if (visualize_) {

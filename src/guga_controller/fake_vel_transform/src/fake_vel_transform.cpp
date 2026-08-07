@@ -38,6 +38,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("output_cmd_vel_topic", "");
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
   this->declare_parameter<float>("init_spin_speed", 0.0);
+  this->declare_parameter<bool>("invert_angular_velocity", false);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("fake_robot_base_frame", fake_robot_base_frame_);
@@ -49,6 +50,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
+  this->get_parameter("invert_angular_velocity", invert_angular_velocity_);
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -196,12 +198,9 @@ geometry_msgs::msg::Twist FakeVelTransform::transformVelocity( const geometry_ms
   geometry_msgs::msg::Twist out;
   out.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff); 
   out.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
-  if(chassis_mode_ == chassisFollowed){  
-    out.angular.z = twist->angular.z; 
-  } 
-  else{
-    out.angular.z = twist->angular.z + spin_speed_;
-  } 
+  const double angular_velocity = chassis_mode_ == chassisFollowed ?
+    twist->angular.z : twist->angular.z + spin_speed_;
+  out.angular.z = invert_angular_velocity_ ? -angular_velocity : angular_velocity;
   return out; 
 }
 
