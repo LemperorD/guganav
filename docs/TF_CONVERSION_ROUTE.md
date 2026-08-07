@@ -16,14 +16,14 @@ map
                     `-- gimbal_yaw
 ```
 
-当前 MPPI 配置还插入了：
+历史 MPPI 配置曾插入：
 
 ```text
 gimbal_yaw
 `-- gimbal_yaw_fake               fake_vel_transform 动态发布
 ```
 
-Nav2 当前把 `gimbal_yaw_fake` 配置为 `robot_base_frame`，见 [nav2_params_mppi.yaml](../src/guga_bringup/config/simulation/nav2_params_mppi.yaml) 中的 `bt_navigator`、两个 costmap 和 `behavior_server` 配置。
+旧配置曾把 `gimbal_yaw_fake` 配置为 `robot_base_frame`；当前试验配置已经统一改为 `base_footprint`。
 
 ## 2. 各段 TF 的来源
 
@@ -105,14 +105,12 @@ fake 节点还将 `cmd_vel_nav2_result` 转换后发布到 `cmd_vel`，并处理
 
 ## 5. 速度坐标系现状
 
-当前速度链为：
+移除 fake 后的速度链为：
 
 ```text
 MPPI/controller_server
     -> cmd_vel_controller
 velocity_smoother
-    -> cmd_vel_nav2_result
-fake_vel_transform
     -> cmd_vel
 底盘控制器
 ```
@@ -145,4 +143,4 @@ ros2 run tf2_ros tf2_echo gimbal_yaw gimbal_yaw_fake
 
 ## 7. 简要结论
 
-对于 MPPI Omni，推荐最终使用 `base_footprint` 作为 `robot_base_frame`，修正 `odometry.twist` 到同一底盘坐标系，再把底盘模式和 `cmd_spin` 逻辑放到底盘适配层。`gimbal_yaw_fake` 不是 Nav2 必需 TF；它是为独立云台和旧版 `Twist` 接口设计的兼容层。
+对于 MPPI Omni，当前试验配置使用 `base_footprint` 作为 `robot_base_frame`。下一步仍需修正 `odometry.twist` 到同一底盘坐标系，并确认底盘适配层不再重复旋转。`gimbal_yaw_fake` 不是 Nav2 必需 TF；它是为独立云台和旧版 `Twist` 接口设计的兼容层。

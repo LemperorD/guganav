@@ -150,19 +150,6 @@ terrain_analysis_ext:
     ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0
 
-fake_vel_transform:
-  ros__parameters:
-    use_sim_time: False
-    odom_topic: "odometry"
-    robot_base_frame: "gimbal_yaw"
-    fake_robot_base_frame: "gimbal_yaw_fake"
-    input_cmd_vel_topic: "cmd_vel_nav2_result"
-    output_cmd_vel_topic: "cmd_vel"
-    cmd_spin_topic: "cmd_spin"
-    chassis_mode_topic: "chassis_mode"
-    chassis_frame: "chassis"
-    init_spin_speed: 3.14
-
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: False
@@ -275,7 +262,7 @@ bt_navigator:
   ros__parameters:
     use_sim_time: False
     global_frame: map
-    robot_base_frame: gimbal_yaw_fake
+    robot_base_frame: base_footprint
     odom_topic: odometry
     bt_loop_duration: 10
     default_server_timeout: 100
@@ -391,7 +378,7 @@ local_costmap:
       update_frequency: 10.0
       publish_frequency: 5.0
       global_frame: odom
-      robot_base_frame: gimbal_yaw_fake
+      robot_base_frame: base_footprint
       rolling_window: true
       width: 5
       height: 5
@@ -454,7 +441,7 @@ global_costmap:
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: map
-      robot_base_frame: gimbal_yaw_fake
+      robot_base_frame: base_footprint
       robot_radius: 0.2
       resolution: 0.05
       track_unknown_space: true
@@ -567,7 +554,7 @@ behavior_server:
       plugin: "nav2_behaviors/AssistedTeleop"
     local_frame: odom
     global_frame: map
-    robot_base_frame: gimbal_yaw_fake
+    robot_base_frame: base_footprint
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0

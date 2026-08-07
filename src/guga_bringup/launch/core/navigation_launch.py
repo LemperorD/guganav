@@ -145,16 +145,6 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
-                package="fake_vel_transform",
-                executable="fake_vel_transform_node",
-                name="fake_vel_transform",
-                output="screen",
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=["--ros-args", "--log-level", log_level],
-            ),
-            Node(
                 package="nav2_controller",
                 executable="controller_server",
                 name="controller_server",
@@ -204,9 +194,6 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),  # remap output
-                ],
             ),
             Node(
                 package="nav2_waypoint_follower",
@@ -229,7 +216,7 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel_nav2_result"),  # remap output
+                    ("cmd_vel_smoothed", "cmd_vel"),  # final chassis velocity
                 ],
             ),
             Node(
@@ -266,14 +253,6 @@ def generate_launch_description():
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
-                package="fake_vel_transform",
-                plugin="fake_vel_transform::FakeVelTransform",
-                name="fake_vel_transform",
-                parameters=[configured_params],
-                extra_arguments=[{'use_intra_process_comms': True}],
-
-            ),
-            ComposableNode(
                 package="nav2_controller",
                 plugin="nav2_controller::ControllerServer",
                 name="controller_server",
@@ -299,9 +278,6 @@ def generate_launch_description():
                 plugin="behavior_server::BehaviorServer",
                 name="behavior_server",
                 parameters=[configured_params],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),  # remap output
-                ],
             ),
             ComposableNode(
                 package="nav2_bt_navigator",
@@ -322,7 +298,7 @@ def generate_launch_description():
                 parameters=[configured_params],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel_nav2_result"),  # remap output
+                    ("cmd_vel_smoothed", "cmd_vel"),  # final chassis velocity
                 ],
             ),
             ComposableNode(
