@@ -93,8 +93,9 @@ namespace pb_omni_pid_pursuit_controller {
 
     // ── helpers ──
 
-    double getLookAheadDistance(const geometry_msgs::msg::Twist& speed) const;
-    geometry_msgs::msg::PoseStamped getLookAheadPoint(
+    [[nodiscard]] double getLookAheadDistance(
+        const geometry_msgs::msg::Twist& speed) const;
+    [[nodiscard]] geometry_msgs::msg::PoseStamped getLookAheadPoint(
         const double& lookahead_dist,
         const nav_msgs::msg::Path& transformed_plan) const;
     [[nodiscard]] double approachVelocityScalingFactor(

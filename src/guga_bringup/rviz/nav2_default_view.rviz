@@ -7,6 +7,8 @@ Panels:
         - /Global Options1
         - /Status1
         - /Controller1
+        - /MarkerArray1
+        - /Path1/Topic1
       Splitter Ratio: 0.5833333134651184
     Tree Height: 652
   - Class: rviz_common/Selection
@@ -43,6 +45,122 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        armor_0:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_support_frame_0:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_support_frame_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_support_frame_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        armor_support_frame_3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        chassis:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_industrial_camera:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_industrial_camera_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_left_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_mid360:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_right_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_rplidar_a2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gimbal_pitch:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gimbal_pitch_odom:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gimbal_yaw:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gimbal_yaw_odom:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        light_indicator:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_left_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_right_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        speed_monitor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -56,13 +174,107 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        armor_0:
+          Value: true
+        armor_1:
+          Value: true
+        armor_2:
+          Value: true
+        armor_3:
+          Value: true
+        armor_support_frame_0:
+          Value: true
+        armor_support_frame_1:
+          Value: true
+        armor_support_frame_2:
+          Value: true
+        armor_support_frame_3:
+          Value: true
+        base_footprint:
+          Value: true
+        chassis:
+          Value: true
+        front_industrial_camera:
+          Value: true
+        front_industrial_camera_optical_frame:
+          Value: true
+        front_left_wheel:
+          Value: true
+        front_mid360:
+          Value: true
+        front_right_wheel:
+          Value: true
+        front_rplidar_a2:
+          Value: true
+        gimbal_pitch:
+          Value: true
+        gimbal_pitch_odom:
+          Value: true
+        gimbal_yaw:
+          Value: true
+        gimbal_yaw_fake:
+          Value: true
+        gimbal_yaw_odom:
+          Value: true
+        light_indicator:
+          Value: true
+        map:
+          Value: true
+        odom:
+          Value: true
+        rear_left_wheel:
+          Value: true
+        rear_right_wheel:
+          Value: true
+        speed_monitor:
+          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
       Tree:
-        {}
+        map:
+          odom:
+            base_footprint:
+              chassis:
+                armor_support_frame_0:
+                  armor_0:
+                    {}
+                armor_support_frame_1:
+                  armor_1:
+                    {}
+                armor_support_frame_2:
+                  armor_2:
+                    {}
+                armor_support_frame_3:
+                  armor_3:
+                    {}
+                front_left_wheel:
+                  {}
+                front_mid360:
+                  {}
+                front_right_wheel:
+                  {}
+                front_rplidar_a2:
+                  {}
+                gimbal_yaw_odom:
+                  gimbal_pitch_odom:
+                    gimbal_yaw:
+                      gimbal_pitch:
+                        front_industrial_camera:
+                          front_industrial_camera_optical_frame:
+                            {}
+                        speed_monitor:
+                          {}
+                      gimbal_yaw_fake:
+                        {}
+                light_indicator:
+                  {}
+                rear_left_wheel:
+                  {}
+                rear_right_wheel:
+                  {}
       Update Interval: 0
       Value: true
     - Class: rviz_default_plugins/Axes
@@ -118,7 +330,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 30
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 0
@@ -139,7 +351,7 @@ Visualization Manager:
         Value: sensor_scan
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
@@ -152,7 +364,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: true
       Max Color: 255; 255; 255
       Max Intensity: 0.20000000298023224
@@ -173,7 +385,7 @@ Visualization Manager:
         Value: terrain_map_ext
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 0.5
       Class: rviz_default_plugins/Map
       Color Scheme: map
@@ -354,6 +566,46 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: waypoints
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /trajectories
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /red_standard_robot1/transformed_global_plan
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -384,16 +636,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 25.934354782104492
+      Distance: 15.119140625
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 8
-        Y: 0
-        Z: 0
+        X: 4.947770118713379
+        Y: -3.074068784713745
+        Z: -0.19528628885746002
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -409,10 +661,10 @@ Window Geometry:
     collapsed: false
   Height: 1445
   Hide Left Dock: false
-  Hide Right Dock: false
+  Hide Right Dock: true
   Navigation 2:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000002050000054bfc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d000002c9000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb00000018004e0061007600690067006100740069006f006e00200032010000030c0000027c0000013900ffffff000000010000010f00000506fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d00000506000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d00650100000000000004500000000000000000000005af0000054b00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000002050000054bfc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d000002c9000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb00000018004e0061007600690067006100740069006f006e00200032010000030c0000027c0000012600ffffff000000010000010f00000506fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d00000506000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d00650100000000000004500000000000000000000005af0000054b00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Tool Properties:
@@ -420,5 +672,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1978
-  X: 151
-  Y: 27
+  X: 277
+  Y: 685
