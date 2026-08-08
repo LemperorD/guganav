@@ -319,19 +319,21 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    controller_frequency: 20.0
+    odom_topic: odometry
+    controller_frequency: 30.0
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 56
-      model_dt: 0.05
+      model_dt: 0.035
       batch_size: 2000
-      vx_std: 2.0
-      vy_std: 2.0
-      wz_std: 1.0
+      vx_std: 1.2
+      vy_std: 1.2
+      wz_std: 0.5
       vx_max: 3.0
-      vx_min: -0.5
+      vx_min: -1.0
       vy_max: 3.0
       wz_max: 2.0
+
       iteration_count: 1
       temperature: 0.3
       gamma: 0.015
@@ -356,69 +358,69 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 5.0
-        threshold_to_consider: 1.4
+        threshold_to_consider: 2.0
       GoalAngleCritic:
         enabled: true
         cost_power: 1
         cost_weight: 3.0
         threshold_to_consider: 0.5
-        symmetric_yaw_tolerance: true
       PreferForwardCritic:
         enabled: true
         cost_power: 1
         cost_weight: 5.0
         threshold_to_consider: 0.5
-      # Option to replace Cost and use Obstacles instead
-      # ObstaclesCritic:
-      #   enabled: true
-      #   cost_power: 1
-      #   repulsion_weight: 1.5
-      #   critical_weight: 20.0
-      #   consider_footprint: false
-      #   collision_cost: 10000.0
-      #   collision_margin_distance: 0.1
-      #   near_goal_distance: 0.5
+      ObstaclesCritic:
+        enabled: true
+        cost_power: 1
+        repulsion_weight: 1.0
+        critical_weight: 20.0
+        consider_footprint: true
+        collision_cost: 10000.0
+        collision_margin_distance: 0.15
+        near_goal_distance: 0.5
+        inflation_radius: 0.55 # (only in Humble)
+        cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
         cost_power: 1
         cost_weight: 3.81
         critical_cost: 300.0
-        consider_footprint: false
+        consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 1.0
         trajectory_point_step: 2
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 14.0
+        cost_weight: 4.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
-        threshold_to_consider: 0.5
+        threshold_to_consider: 0.4
         offset_from_furthest: 20
-        use_path_orientations: false
+        use_path_orientations: true
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
+        cost_weight: 10.0
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
-        enabled: false
+        enabled: true
         cost_power: 1
         cost_weight: 2.0
         offset_from_furthest: 4
         threshold_to_consider: 0.5
         max_angle_to_furthest: 1.0
-        forward_preference: false
+        mode: 0
       # VelocityDeadbandCritic:
       #   enabled: true
       #   cost_power: 1
       #   cost_weight: 35.0
       #   deadband_velocities: [0.05, 0.05, 0.05]
-      # TwirlingCritic:
-      #   enabled: true
-      #   twirling_cost_power: 1
-      #   twirling_cost_weight: 10.0
+      TwirlingCritic:
+        enabled: true
+        twirling_cost_power: 1
+        twirling_cost_weight: 10.0
 
 local_costmap:
   local_costmap:
@@ -429,10 +431,10 @@ local_costmap:
       global_frame: odom
       robot_base_frame: base_footprint
       rolling_window: true
-      width: 5
-      height: 5
+      width: 10
+      height: 10
       resolution: 0.05
-      robot_radius: 0.30
+      footprint: "[[-0.31, -0.24], [-0.31, 0.24], [0.31, 0.24], [0.31, -0.24]]"
       plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
@@ -461,6 +463,7 @@ local_costmap:
           max_obstacle_height: 2.0
           obstacle_max_range: 5.0
           obstacle_min_range: 0.2
+          observation_persistence: 3.0
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer
         enabled: true
@@ -479,8 +482,8 @@ local_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        enabled: false
-        cost_scaling_factor: 4.0
+        enabled: true
+        cost_scaling_factor: 8.0
         inflation_radius: 0.4
         num_threads: 4
       always_send_full_costmap: False
@@ -493,7 +496,7 @@ global_costmap:
       publish_frequency: 2.0
       global_frame: map
       robot_base_frame: base_footprint
-      robot_radius: 0.4
+      robot_radius: 0.40
       resolution: 0.05
       plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
       intensity_voxel_layer:
@@ -523,6 +526,7 @@ global_costmap:
           max_obstacle_height: 2.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.2
+          observation_persistence: 3.0
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer
         enabled: true
@@ -541,9 +545,9 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        enabled: false
-        cost_scaling_factor: 4.0
-        inflation_radius: 0.4
+        enabled: true
+        cost_scaling_factor: 8.0
+        inflation_radius: 0.42
         num_threads: 4
       always_send_full_costmap: False
 
@@ -565,19 +569,19 @@ map_saver:
 planner_server:
   ros__parameters:
     use_sim_time: True
-    expected_planner_frequency: 10.0
+    expected_planner_frequency: 1.0
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "jps_planner/JPSPlanner"
-      w_euc_cost: 1.0
-      w_traversal_cost: 10.0
-      w_heuristic_cost: 1.0
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.125
+      downsample_costmap: false
+      downsampling_factor: 1
       allow_unknown: false
-      enable_bspline: true
-      enable_esdf: true
-      esdf_weight: 200.0
-      esdf_safe_distance: 1.5
-      corridor_halfwidth: 15.0
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      terminal_checking_interval: 5000
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
 
 smoother_server:
   ros__parameters:
@@ -661,12 +665,12 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: True
     smoothing_frequency: 20.0
-    scale_velocities: False
+    scale_velocities: True
     feedback: "OPEN_LOOP"
     max_velocity: [2.5, 2.5, 3.0]
     min_velocity: [-2.5, -2.5, -3.0]
-    max_accel: [4.5, 4.5, 5.0]
-    max_decel: [-4.5, -4.5, -5.0]
+    max_accel: [2.0, 2.0, 2.5]
+    max_decel: [-3.0, -3.0, -4.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
