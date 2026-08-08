@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
@@ -28,6 +28,7 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
     use_ui = LaunchConfiguration("use_ui")
+    navigation_profile = LaunchConfiguration("navigation_profile")
 
     configured_params = ParameterFile(
         RewrittenYaml(
@@ -84,10 +85,34 @@ def generate_launch_description():
         description="Use simulation (Gazebo) clock if True",
     )
 
+    declare_navigation_profile_cmd = DeclareLaunchArgument(
+        "navigation_profile",
+        default_value="jps_pid",
+        choices=["jps_pid", "2d_mppi"],
+        description=(
+            "Navigation stack profile: jps_pid (JPS + omni PID) or "
+            "2d_mppi (SmacPlanner2D + MPPI)"
+        ),
+    )
+
+    # Select the profile's parameter file by default. An explicit params_file
+    # launch argument still takes precedence for one-off tuning experiments.
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
-        default_value=os.path.join(
-            bringup_dir, "config", "simulation", "nav2_params_mppi.yaml"
+        default_value=PythonExpression(
+            [
+                "'",
+                navigation_profile,
+                "' == '2d_mppi' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "nav2_params_mppi.yaml"
+                ),
+                "' or '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "nav2_params.yaml"
+                ),
+                "'",
+            ]
         ),
         description="Full path to the ROS2 parameters file to use for all launched nodes",
     )
@@ -179,6 +204,7 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
+    ld.add_action(declare_navigation_profile_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
