@@ -139,14 +139,20 @@ void SensorScanGenerationNode::publishOdometry(
   if (has_previous_odometry_) {
     const double dt = (stamp - previous_odometry_stamp_).seconds();
     if (dt > min_odometry_dt_) {
-      const auto linear_velocity =
+      const auto linear_velocity_parent =
         (transform.getOrigin() - previous_odometry_transform_.getOrigin()) / dt;
 
       tf2::Quaternion q_diff =
         transform.getRotation() * previous_odometry_transform_.getRotation().inverse();
       q_diff.normalize();
       const double angle = std::remainder(q_diff.getAngle(), 2.0 * M_PI);
-      const auto angular_velocity = q_diff.getAxis() * angle / dt;
+      const auto angular_velocity_parent = q_diff.getAxis() * angle / dt;
+
+      // Pose differences are expressed in parent_frame. Odometry requires twist
+      // to be expressed in child_frame, so apply the inverse current rotation.
+      const auto parent_to_child_rotation = transform.getBasis().transpose();
+      const auto linear_velocity = parent_to_child_rotation * linear_velocity_parent;
+      const auto angular_velocity = parent_to_child_rotation * angular_velocity_parent;
 
       const double linear_speed = linear_velocity.length();
       const double angular_speed = angular_velocity.length();

@@ -50,8 +50,8 @@ def generate_launch_description():
 
     declare_robot_base_frame = DeclareLaunchArgument(
         "robot_base_frame",
-        default_value="gimbal_yaw",
-        description="Frame ID for Gimbal",
+        default_value="base_footprint",
+        description="Frame ID for odometry child frame",
     )
 
     start_sensor_scan_generation = Node(

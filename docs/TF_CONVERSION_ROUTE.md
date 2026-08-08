@@ -32,7 +32,7 @@ gimbal_yaw
 - 正常定位：`small_gicp_relocalization` 发布，见 [small_gicp_relocalization.cpp](../src/guga_localization/small_gicp_relocalization/src/small_gicp_relocalization.cpp)。`publishTransform()` 设置 `header.frame_id = map`、`child_frame_id = odom`。
 - SLAM 模式：`slam_launch.py` 启动 `tf2_ros/static_transform_publisher` 发布零变换 `map -> odom`，见 [slam_launch.py](../src/guga_bringup/launch/core/slam_launch.py)。
 
-### `odom -> base_footprint` 和 `odom -> gimbal_yaw`
+### `odom -> base_footprint`
 
 `sensor_scan_generation` 订阅：
 
@@ -44,18 +44,18 @@ registered_scan      loam_interface 输出的点云
 在 [sensor_scan_generation.cpp](../src/guga_perception/sensor_scan_generation/src/sensor_scan_generation.cpp) 中：
 
 1. 将 `lidar_odometry.pose` 作为 `odom -> front_mid360`。
-2. 调用 `lookupTransform(front_mid360, base_footprint)` 和
-   `lookupTransform(front_mid360, gimbal_yaw)`，取得 `T_lidar_base` 和
-   `T_lidar_gimbal`。
+2. 调用 `lookupTransform(front_mid360, base_footprint)`，取得
+   `T_lidar_base`。当前 `base_frame` 和 `robot_base_frame` 均配置为
+   `base_footprint`。
 3. 计算：
 
    ```text
    odom -> base_footprint = (odom -> lidar) * (lidar -> base_footprint)
-   odom -> gimbal_yaw     = (odom -> lidar) * (lidar -> gimbal_yaw)
    ```
 
-4. 通过 `TransformBroadcaster` 发布上述两段 TF。
-5. 同时发布 `odometry` 话题，消息的 `child_frame_id` 当前为 `gimbal_yaw`。
+4. 通过 `TransformBroadcaster` 发布 `odom -> base_footprint`。
+5. 同时发布 `odometry` 话题，其 pose 位于 `odom`，`child_frame_id` 和
+   twist 均为 `base_footprint`。
 
 ### 机器人内部链
 
@@ -79,7 +79,7 @@ Point-LIO: aft_mapped_to_init
     ↓ loam_interface
 lidar_odometry: pose 转到 odom，child = front_mid360
     ↓ sensor_scan_generation
-odometry: pose 转到 gimbal_yaw，并发布 odom -> base_footprint/gimbal_yaw
+odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 ```
 
 Point-LIO 默认只发布 `aft_mapped_to_init` 话题；其 TF 发布开关 `tf_send_en` 在当前配置中关闭，因此 `loam_interface` 负责把激光里程计接入项目的 `odom` 系。
@@ -115,7 +115,14 @@ velocity_smoother
 底盘控制器
 ```
 
-`sensor_scan_generation::publishOdometry()` 用相邻 `odom -> gimbal_yaw` 位姿差分计算 twist，但没有将线速度旋转到 `child_frame_id` (`gimbal_yaw`)；当前写入的 `linear.x/y` 实际仍是 `odom` 轴。这是一个坐标语义错误，不能仅靠 fake TF 修复。
+`sensor_scan_generation::publishOdometry()` 先对相邻 `odom -> base_footprint`
+位姿做差，得到 `odom` 轴的线速度和角速度，再乘当前姿态的逆旋转，将其
+转换到 `child_frame_id` (`base_footprint`) 后写入 twist。这符合
+`nav_msgs/Odometry` 对 twist 坐标系的定义。
+
+MPPI 的 `controller_server.odom_topic` 已显式配置为相对话题 `odometry`。
+在机器人命名空间下，它订阅 `/red_standard_robot1/odometry`，不会再回退到
+Nav2 默认的 `odom` 话题。
 
 此外，仿真 `rmua19_robot_base` 还发布 `robot_base/odom`，其 TF 和 twist 来自 Gazebo 真值，见 [odometry_publisher.cpp](../src/guga_sim/rmoss_gazebo/rmoss_gz_base/src/odometry_publisher.cpp)。Nav2 配置订阅的是相对话题 `odometry`，不是 `robot_base/odom`。
 
@@ -127,8 +134,7 @@ velocity_smoother
 ros2 topic info -v /red_standard_robot1/odometry
 ros2 topic echo --once /red_standard_robot1/odometry
 ros2 run tf2_ros tf2_echo odom base_footprint
-ros2 run tf2_ros tf2_echo odom gimbal_yaw
-ros2 run tf2_ros tf2_echo gimbal_yaw gimbal_yaw_fake
+ros2 param get /red_standard_robot1/controller_server odom_topic
 ```
 
 注意：话题带机器人命名空间，例如 `/red_standard_robot1/odometry`；TF 的
@@ -139,8 +145,11 @@ ros2 run tf2_ros tf2_echo gimbal_yaw gimbal_yaw_fake
 - `/odometry` 的发布者是否只有 `sensor_scan_generation`。
 - `Odometry.child_frame_id` 与 `twist` 实际坐标系是否一致。
 - 是否同时存在两个节点发布 `odom -> base_footprint`。
-- fake 开启时，`gimbal_yaw_fake` 的 yaw 是否随底盘模式发生跳变。
+- `controller_server` 的 `odom_topic` 是否为 `odometry`。
 
 ## 7. 简要结论
 
-对于 MPPI Omni，当前试验配置使用 `base_footprint` 作为 `robot_base_frame`。下一步仍需修正 `odometry.twist` 到同一底盘坐标系，并确认底盘适配层不再重复旋转。`gimbal_yaw_fake` 不是 Nav2 必需 TF；它是为独立云台和旧版 `Twist` 接口设计的兼容层。
+对于 MPPI Omni，当前配置使用 `base_footprint` 作为 `robot_base_frame`，
+`odometry.twist` 也转换到同一底盘坐标系，MPPI 明确订阅 `odometry`。
+`gimbal_yaw_fake` 不是 Nav2 必需 TF；它是为独立云台和旧版 `Twist` 接口
+设计的兼容层，当前 bringup 已不再启动它。
