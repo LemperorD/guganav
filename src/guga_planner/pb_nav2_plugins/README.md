@@ -16,18 +16,24 @@
 
 #### 2.1.1 BackUpFreeSpace
 
-`BackUpFreeSpace` 插件是一个用于在机器人的导航过程中执行后退行为的插件，主要功能：
+`BackUpFreeSpace` 插件用于在导航恢复过程中寻找并执行一段全向脱困运动，主要功能：
 
-1. **动态调整半径**：通过调整搜索的半径范围，机器人在限定的范围内找到足够的自由空间后退。
-2. **退回到自由空间**：机器人根据当前的代价图，找出最接近的自由空间并退回到该位置。
+1. **全向搜索**：在请求距离内搜索可行方向，并优先选择角度裕量更大、累计代价更低的方向。
+2. **驶出初始高代价区**：当机器人起始格为 `253/254` 时，允许穿过与起点连续且代价不增加的高代价区域。
+3. **验证安全终点**：沿选定方向继续搜索，直到找到通过完整 footprint 碰撞检查的最近终点。
+4. **恢复严格检查**：离开初始高代价区后，若再次遇到 `253/254`，立即拒绝该方向。
 
 **Parameters:**
 
-- `robot_radius`: 机器人半径，用于确定搜索自由空间时的范围（default：0.1 m）。
-- `max_radius`: 搜索自由空间时的最大半径范围（default：1.0 m）。
+- `max_radius`: 单次恢复动作允许请求的最大移动距离（default：1.0 m）。
+- `max_escape_distance`: 起始位置处于 253/254 高代价区时，允许驶出该区域的最大距离（default：0.5 m）。
+- `escape_clearance`: 首次到达 `<253` 区域后继续移动的安全余量（default：0.1 m）。
 - `service_name`: 获取代价图的服务名称（default："local_costmap/get_costmap"）。
-- `free_threshold`: 定义自由空间的阈值，即自由空间中足够数量的点才能视为有效（default：5）。
 - `visualize`: 是否启用可视化功能。启用后会在 RViz 中显示自由空间和目标位置（default：false）。
+
+当机器人起始格为 `253/254` 时，插件只允许穿过与起点连续且代价不增加的高代价前缀，
+并要求在 `max_escape_distance` 内进入 `<253` 区域。实际移动距离会限制到选出的安全终点，
+不会继续执行原始请求中超出安全终点的部分。
 
 **Example:**
 
@@ -60,10 +66,10 @@ ros__parameters:
    min_rotational_vel: 0.4
    rotational_acc_lim: 3.2
    # params for pb_nav2_behaviors/BackUpFreeSpace
-   robot_radius: 0.2
    max_radius: 3.5
+   max_escape_distance: 0.5
+   escape_clearance: 0.1
    service_name: "global_costmap/get_costmap"
-   free_threshold: 5
    visualize: True
 ```
 
