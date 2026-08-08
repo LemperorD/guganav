@@ -395,8 +395,8 @@ controller_server:
         cost_weight: 4.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
-        threshold_to_consider: 0.4
-        offset_from_furthest: 20
+        threshold_to_consider: 0.2
+        offset_from_furthest: 10
         use_path_orientations: true
       PathFollowCritic:
         enabled: true
@@ -484,7 +484,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
         cost_scaling_factor: 8.0
-        inflation_radius: 0.4
+        inflation_radius: 0.55
         num_threads: 4
       always_send_full_costmap: False
 
