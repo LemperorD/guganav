@@ -8,18 +8,6 @@
 
 using namespace JPS;
 
-/**
- * @brief 构造函数: 初始化使用 SDF 地图的 2D 图搜索引擎
- *
- * 初始化步骤:
- * 1. 保存地图指针和安全距离
- * 2. 获取地图尺寸
- * 3. 分配哈希映射和访问标记数组（大小 = GLX_SIZE * GLY_SIZE）
- * 4. 初始化 A* 的 8 邻域偏移量
- * 5. 预计算 JPS 2D 邻居查找表
- *
- * eps_ 固定为 1，使用标准 A*（而非加权 A*）
- */
 GraphSearch::GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis):map_(Map), safe_dis_(safe_dis)
 {
   verbose_ = false;                               // 默认不输出调试信息
@@ -41,9 +29,7 @@ GraphSearch::GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis):m
   jps_neib_2d_ = std::make_shared<JPS2DNeib>();          // 预计算 JPS 2D 邻居查找表
 }
 
-// ======================== 坐标哈希函数 ========================
-
-/// 将 (x,y) 栅格坐标转换为唯一的一维哈希 ID
+// 坐标哈希函数, 将 (x,y) 栅格坐标转换为唯一的一维哈希 ID
 inline int GraphSearch::coordToId(int x, int y) const {
   return map_->Index2Vectornum(x,y);               // 委托给 SDFmap 的索引转换函数
 }
@@ -52,31 +38,21 @@ inline int GraphSearch::coordToId(int x, int y) const {
 //   return x + y*xDim_ + z*xDim_*yDim_;
 // }
 
-// ======================== 碰撞检测函数 ========================
-
-/**
- * @brief 检查栅格是否可通行（包含边界检查和 SDF 距离检查）
- *
- * SDF 碰撞检测原理:
- * SDF (Signed Distance Field) 地图中每个栅格存储到最近障碍物的符号距离。
- * isFree 要求该距离 >= safe_dis_，即为障碍物膨胀后的安全区域。
- *
- * 注意: 边界外的点直接返回 false（不可通行）
- */
+// 碰撞检测函数
 inline bool GraphSearch::isFree(int x, int y) const {
   if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)  // 边界检查
     return false;
   return !map_->isOccWithSafeDis(x,y,safe_dis_);   // SDF 安全距离检查
 }
 
-/// 检查栅格是否未被占用（使用地图原始占用信息，不考虑安全距离膨胀）
+// 检查栅格是否未被占用（使用地图原始占用信息，不考虑安全距离膨胀）
 inline bool GraphSearch::isUnoccupied(int x, int y) const{
   if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)
     return false;
   return map_->isUnOccupied(x,y);
 }
 
-/// 检查栅格是否被占用（边界外视为占用）
+// 检查栅格是否被占用（边界外视为占用）
 inline bool GraphSearch::isOccupied(int x, int y) const {
   // return x >= 0 && x < xDim_ && y >= 0 && y < yDim_ &&
   //   cMap_[coordToId(x, y)] > val_free_;
@@ -85,35 +61,12 @@ inline bool GraphSearch::isOccupied(int x, int y) const {
   return map_->isOccupied(x,y);
 }
 
-// ======================== 启发式函数 ========================
-
-/**
- * @brief 计算启发式代价 h
- *
- * 使用欧几里得距离: h = eps_ * sqrt((x - x_goal)^2 + (y - y_goal)^2)
- *
- * 数学性质:
- * - eps_ = 1: h 是可容许的（admissible），保证 A* 找到最优解
- * - eps_ > 1: h 是膨胀启发式（inflated heuristic），A* 退化为加权 A*，
- *   搜索速度更快但可能不是最优解（代价不超过最优解的 eps_ 倍）
- */
+// 启发式函数
 inline double GraphSearch::getHeur(int x, int y) const {
   return eps_ * std::sqrt((x - xGoal_) * (x - xGoal_) + (y - yGoal_) * (y - yGoal_));
 }
 
-// ======================== 2D 规划入口 ========================
-
-/**
- * @brief 2D 规划入口函数
- *
- * 初始化搜索环境:
- * 1. 清空优先队列和之前的结果路径
- * 2. 重置 seen_ 标记（重规划时必须清除旧标记）
- * 3. 设置 JPS/A* 模式
- * 4. 计算起止点的哈希 ID
- * 5. 构造起始节点（方向为 (0,0)，表示初始无方向）
- * 6. 初始化 g=0, h=heuristic，进入主循环
- */
+// 2D 规划入口
 bool GraphSearch::plan(int xStart, int yStart, int xGoal, int yGoal, bool useJps, int maxExpand)
 {
   use_2d_ = true;                                  // 标记为 2D 模式
@@ -139,38 +92,7 @@ bool GraphSearch::plan(int xStart, int yStart, int xGoal, int yGoal, bool useJps
   return plan(currNode_ptr, maxExpand, start_id, goal_id);
 }
 
-// ======================== A*/JPS 主循环 ========================
-
-/**
- * @brief A*/JPS 搜索主循环
- *
- * 算法伪代码:
- *
- *   将 start 节点加入优先队列
- *   while 优先队列非空:
- *     取出 f 值最小的节点 curr
- *     标记 curr 为 closed
- *     if curr == goal:
- *       break  // 找到目标
- *     生成 curr 的后继节点:
- *       if use_jps_:
- *         getJpsSucc()   // JPS 模式: 跳点搜索
- *       else:
- *         getSucc()      // A* 模式: 8邻域扩展
- *     for each 后继 child:
- *       tentative_g = curr.g + cost(curr, child)
- *       if tentative_g < child.g:
- *         child.parent = curr
- *         child.g = tentative_g
- *         更新 child 在优先队列中的位置  // decrease-key
- *     检查最大扩展次数限制
- *     检查优先队列是否为空（无可扩展节点则失败）
- *   从 goal 节点回溯路径
- *
- * 时间复杂度:
- * - A*:  O(b^d) 其中 b 是分支因子(8)，d 是解深度
- * - JPS: O(N)  在实际中 N 远小于 A* 的扩展节点数
- */
+// A*/JPS 主循环
 bool GraphSearch::plan(StatePtr& currNode_ptr, int maxExpand, int start_id, int goal_id) {
   // 将起始节点插入优先队列
   currNode_ptr->heapkey = pq_.push(currNode_ptr);  // 入队并保存堆位置句柄
@@ -293,19 +215,7 @@ std::vector<StatePtr> GraphSearch::recoverPath(StatePtr node, int start_id) {
   return path;                                     // 返回反向路径 (goal -> start)
 }
 
-// ======================== A* 后继生成 (8邻域) ========================
-
-/**
- * @brief A* 模式的后继生成: 遍历所有 8 邻域
- *
- * 对于当前节点的每个邻域:
- * 1. 检查是否可通行（isFree）
- * 2. 如果该邻域首次被访问（!seen_），在哈希映射中创建新 State
- * 3. 将邻域添加到后继列表
- *
- * 代价: 水平/垂直移动代价 = 1，对角线移动代价 = sqrt(2) ≈ 1.414
- * （使用欧几里得距离而非曼哈顿距离，使路径更自然）
- */
+// A* 后继生成 (8邻域)
 void GraphSearch::getSucc(const StatePtr& curr, std::vector<int>& succ_ids, std::vector<double>& succ_costs) {
   if(use_2d_) {
     for(const auto& d: ns_) {                      // 遍历 8 邻域
@@ -347,34 +257,7 @@ void GraphSearch::getSucc(const StatePtr& curr, std::vector<int>& succ_ids, std:
   // }
 }
 
-// ======================== JPS 后继生成 (跳点搜索) ========================
-
-/**
- * @brief JPS 模式的后继生成: 跳点搜索
- *
- * JPS 与 A* 的关键区别:
- * A* 将其所有邻域都作为后继扩展，而 JPS 只将"跳点"作为后继。
- * 跳点是通过 jump() 函数沿方向递归跳跃找到的。
- *
- * 算法步骤:
- * 1. 计算当前移动方向的范数类型 (norm1 = |dx|+|dy|)
- *    norm1=0: 起点，全向搜索
- *    norm1=1: 直线移动
- *    norm1=2: 对角线移动
- *
- * 2. 根据查找表获取自然邻居和强制邻居
- *    - 自然邻居: 始终需要沿该方向跳跃
- *    - 强制邻居: 只有当 f1 位置被占用时，才向 f2 方向跳跃
- *
- * 3. 对每个需要的方向调用 jump() 函数
- *    如果 jump() 找到跳点或目标，则将其加入后继列表
- *
- * 4. 后继代价 = 欧几里得距离（即直接连接而非沿栅格的路径长度）
- *
- * 复杂度分析:
- *   在开阔区域，JPS 的后继数量远少于 A* 的 8 邻域，
- *   因为大多数节点都被跳过了。这是 JPS 高效的核心原因。
- */
+// JPS 后继生成 (跳点搜索)
 void GraphSearch::getJpsSucc(const StatePtr& curr, std::vector<int>& succ_ids, std::vector<double>& succ_costs) {
   if(use_2d_) {
     // L1 范数: |dx|+|dy| 用于分类移动类型
@@ -579,24 +462,7 @@ bool GraphSearch::jump(int x, int y, int dx, int dy, int& new_x, int& new_y ) {
 //   return jump(new_x, new_y, new_z, dx, dy, dz, new_x, new_y, new_z);
 // }
 
-// ======================== 强制邻居检测 ========================
-
-/**
- * @brief 检查 (x,y) 是否在方向 (dx,dy) 上存在强制邻居
- *
- * 强制邻居的定义（以直线移动为例）:
- * 假设当前沿 (dx=1, dy=0) 向右移动，检查 (x,y) 上方和下方的格子:
- *   如果 (x, y+1) 不可通行 而 (x+1, y+1) 可通行 -> 强制邻居触发
- *   如果 (x, y-1) 不可通行 而 (x+1, y-1) 可通行 -> 强制邻居触发
- *
- * 为什么需要强制邻居:
- * 如果 (x, y+1) 被占用，则从父节点到 (x+1, y+1) 的最短路径必须经过 (x,y)，
- * 而不能走 (x 的父节点) -> (x+1) -> (x+1, y+1) 的路径。
- * 因此 (x,y) 是一个拐点（jump point），不能跳过。
- *
- * 通过预计算的查找表 f1[id] 直接获取需要检查的强制邻居位置，
- * 避免了在每次调用时计算邻居关系。
- */
+// 强制邻居检测
 inline bool GraphSearch::hasForced(int x, int y, int dx, int dy) {
   const int id = (dx+1)+3*(dy+1);                  // 方向->查找表索引
   // 检查两组强制邻居（如直线移动的上下两格）
@@ -654,7 +520,7 @@ inline bool GraphSearch::hasForced(int x, int y, int dx, int dy) {
 //   }
 // }
 
-// ======================== 公共接口函数 ========================
+// 公共接口函数
 
 std::vector<StatePtr> GraphSearch::getPath() const {
   return path_;

@@ -1,17 +1,3 @@
-// Copyright 2026 guganav
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #pragma once
 
 #include <nav_msgs/msg/occupancy_grid.hpp>
@@ -20,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -34,23 +21,28 @@ class EsdfMap
 public:
   EsdfMap() = default;
 
-  void resize(
-    size_t size_x, size_t size_y, double resolution,
-    double origin_x, double origin_y);
+  // 初始化ESDF地图
+  void resize(size_t size_x, size_t size_y, double resolution, double origin_x, double origin_y);
 
+  // 重置ESDF地图
   void reset();
 
+  // 全量更新
   void computeFull(
     const unsigned char * occupancy,
     const EsdfConfig & config,
     EsdfParallelExecutor * executor = nullptr);
 
+  // 增量更新
   void computeIncremental(
     const unsigned char * occupancy,
     const std::vector<unsigned char> & previous_occupancy,
     const EsdfConfig & config,
     EsdfParallelExecutor * executor = nullptr);
 
+  inline int coordToIndex(size_t x, size_t y) const {return static_cast<int>(y * size_x_ + x);}
+
+  // 获取 ESDF 代价和梯度
   [[nodiscard]] float getDistance(size_t idx) const;
   [[nodiscard]] std::pair<float, float> getGradient(size_t idx) const;
   [[nodiscard]] float getDistanceAt(double wx, double wy) const;
@@ -72,7 +64,7 @@ public:
     const EsdfConfig & config) const;
 
 private:
-  static constexpr float INF_DISTANCE{1e10f};
+  static constexpr double INF_DISTANCE = std::numeric_limits<double>::infinity();
 
   void initFromOccupancy(
     const unsigned char * occupancy,
