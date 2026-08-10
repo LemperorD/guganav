@@ -9,7 +9,7 @@ ROS2 消息 → TerrainAnalysisContext → TerrainAlgorithm.run() → publish �
  (订阅)      (config/state 汇总)       (10 阶段管线)         (发布)     (terrain_map)
 ```
 
-- **Context 层** (`core/context`) — Config + State 公开 struct，回调接收 odometry/laser/joystick/clearing 消息
+- **Context 层** (`core/context`) — Config + State 公开 struct，回调接收 odometry/laser/clearing 消息
 - **算法层** (`core/algorithm`) — 纯静态方法，10 阶段管线，无副作用
 - **节点层** (`terrain_analysis`) — ROS2 接线，参数声明，组装并驱动上述两层
 
@@ -67,7 +67,6 @@ scripts/test/test_terrain_analysis_coverage.sh
 | -------------------- | ----------------- | ------------------------- | ---------------------------- |
 | `terrainAnalysis`    | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
 | `terrainAnalysis`    | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
-| `terrainAnalysis`    | `joy`             | `sensor_msgs/Joy`         | 调试用（手柄按钮）           |
 | `terrainAnalysis`    | `map_clearing`    | `std_msgs/Float32`        | 调试用（清除距离）           |
 | `terrainAnalysisExt` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
 | `terrainAnalysisExt` | `terrain_map`     | `sensor_msgs/PointCloud2` | `terrainAnalysis` (本包)     |

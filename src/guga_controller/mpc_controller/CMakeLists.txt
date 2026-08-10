@@ -17,7 +17,9 @@ set(ACADOS_INCLUDE_DIR $ENV{ACADOS_SOURCE_DIR}/include)
 set(ACADOS_LIB_DIR $ENV{ACADOS_SOURCE_DIR}/lib)
 
 # ---- generated solver source directory ----
-set(GENERATED_OCP_DIR ${CMAKE_SOURCE_DIR}/generated/omni/omni_ocp)
+set(ACADOS_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/generated" CACHE PATH
+  "Root directory containing generated acados solver code")
+set(GENERATED_OCP_DIR ${ACADOS_GENERATED_ROOT}/omni/omni_ocp)
 
 file(GLOB MODEL_SRC   ${GENERATED_OCP_DIR}/omni_model/*.c)
 file(GLOB COST_SRC    ${GENERATED_OCP_DIR}/omni_cost/*.c)

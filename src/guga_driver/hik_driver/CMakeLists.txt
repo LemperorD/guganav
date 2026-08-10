@@ -24,6 +24,35 @@ find_package(image_transport REQUIRED)
 find_package(camera_info_manager REQUIRED)
 find_package(camera_interface REQUIRED)
 
+# ---- Hikrobot MVS SDK ----
+set(HIK_MVS_ROOT "/opt/MVS" CACHE PATH "Hikrobot MVS SDK root")
+if(DEFINED ENV{HIK_MVS_ROOT} AND NOT "$ENV{HIK_MVS_ROOT}" STREQUAL "")
+  set(HIK_MVS_ROOT "$ENV{HIK_MVS_ROOT}")
+endif()
+
+unset(HIK_MVS_INCLUDE_DIR CACHE)
+find_path(HIK_MVS_INCLUDE_DIR
+  NAMES MvCameraControl.h
+  PATHS "${HIK_MVS_ROOT}/include"
+  NO_DEFAULT_PATH)
+if(NOT HIK_MVS_INCLUDE_DIR)
+  message(FATAL_ERROR "Hikrobot MVS header not found under ${HIK_MVS_ROOT}/include")
+endif()
+
+set(HIK_MVS_LIBRARIES)
+foreach(mvs_library MvCameraControl FormatConversion MediaProcess MVRender MvUsb3vTL)
+  string(TOUPPER "${mvs_library}" mvs_library_upper)
+  unset(HIK_MVS_${mvs_library_upper}_LIBRARY CACHE)
+  find_library(HIK_MVS_${mvs_library_upper}_LIBRARY
+    NAMES "${mvs_library}"
+    PATHS "${HIK_MVS_ROOT}/lib/64"
+    NO_DEFAULT_PATH)
+  if(NOT HIK_MVS_${mvs_library_upper}_LIBRARY)
+    message(FATAL_ERROR "Hikrobot MVS library lib${mvs_library}.so not found under ${HIK_MVS_ROOT}/lib/64")
+  endif()
+  list(APPEND HIK_MVS_LIBRARIES "${HIK_MVS_${mvs_library_upper}_LIBRARY}")
+endforeach()
+
 # ---- HikCameraMain (HW layer, links MVS SDK, no ROS deps) ----
 add_library(${PROJECT_NAME}_main SHARED
   src/hik_camera_main.cpp)
@@ -31,15 +60,9 @@ target_include_directories(${PROJECT_NAME}_main PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${camera_interface_INCLUDE_DIRS}>
   $<INSTALL_INTERFACE:include>
-  /opt/MVS/include)
-target_link_directories(${PROJECT_NAME}_main PUBLIC
-  /opt/MVS/lib/64)
+  ${HIK_MVS_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME}_main
-  MvCameraControl
-  FormatConversion
-  MediaProcess
-  MVRender
-  MvUsb3vTL
+  ${HIK_MVS_LIBRARIES}
 )
 
 # ---- HikCameraNode (ROS2 layer) ----

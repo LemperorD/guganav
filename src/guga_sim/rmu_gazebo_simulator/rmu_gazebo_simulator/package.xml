@@ -18,7 +18,6 @@
 
 	<depend>ros_gz_sim</depend>
 	<depend>ros_gz_bridge</depend>
-	<depend>rmoss_core</depend>
 	<depend>rmoss_interfaces</depend>
 	<depend>rmoss_gz_base</depend>
 	<depend>rmoss_gz_cam</depend>

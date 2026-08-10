@@ -2,9 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(serial_driver)
 
 # C++17 标准
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
-endif()
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 编译器警告（编码规范要求 Wall/Wextra/Wpedantic）
@@ -21,7 +19,6 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(guga_interfaces REQUIRED)
-find_package(nlohmann_json REQUIRED)
 
 # ---- 串口底层库 (lib) ----
 add_library(serial_driver_main SHARED
@@ -49,7 +46,6 @@ ament_target_dependencies(serial_driver_node
   tf2
   tf2_ros
   guga_interfaces
-  nlohmann_json
 )
 
 # 注册为 rclcpp component，同时生成独立可执行文件
