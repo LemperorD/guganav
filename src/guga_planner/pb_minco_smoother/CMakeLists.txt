@@ -32,7 +32,7 @@ find_package(OpenCV REQUIRED)
 find_package(pb_nav2_plugins REQUIRED)
 
 # interfaces 依赖（用于 MINCO 轨迹消息）
-find_package(interfaces REQUIRED)
+find_package(guga_common REQUIRED)
 
 find_package(pcl_conversions REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -72,7 +72,7 @@ ament_target_dependencies(${library_name}
   tf2_geometry_msgs
   pluginlib
   pb_nav2_plugins
-  interfaces
+  guga_common
   pcl_conversions
 )
 

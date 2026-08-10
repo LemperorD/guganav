@@ -62,7 +62,7 @@ void MincoSmoother::configure(
     }
 
     // 创建 MINCO 多项式轨迹发布器（供 Controller 订阅）
-    minco_traj_pub_ = node->create_publisher<interfaces::msg::MincoTrajectory>(
+    minco_traj_pub_ = node->create_publisher<guga_common::msg::MincoTrajectory>(
         "~/minco_polynomial_trajectory", rclcpp::QoS(1).reliable());
 
     // 创建中间路点可视化发布器（MarkerArray）
@@ -924,10 +924,10 @@ MincoSmoother::dynamicParametersCallback(
     return result;
 }
 
-interfaces::msg::MincoTrajectory MincoSmoother::trajectoryToMsg(
+guga_common::msg::MincoTrajectory MincoSmoother::trajectoryToMsg(
     const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header,
     const rclcpp::Time &start_time) {
-    interfaces::msg::MincoTrajectory msg;
+    guga_common::msg::MincoTrajectory msg;
 
     // 设置消息头
     msg.header = header;

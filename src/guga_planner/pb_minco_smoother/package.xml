@@ -33,6 +33,7 @@
     <depend>tf2_geometry_msgs</depend>
     <depend>pluginlib</depend>
     <depend>eigen</depend>
+    <depend>guga_common</depend>
 
     <!-- 项目内依赖（IntensityVoxelLayer 的 ESDF 功能） -->
     <depend>pb_nav2_plugins</depend>
