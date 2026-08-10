@@ -1,0 +1,658 @@
+/**
+ * trajectory.hpp — 多项式轨迹段 (Piece) 与分段轨迹 (Trajectory) 模板类
+ *
+ * 本文件定义了两个核心模板类：
+ *
+ * Piece<D, Freedom>:
+ *   - D 阶多项式，Freedom 维输出的单段轨迹
+ *   - 系数矩阵 coeffMat 组织为 (Freedom, D+1)，每列对应一个幂次
+ *   - 支持位置、速度、加速度、加加速度 (jerk)、snap 的逐点查询
+ *   - 提供归一化系数矩阵用于多项式求根
+ *   - getMaxVelRate / getMaxAccRate 通过求导多项式的根来计算最大速率
+ *   - checkMaxVelRate / checkMaxAccRate 通过 Sturm 定理判断是否超限
+ *
+ * Trajectory<D, Freedom>:
+ *   - 由多个 Piece 组成的分段多项式轨迹
+ *   - 支持按全局时间查询各阶导数
+ *   - locatePieceIdx 用 O(N) 扫描定位当前时间所属的轨迹段
+ *   - 提供迭代器接口和追加/拼接操作
+ *
+ * 模板参数说明：
+ *   D       — 多项式的阶数（本项目 2D 轨迹使用 D=5，即 5 次多项式）
+ *   Freedom — 输出维度（本项目为 2，分别对应偏航角 θ 和弧长 s）
+ */
+
+#ifndef TRAJECTORY_HPP
+#define TRAJECTORY_HPP
+
+#include "root_finder.hpp"
+
+#include <Eigen/Eigen>
+
+#include <iostream>
+#include <cmath>
+#include <cfloat>
+#include <vector>
+
+/**
+ * Piece — 单段 D 阶多项式轨迹
+ * ===========================
+ * 系数存储：coeffMat 为 (Freedom, D+1) 矩阵
+ *   第 i 列对应 t^(D-i) 的系数（从高次到低次排列）
+ *   例如 pos(t) = coeffMat.col(0)*t^D + ... + coeffMat.col(D)*1
+ * 导数计算：通过逐项求导和阶乘系数实现
+ */
+template <int D, int Freedom>
+class Piece
+{
+public:
+    // 系数矩阵类型别名
+    typedef Eigen::Matrix<double, Freedom, D + 1> CoefficientMat;      // 位置系数
+    typedef Eigen::Matrix<double, Freedom, D> VelCoefficientMat;        // 速度系数
+    typedef Eigen::Matrix<double, Freedom, D - 1> AccCoefficientMat;   // 加速度系数
+
+private:
+    double duration;
+    CoefficientMat coeffMat;
+
+public:
+    Piece() = default;
+
+    Piece(double dur, const CoefficientMat &cMat)
+        : duration(dur), coeffMat(cMat) {}
+
+    inline int getDim() const
+    {
+        return Freedom;
+    }
+
+    inline int getDegree() const
+    {
+        return D;
+    }
+
+    inline double getDuration() const
+    {
+        return duration;
+    }
+
+    inline const CoefficientMat &getCoeffMat() const
+    {
+        return coeffMat;
+    }
+
+    inline Eigen::VectorXd getPos(const double &t) const
+    {
+        Eigen::VectorXd pos;
+        pos.resize(Freedom);
+        pos.setZero();
+        double tn = 1.0;
+        for (int i = D; i >= 0; i--)
+        {
+            pos += tn * coeffMat.col(i);
+            tn *= t;
+        }
+        return pos;
+    }
+
+    inline Eigen::VectorXd getVel(const double &t) const
+    {
+        Eigen::VectorXd vel;
+        vel.resize(Freedom);
+        vel.setZero();
+        double tn = 1.0;
+        int n = 1;
+        for (int i = D - 1; i >= 0; i--)
+        {
+            vel += n * tn * coeffMat.col(i);
+            tn *= t;
+            n++;
+        }
+        return vel;
+    }
+
+    inline Eigen::VectorXd getAcc(const double &t) const
+    {
+        Eigen::VectorXd acc;
+        acc.resize(Freedom);
+        acc.setZero();
+        double tn = 1.0;
+        int m = 1;
+        int n = 2;
+        for (int i = D - 2; i >= 0; i--)
+        {
+            acc += m * n * tn * coeffMat.col(i);
+            tn *= t;
+            m++;
+            n++;
+        }
+        return acc;
+    }
+
+    inline Eigen::VectorXd getJer(const double &t) const
+    {
+        Eigen::VectorXd jer;
+        jer.resize(Freedom);
+        jer.setZero();
+        double tn = 1.0;
+        int l = 1;
+        int m = 2;
+        int n = 3;
+        for (int i = D - 3; i >= 0; i--)
+        {
+            jer += l * m * n * tn * coeffMat.col(i);
+            tn *= t;
+            l++;
+            m++;
+            n++;
+        }
+        return jer;
+    }
+
+    inline Eigen::VectorXd getSna(const double &t) const
+    {
+        Eigen::VectorXd sna;
+        sna.resize(Freedom);
+        sna.setZero();
+        double tn = 1.0;
+        int l = 1;
+        int m = 2;
+        int n = 3;
+        int o = 4;
+        for (int i = D - 4; i >= 0; i--)
+        {
+            sna += l * m * n * o * tn * coeffMat.col(i);
+            tn *= t;
+            l++;
+            m++;
+            n++;
+            o++;
+        }
+        return sna;
+    }
+
+    /**
+     * 计算归一化的位置系数矩阵
+     * 将 [0,T] 时间域归一化到 [0,1]，便于多项式求根
+     * nPosCoeffsMat.col(i) = coeffMat.col(i) * T^(D-i)
+     */
+    inline CoefficientMat normalizePosCoeffMat() const
+    {
+        CoefficientMat nPosCoeffsMat;
+        double t = 1.0;
+        for (int i = D; i >= 0; i--)
+        {
+            nPosCoeffsMat.col(i) = coeffMat.col(i) * t;
+            t *= duration;
+        }
+        return nPosCoeffsMat;
+    }
+
+    inline VelCoefficientMat normalizeVelCoeffMat() const
+    {
+        VelCoefficientMat nVelCoeffMat;
+        int n = 1;
+        double t = duration;
+        for (int i = D - 1; i >= 0; i--)
+        {
+            nVelCoeffMat.col(i) = n * coeffMat.col(i) * t;
+            t *= duration;
+            n++;
+        }
+        return nVelCoeffMat;
+    }
+
+    inline AccCoefficientMat normalizeAccCoeffMat() const
+    {
+        AccCoefficientMat nAccCoeffMat;
+        int n = 2;
+        int m = 1;
+        double t = duration * duration;
+        for (int i = D - 2; i >= 0; i--)
+        {
+            nAccCoeffMat.col(i) = n * m * coeffMat.col(i) * t;
+            n++;
+            m++;
+            t *= duration;
+        }
+        return nAccCoeffMat;
+    }
+
+    /**
+     * 获取最大速率（归一化域的 max norm of velocity）
+     * 1. 将速度系数归一化到 [0,1]
+     * 2. 构造速度平方多项式（各维度平方求和）
+     * 3. 求导后找极值点（候选点），在候选点和端点中取最大
+     */
+    inline double getMaxVelRate() const
+    {
+        VelCoefficientMat nVelCoeffMat = normalizeVelCoeffMat();
+        Eigen::VectorXd coeff = RootFinder::polySqr(nVelCoeffMat.row(0)) +
+                                RootFinder::polySqr(nVelCoeffMat.row(1)) +
+                                RootFinder::polySqr(nVelCoeffMat.row(2));
+        int N = coeff.size();
+        int n = N - 1;
+        for (int i = 0; i < N; i++)
+        {
+            coeff(i) *= n;
+            n--;
+        }
+        if (coeff.head(N - 1).squaredNorm() < DBL_EPSILON)
+        {
+            return getVel(0.0).norm();
+        }
+        else
+        {
+            double l = -0.0625;
+            double r = 1.0625;
+            while (fabs(RootFinder::polyVal(coeff.head(N - 1), l)) < DBL_EPSILON)
+            {
+                l = 0.5 * l;
+            }
+            while (fabs(RootFinder::polyVal(coeff.head(N - 1), r)) < DBL_EPSILON)
+            {
+                r = 0.5 * (r + 1.0);
+            }
+            std::set<double> candidates = RootFinder::solvePolynomial(coeff.head(N - 1), l, r,
+                                                                      FLT_EPSILON / duration);
+            candidates.insert(0.0);
+            candidates.insert(1.0);
+            double maxVelRateSqr = -INFINITY;
+            double tempNormSqr;
+            for (std::set<double>::const_iterator it = candidates.begin();
+                 it != candidates.end();
+                 it++)
+            {
+                if (0.0 <= *it && 1.0 >= *it)
+                {
+                    tempNormSqr = getVel((*it) * duration).squaredNorm();
+                    maxVelRateSqr = maxVelRateSqr < tempNormSqr ? tempNormSqr : maxVelRateSqr;
+                }
+            }
+            return sqrt(maxVelRateSqr);
+        }
+    }
+
+    /**
+     * 获取最大加速度（归一化域的 max norm of acceleration）
+     * 同理构造加速度平方多项式求极值
+     */
+    inline double getMaxAccRate() const
+    {
+        AccCoefficientMat nAccCoeffMat = normalizeAccCoeffMat();
+        Eigen::VectorXd coeff = RootFinder::polySqr(nAccCoeffMat.row(0)) +
+                                RootFinder::polySqr(nAccCoeffMat.row(1)) +
+                                RootFinder::polySqr(nAccCoeffMat.row(2));
+        int N = coeff.size();
+        int n = N - 1;
+        for (int i = 0; i < N; i++)
+        {
+            coeff(i) *= n;
+            n--;
+        }
+        if (coeff.head(N - 1).squaredNorm() < DBL_EPSILON)
+        {
+            return getAcc(0.0).norm();
+        }
+        else
+        {
+            double l = -0.0625;
+            double r = 1.0625;
+            while (fabs(RootFinder::polyVal(coeff.head(N - 1), l)) < DBL_EPSILON)
+            {
+                l = 0.5 * l;
+            }
+            while (fabs(RootFinder::polyVal(coeff.head(N - 1), r)) < DBL_EPSILON)
+            {
+                r = 0.5 * (r + 1.0);
+            }
+            std::set<double> candidates = RootFinder::solvePolynomial(coeff.head(N - 1), l, r,
+                                                                      FLT_EPSILON / duration);
+            candidates.insert(0.0);
+            candidates.insert(1.0);
+            double maxAccRateSqr = -INFINITY;
+            double tempNormSqr;
+            for (std::set<double>::const_iterator it = candidates.begin();
+                 it != candidates.end();
+                 it++)
+            {
+                if (0.0 <= *it && 1.0 >= *it)
+                {
+                    tempNormSqr = getAcc((*it) * duration).squaredNorm();
+                    maxAccRateSqr = maxAccRateSqr < tempNormSqr ? tempNormSqr : maxAccRateSqr;
+                }
+            }
+            return sqrt(maxAccRateSqr);
+        }
+    }
+
+    /**
+     * 检查是否满足最大速率约束
+     * 使用 Sturm 定理计算多项式的根数来判断是否有超限点
+     * 若端点都不超限且 (0,1) 内无根，则满足约束
+     */
+    inline bool checkMaxVelRate(const double &maxVelRate) const
+    {
+        double sqrMaxVelRate = maxVelRate * maxVelRate;
+        if (getVel(0.0).squaredNorm() >= sqrMaxVelRate ||
+            getVel(duration).squaredNorm() >= sqrMaxVelRate)
+        {
+            return false;
+        }
+        else
+        {
+            VelCoefficientMat nVelCoeffMat = normalizeVelCoeffMat();
+            Eigen::VectorXd coeff = RootFinder::polySqr(nVelCoeffMat.row(0)) +
+                                    RootFinder::polySqr(nVelCoeffMat.row(1)) +
+                                    RootFinder::polySqr(nVelCoeffMat.row(2));
+            double t2 = duration * duration;
+            coeff.tail<1>()(0) -= sqrMaxVelRate * t2;
+            return RootFinder::countRoots(coeff, 0.0, 1.0) == 0;
+        }
+    }
+
+    /**
+     * 检查是否满足最大加速度约束
+     * 同理使用 Sturm 定理
+     */
+    inline bool checkMaxAccRate(const double &maxAccRate) const
+    {
+        double sqrMaxAccRate = maxAccRate * maxAccRate;
+        if (getAcc(0.0).squaredNorm() >= sqrMaxAccRate ||
+            getAcc(duration).squaredNorm() >= sqrMaxAccRate)
+        {
+            return false;
+        }
+        else
+        {
+            AccCoefficientMat nAccCoeffMat = normalizeAccCoeffMat();
+            Eigen::VectorXd coeff = RootFinder::polySqr(nAccCoeffMat.row(0)) +
+                                    RootFinder::polySqr(nAccCoeffMat.row(1)) +
+                                    RootFinder::polySqr(nAccCoeffMat.row(2));
+            double t2 = duration * duration;
+            double t4 = t2 * t2;
+            coeff.tail<1>()(0) -= sqrMaxAccRate * t4;
+            return RootFinder::countRoots(coeff, 0.0, 1.0) == 0;
+        }
+    }
+};
+
+/**
+ * Trajectory — 分段多项式轨迹
+ * ===========================
+ * 由多个 Piece 组成，提供统一的时间参数化访问接口
+ * 所有 get* 方法先通过 locatePieceIdx 定位段索引，
+ * 然后将全局时间转换为段内时间后调用对应 Piece 的方法
+ */
+template <int D, int Freedom>
+class Trajectory
+{
+private:
+    typedef std::vector<Piece<D, Freedom>> Pieces;
+    Pieces pieces;
+
+public:
+    Trajectory() = default;
+
+    Trajectory(const std::vector<double> &durs,
+               const std::vector<typename Piece<D, Freedom>::CoefficientMat> &cMats)
+    {
+        int N = std::min(durs.size(), cMats.size());
+        pieces.reserve(N);
+        for (int i = 0; i < N; i++)
+        {
+            pieces.emplace_back(durs[i], cMats[i]);
+        }
+    }
+
+    inline int getPieceNum() const
+    {
+        return pieces.size();
+    }
+    
+    inline int getDim() const
+    {
+        return Freedom;
+    }
+    inline Eigen::VectorXd getDurations() const
+    {
+        int N = getPieceNum();
+        Eigen::VectorXd durations(N);
+        for (int i = 0; i < N; i++)
+        {
+            durations(i) = pieces[i].getDuration();
+        }
+        return durations;
+    }
+
+    inline double getTotalDuration() const
+    {
+        int N = getPieceNum();
+        double totalDuration = 0.0;
+        for (int i = 0; i < N; i++)
+        {
+            totalDuration += pieces[i].getDuration();
+        }
+        return totalDuration;
+    }
+
+    inline Eigen::MatrixXd getPositions() const
+    {
+        int N = getPieceNum();
+        Eigen::MatrixXd positions(Freedom, N + 1);
+        for (int i = 0; i < N; i++)
+        {
+            positions.col(i) = pieces[i].getCoeffMat().col(D);
+        }
+        positions.col(N) = pieces[N - 1].getPos(pieces[N - 1].getDuration());
+        return positions;
+    }
+
+    inline const Piece<D, Freedom> &operator[](int i) const
+    {
+        return pieces[i];
+    }
+
+    inline Piece<D, Freedom> &operator[](int i)
+    {
+        return pieces[i];
+    }
+
+    inline void clear(void)
+    {
+        pieces.clear();
+        return;
+    }
+
+    inline typename Pieces::const_iterator begin() const
+    {
+        return pieces.begin();
+    }
+
+    inline typename Pieces::const_iterator end() const
+    {
+        return pieces.end();
+    }
+
+    inline typename Pieces::iterator begin()
+    {
+        return pieces.begin();
+    }
+
+    inline typename Pieces::iterator end()
+    {
+        return pieces.end();
+    }
+
+    inline void reserve(const int &n)
+    {
+        pieces.reserve(n);
+        return;
+    }
+
+    inline void emplace_back(const Piece<D, Freedom> &piece)
+    {
+        pieces.emplace_back(piece);
+        return;
+    }
+
+    inline void emplace_back(const double &dur,
+                             const typename Piece<D, Freedom>::CoefficientMat &cMat)
+    {
+        pieces.emplace_back(dur, cMat);
+        return;
+    }
+
+    inline void append(const Trajectory<D, Freedom> &traj)
+    {
+        pieces.insert(pieces.end(), traj.begin(), traj.end());
+        return;
+    }
+
+    /**
+     * 根据全局时间 t 定位所在的轨迹段索引
+     * 输入 t 会被修改为段内相对时间
+     * O(N) 线性扫描所有段
+     */
+    inline int locatePieceIdx(double &t) const
+    {
+        int N = getPieceNum();
+        int idx;
+        double dur;
+        for (idx = 0;
+             idx < N &&
+             t > (dur = pieces[idx].getDuration());
+             idx++)
+        {
+            t -= dur;
+        }
+        if (idx == N)
+        {
+            idx--;
+            t += pieces[idx].getDuration();
+        }
+        return idx;
+    }
+
+    inline Eigen::VectorXd getPos(double t) const
+    {
+        int pieceIdx = locatePieceIdx(t);
+        return pieces[pieceIdx].getPos(t);
+    }
+
+    inline Eigen::VectorXd getVel(double t) const
+    {
+        int pieceIdx = locatePieceIdx(t);
+        return pieces[pieceIdx].getVel(t);
+    }
+
+    inline Eigen::VectorXd getAcc(double t) const
+    {
+        int pieceIdx = locatePieceIdx(t);
+        return pieces[pieceIdx].getAcc(t);
+    }
+
+    inline Eigen::VectorXd getJer(double t) const
+    {
+        int pieceIdx = locatePieceIdx(t);
+        return pieces[pieceIdx].getJer(t);
+    }
+
+    inline Eigen::VectorXd getSna(double t) const
+    {
+        int pieceIdx = locatePieceIdx(t);
+        return pieces[pieceIdx].getSna(t);
+    }
+
+    inline Eigen::VectorXd getJuncPos(int juncIdx) const
+    {
+        if (juncIdx != getPieceNum())
+        {
+            return pieces[juncIdx].getCoeffMat().col(D);
+        }
+        else
+        {
+            return pieces[juncIdx - 1].getPos(pieces[juncIdx - 1].getDuration());
+        }
+    }
+
+    inline Eigen::VectorXd getJuncVel(int juncIdx) const
+    {
+        if (juncIdx != getPieceNum())
+        {
+            return pieces[juncIdx].getCoeffMat().col(D - 1);
+        }
+        else
+        {
+            return pieces[juncIdx - 1].getVel(pieces[juncIdx - 1].getDuration());
+        }
+    }
+
+    inline Eigen::VectorXd getJuncAcc(int juncIdx) const
+    {
+        if (juncIdx != getPieceNum())
+        {
+            return pieces[juncIdx].getCoeffMat().col(D - 2) * 2.0;
+        }
+        else
+        {
+            return pieces[juncIdx - 1].getAcc(pieces[juncIdx - 1].getDuration());
+        }
+    }
+
+    /**
+     * 获取轨迹全局最大速度（遍历所有段）
+     */
+    inline double getMaxVelRate() const
+    {
+        int N = getPieceNum();
+        double maxVelRate = -INFINITY;
+        double tempNorm;
+        for (int i = 0; i < N; i++)
+        {
+            tempNorm = pieces[i].getMaxVelRate();
+            maxVelRate = maxVelRate < tempNorm ? tempNorm : maxVelRate;
+        }
+        return maxVelRate;
+    }
+
+    /**
+     * 获取轨迹全局最大加速度（遍历所有段）
+     */
+    inline double getMaxAccRate() const
+    {
+        int N = getPieceNum();
+        double maxAccRate = -INFINITY;
+        double tempNorm;
+        for (int i = 0; i < N; i++)
+        {
+            tempNorm = pieces[i].getMaxAccRate();
+            maxAccRate = maxAccRate < tempNorm ? tempNorm : maxAccRate;
+        }
+        return maxAccRate;
+    }
+
+    inline bool checkMaxVelRate(const double &maxVelRate) const
+    {
+        int N = getPieceNum();
+        bool feasible = true;
+        for (int i = 0; i < N && feasible; i++)
+        {
+            feasible = feasible && pieces[i].checkMaxVelRate(maxVelRate);
+        }
+        return feasible;
+    }
+
+    inline bool checkMaxAccRate(const double &maxAccRate) const
+    {
+        int N = getPieceNum();
+        bool feasible = true;
+        for (int i = 0; i < N && feasible; i++)
+        {
+            feasible = feasible && pieces[i].checkMaxAccRate(maxAccRate);
+        }
+        return feasible;
+    }
+};
+
+#endif

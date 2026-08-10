@@ -1,0 +1,83 @@
+# pb_minco_smoother 示例配置
+#
+# 将以下配置添加到您的 Nav2 参数文件中，以使用 MINCO 平滑器插件
+#
+# 使用方式：
+# 1. 确保 pb_minco_smoother 包已编译并安装
+# 2. 在 smoother_server 的配置中添加此插件
+# 3. 如需 ESDF 避障功能，确保 global_costmap 中使用了 IntensityVoxelLayer
+
+smoother_server:
+  ros__parameters:
+    # 平滑器插件列表
+    smoother_plugins: ["minco_smoother"]
+    
+    # MINCO 平滑器配置
+    minco_smoother:
+      plugin: "pb_minco/MincoSmoother"
+      
+      # ========== 优化权重 ==========
+      # 平滑性权重（控制轨迹的平滑程度）
+      weight_smooth: 1.0
+      
+      # 避障权重（越大越远离障碍物，但可能使轨迹变长）
+      weight_obstacle: 100.0
+      
+      # 动力学可行性权重（控制速度/加速度约束的严格程度）
+      weight_feasibility: 10.0
+      
+      # 时间正则化权重（越大越偏向快速完成）
+      weight_time: 10.0
+      
+      # ========== 动力学约束 ==========
+      # 最大速度 (m/s) - 根据机器人能力设置
+      max_vel: 2.0
+      
+      # 最大加速度 (m/s²) - 根据机器人能力设置
+      max_acc: 2.0
+      
+      # 安全距离 (m) - 轨迹与障碍物的最小距离
+      safe_distance: 0.5
+      
+      # ========== 优化器参数 ==========
+      # L-BFGS 最大迭代次数
+      max_iterations: 200
+      
+      # 梯度收敛阈值
+      g_epsilon: 0.0001
+      
+      # 每段轨迹的积分采样点数（用于代价计算）
+      integral_resolution: 8
+      
+      # ========== 路径处理参数 ==========
+      # 路点采样间隔 (m) - 用于下采样输入路径
+      waypoint_interval: 0.5
+      
+      # 最少路点数 - 少于此数不进行平滑
+      min_waypoints: 3
+      
+      # 初始每米时间估计 (s/m) - 用于时间分配初始化
+      initial_time_per_meter: 0.5
+      
+      # ========== 输出参数 ==========
+      # 输出轨迹采样间隔 (s)
+      output_dt: 0.1
+      
+      # 是否发布轨迹可视化（话题：minco_trajectory）
+      publish_trajectory: true
+
+# ========== 与 ESDF 集成的 Costmap 配置示例 ==========
+# 如需使用 ESDF 避障功能，需要在 global_costmap 中配置 IntensityVoxelLayer
+# 
+# global_costmap:
+#   global_costmap:
+#     ros__parameters:
+#       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
+#       
+#       intensity_voxel_layer:
+#         plugin: "pb_nav2_costmap_2d::IntensityVoxelLayer"
+#         enabled: true
+#         enable_esdf: true
+#         publish_esdf_visualization: true
+#         max_esdf_distance: 10.0
+#         # ... 其他体素层参数

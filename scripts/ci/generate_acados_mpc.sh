@@ -26,7 +26,12 @@ fi
 export PYTHONPATH="${PY_SIM_DIR}:${PYTHONPATH:-}"
 
 cd "${REPO_ROOT}"
+
+python3 "${PY_SIM_DIR}/c_codegen/c_codegen_unicycle.py"
+echo "[INFO] Generated stable unicycle C API in ${GENERATED_OCP_DIR}"
+
 python3 "${PY_SIM_DIR}/c_codegen/c_codegen_omni.py"
+echo "[INFO] Generated stable omni C API in ${GENERATED_OCP_DIR}"
 
 for generated_file in "${GENERATED_SOLVER_FILES[@]}"; do
   if [ ! -f "${generated_file}" ]; then

@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<library path="pb_minco_smoother_core">
+    <class name="pb_minco/MincoSmoother" type="pb_minco::MincoSmoother" base_class_type="nav2_core::Smoother">
+        <description>
+      MINCO (Minimum Control) 轨迹平滑器插件。
+      将 A* 规划器输出的离散路径转换为平滑的多项式轨迹。
+      特性：
+      - 最小化 Jerk 能量的平滑轨迹
+      - 基于 ESDF 的避障优化
+      - 速度和加速度软约束
+      - 时间最优规划
+        </description>
+    </class>
+</library>

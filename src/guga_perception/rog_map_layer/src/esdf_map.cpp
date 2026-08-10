@@ -1,17 +1,3 @@
-// Copyright 2026 guganav
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #include "rog_map_layer/esdf_map.hpp"
 
 #include <algorithm>
@@ -26,9 +12,7 @@
 namespace rog_map_layer
 {
 
-void EsdfMap::resize(
-  size_t size_x, size_t size_y, double resolution,
-  double origin_x, double origin_y)
+void EsdfMap::resize(size_t size_x, size_t size_y, double resolution, double origin_x, double origin_y)
 {
   size_x_ = size_x;
   size_y_ = size_y;
@@ -53,10 +37,7 @@ void EsdfMap::reset()
   std::fill(gradient_y_.begin(), gradient_y_.end(), 0.0f);
 }
 
-void EsdfMap::initFromOccupancy(
-  const unsigned char * occupancy,
-  unsigned char obstacle_threshold,
-  EsdfParallelExecutor * executor)
+void EsdfMap::initFromOccupancy(const unsigned char * occupancy, unsigned char obstacle_threshold, EsdfParallelExecutor * executor)
 {
   size_t n = size_x_ * size_y_;
 
@@ -84,9 +65,7 @@ void EsdfMap::initFromOccupancy(
   }
 }
 
-void EsdfMap::propagateForward(
-  size_t start_row, size_t end_row,
-  size_t start_col, size_t end_col)
+void EsdfMap::propagateForward(size_t start_row, size_t end_row, size_t start_col, size_t end_col)
 {
   // 8SED forward pass: 左上→右下
   // 检查 4 个邻居: (-1,-1), (0,-1), (1,-1), (-1,0)
@@ -145,9 +124,7 @@ void EsdfMap::propagateForward(
   }
 }
 
-void EsdfMap::propagateBackward(
-  size_t start_row, size_t end_row,
-  size_t start_col, size_t end_col)
+void EsdfMap::propagateBackward(size_t start_row, size_t end_row, size_t start_col, size_t end_col)
 {
   // 8SED backward pass: 右下→左上
   // 检查 4 个邻居: (1,0), (-1,1), (0,1), (1,1)
@@ -224,10 +201,7 @@ void EsdfMap::copyOffsetsToDistances(const EsdfConfig & config)
   }
 }
 
-void EsdfMap::computeFull(
-  const unsigned char * occupancy,
-  const EsdfConfig & config,
-  EsdfParallelExecutor * executor)
+void EsdfMap::computeFull(const unsigned char * occupancy, const EsdfConfig & config, EsdfParallelExecutor * executor)
 {
   // Disable TBB parallel path — it uses tile-based 8SED with seam fixing
   // which produces ~2% distance error vs ground truth. Serial 8SED is exact
@@ -237,9 +211,7 @@ void EsdfMap::computeFull(
   computeGradients(executor);
 }
 
-void EsdfMap::computeFullSerial(
-  const unsigned char * occupancy,
-  const EsdfConfig & config)
+void EsdfMap::computeFullSerial(const unsigned char * occupancy, const EsdfConfig & config)
 {
   initFromOccupancy(occupancy, config.obstacle_threshold, nullptr);
   propagateForward(0, size_y_, 0, size_x_);
@@ -431,10 +403,7 @@ void EsdfMap::fixSeamBetween(const Tile & a, const Tile & b, bool horizontal)
   }
 }
 
-void EsdfMap::computeFullParallel(
-  const unsigned char * occupancy,
-  const EsdfConfig & config,
-  EsdfParallelExecutor * executor)
+void EsdfMap::computeFullParallel(const unsigned char * occupancy, const EsdfConfig & config, EsdfParallelExecutor * executor)
 {
   // Step 1: 初始化
   initFromOccupancy(occupancy, config.obstacle_threshold, executor);
@@ -531,11 +500,7 @@ void EsdfMap::computeGradients(EsdfParallelExecutor * executor)
   }
 }
 
-void EsdfMap::computeIncremental(
-  const unsigned char * occupancy,
-  const std::vector<unsigned char> & previous_occupancy,
-  const EsdfConfig & config,
-  EsdfParallelExecutor * executor)
+void EsdfMap::computeIncremental(const unsigned char * occupancy, const std::vector<unsigned char> & previous_occupancy, const EsdfConfig & config, EsdfParallelExecutor * executor)
 {
   size_t n = size_x_ * size_y_;
 
@@ -596,7 +561,8 @@ float EsdfMap::getDistanceAt(double wx, double wy) const
   if (!worldToMap(wx, wy, mx, my)) {
     return 0.0f;
   }
-  size_t idx = my * size_x_ + mx;
+  // size_t idx = my * size_x_ + mx;
+  size_t idx = coordToIndex(mx, my);
   return distance_field_[idx];
 }
 
@@ -606,13 +572,12 @@ std::pair<float, float> EsdfMap::getGradientAt(double wx, double wy) const
   if (!worldToMap(wx, wy, mx, my)) {
     return {0.0f, 0.0f};
   }
-  size_t idx = my * size_x_ + mx;
+  // size_t idx = my * size_x_ + mx;
+  size_t idx = coordToIndex(mx, my);
   return {gradient_x_[idx], gradient_y_[idx]};
 }
 
-bool EsdfMap::worldToMap(
-  double wx, double wy,
-  size_t & mx, size_t & my) const
+bool EsdfMap::worldToMap(double wx, double wy, size_t & mx, size_t & my) const
 {
   if (wx < origin_x_ || wy < origin_y_) {
     return false;
@@ -676,6 +641,34 @@ void EsdfMap::expandDirtyRegion(
   IncrementalUpdate::buildDirtyMask(
     changed_indices, size_x_, size_y_,
     config, dirty_mask, dummy_count);
+}
+
+
+bool EsdfMap::isOccupied(size_t mx, size_t my) const
+{
+  if (mx >= size_x_ || my >= size_y_) {
+    return false;
+  }
+  size_t idx = my * size_x_ + mx;
+  return offset_dx_[idx] == 0 && offset_dy_[idx] == 0;
+}
+
+bool EsdfMap::isUnoccupied(size_t mx, size_t my) const
+{
+  if (mx >= size_x_ || my >= size_y_) {
+    return false;
+  }
+  size_t idx = my * size_x_ + mx;
+  return offset_dx_[idx] == 0 && offset_dy_[idx] == 0;
+}
+
+bool EsdfMap::isOccWithSafeDis(size_t mx, size_t my, double safe_dis) const
+{
+  if (mx >= size_x_ || my >= size_y_) {
+    return false;
+  }
+  size_t idx = my * size_x_ + mx;
+  return offset_dx_[idx] == 0 && offset_dy_[idx] == 0;
 }
 
 }  // namespace rog_map_layer

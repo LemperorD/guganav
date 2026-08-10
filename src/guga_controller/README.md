@@ -10,4 +10,4 @@
 - [X] MPC Wrapper设计与测试
 - [X] mpc_controller
 - [ ] mpc_controller调参
-- [ ] 局部规划器功能实现
+- [ ] ego-planner局部规划器功能实现

@@ -91,11 +91,11 @@ class MPCSolver:
         # acados 安装目录
         acados_path = os.environ["ACADOS_SOURCE_DIR"]
         print(f"acados_path: {acados_path}")
-        self.ocp.acados_include_path = acados_path + "/include"
-        self.ocp.acados_lib_path = acados_path + "/lib"
+        self.ocp.code_gen_opts.acados_include_path = acados_path + "/include"
+        self.ocp.code_gen_opts.acados_lib_path = acados_path + "/lib"
 
         # C代码导出目录，根据自身情况修改
-        self.ocp.code_export_directory = os.path.join(
+        self.ocp.code_gen_opts.code_export_directory = os.path.join(
             generated_root, self.model.name, f"{self.model.name}_ocp")
 
 class MPCSim: # 仿真测试使用
@@ -119,7 +119,7 @@ class MPCSim: # 仿真测试使用
         self.sim.solver_options.collocation_type = "GAUSS_RADAU_IIA"
 
         # C代码导出目录，根据自身情况修改
-        self.sim.code_export_directory = os.path.join(
+        self.sim.code_gen_opts.code_export_directory = os.path.join(
             generated_root, self.model.name, f"{self.model.name}_sim")
         
 if __name__ == "__main__":
@@ -128,15 +128,15 @@ if __name__ == "__main__":
 	
     solver = AcadosOcpSolver(
         mpc_solver.ocp,
-        json_file = f"{mpc_solver.ocp.code_export_directory}.json"
+        json_file = f"{mpc_solver.ocp.code_gen_opts.code_export_directory}.json"
     )
     sim = AcadosSimSolver(
         mpc_sim.sim,
-        json_file = f"{mpc_sim.sim.code_export_directory}.json"
+        json_file = f"{mpc_sim.sim.code_gen_opts.code_export_directory}.json"
     )
 
     print("=======================================")
     print("acados Solver 已生成")
-    print(f"生成目录：{mpc_solver.ocp.code_export_directory}")
-    print(f"JSON文件：{mpc_solver.ocp.code_export_directory}.json")
+    print(f"生成目录：{mpc_solver.ocp.code_gen_opts.code_export_directory}")
+    print(f"JSON文件：{mpc_solver.ocp.code_gen_opts.code_export_directory}.json")
     print("=======================================")

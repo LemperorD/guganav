@@ -19,7 +19,8 @@
         "jps",
         "pointLIO",
         "test",
-        "common"
+        "common",
+        "planner"
     ],
     "ROS2.distro": "humble",
     "python.autoComplete.extraPaths": [

@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+    <name>pb_minco_smoother</name>
+    <version>0.1.0</version>
+    <description>
+    MINCO (Minimum Control) 轨迹平滑器 Nav2 插件。
+    基于 GCOPTER 算法，针对 2D 地面机器人进行优化。
+    特性：
+    - 平滑多项式轨迹生成
+    - ESDF 避障优化
+    - 速度/加速度软约束
+    - 时间最优规划
+    </description>
+    <maintainer email="lihanchen@example.com">Lihan Chen</maintainer>
+    <license>MIT</license>
+
+    <author email="lihanchen@example.com">Lihan Chen</author>
+
+    <buildtool_depend>ament_cmake</buildtool_depend>
+
+    <!-- 核心依赖 -->
+    <depend>rclcpp</depend>
+    <depend>rclcpp_lifecycle</depend>
+    <depend>nav2_core</depend>
+    <depend>nav2_costmap_2d</depend>
+    <depend>nav2_util</depend>
+    <depend>nav_msgs</depend>
+    <depend>geometry_msgs</depend>
+    <depend>std_msgs</depend>
+    <depend>tf2</depend>
+    <depend>tf2_ros</depend>
+    <depend>tf2_geometry_msgs</depend>
+    <depend>pluginlib</depend>
+    <depend>eigen</depend>
+
+    <!-- 项目内依赖（IntensityVoxelLayer 的 ESDF 功能） -->
+    <depend>pb_nav2_plugins</depend>
+
+    <!-- 轨迹消息接口 -->
+    <depend>rmoss_interfaces</depend>
+
+    <!-- 测试依赖 -->
+    <test_depend>ament_lint_auto</test_depend>
+    <test_depend>ament_lint_common</test_depend>
+
+    <export>
+        <build_type>ament_cmake</build_type>
+    </export>
+</package>

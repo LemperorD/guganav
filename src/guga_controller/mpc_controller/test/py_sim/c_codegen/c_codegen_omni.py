@@ -98,13 +98,13 @@ class MPCSolver:
         # acados 安装目录
         acados_path = os.environ["ACADOS_SOURCE_DIR"]
         print(f"acados_path: {acados_path}")
-        self.ocp.code_gen_options.acados_include_path = acados_path + "/include"
-        self.ocp.code_gen_options.acados_lib_path = acados_path + "/lib"
+        self.ocp.code_gen_opts.acados_include_path = acados_path + "/include"
+        self.ocp.code_gen_opts.acados_lib_path = acados_path + "/lib"
 
         # C代码导出目录，根据自身情况修改
-        self.ocp.code_gen_options.code_export_directory = os.path.join(
+        self.ocp.code_gen_opts.code_export_directory = os.path.join(
             generated_root, self.model.name, f"{self.model.name}_ocp")
-        self.ocp.code_gen_options.json_file = f"{self.model.name}_ocp.json"
+        self.ocp.code_gen_opts.json_file = f"{self.model.name}_ocp.json"
 
 class MPCSim: # 仿真测试使用
     def __init__(self):
@@ -128,19 +128,25 @@ class MPCSim: # 仿真测试使用
         self.sim.solver_options.collocation_type = "GAUSS_RADAU_IIA"
 
         # C代码导出目录，根据自身情况修改
-        self.sim.code_gen_options.code_export_directory = os.path.join(
+        self.sim.code_gen_opts.code_export_directory = os.path.join(
             generated_root, self.model.name, f"{self.model.name}_sim")
-        self.sim.code_gen_options.json_file = f"{self.model.name}_sim.json"
+        self.sim.code_gen_opts.json_file = f"{self.model.name}_sim.json"
         
 if __name__ == "__main__":
     mpc_solver = MPCSolver()
     mpc_sim = MPCSim()
-	
-    solver = AcadosOcpSolver(mpc_solver.ocp)
-    sim = AcadosSimSolver(mpc_sim.sim)
+
+    solver = AcadosOcpSolver(
+        mpc_solver.ocp,
+        json_file = f"{mpc_solver.ocp.code_gen_opts.code_export_directory}.json"
+    )
+    sim = AcadosSimSolver(
+        mpc_sim.sim,
+        json_file = f"{mpc_sim.sim.code_gen_opts.code_export_directory}.json"
+    )
 
     print("=======================================")
     print("acados Solver 已生成")
-    print(f"生成目录: {mpc_solver.ocp.code_gen_options.code_export_directory}")
-    print(f"JSON文件: {mpc_solver.ocp.code_gen_options.json_file}")
+    print(f"生成目录: {mpc_solver.ocp.code_gen_opts.code_export_directory}")
+    print(f"JSON文件: {mpc_solver.ocp.code_gen_opts.json_file}")
     print("=======================================")

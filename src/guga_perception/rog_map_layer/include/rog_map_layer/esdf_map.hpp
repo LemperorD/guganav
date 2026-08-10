@@ -1,17 +1,3 @@
-// Copyright 2026 guganav
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #pragma once
 
 #include <nav_msgs/msg/occupancy_grid.hpp>
@@ -20,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -34,23 +21,28 @@ class EsdfMap
 public:
   EsdfMap() = default;
 
-  void resize(
-    size_t size_x, size_t size_y, double resolution,
-    double origin_x, double origin_y);
+  // 初始化ESDF地图
+  void resize(size_t size_x, size_t size_y, double resolution, double origin_x, double origin_y);
 
+  // 重置ESDF地图
   void reset();
 
+  // 全量更新
   void computeFull(
     const unsigned char * occupancy,
     const EsdfConfig & config,
     EsdfParallelExecutor * executor = nullptr);
 
+  // 增量更新
   void computeIncremental(
     const unsigned char * occupancy,
     const std::vector<unsigned char> & previous_occupancy,
     const EsdfConfig & config,
     EsdfParallelExecutor * executor = nullptr);
 
+  inline int coordToIndex(size_t x, size_t y) const {return static_cast<int>(y * size_x_ + x);}
+
+  // 获取 ESDF 代价和梯度
   [[nodiscard]] float getDistance(size_t idx) const;
   [[nodiscard]] std::pair<float, float> getGradient(size_t idx) const;
   [[nodiscard]] float getDistanceAt(double wx, double wy) const;
@@ -71,8 +63,12 @@ public:
     const std::string & frame_id, rclcpp::Time stamp,
     const EsdfConfig & config) const;
 
+  bool isOccupied(size_t mx, size_t my) const;
+  bool isUnoccupied(size_t mx, size_t my) const;
+  bool isOccWithSafeDis(size_t mx, size_t my, double safe_dis) const;
+
 private:
-  static constexpr float INF_DISTANCE{1e10f};
+  static constexpr double INF_DISTANCE = std::numeric_limits<double>::infinity();
 
   void initFromOccupancy(
     const unsigned char * occupancy,
@@ -123,9 +119,10 @@ private:
 
   // 8SED 使用 int16_t 偏移量存储最近障碍物的 (dx, dy)
   // distance = sqrt(dx^2 + dy^2) * resolution_
-  std::vector<int16_t> offset_dx_;
-  std::vector<int16_t> offset_dy_;
+  std::vector<int16_t> offset_dx_; // 最近障碍物的 x 偏移量 (单位: cells)
+  std::vector<int16_t> offset_dy_; // 最近障碍物的 y 偏移量 (单位: cells)
 
+  // ESDF 距离场和梯度场
   std::vector<float> distance_field_;
   std::vector<float> gradient_x_;
   std::vector<float> gradient_y_;
