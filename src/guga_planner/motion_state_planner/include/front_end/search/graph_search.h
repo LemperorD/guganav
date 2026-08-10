@@ -329,7 +329,7 @@ private:
   bool use_jps_ = false;               // A*/JPS 模式标志
 
   priorityQueue pq_;                   // 优先队列（开放集），按 f=g+h 排序
-  std::vector<StatePtr> hm_;           // 哈希映射（大小 = xDim*yDim），id->StatePtr
+  std::vector<StatePtr> hash_map_;     // 哈希映射(hash_map)，大小 = xDim*yDim，id->StatePtr
   std::vector<bool> seen_;             // 标记向量，记录某ID是否已被访问过
 
   std::vector<StatePtr> path_;         // 最终路径（从起点到目标）

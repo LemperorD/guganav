@@ -643,4 +643,32 @@ void EsdfMap::expandDirtyRegion(
     config, dirty_mask, dummy_count);
 }
 
+
+bool EsdfMap::isOccupied(size_t mx, size_t my) const
+{
+  if (mx >= size_x_ || my >= size_y_) {
+    return false;
+  }
+  size_t idx = my * size_x_ + mx;
+  return offset_dx_[idx] == 0 && offset_dy_[idx] == 0;
+}
+
+bool EsdfMap::isUnoccupied(size_t mx, size_t my) const
+{
+  if (mx >= size_x_ || my >= size_y_) {
+    return false;
+  }
+  size_t idx = my * size_x_ + mx;
+  return offset_dx_[idx] == 0 && offset_dy_[idx] == 0;
+}
+
+bool EsdfMap::isOccWithSafeDis(size_t mx, size_t my, double safe_dis) const
+{
+  if (mx >= size_x_ || my >= size_y_) {
+    return false;
+  }
+  size_t idx = my * size_x_ + mx;
+  return offset_dx_[idx] == 0 && offset_dy_[idx] == 0;
+}
+
 }  // namespace rog_map_layer

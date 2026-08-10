@@ -63,6 +63,10 @@ public:
     const std::string & frame_id, rclcpp::Time stamp,
     const EsdfConfig & config) const;
 
+  bool isOccupied(size_t mx, size_t my) const;
+  bool isUnoccupied(size_t mx, size_t my) const;
+  bool isOccWithSafeDis(size_t mx, size_t my, double safe_dis) const;
+
 private:
   static constexpr double INF_DISTANCE = std::numeric_limits<double>::infinity();
 
@@ -115,9 +119,10 @@ private:
 
   // 8SED 使用 int16_t 偏移量存储最近障碍物的 (dx, dy)
   // distance = sqrt(dx^2 + dy^2) * resolution_
-  std::vector<int16_t> offset_dx_;
-  std::vector<int16_t> offset_dy_;
+  std::vector<int16_t> offset_dx_; // 最近障碍物的 x 偏移量 (单位: cells)
+  std::vector<int16_t> offset_dy_; // 最近障碍物的 y 偏移量 (单位: cells)
 
+  // ESDF 距离场和梯度场
   std::vector<float> distance_field_;
   std::vector<float> gradient_x_;
   std::vector<float> gradient_y_;

@@ -8,15 +8,15 @@
 
 using namespace JPS;
 
-GraphSearch::GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis):map_(Map), safe_dis_(safe_dis)
+GraphSearch::GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis) : map_(Map), safe_dis_(safe_dis)
 {
-  verbose_ = false;                               // 默认不输出调试信息
+  verbose_ = false;                             // 默认不输出调试信息
   xDim_ = map_->sizeX();                        // 地图 X 方向栅格数
   yDim_ = map_->sizeY();                        // 地图 Y 方向栅格数
-  eps_ = 1;                                       // 启发式权重 = 1.0 (标准A*)
+  eps_ = 1;                                     // 启发式权重 = 1.0 (标准A*)
 
-  hm_.resize(xDim_ * yDim_);                      // 哈希映射: id -> StatePtr
-  seen_.resize(xDim_ * yDim_, false);             // 访问标记: 标记某 id 是否已被生成
+  hash_map_.resize(xDim_ * yDim_);              // 哈希映射: id -> StatePtr
+  seen_.resize(xDim_ * yDim_, false);           // 访问标记: 标记某 id 是否已被生成
 
   // 初始化 A* 的 8 邻域偏移量（Moore邻域，不包括自身）
   for(int x = -1; x <= 1; x ++) {
@@ -29,50 +29,13 @@ GraphSearch::GraphSearch(std::shared_ptr<EsdfMap> Map, const double &safe_dis):m
   jps_neib_2d_ = std::make_shared<JPS2DNeib>();          // 预计算 JPS 2D 邻居查找表
 }
 
-// 坐标哈希函数, 将 (x,y) 栅格坐标转换为唯一的一维哈希 ID
-inline int GraphSearch::coordToId(int x, int y) const {
-  return map_->Index2Vectornum(x,y);               // 委托给 SDFmap 的索引转换函数
-}
-
-// inline int GraphSearch::coordToId(int x, int y, int z) const {
-//   return x + y*xDim_ + z*xDim_*yDim_;
-// }
-
-// 碰撞检测函数
-inline bool GraphSearch::isFree(int x, int y) const {
-  if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)  // 边界检查
-    return false;
-  return !map_->isOccWithSafeDis(x,y,safe_dis_);   // SDF 安全距离检查
-}
-
-// 检查栅格是否未被占用（使用地图原始占用信息，不考虑安全距离膨胀）
-inline bool GraphSearch::isUnoccupied(int x, int y) const{
-  if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)
-    return false;
-  return map_->isUnOccupied(x,y);
-}
-
-// 检查栅格是否被占用（边界外视为占用）
-inline bool GraphSearch::isOccupied(int x, int y) const {
-  // return x >= 0 && x < xDim_ && y >= 0 && y < yDim_ &&
-  //   cMap_[coordToId(x, y)] > val_free_;
-  if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)
-    return true;                                   // 边界外视为被占用
-  return map_->isOccupied(x,y);
-}
-
-// 启发式函数
-inline double GraphSearch::getHeur(int x, int y) const {
-  return eps_ * std::sqrt((x - xGoal_) * (x - xGoal_) + (y - yGoal_) * (y - yGoal_));
-}
-
 // 2D 规划入口
 bool GraphSearch::plan(int xStart, int yStart, int xGoal, int yGoal, bool useJps, int maxExpand)
 {
   use_2d_ = true;                                  // 标记为 2D 模式
   pq_.clear();                                     // 清空优先队列
   path_.clear();                                   // 清空路径
-  // hm_.resize(xDim_ * yDim_);
+  // hash_map_.resize(xDim_ * yDim_);
   // seen_.resize(xDim_ * yDim_, false);
   std::fill(seen_.begin(), seen_.end(), false);    // 重置所有访问标记
 
@@ -97,7 +60,7 @@ bool GraphSearch::plan(StatePtr& currNode_ptr, int maxExpand, int start_id, int 
   // 将起始节点插入优先队列
   currNode_ptr->heapkey = pq_.push(currNode_ptr);  // 入队并保存堆位置句柄
   currNode_ptr->opened = true;                     // 标记为已入队
-  hm_[currNode_ptr->id] = currNode_ptr;            // 注册到哈希映射
+  hash_map_[currNode_ptr->id] = currNode_ptr;      // 注册到哈希映射
   seen_[currNode_ptr->id] = true;                  // 标记为已访问
 
   int expand_iteration = 0;                        // 扩展计数器
@@ -129,7 +92,7 @@ bool GraphSearch::plan(StatePtr& currNode_ptr, int maxExpand, int start_id, int 
     for( int s = 0; s < (int) succ_ids.size(); s++ )
     {
       // 检查是否能改善后继节点的 g 值
-      StatePtr& child_ptr = hm_[succ_ids[s]];
+      StatePtr& child_ptr = hash_map_[succ_ids[s]];
       double tentative_gval = currNode_ptr->g + succ_costs[s];
 
       if( tentative_gval < child_ptr->g )
@@ -208,7 +171,7 @@ std::vector<StatePtr> GraphSearch::recoverPath(StatePtr node, int start_id) {
   std::vector<StatePtr> path;
   path.push_back(node);                            // 先加入目标节点
   while(node && node->id != start_id) {            // 沿父链回溯
-    node = hm_[node->parentId];                    // 通过哈希映射查找父节点
+    node = hash_map_[node->parentId];                    // 通过哈希映射查找父节点
     path.push_back(node);
   }
 
@@ -227,8 +190,8 @@ void GraphSearch::getSucc(const StatePtr& curr, std::vector<int>& succ_ids, std:
       int new_id = coordToId(new_x, new_y);
       if(!seen_[new_id]) {                         // 首次发现: 创建新 State
         seen_[new_id] = true;
-        hm_[new_id] = std::make_shared<State>(new_id, new_x, new_y, d[0], d[1]);
-        hm_[new_id]->h = getHeur(new_x, new_y);    // 预计算启发式代价
+        hash_map_[new_id] = std::make_shared<State>(new_id, new_x, new_y, d[0], d[1]);
+        hash_map_[new_id]->h = getHeur(new_x, new_y);    // 预计算启发式代价
       }
 
       succ_ids.push_back(new_id);
@@ -262,8 +225,8 @@ void GraphSearch::getJpsSucc(const StatePtr& curr, std::vector<int>& succ_ids, s
   if(use_2d_) {
     // L1 范数: |dx|+|dy| 用于分类移动类型
     const int norm1 = std::abs(curr->dx)+std::abs(curr->dy);
-    int num_neib = jn2d_->nsz[norm1][0];           // 自然邻居数量
-    int num_fneib = jn2d_->nsz[norm1][1];          // 强制邻居数量
+    int num_neib = jps_neib_2d_->nsz[norm1][0];           // 自然邻居数量
+    int num_fneib = jps_neib_2d_->nsz[norm1][1];          // 强制邻居数量
     // 将 (dx,dy) ∈ {-1,0,1}^2 映射到一维 ID [0..8]
     // id = (dx+1) + 3*(dy+1)
     int id = (curr->dx+1)+3*(curr->dy+1);
@@ -274,19 +237,19 @@ void GraphSearch::getJpsSucc(const StatePtr& curr, std::vector<int>& succ_ids, s
       int dx, dy;
       // 阶段1: 处理自然邻居（始终需要检查）
       if(dev < num_neib) {
-        dx = jn2d_->ns[id][0][dev];                // 查找表中的自然邻居方向
-        dy = jn2d_->ns[id][1][dev];
+        dx = jps_neib_2d_->ns[id][0][dev];                // 查找表中的自然邻居方向
+        dy = jps_neib_2d_->ns[id][1][dev];
         // 沿 (dx,dy) 执行跳跃，搜索跳点
         if(!jump(curr->x, curr->y, dx, dy, new_x, new_y)) continue;
       }
       // 阶段2: 处理强制邻居（仅在 f1 被占用时添加）
       else {
         // 检查 f1 位置是否被占用
-        int nx = curr->x + jn2d_->f1[id][0][dev-num_neib];
-        int ny = curr->y + jn2d_->f1[id][1][dev-num_neib];
+        int nx = curr->x + jps_neib_2d_->f1[id][0][dev-num_neib];
+        int ny = curr->y + jps_neib_2d_->f1[id][1][dev-num_neib];
         if(!isFree(nx,ny)) {                       // f1 被占用 -> 强制邻居触发
-          dx = jn2d_->f2[id][0][dev-num_neib];     // 向 f2 方向跳跃
-          dy = jn2d_->f2[id][1][dev-num_neib];
+          dx = jps_neib_2d_->f2[id][0][dev-num_neib];     // 向 f2 方向跳跃
+          dy = jps_neib_2d_->f2[id][1][dev-num_neib];
           if(!jump(curr->x, curr->y, dx, dy, new_x, new_y)) continue;
         }
         else
@@ -297,8 +260,8 @@ void GraphSearch::getJpsSucc(const StatePtr& curr, std::vector<int>& succ_ids, s
       int new_id = coordToId(new_x, new_y);
       if(!seen_[new_id]) {                         // 首次发现
         seen_[new_id] = true;
-        hm_[new_id] = std::make_shared<State>(new_id, new_x, new_y, dx, dy);
-        hm_[new_id]->h = getHeur(new_x, new_y);
+        hash_map_[new_id] = std::make_shared<State>(new_id, new_x, new_y, dx, dy);
+        hash_map_[new_id]->h = getHeur(new_x, new_y);
       }
       succ_ids.push_back(new_id);
       // 后继代价 = 直接从当前节点到跳点的欧几里得距离
@@ -419,13 +382,13 @@ bool GraphSearch::jump(int x, int y, int dx, int dy, int& new_x, int& new_y ) {
   // 只有当 dx 和 dy 都非零时才需要此检查（即对角线移动）
   const int id = (dx+1)+3*(dy+1);
   const int norm1 = std::abs(dx) + std::abs(dy);
-  int num_neib = jn2d_->nsz[norm1][0];             // 自然邻居数
+  int num_neib = jps_neib_2d_->nsz[norm1][0];             // 自然邻居数
   // 遍历自然邻居中的前 (num_neib-1) 个（即轴向分量，不包括对角线自身）
   for( int k = 0; k < num_neib-1; ++k )
   {
     int new_new_x, new_new_y;
     // 递归检查轴向分量是否可跳
-    if(jump(new_x, new_y, jn2d_->ns[id][0][k], jn2d_->ns[id][1][k],
+    if(jump(new_x, new_y, jps_neib_2d_->ns[id][0][k], jps_neib_2d_->ns[id][1][k],
         new_new_x, new_new_y)) return true;         // 轴向能跳到跳点 -> 对角线也是跳点
   }
 
@@ -468,8 +431,8 @@ inline bool GraphSearch::hasForced(int x, int y, int dx, int dy) {
   // 检查两组强制邻居（如直线移动的上下两格）
   for( int fn = 0; fn < 2; ++fn )
   {
-    int nx = x + jn2d_->f1[id][0][fn];             // 强制邻居检查点坐标
-    int ny = y + jn2d_->f1[id][1][fn];
+    int nx = x + jps_neib_2d_->f1[id][0][fn];             // 强制邻居检查点坐标
+    int ny = y + jps_neib_2d_->f1[id][1][fn];
     if( !isFree(nx,ny) )                           // 如果该位置不可通行
       return true;                                 // -> 存在强制邻居，当前点是跳点
   }
@@ -1105,6 +1068,39 @@ void JPS3DNeib::FNeib( int dx, int dy, int dz, int norm1, int dev,
 }
 
 
+// 坐标哈希函数, 将 (x,y) 栅格坐标转换为唯一的一维哈希 ID
+inline int GraphSearch::coordToId(int x, int y) const {
+  return map_->coordToId(x,y); // 委托给 EsdfMap 的索引转换函数
+}
 
+// inline int GraphSearch::coordToId(int x, int y, int z) const {
+//   return x + y*xDim_ + z*xDim_*yDim_;
+// }
 
+// 碰撞检测函数
+inline bool GraphSearch::isFree(int x, int y) const {
+  if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)  // 边界检查
+    return false;
+  return !map_->isOccWithSafeDis(x,y,safe_dis_);   // ESDF安全距离检查
+}
 
+// 检查栅格是否未被占用（使用地图原始占用信息，不考虑安全距离膨胀）
+inline bool GraphSearch::isUnoccupied(int x, int y) const{
+  if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)
+    return false;
+  return map_->isUnOccupied(x,y);
+}
+
+// 检查栅格是否被占用（边界外视为占用）
+inline bool GraphSearch::isOccupied(int x, int y) const {
+  // return x >= 0 && x < xDim_ && y >= 0 && y < yDim_ &&
+  //   cMap_[coordToId(x, y)] > val_free_;
+  if(x < 0 || x >= xDim_ || y < 0 || y >= yDim_)
+    return true;                                   // 边界外视为被占用
+  return map_->isOccupied(x,y);
+}
+
+// 启发式函数
+inline double GraphSearch::getHeur(int x, int y) const {
+  return eps_ * std::sqrt((x - xGoal_) * (x - xGoal_) + (y - yGoal_) * (y - yGoal_));
+}
