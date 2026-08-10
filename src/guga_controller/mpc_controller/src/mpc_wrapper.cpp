@@ -140,12 +140,12 @@ Input MpcWrapper::solve()
   status_ = omni_acados_solve(capsule_);
   ocp_nlp_get(slv_, "time_tot", &solve_time_);
   // 保存预测状态序列
-  for(int i=0;i<=kHorizonSteps;i++)
+  for(int i=0; i<=kHorizonSteps; i++)
   {
     ocp_nlp_out_get(cfg_, dims_, out_, i, "x", x_pred_.col(i).data());
   }
   // 保存预测控制序列
-  for(int i=0;i<=kHorizonSteps;i++)
+  for(int i=0; i<=kHorizonSteps; i++)
   {
     ocp_nlp_out_get(cfg_, dims_, out_, i, "u", u_pred_.col(i).data());
   }

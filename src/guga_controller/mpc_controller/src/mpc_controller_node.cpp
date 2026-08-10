@@ -89,10 +89,10 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   u0[1] = velocity.linear.y;
   u0[2] = velocity.angular.z;
 
-  mpc_wrapper_->set_x0(x0);
+  mpc_wrapper_->setInitialState(x0);
 
 
-  mpc_wrapper_->set_yref(ref_traj);
+  mpc_wrapper_->setReferenceTrajectory(ref_traj);
 
   std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
   std::vector<double> u_opt = mpc_wrapper_->solve();

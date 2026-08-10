@@ -45,9 +45,7 @@ public:
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
 
-  void setSpeedLimit(
-    const double & speed_limit,
-    const bool & percentage) override;
+  void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
 private:
 
@@ -103,9 +101,33 @@ inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose)
   return state;
 }
 
-inline const Control Vel2Ctrl (const geometry_msgs::msg::Twist& vel) const
+inline const Input Vel2Ctrl (const geometry_msgs::msg::Twist& vel) const
 {
-  const Control ctrl(3, 0.0);
+  const Input ctrl(3, 0.0);
+  ctrl[0] = vel.linear.x;
+  ctrl[1] = vel.linear.y;
+  ctrl[2] = vel.angular.z;
+
+  return ctrl;
+}
+
+inline const  State2Point(const geometry_msgs::msg::PoseStamped& pose) const
+{
+  const StateBound state(3, 0.0);
+  state[0] = pose.pose.position.x;
+  state[1] = pose.pose.position.y;
+
+  const auto & q = pose.pose.orientation;
+  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
+  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+  state[2] = std::atan2(siny, cosy);
+
+  return state;
+}
+
+inline const Input Ctrl2Vel (const geometry_msgs::msg::Twist& vel) const
+{
+  const Input ctrl(3, 0.0);
   ctrl[0] = vel.linear.x;
   ctrl[1] = vel.linear.y;
   ctrl[2] = vel.angular.z;
