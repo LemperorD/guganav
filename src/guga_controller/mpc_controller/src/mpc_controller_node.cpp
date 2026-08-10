@@ -1,4 +1,4 @@
-#include "mpc_controller/node/mpc_controller_node.hpp"
+#include "mpc_controller/mpc_controller_node.hpp"
 
 namespace mpc_controller
 {
@@ -12,7 +12,7 @@ void MpcControllerNode::configure(
   auto node = parent.lock();
   if (!node) { throw nav2_core::PlannerException("Unable to lock node!"); }
   node_ = parent;
-
+  
   costmap_ros_ = costmap_ros;
   tf_buffer_ = tf;
   name_ = name;
@@ -20,14 +20,12 @@ void MpcControllerNode::configure(
   clock_ = node->get_clock();
 
   local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
-  carrot_pub_ = node->create_publisher<geometry_msgs::msg::PointStamped>("lookahead_point", 1);
 
   // 初始化wrapper
   mpc_wrapper_ = std::make_shared<MpcWrapper>();
-  nav_wrapper_ = std::make_shared<NavWrapper>(tf_buffer_, costmap_ros_, local_plan_pub_, 0.1);
 
   // 加载参数并配置wrapper
-  loadParameters(); ConfigMpcWrapper(mpc_config_); ConfigNavWrapper(nav_config_);
+  loadParameters(); ConfigMpcWrapper(mpc_config_);
 
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Configured");
 }
@@ -35,20 +33,19 @@ void MpcControllerNode::configure(
 void MpcControllerNode::activate()
 {
   if (local_plan_pub_) { local_plan_pub_->on_activate(); }
-  if (carrot_pub_) { carrot_pub_->on_activate(); }
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Activated");
 }
 
 void MpcControllerNode::deactivate()
 {
   if (local_plan_pub_) { local_plan_pub_->on_deactivate(); }
-  if (carrot_pub_) { carrot_pub_->on_deactivate(); }
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Deactivated");
 }
 
 void MpcControllerNode::cleanup()
 {
-  local_plan_pub_.reset(); carrot_pub_.reset();
+  local_plan_pub_.reset();
+
   costmap_ros_.reset(); tf_buffer_.reset();
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Cleaned up");
 }
@@ -73,7 +70,6 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   if (global_plan_.poses.empty()) { return cmd_vel; }
 
   const double current_speed = std::hypot(velocity.linear.x, velocity.linear.y);
-  const double lookahead_distance = nav_wrapper_->getLookaheadDistance();
 
   double robot_yaw = 0.0;
   {
@@ -94,12 +90,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   u0[2] = velocity.angular.z;
 
   mpc_wrapper_->set_x0(x0);
-  mpc_wrapper_->set_xinit(x0);
-  mpc_wrapper_->set_uinit(u0);
 
-  auto local_plan = nav_wrapper_->transformGlobalPlan(pose, global_plan_);
-  std::vector<double> ref_point = getLookAheadPoint(lookahead_distance, local_plan);
-  mpc_wrapper_->set_yref(ref_point, u0);
+
+  mpc_wrapper_->set_yref(ref_traj);
 
   std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
   std::vector<double> u_opt = mpc_wrapper_->solve();
@@ -114,44 +107,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   return cmd_vel;
 }
 
-std::vector<double> MpcControllerNode::getLookAheadPoint(const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const
+std::vector<double> MpcControllerNode::getReferencePath() const
 {
-  auto goal_pose_it = std::find_if(
-    transformed_plan.poses.begin(), transformed_plan.poses.end(),
-    [&](const auto& ps) {
-      return std::hypot(ps.pose.position.x, ps.pose.position.y) >= lookahead_dist;
-    }
-  );
 
-  std::vector<double> lookahead_point(3, 0.0);
-  if (goal_pose_it == transformed_plan.poses.end()) {
-    // std::cout << "use end point" << std::endl;
-    goal_pose_it = std::prev(transformed_plan.poses.end());
-    carrot_pub_->publish(createCarrotMsg(*goal_pose_it));
-    lookahead_point = convertPoint2Vector(*goal_pose_it);
-  }
-  else if (nav_wrapper_->use_interpolation() && goal_pose_it != transformed_plan.poses.begin())
-  {
-    std::cout << "use interpolated point" << std::endl;
-    auto prev_pose_it = std::prev(goal_pose_it);
-    auto point = nav_wrapper_->circleSegmentIntersection(
-        prev_pose_it->pose.position, goal_pose_it->pose.position,
-        lookahead_dist);
-    geometry_msgs::msg::PoseStamped pose;
-    pose.header.frame_id = prev_pose_it->header.frame_id;
-    pose.header.stamp = goal_pose_it->header.stamp;
-    pose.pose.position = point;
-    carrot_pub_->publish(createCarrotMsg(pose));
-    lookahead_point = convertPoint2Vector(pose);
-  }
-  else
-  {
-    // std::cout << "use end point" << std::endl;
-    carrot_pub_->publish(createCarrotMsg(*std::prev(transformed_plan.poses.end())));
-    lookahead_point = convertPoint2Vector(*std::prev(transformed_plan.poses.end()));
-  }
-
-  return lookahead_point;
 }
 
 void MpcControllerNode::loadParameters()
@@ -214,16 +172,6 @@ void MpcControllerNode::loadParameters()
 
   nav2_util::declare_parameter_if_not_declared(node, name_ + ".mpc.omega_max", rclcpp::ParameterValue(6.0));
   node->get_parameter(name_ + ".mpc.omega_max", mpc_config_.omega_max);
-
-  // --- NAV参数部分 ---
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".nav.use_interpolation", rclcpp::ParameterValue(true));
-  node->get_parameter(name_ + ".nav.use_interpolation", nav_config_.use_interpolation);
-
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".nav.use_curvature_scaling", rclcpp::ParameterValue(true));
-  node->get_parameter(name_ + ".nav.use_curvature_scaling", nav_config_.use_curvature_scaling);
-
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".nav.lookahead_distance", rclcpp::ParameterValue(2.0));
-  node->get_parameter(name_ + ".nav.lookahead_distance", nav_config_.lookahead_distance);
 }
  
 void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
@@ -252,16 +200,9 @@ void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
     config.omega_min, config.omega_max);
 }
 
-void MpcControllerNode::ConfigNavWrapper(NavConfig & config)
-{
-  nav_wrapper_->setUseInterpolation(config.use_interpolation);
-  nav_wrapper_->setUseCurvatureScaling(config.use_curvature_scaling);
-  nav_wrapper_->setLookaheadDistance(config.lookahead_distance);
-}
-
 void MpcControllerNode::setSpeedLimit(const double & speed_limit, const bool & percentage)
 {
-
+  // USELESS API
 }
 
 } // namespace mpc_controller

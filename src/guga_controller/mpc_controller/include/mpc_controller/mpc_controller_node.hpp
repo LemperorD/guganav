@@ -13,33 +13,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_util/node_utils.hpp"
 
-#include "mpc_controller/core/mpc_wrapper.hpp"
-#include "mpc_controller/core/nav2_wrapper.hpp"
-
-inline std::vector<double> convertPoint2Vector(const geometry_msgs::msg::PoseStamped& pose)
-{
-  std::vector<double> point(3, 0.0);
-  point[0] = pose.pose.position.x;
-  point[1] = pose.pose.position.y;
-
-  const auto & q = pose.pose.orientation;
-  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
-  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  point[2] = std::atan2(siny, cosy);
-
-  return point;
-}
-
-inline std::unique_ptr<geometry_msgs::msg::PointStamped> createCarrotMsg(
-  const geometry_msgs::msg::PoseStamped & carrot_pose)
-{
-  auto carrot_msg = std::make_unique<geometry_msgs::msg::PointStamped>();
-  carrot_msg->header = carrot_pose.header;
-  carrot_msg->point.x = carrot_pose.pose.position.x;
-  carrot_msg->point.y = carrot_pose.pose.position.y;
-  carrot_msg->point.z = 0.01;  // publish right over map to stand out
-  return carrot_msg;
-}
+#include "mpc_controller/mpc_wrapper.hpp"
 
 namespace mpc_controller
 {
@@ -76,14 +50,6 @@ public:
     const bool & percentage) override;
 
 private:
-  /**
-   * @brief 获取前瞻点。
-   * @param lookahead_dist 前瞻距离。
-   * @param transformed_plan 已转换的全局路径。
-   * @return 前瞻点向量 (x, y, theta)。
-   */
-  std::vector<double> getLookAheadPoint(
-    const double& lookahead_dist, const nav_msgs::msg::Path& transformed_plan) const;
 
   /** 
    * @brief 从参数服务器加载配置。
@@ -95,12 +61,6 @@ private:
    * @param config MpcWrapper配置结构体。
    */
   void ConfigMpcWrapper(MpcConfig & config);
-
-  /**
-   * @brief 配置NavWrapper。
-   * @param config NavWrapper配置结构体。
-   */
-  void ConfigNavWrapper(NavConfig & config);
 
   // ROS2
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
@@ -117,9 +77,6 @@ private:
   // MPC控制器
   std::shared_ptr<MpcWrapper> mpc_wrapper_;
 
-  // Nav2路径处理器
-  std::shared_ptr<NavWrapper> nav_wrapper_;
-
   // 已存储的全局规划路径
   nav_msgs::msg::Path global_plan_;
 
@@ -128,9 +85,32 @@ private:
 
   // 配置参数
   MpcConfig mpc_config_;
-  NavConfig nav_config_;
 };
 
 }  // namespace mpc_controller
+
+inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose) const
+{
+  const StateBound state(3, 0.0);
+  state[0] = pose.pose.position.x;
+  state[1] = pose.pose.position.y;
+
+  const auto & q = pose.pose.orientation;
+  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
+  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+  state[2] = std::atan2(siny, cosy);
+
+  return state;
+}
+
+inline const Control Vel2Ctrl (const geometry_msgs::msg::Twist& vel) const
+{
+  const Control ctrl(3, 0.0);
+  ctrl[0] = vel.linear.x;
+  ctrl[1] = vel.linear.y;
+  ctrl[2] = vel.angular.z;
+
+  return ctrl;
+}
 
 #endif  // MPC_CONTROLLER_NODE_HPP_

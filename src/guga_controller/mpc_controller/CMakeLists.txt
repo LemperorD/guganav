@@ -32,7 +32,7 @@ set(GENERATED_SRC
 )
 
 ament_auto_add_library(mpc_wrapper SHARED
-  src/core/mpc_wrapper.cpp
+  src/mpc_wrapper.cpp
   ${GENERATED_SRC}
 )
 
@@ -55,22 +55,16 @@ target_link_libraries(mpc_wrapper
   m
 )
 
-
-ament_auto_add_library(nav2_wrapper SHARED
-  src/core/nav2_wrapper.cpp
-)
-
-ament_auto_add_library(${PROJECT_NAME}_node SHARED
-  src/node/mpc_controller_node.cpp
-)
-rclcpp_components_register_node(${PROJECT_NAME}_node
-  PLUGIN "mpc_controller::MpcControllerNode"
-  EXECUTABLE ${PROJECT_NAME}_node_exe
-)
-target_link_libraries(${PROJECT_NAME}_node 
-  mpc_wrapper
-  nav2_wrapper
-)
+# ament_auto_add_library(${PROJECT_NAME}_node SHARED
+#   src/mpc_controller_node.cpp
+# )
+# rclcpp_components_register_node(${PROJECT_NAME}_node
+#   PLUGIN "mpc_controller::MpcControllerNode"
+#   EXECUTABLE ${PROJECT_NAME}_node_exe
+# )
+# target_link_libraries(${PROJECT_NAME}_node 
+#   mpc_wrapper
+# )
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
