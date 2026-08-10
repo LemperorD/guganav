@@ -354,17 +354,17 @@ controller_server:
       mpc:
         qx: 10.0
         qy: 10.0
-        qtheta: 2.0
+        qtheta: 5.0
         rvx: 1.0
         rvy: 1.0
         romega: 0.5
         qx_e: 50.0
         qy_e: 50.0
-        qtheta_e: 10.0
-        vx_min: -2.0
-        vx_max: 2.0
-        vy_min: -0.5
-        vy_max: 0.5
+        qtheta_e: 25.0
+        vx_min: -1.0
+        vx_max: 1.0
+        vy_min: -1.0
+        vy_max: 1.0
         omega_min: -1.0
         omega_max: 1.0
       nav:

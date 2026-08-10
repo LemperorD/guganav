@@ -45,6 +45,9 @@ public:
     const std::string& frame,
     const geometry_msgs::msg::PoseStamped& in_pose) const;
 
+  [[nodiscard]]std::optional<nav_msgs::msg::Path> transformPath(
+  const std::string& frame, const nav_msgs::msg::Path& in_path) const;
+
   geometry_msgs::msg::Point circleSegmentIntersection(
     const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2,
     double r);

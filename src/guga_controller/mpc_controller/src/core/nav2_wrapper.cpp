@@ -41,12 +41,33 @@ std::optional<geometry_msgs::msg::PoseStamped> NavWrapper::transformPose(
   return std::nullopt;
 }
 
+std::optional<nav_msgs::msg::Path> NavWrapper::transformPath(
+  const std::string& frame, const nav_msgs::msg::Path& in_path) const
+{
+  if (in_path.header.frame_id == frame) {
+    return in_path;
+  }
+  try {
+    nav_msgs::msg::Path out_path;
+    for (const auto& pose : in_path.poses) {
+      auto transformed_pose = tf_buffer_->transform(pose, frame, transform_tolerance_);
+      out_path.poses.push_back(transformed_pose);
+    }
+    return out_path;
+  } catch (tf2::TransformException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger("nav2_wrapper"), "Exception in transformPath: %s", ex.what());
+  }
+  return std::nullopt;
+}
+
 nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::PoseStamped& pose, nav_msgs::msg::Path& global_plan)
 {
+  // 全局路径不能为空
   if (global_plan.poses.empty()) {
     throw nav2_core::PlannerException("Received plan with zero length");
   }
 
+  // 将机器人位姿转换到全局路径的坐标系中
   auto robot_pose = transformPose(global_plan.header.frame_id, pose);
   if (!robot_pose) {
     throw nav2_core::PlannerException(
@@ -55,26 +76,30 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
 
   double max_costmap_extent = getCostmapMaxExtent();
 
-  auto closest_pose_upper_bound =
-      nav2_util::geometry_utils::first_after_integrated_distance(
-          global_plan.poses.begin(), global_plan.poses.end(),
-          max_robot_pose_search_dist_);
+  // 根据代价地图尺寸对全局路径进行裁剪得到局部路径
+  // first_after_integrated_distance: 沿着路径累计长度，当累计距离超过指定阈值后，返回第一个超过该距离的路径点迭代器。
+  auto closest_pose_upper_bound = nav2_util::geometry_utils::first_after_integrated_distance(
+    global_plan.poses.begin(), global_plan.poses.end(), max_robot_pose_search_dist_);
 
+  // 找到全局路径上距离机器人最近的点（即机器人所在的点）
   auto transformation_begin = nav2_util::geometry_utils::min_by(
       global_plan.poses.begin(), closest_pose_upper_bound,
       [&robot_pose](const geometry_msgs::msg::PoseStamped& ps) {
         return euclidean_distance(*robot_pose, ps);
       });
 
+  // 找到局部路径应该截取到哪里（终点）
   auto transformation_end = std::find_if(
-      transformation_begin, global_plan.poses.end(), [&](const auto& pose) {
+      transformation_begin, global_plan.poses.end(),
+      [&](const auto& pose) {
         return euclidean_distance(pose, *robot_pose) > max_costmap_extent;
       });
 
   auto transform_global_pose_to_local = [&](const auto& global_plan_pose) {
     geometry_msgs::msg::PoseStamped stamped_pose;
     stamped_pose.header.frame_id = global_plan.header.frame_id;
-    stamped_pose.header.stamp = robot_pose->header.stamp;
+    // stamped_pose.header.stamp = robot_pose->header.stamp;
+    stamped_pose.header.stamp = rclcpp::Clock().now();
     stamped_pose.pose = global_plan_pose.pose;
     stamped_pose.pose.position.z = 0.0;
     return stamped_pose;
@@ -85,14 +110,19 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
                   std::back_inserter(transformed_plan.poses),
                   transform_global_pose_to_local);
   transformed_plan.header.frame_id = robot_pose->header.frame_id;
-  transformed_plan.header.stamp = robot_pose->header.stamp;
+  transformed_plan.header.stamp = rclcpp::Clock().now();
 
-  // global_plan.poses.erase(begin(global_plan.poses), transformation_begin);
+  global_plan.poses.erase(begin(global_plan.poses), transformation_begin);
   local_path_pub_->publish(transformed_plan);
 
-  if (transformed_plan.poses.empty()) {
-    throw nav2_core::PlannerException("Resulting plan has 0 poses in it.");
-  }
+  // auto out_plan = transformPath(pose.header.frame_id, transformed_plan);
+  // if (!out_plan || out_plan->poses.empty()) {
+  //   throw nav2_core::PlannerException("Resulting plan has 0 poses in it.");
+  //   return transformed_plan;
+  // } else {
+  //   local_path_pub_->publish(*out_plan);
+  //   return *out_plan;
+  // }
 
   return transformed_plan;
 }

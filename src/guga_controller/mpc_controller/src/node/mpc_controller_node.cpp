@@ -97,8 +97,8 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   mpc_wrapper_->set_xinit(x0);
   mpc_wrapper_->set_uinit(u0);
 
-  auto transformed_plan = nav_wrapper_->transformGlobalPlan(pose, global_plan_);
-  std::vector<double> ref_point = getLookAheadPoint(lookahead_distance, transformed_plan);
+  auto local_plan = nav_wrapper_->transformGlobalPlan(pose, global_plan_);
+  std::vector<double> ref_point = getLookAheadPoint(lookahead_distance, local_plan);
   mpc_wrapper_->set_yref(ref_point, u0);
 
   std::vector<double> u_opt = mpc_wrapper_->solve();
