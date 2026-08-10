@@ -23,8 +23,8 @@ class MPCSolver:
         self.ocp.name = self.model.name
         
         # Horizon 设置
-        self.N = 20                 # 预测步数
-        self.Tf = 1.0               # 预测时间(s)
+        self.N = 10                 # 预测步数
+        self.Tf = 0.5               # 预测时间(s)
         self.ocp.solver_options.N_horizon = self.N
         self.ocp.solver_options.tf = self.Tf
 

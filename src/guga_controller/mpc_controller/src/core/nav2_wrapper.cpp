@@ -98,8 +98,8 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
   auto transform_global_pose_to_local = [&](const auto& global_plan_pose) {
     geometry_msgs::msg::PoseStamped stamped_pose;
     stamped_pose.header.frame_id = global_plan.header.frame_id;
-    // stamped_pose.header.stamp = robot_pose->header.stamp;
-    stamped_pose.header.stamp = rclcpp::Clock().now();
+    stamped_pose.header.stamp = robot_pose->header.stamp;
+    // stamped_pose.header.stamp = rclcpp::Clock().now();
     stamped_pose.pose = global_plan_pose.pose;
     stamped_pose.pose.position.z = 0.0;
     return stamped_pose;
@@ -110,7 +110,8 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
                   std::back_inserter(transformed_plan.poses),
                   transform_global_pose_to_local);
   transformed_plan.header.frame_id = robot_pose->header.frame_id;
-  transformed_plan.header.stamp = rclcpp::Clock().now();
+  // transformed_plan.header.stamp = rclcpp::Clock().now();
+  transformed_plan.header.stamp = robot_pose->header.stamp;
 
   global_plan.poses.erase(begin(global_plan.poses), transformation_begin);
   local_path_pub_->publish(transformed_plan);

@@ -101,7 +101,11 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   std::vector<double> ref_point = getLookAheadPoint(lookahead_distance, local_plan);
   mpc_wrapper_->set_yref(ref_point, u0);
 
+  std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
   std::vector<double> u_opt = mpc_wrapper_->solve();
+  std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+  std::chrono::duration<double> elapsed_time = end_time - start_time;
+  RCLCPP_INFO(logger_, "MPC solve time: %.6f seconds", elapsed_time.count());
 
   cmd_vel.twist.linear.x = u_opt[0];
   cmd_vel.twist.linear.y = u_opt[1];
@@ -121,7 +125,7 @@ std::vector<double> MpcControllerNode::getLookAheadPoint(const double& lookahead
 
   std::vector<double> lookahead_point(3, 0.0);
   if (goal_pose_it == transformed_plan.poses.end()) {
-    std::cout << "use end point" << std::endl;
+    // std::cout << "use end point" << std::endl;
     goal_pose_it = std::prev(transformed_plan.poses.end());
     carrot_pub_->publish(createCarrotMsg(*goal_pose_it));
     lookahead_point = convertPoint2Vector(*goal_pose_it);
@@ -142,7 +146,7 @@ std::vector<double> MpcControllerNode::getLookAheadPoint(const double& lookahead
   }
   else
   {
-    std::cout << "use end point" << std::endl;
+    // std::cout << "use end point" << std::endl;
     carrot_pub_->publish(createCarrotMsg(*std::prev(transformed_plan.poses.end())));
     lookahead_point = convertPoint2Vector(*std::prev(transformed_plan.poses.end()));
   }
