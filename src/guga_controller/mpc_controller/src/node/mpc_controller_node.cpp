@@ -89,12 +89,14 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   x0[1] = pose.pose.position.y;
   x0[2] = robot_yaw;
 
-  // mpc_wrapper_->set_x0({x0[0], x0[1], x0[2]});
-  // mpc_wrapper_->set_xinit({x0[0], x0[1], x0[2]});
+  std::vector<double> u0(3, 0.0);
+  u0[0] = velocity.linear.x;
+  u0[1] = velocity.linear.y;
+  u0[2] = velocity.angular.z;
 
-  mpc_wrapper_->set_x0({0, 0, 0});
-  mpc_wrapper_->set_xinit({0, 0, 0});
-  mpc_wrapper_->set_uinit({0, 0, 0});
+  mpc_wrapper_->set_x0(x0);
+  mpc_wrapper_->set_xinit(x0);
+  mpc_wrapper_->set_uinit(u0);
 
   auto transformed_plan = nav_wrapper_->transformGlobalPlan(pose, global_plan_);
 
