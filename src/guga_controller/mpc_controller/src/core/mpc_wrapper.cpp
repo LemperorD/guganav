@@ -38,6 +38,52 @@ MpcWrapper::~MpcWrapper()
   }
 }
 
+// 移动构造函数
+MpcWrapper::MpcWrapper(MpcWrapper&& other) noexcept
+  : capsule_(other.capsule_),
+    cfg_(other.cfg_),
+    dims_(other.dims_),
+    in_(other.in_),
+    out_(other.out_),
+    slv_(other.slv_) {
+  // 清空源对象的指针
+  other.capsule_ = nullptr;
+  other.cfg_ = nullptr;
+  other.dims_ = nullptr;
+  other.in_ = nullptr;
+  other.out_ = nullptr;
+  other.slv_ = nullptr;
+}
+
+// 移动赋值运算符
+MpcWrapper& MpcWrapper::operator=(MpcWrapper&& other) noexcept {
+  if (this != &other) {
+    // 释放当前资源
+    if (capsule_ != nullptr) {
+      omni_acados_free(capsule_);
+      omni_acados_free_capsule(capsule_);
+    }
+
+    // 移动资源
+    capsule_ = other.capsule_;
+    cfg_ = other.cfg_;
+    dims_ = other.dims_;
+    in_ = other.in_;
+    out_ = other.out_;
+    slv_ = other.slv_;
+
+    // 清空源对象的指针
+    other.capsule_ = nullptr;
+    other.cfg_ = nullptr;
+    other.dims_ = nullptr;
+    other.in_ = nullptr;
+    other.out_ = nullptr;
+    other.slv_ = nullptr;
+  }
+  return *this;
+}
+
+
 const std::vector<double>& MpcWrapper::solve(){
   // solve ocp in loop
   for (int ii = 0; ii < NTIMINGS_; ii++)
@@ -127,9 +173,9 @@ void MpcWrapper::set_yref(const std::vector<double>& xref, const std::vector<dou
 }
 
 void MpcWrapper::setCosts(
-  const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> Q,
-  const Eigen::Ref<const Eigen::Matrix<double, kNU, kNU>> R,
-  const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> QE
+  const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> &Q,
+  const Eigen::Ref<const Eigen::Matrix<double, kNU, kNU>> &R,
+  const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> &QE
 ) {
   Eigen::Matrix<double,kNX+kNU,kNX+kNU> W;
   W.setZero();
@@ -141,8 +187,6 @@ void MpcWrapper::setCosts(
     ocp_nlp_cost_model_set(cfg_, dims_, in_, stage, "W", W.data());
   }
 
-  // ocp_nlp_cost_model_set expects a void* (non-const), but QE.data() is const double*
-  // cast away const to match the API. QE is not modified by this call.
   ocp_nlp_cost_model_set(cfg_, dims_, in_, kN, "W", const_cast<double*>(QE.data()));
 }
 

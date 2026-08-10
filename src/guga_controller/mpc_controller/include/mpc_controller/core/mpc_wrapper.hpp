@@ -28,26 +28,19 @@ namespace mpc_controller {
 
 struct CostWeights
 {
-  // 状态权重
-  double qx; double qy; double qtheta;
-
-  // 控制权重
-  double rvx; double rvy; double romega;
-
-  // 终端状态权重
-  double qx_e; double qy_e; double qtheta_e;
+  double qx; double qy; double qtheta; // 状态权重
+  double rvx; double rvy; double romega; // 控制权重
+  double qx_e; double qy_e; double qtheta_e; // 终端状态权重
 } typedef CostWeights;
 
-/**
- * @brief MPC 控制器配置结构体。
- */
+// MPC 控制器配置结构体。
 struct MpcWrapperConfig
 {
-  int horizon_n;
-  double control_dt;
-  double vx_min, vx_max;
-  double vy_min, vy_max;
-  double omega_min, omega_max;
+  int horizon_n; // 预测时域步数
+  double control_dt; // 控制时域步长
+  double vx_min, vx_max; // x线速度限制
+  double vy_min, vy_max; // y线速度限制
+  double omega_min, omega_max; // 角速度限制
   CostWeights cost_weights;
 } typedef MpcConfig;
 
@@ -66,6 +59,10 @@ public:
   MpcWrapper(const MpcWrapper &) = delete;
   MpcWrapper & operator=(const MpcWrapper &) = delete;
 
+  // 允许移动
+  MpcWrapper(MpcWrapper &&other) noexcept;
+  MpcWrapper &operator=(MpcWrapper &&other) noexcept;
+
   /**
    * @brief 设置代价函数权重矩阵。
    * @param Q 状态权重矩阵 (NX x NX)
@@ -73,9 +70,9 @@ public:
    * @param QE 终端状态权重矩阵 (NX x NX)
    */
   void setCosts(
-    const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> Q,
-    const Eigen::Ref<const Eigen::Matrix<double, kNU, kNU>> R,
-    const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> QE
+    const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> &Q,
+    const Eigen::Ref<const Eigen::Matrix<double, kNU, kNU>> &R,
+    const Eigen::Ref<const Eigen::Matrix<double, kNX, kNX>> &QE
   );
 
   /**
