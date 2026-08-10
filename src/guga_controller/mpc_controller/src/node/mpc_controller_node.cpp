@@ -74,7 +74,6 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 
   const double current_speed = std::hypot(velocity.linear.x, velocity.linear.y);
   const double lookahead_distance = nav_wrapper_->getLookaheadDistance();
-  std::cout << "Current Speed: " << current_speed << ", Lookahead Distance: " << lookahead_distance << std::endl;
 
   double robot_yaw = 0.0;
   {
@@ -84,7 +83,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
     robot_yaw = std::atan2(siny, cosy);
   }
 
-  std::vector<double> x0(3);
+  std::vector<double> x0(3, 0.0);
   x0[0] = pose.pose.position.x;
   x0[1] = pose.pose.position.y;
   x0[2] = robot_yaw;
@@ -99,21 +98,14 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   mpc_wrapper_->set_uinit(u0);
 
   auto transformed_plan = nav_wrapper_->transformGlobalPlan(pose, global_plan_);
-
   std::vector<double> ref_point = getLookAheadPoint(lookahead_distance, transformed_plan);
-  mpc_wrapper_->set_yref({ref_point[0], ref_point[1], ref_point[2]}, {0, 0, 0});
-
-  std::cout << "Lookahead Point: [" << ref_point[0] << ", " << ref_point[1] << ", " << ref_point[2] << "]" << std::endl;
+  mpc_wrapper_->set_yref(ref_point, u0);
 
   std::vector<double> u_opt = mpc_wrapper_->solve();
 
   cmd_vel.twist.linear.x = u_opt[0];
   cmd_vel.twist.linear.y = u_opt[1];
   cmd_vel.twist.angular.z = u_opt[2];
-
-  // if (nav_wrapper_->use_curvature_scaling()) {
-  //   nav_wrapper_->applyCurvatureLimitation(global_plan_, pose, cmd_vel.twist.linear.x);
-  // }
 
   return cmd_vel;
 }
@@ -150,9 +142,9 @@ std::vector<double> MpcControllerNode::getLookAheadPoint(const double& lookahead
   }
   else
   {
-    std::cout << "use next point" << std::endl;
-    carrot_pub_->publish(createCarrotMsg(*goal_pose_it));
-    lookahead_point = convertPoint2Vector(*goal_pose_it);
+    std::cout << "use end point" << std::endl;
+    carrot_pub_->publish(createCarrotMsg(*std::prev(transformed_plan.poses.end())));
+    lookahead_point = convertPoint2Vector(*std::prev(transformed_plan.poses.end()));
   }
 
   return lookahead_point;

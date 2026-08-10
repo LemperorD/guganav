@@ -76,25 +76,18 @@ nav_msgs::msg::Path NavWrapper::transformGlobalPlan(const geometry_msgs::msg::Po
     stamped_pose.header.frame_id = global_plan.header.frame_id;
     stamped_pose.header.stamp = robot_pose->header.stamp;
     stamped_pose.pose = global_plan_pose.pose;
-    auto transformed_pose = transformPose(costmap_ros_->getBaseFrameID(),
-                                          stamped_pose);
-    if (transformed_pose) {
-      transformed_pose->pose.position.z = 0.0;
-      return *transformed_pose;
-    }
-    geometry_msgs::msg::PoseStamped empty;
-    empty.pose.position.z = 0.0;
-    return empty;
+    stamped_pose.pose.position.z = 0.0;
+    return stamped_pose;
   };
 
   nav_msgs::msg::Path transformed_plan;
   std::transform(transformation_begin, transformation_end,
                   std::back_inserter(transformed_plan.poses),
                   transform_global_pose_to_local);
-  transformed_plan.header.frame_id = costmap_ros_->getBaseFrameID();
+  transformed_plan.header.frame_id = robot_pose->header.frame_id;
   transformed_plan.header.stamp = robot_pose->header.stamp;
 
-  global_plan.poses.erase(begin(global_plan.poses), transformation_begin);
+  // global_plan.poses.erase(begin(global_plan.poses), transformation_begin);
   local_path_pub_->publish(transformed_plan);
 
   if (transformed_plan.poses.empty()) {

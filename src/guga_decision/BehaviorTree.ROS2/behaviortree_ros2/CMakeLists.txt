@@ -8,7 +8,7 @@ set(THIS_PACKAGE_DEPS
     rclcpp
     rclcpp_action
     ament_index_cpp
-    behaviortree_cpp
+    behaviortree_cpp_v3
     btcpp_ros2_interfaces
     generate_parameter_library
     )

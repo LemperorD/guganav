@@ -60,6 +60,6 @@ def generate_launch_description():
     ld.add_action(referee_ign_bridge)
     ld.add_action(referee_ign_pose_bridge)
     ld.add_action(referee_ign_rfid_bridge)
-    ld.add_action(referee_system)
+    # ld.add_action(referee_system)
 
     return ld
