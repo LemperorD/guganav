@@ -11,6 +11,7 @@ Options:
     -c / --clean         清理build目录
     -r / --release       Release编译
     -d / --debug         Debug编译
+    -m / --model         强制重编译编译控制器模型
 EOF
 }
 
@@ -20,6 +21,10 @@ WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
 # 默认参数
 CLEAN=false
 BUILD_TYPE=Release
+
+# 是否重新编译MPC控制器模型
+FORCE_MODEL=false  # 强制编译模型
+HAVE_MODEL=true    # 根据是否存在模型文件来判断是否需要编译模型
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -37,6 +42,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -d | --debug)
             BUILD_TYPE=Debug
+            shift
+            ;;
+        -m | --model)
+            MODEL=true
             shift
             ;;
         *)
@@ -58,6 +67,28 @@ if $CLEAN; then
 fi
 
 echo "Building..."
+
+if [ ! -f "$WS/src/guga_controller/generated/" ]; then
+  echo "控制器模型不存在，正在编译..."
+  cd "$WS/src/guga_controller/model"
+  ./build_model.sh
+  if [ $? -ne 0 ]; then
+    echo "控制器模型编译失败，请检查错误信息。"
+    exit 1
+  fi
+fi
+
+if $FORCE_MODEL; then
+  echo "正在强制编译控制器模型..."
+  cd "$WS/src/guga_controller/model"
+  ./build_model.sh
+  if [ $? -ne 0 ]; then
+    echo "控制器模型编译失败，请检查错误信息。"
+    exit 1
+  fi
+else
+  echo "控制器模型已存在，跳过编译。"
+fi
 
 cd "$WS"
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
