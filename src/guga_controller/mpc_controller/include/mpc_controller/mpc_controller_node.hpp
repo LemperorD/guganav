@@ -60,6 +60,20 @@ private:
    */
   void ConfigMpcWrapper(MpcConfig & config);
 
+  /**
+   * @brief 获取局部规划路径
+   * @param pose 当前机器人位姿。
+   * @return 局部规划路径。
+   */
+  nav_msgs::msg::Path getLocalPlan(const geometry_msgs::msg::PoseStamped & pose);
+
+  /**
+   * @brief 生成参考轨迹
+   * @param local_plan 局部规划路径。
+   * @return 参考轨迹。
+   */
+  RefHorizon getReferenceHorizon(const nav_msgs::msg::Path & local_plan);
+
   // ROS2
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -69,8 +83,9 @@ private:
   rclcpp::Logger logger_{rclcpp::get_logger("MpcControllerNode")};
   rclcpp::Clock::SharedPtr clock_;
 
+  // pub
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;
-  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PointStamped>::SharedPtr carrot_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr predicted_plan_pub_;
 
   // MPC控制器
   std::shared_ptr<MpcWrapper> mpc_wrapper_;
@@ -87,6 +102,7 @@ private:
 
 }  // namespace mpc_controller
 
+// Tools
 inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose) const
 {
   const StateBound state(3, 0.0);
@@ -111,28 +127,45 @@ inline const Input Vel2Ctrl (const geometry_msgs::msg::Twist& vel) const
   return ctrl;
 }
 
-inline const  State2Point(const geometry_msgs::msg::PoseStamped& pose) const
+inline const geometry_msgs::msg::PoseStamped State2Point(const State& state) const
 {
-  const StateBound state(3, 0.0);
-  state[0] = pose.pose.position.x;
-  state[1] = pose.pose.position.y;
+  geometry_msgs::msg::PoseStamped pose;
+  pose.pose.position.x = state[0];
+  pose.pose.position.y = state[1];
+  pose.pose.position.z = 0.0;
 
-  const auto & q = pose.pose.orientation;
-  const double siny = 2.0 * (q.w * q.z + q.x * q.y);
-  const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  state[2] = std::atan2(siny, cosy);
+  const double yaw = state[2];
+  const double half_yaw = yaw * 0.5;
+  pose.pose.orientation.w = std::cos(half_yaw);
+  pose.pose.orientation.x = 0.0;
+  pose.pose.orientation.y = 0.0;
+  pose.pose.orientation.z = std::sin(half_yaw);
 
-  return state;
+  return pose;
 }
 
-inline const Input Ctrl2Vel (const geometry_msgs::msg::Twist& vel) const
-{
-  const Input ctrl(3, 0.0);
-  ctrl[0] = vel.linear.x;
-  ctrl[1] = vel.linear.y;
-  ctrl[2] = vel.angular.z;
 
-  return ctrl;
+inline const geometry_msgs::msg::Twist Ctrl2Vel (const Input& vel) const
+{
+  geometry_msgs::msg::Twist twist;
+  twist.linear.x = vel[0];
+  twist.linear.y = vel[1];
+  twist.linear.z = 0.0;
+  twist.angular.x = 0.0;
+  twist.angular.y = 0.0;
+  twist.angular.z = vel[2];
+
+  return twist;
+}
+
+inline const nav_msgs::msg::Path StateHorizon2Path(const StateHorizon& states) const
+{
+  nav_msgs::msg::Path path;
+  path.poses.reserve(states.size());
+  for (const auto& state : states) {
+    path.poses.push_back(State2Point(state));
+  }
+  return path;
 }
 
 #endif  // MPC_CONTROLLER_NODE_HPP_

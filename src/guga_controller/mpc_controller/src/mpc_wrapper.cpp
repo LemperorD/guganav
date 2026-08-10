@@ -114,7 +114,7 @@ void MpcWrapper::setControlLimits(double vx_min, double vx_max,
 }
 
 // 设置初始状态约束
-void MpcWrapper::setInitialState(const State &x0)
+void MpcWrapper::setInitialState(const StateBound &x0)
 {
   x0_ = x0;
   ocp_nlp_constraints_model_set(cfg_, dims_, in_, out_, 0, "lbx", x0_.data());

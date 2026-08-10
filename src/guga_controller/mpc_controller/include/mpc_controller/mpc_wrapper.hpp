@@ -112,6 +112,15 @@ class MpcWrapper {
   /// 求解 OCP, 返回最优控制量
   Input solve();
 
+  /// 获取求解时间
+  double solve_time() const { return solve_time_; }
+
+  /// 获取预测状态轨迹
+  const StateHorizon &predictedStates() const { return x_pred_; }
+
+  /// 获取预测控制轨迹
+  const InputHorizon &predictedInputs() const { return u_pred_; }
+
  private:
   // ── acados 内部句柄 ──
   omni_solver_capsule *capsule_{nullptr};
