@@ -37,7 +37,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 
 // 自定义消息
-#include <interfaces/msg/minco_trajectory.hpp>
+#include <guga_common/msg/minco_trajectory.hpp>
 
 #include "gcopter/trajectory.hpp"
 #include "pb_minco_smoother/costmap_esdf_adapter.hpp"
@@ -297,7 +297,7 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param start_time 轨迹起始绝对时间
      * @return MincoTrajectory 消息
      */
-    interfaces::msg::MincoTrajectory trajectoryToMsg(
+    guga_common::msg::MincoTrajectory trajectoryToMsg(
         const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header,
         const rclcpp::Time &start_time);
 
@@ -422,7 +422,7 @@ class MincoSmoother : public nav2_core::Smoother {
 
     // 发布器 - MINCO 多项式轨迹（用于 Controller 订阅）
     rclcpp_lifecycle::LifecyclePublisher<
-        interfaces::msg::MincoTrajectory>::SharedPtr minco_traj_pub_;
+        guga_common::msg::MincoTrajectory>::SharedPtr minco_traj_pub_;
 
     // 轨迹 ID 计数器（用于生成唯一标识）
     uint32_t trajectory_id_counter_ = 0;
