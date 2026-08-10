@@ -13,7 +13,7 @@ Options:
     -c / --clean         清理build目录
     -r / --release       Release编译
     -d / --debug         Debug编译
-    -m / --model         强制重编译编译控制器模型
+    -m / --model         强制重编译控制器模型
 EOF
 }
 
@@ -26,8 +26,7 @@ CLEAN=false
 BUILD_TYPE=Release
 
 # 是否重新编译MPC控制器模型
-FORCE_MODEL=false  # 强制编译模型
-HAVE_MODEL=true    # 根据是否存在模型文件来判断是否需要编译模型
+FORCE_MODEL=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -47,8 +46,8 @@ while [[ $# -gt 0 ]]; do
             BUILD_TYPE=Debug
             shift
             ;;
-        -m | --model)
-            MODEL=true
+        -fm | --force-model)
+            FORCE_MODEL=true
             shift
             ;;
         *)
@@ -76,26 +75,25 @@ fi
 
 echo "Building..."
 
-if [ ! -f "$WS/src/guga_controller/generated/" ]; then
-  echo "控制器模型不存在，正在编译..."
-  cd "$WS/src/guga_controller/model"
-  ./build_model.sh
-  if [ $? -ne 0 ]; then
-    echo "控制器模型编译失败，请检查错误信息。"
-    exit 1
-  fi
-fi
 
 if $FORCE_MODEL; then
   echo "正在强制编译控制器模型..."
-  cd "$WS/src/guga_controller/model"
-  ./build_model.sh
+  bash "$WS/scripts/ci/generate_acados_mpc.sh"
   if [ $? -ne 0 ]; then
     echo "控制器模型编译失败，请检查错误信息。"
     exit 1
   fi
 else
-  echo "控制器模型已存在，跳过编译。"
+  if [ ! -f "$WS/src/guga_controller/mpc_controller/generated/omni/omni_ocp/acados_solver_omni.h" ]; then
+    echo "控制器模型不存在，正在编译..."
+    bash "$WS/scripts/ci/generate_acados_mpc.sh"
+    if [ $? -ne 0 ]; then
+      echo "控制器模型编译失败，请检查错误信息。"
+      exit 1
+    fi
+  else 
+    echo "控制器模型已存在，跳过编译。"
+  fi
 fi
 
 cd "$WS"
