@@ -64,7 +64,9 @@ rclcpp_components_register_node(${PROJECT_NAME}_node
 )
 target_link_libraries(${PROJECT_NAME}_node 
   mpc_wrapper
+  dw
 )
+target_compile_definitions(${PROJECT_NAME}_node PRIVATE BACKWARD_HAS_DW=1)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

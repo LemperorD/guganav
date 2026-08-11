@@ -1,7 +1,7 @@
 #ifndef MPC_CONTROLLER_NODE_HPP_
 #define MPC_CONTROLLER_NODE_HPP_
 
-#define HUHU // DEBUG模式下打印调试信息
+// #define HUHU // DEBUG模式下打印调试信息
 
 #include <iostream>
 #include <memory>
@@ -18,6 +18,11 @@
 #include "nav2_util/node_utils.hpp"
 
 #include "mpc_controller/mpc_wrapper.hpp"
+#include "mpc_controller/backward.hpp"
+
+namespace backward{
+  backward::SignalHandling sh;
+}
 
 namespace mpc_controller
 {

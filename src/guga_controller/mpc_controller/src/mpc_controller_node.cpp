@@ -20,6 +20,7 @@ void MpcControllerNode::configure(
   clock_ = node->get_clock();
 
   local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+  predicted_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("predicted_plan", 1);
 
   // 初始化wrapper
   mpc_wrapper_ = std::make_shared<MpcWrapper>();
@@ -54,7 +55,6 @@ void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   global_plan_ = path;
-  std::cout << "[MpcControllerNode] setPlan: global_plan_.poses.size()=" << global_plan_.poses.size() << std::endl;
 }
 
 geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
@@ -70,33 +70,57 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   cmd_vel.twist.angular.z = 0.0;
 
   if (global_plan_.poses.empty()) { return cmd_vel; }
-  std::cout << "11111" << std::endl;
 #ifdef HUHU
-  std::cout << "11112" << std::endl;
-  std::printf("\033[1;32mstart computeVelocityCommands, global_plan_.poses.size()=%zu\033[0m\n", global_plan_.poses.size());
+  std::cout << "\033[1;32mstart compute velocity commands\033[0m" << std::endl;
 #endif
 
   // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
   geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
 #ifdef HUHU
-  std::printf("\033[1;32m坐标转换成功\033[0m\n");
+  std::cout << "\033[1;32m坐标转换成功\033[0m" << std::endl;
 #endif
   StateBound x0 = Point2State(global_pose);
 #ifdef HUHU
-  std::printf("\033[1;32m转换为StateBound成功\033[0m\n");
-#endif.
+  std::cout << "\033[1;32m转换为StateBound成功\033[0m" << std::endl;
+#endif
   mpc_wrapper_->setInitialState(x0);
 #ifdef HUHU
-  std::printf("\033[1;32m成功设置初始状态\033[0m\n");
+  std::cout << "\033[1;32m成功设置初始状态\033[0m" << std::endl;
 #endif
 
   auto local_plan = getLocalPlan(global_pose);
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态1\033[0m" << std::endl;
+#endif
   local_plan_pub_->publish(local_plan);
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态2\033[0m" << std::endl;
+#endif
 
   auto ref_traj = getReferenceHorizon(local_plan);
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态3\033[0m" << std::endl;
+#endif
   TerminalRef end_ref = ref_traj.col(kHorizonSteps - 1).head<3>();
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态4\033[0m" << std::endl;
+#endif
   mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
-  predicted_plan_pub_->publish(StateHorizon2Path(mpc_wrapper_->predictedStates()));
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态56\033[0m" << std::endl;
+#endif
+  auto predicted_states = mpc_wrapper_->predictedStates();
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态7\033[0m" << std::endl;
+#endif
+  auto predicted_plan = StateHorizon2Path(predicted_states);
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态8\033[0m" << std::endl;
+#endif
+  predicted_plan_pub_->publish(predicted_plan);
+#ifdef HUHU
+  std::cout << "\033[1;32m成功设置初始状态9\033[0m" << std::endl;
+#endif
 
   Input u_opt = mpc_wrapper_->solve();
   double solve_time = mpc_wrapper_->solve_time();
