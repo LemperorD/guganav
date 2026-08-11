@@ -60,6 +60,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 {
   std::lock_guard<std::mutex> lock(mutex_);
   (void)goal_checker;
+  (void)velocity;
 
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header = pose.header;
@@ -69,36 +70,22 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 
   if (global_plan_.poses.empty()) { return cmd_vel; }
 
-  const double current_speed = std::hypot(velocity.linear.x, velocity.linear.y);
-
-  double robot_yaw = 0.0;
-  {
-    const auto & q = pose.pose.orientation;
-    const double siny = 2.0 * (q.w * q.z + q.x * q.y);
-    const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-    robot_yaw = std::atan2(siny, cosy);
-  }
-
-  std::vector<double> x0(3, 0.0);
-  x0[0] = pose.pose.position.x;
-  x0[1] = pose.pose.position.y;
-  x0[2] = robot_yaw;
-
-  std::vector<double> u0(3, 0.0);
-  u0[0] = velocity.linear.x;
-  u0[1] = velocity.linear.y;
-  u0[2] = velocity.angular.z;
-
+  // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
+  geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
+  StateBound x0 = Point2State(global_pose);
   mpc_wrapper_->setInitialState(x0);
 
+  auto local_plan = getLocalPlan(global_pose);
+  local_plan_pub_->publish(local_plan);
 
-  mpc_wrapper_->setReferenceTrajectory(ref_traj);
+  auto ref_traj = getReferenceHorizon(local_plan);
+  TerminalRef end_ref = ref_traj.col(kHorizonSteps - 1).head<3>();
+  mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
+  predicted_plan_pub_->publish(StateHorizon2Path(mpc_wrapper_->predictedStates()));
 
-  std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-  std::vector<double> u_opt = mpc_wrapper_->solve();
-  std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
-  std::chrono::duration<double> elapsed_time = end_time - start_time;
-  RCLCPP_INFO(logger_, "MPC solve time: %.6f seconds", elapsed_time.count());
+  Input u_opt = mpc_wrapper_->solve();
+  double solve_time = mpc_wrapper_->solve_time();
+  RCLCPP_INFO(logger_, "MPC solve time: %.6f seconds", solve_time);
 
   cmd_vel.twist.linear.x = u_opt[0];
   cmd_vel.twist.linear.y = u_opt[1];
@@ -107,9 +94,97 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   return cmd_vel;
 }
 
-std::vector<double> MpcControllerNode::getReferencePath() const
+nav_msgs::msg::Path MpcControllerNode::getLocalPlan(const geometry_msgs::msg::PoseStamped & pose)
 {
+  nav_msgs::msg::Path local_plan;
+  local_plan.header = global_plan_.header;
 
+  if (global_plan_.poses.empty()) return local_plan;
+
+  // 1. 找到全局路径上距离机器人最近的点
+  auto closest = std::min_element(
+    global_plan_.poses.begin(), global_plan_.poses.end(),
+    [&pose](const auto &a, const auto &b) {
+      return std::hypot(a.pose.position.x - pose.pose.position.x,
+                        a.pose.position.y - pose.pose.position.y) <
+             std::hypot(b.pose.position.x - pose.pose.position.x,
+                        b.pose.position.y - pose.pose.position.y);
+    });
+
+  // 2. 从最近点开始沿路径前进, 累计距离不超过 local_plan_length_
+  local_plan.poses.push_back(*closest);
+
+  double cum_dist = 0.0;
+  for (auto it = closest; it + 1 != global_plan_.poses.end(); ++it) {
+    double dx = (it + 1)->pose.position.x - it->pose.position.x;
+    double dy = (it + 1)->pose.position.y - it->pose.position.y;
+    cum_dist += std::hypot(dx, dy);
+    local_plan.poses.push_back(*(it + 1));
+    if (cum_dist >= local_plan_length_) break;
+  }
+
+  return local_plan;
+}
+
+RefHorizon MpcControllerNode::getReferenceHorizon(const nav_msgs::msg::Path & local_plan)
+{
+  RefHorizon ref = RefHorizon::Zero();
+
+  if (local_plan.poses.size() < 2) return ref;
+
+  // 1. 计算局部路径的累计弧长
+  std::vector<double> arc_len(local_plan.poses.size(), 0.0);
+  for (size_t i = 1; i < local_plan.poses.size(); ++i) {
+    double dx = local_plan.poses[i].pose.position.x - local_plan.poses[i-1].pose.position.x;
+    double dy = local_plan.poses[i].pose.position.y - local_plan.poses[i-1].pose.position.y;
+    arc_len[i] = arc_len[i - 1] + std::hypot(dx, dy);
+  }
+
+  const double total_len = arc_len.back();
+
+  // 2. 沿路径均匀采样 N 个参考点
+  //    stage 0 对应最近的参考, stage N-1 对应最远的参考
+  const double step = total_len / kHorizonSteps;
+
+  for (int s = 0; s < kHorizonSteps; ++s) {
+    double target = step * (s + 1);  // s 越大参考点越远
+
+    // 二分查找目标弧长所在的路径段
+    auto it = std::lower_bound(arc_len.begin(), arc_len.end(), target);
+
+    if (it == arc_len.begin()) {
+      // 目标距离小于第一个段, 直接用起点
+      ref(0, s) = local_plan.poses[0].pose.position.x;
+      ref(1, s) = local_plan.poses[0].pose.position.y;
+      ref(2, s) = 0.0;
+    } else {
+      size_t idx = std::min(static_cast<size_t>(std::distance(arc_len.begin(), it)),
+                            arc_len.size() - 1);
+
+      double seg_len = arc_len[idx] - arc_len[idx - 1];
+      double ratio = (seg_len > 1e-9)
+        ? std::clamp((target - arc_len[idx - 1]) / seg_len, 0.0, 1.0)
+        : 0.0;
+
+      // 线性插值位置
+      ref(0, s) = local_plan.poses[idx-1].pose.position.x + ratio *
+                 (local_plan.poses[idx].pose.position.x - local_plan.poses[idx-1].pose.position.x);
+      ref(1, s) = local_plan.poses[idx-1].pose.position.y + ratio *
+                 (local_plan.poses[idx].pose.position.y - local_plan.poses[idx-1].pose.position.y);
+
+      // θ_ref: 路径切线方向
+      double dx = local_plan.poses[idx].pose.position.x - local_plan.poses[idx-1].pose.position.x;
+      double dy = local_plan.poses[idx].pose.position.y - local_plan.poses[idx-1].pose.position.y;
+      ref(2, s) = std::atan2(dy, dx);
+    }
+
+    // 控制参考量设为零 (只惩罚控制努力, 不预设速度方向)
+    ref(3, s) = 0.0;  // vx_ref
+    ref(4, s) = 0.0;  // vy_ref
+    ref(5, s) = 0.0;  // ω_ref
+  }
+
+  return ref;
 }
 
 void MpcControllerNode::loadParameters()
@@ -117,13 +192,6 @@ void MpcControllerNode::loadParameters()
   auto node = node_.lock(); if (!node) { return; }
 
   // --- MPC参数部分 ---
-  // 预测时域与控制时域
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".mpc.horizon_n", rclcpp::ParameterValue(15));
-  node->get_parameter(name_ + ".mpc.horizon_n", mpc_config_.horizon_n);
-
-  nav2_util::declare_parameter_if_not_declared(node, name_ + ".mpc.control_dt", rclcpp::ParameterValue(0.05));
-  node->get_parameter(name_ + ".mpc.control_dt", mpc_config_.control_dt);
-
   // 状态权重
   nav2_util::declare_parameter_if_not_declared(node, name_ + ".mpc.qx", rclcpp::ParameterValue(10.0));
   node->get_parameter(name_ + ".mpc.qx", mpc_config_.cost_weights.qx);
@@ -172,6 +240,10 @@ void MpcControllerNode::loadParameters()
 
   nav2_util::declare_parameter_if_not_declared(node, name_ + ".mpc.omega_max", rclcpp::ParameterValue(6.0));
   node->get_parameter(name_ + ".mpc.omega_max", mpc_config_.omega_max);
+
+  nav2_util::declare_parameter_if_not_declared(node, name_ + ".local_plan_length", rclcpp::ParameterValue(6.0));
+  node->get_parameter(name_ + ".local_plan_length", local_plan_length_);
+
 }
  
 void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
@@ -192,7 +264,7 @@ void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
     config.cost_weights.rvx,0,0,
     0,config.cost_weights.rvy,0,
     0,0,config.cost_weights.romega;
-  mpc_wrapper_->setCosts(Q, R, QE);
+  mpc_wrapper_->setCostWeights(Q, R, QE);
 
   // 设置MPC求解器的控制输入约束
   mpc_wrapper_->setControlLimits(
@@ -202,7 +274,20 @@ void MpcControllerNode::ConfigMpcWrapper(MpcConfig & config)
 
 void MpcControllerNode::setSpeedLimit(const double & speed_limit, const bool & percentage)
 {
-  // USELESS API
+  RCLCPP_DEBUG(logger_, "Setting speed limit: %f, percentage: %d", speed_limit, percentage);
+  // USELESS API, 这样写减少编译时的warning
+}
+
+inline geometry_msgs::msg::PoseStamped MpcControllerNode::transformPoseToGlobal(const geometry_msgs::msg::PoseStamped & pose) const
+{
+  geometry_msgs::msg::PoseStamped transformed_pose;
+  try {
+    transformed_pose = tf_buffer_->transform(pose, global_plan_.header.frame_id, tf2::durationFromSec(0.1));
+  } catch (tf2::TransformException & ex) {
+    RCLCPP_WARN(logger_, "Transform failed: %s", ex.what());
+    transformed_pose = pose; // 如果转换失败，返回原始位姿
+  }
+  return transformed_pose;
 }
 
 } // namespace mpc_controller

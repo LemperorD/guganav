@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 
+#include "nav2_core/exceptions.hpp"
 #include "nav2_core/controller.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
@@ -98,36 +99,37 @@ private:
 
   // 配置参数
   MpcConfig mpc_config_;
+
+  // 局部规划路径长度
+  double local_plan_length_{6.0};
+
+  inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(const geometry_msgs::msg::PoseStamped & pose) const;
 };
 
 }  // namespace mpc_controller
 
-// Tools
-inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose) const
+// Tools Functions
+inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose)
 {
-  const StateBound state(3, 0.0);
-  state[0] = pose.pose.position.x;
-  state[1] = pose.pose.position.y;
+  StateBound state;
+  state << pose.pose.position.x, pose.pose.position.y;
 
   const auto & q = pose.pose.orientation;
   const double siny = 2.0 * (q.w * q.z + q.x * q.y);
   const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  state[2] = std::atan2(siny, cosy);
+  state << std::atan2(siny, cosy);
 
   return state;
 }
 
-inline const Input Vel2Ctrl (const geometry_msgs::msg::Twist& vel) const
+inline Input Vel2Ctrl(const geometry_msgs::msg::Twist& vel)
 {
-  const Input ctrl(3, 0.0);
-  ctrl[0] = vel.linear.x;
-  ctrl[1] = vel.linear.y;
-  ctrl[2] = vel.angular.z;
-
+  Input ctrl;
+  ctrl << vel.linear.x, vel.linear.y, vel.angular.z;
   return ctrl;
 }
 
-inline const geometry_msgs::msg::PoseStamped State2Point(const State& state) const
+inline const geometry_msgs::msg::PoseStamped State2Point(const State& state)
 {
   geometry_msgs::msg::PoseStamped pose;
   pose.pose.position.x = state[0];
@@ -144,8 +146,7 @@ inline const geometry_msgs::msg::PoseStamped State2Point(const State& state) con
   return pose;
 }
 
-
-inline const geometry_msgs::msg::Twist Ctrl2Vel (const Input& vel) const
+inline const geometry_msgs::msg::Twist Ctrl2Vel (const Input& vel)
 {
   geometry_msgs::msg::Twist twist;
   twist.linear.x = vel[0];
@@ -158,12 +159,12 @@ inline const geometry_msgs::msg::Twist Ctrl2Vel (const Input& vel) const
   return twist;
 }
 
-inline const nav_msgs::msg::Path StateHorizon2Path(const StateHorizon& states) const
+inline const nav_msgs::msg::Path StateHorizon2Path(const StateHorizon& state_horizon)
 {
   nav_msgs::msg::Path path;
-  path.poses.reserve(states.size());
-  for (const auto& state : states) {
-    path.poses.push_back(State2Point(state));
+  path.poses.reserve(state_horizon.cols());
+  for (int i = 0; i < state_horizon.cols(); ++i) {
+    path.poses.push_back(State2Point(state_horizon.col(i)));
   }
   return path;
 }

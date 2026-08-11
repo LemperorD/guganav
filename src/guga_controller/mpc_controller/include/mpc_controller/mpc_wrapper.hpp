@@ -96,10 +96,6 @@ class MpcWrapper {
                         double vy_min, double vy_max,
                         double omega_min, double omega_max);
 
-  // ────────────────────────────────────────────────
-  // 每帧调用
-  // ────────────────────────────────────────────────
-
   /// 设置 stage 0 的初始状态等式约束 (lbx = ubx = x0)
   void setInitialState(const StateBound &x0);
 
@@ -112,14 +108,17 @@ class MpcWrapper {
   /// 求解 OCP, 返回最优控制量
   Input solve();
 
+  /// 获取预测时域总时长
+  double* pred_time() const { return in_->Ts; }
+
   /// 获取求解时间
   double solve_time() const { return solve_time_; }
 
   /// 获取预测状态轨迹
-  const StateHorizon &predictedStates() const { return x_pred_; }
+  StateHorizon predictedStates() const { return x_pred_; }
 
   /// 获取预测控制轨迹
-  const InputHorizon &predictedInputs() const { return u_pred_; }
+  InputHorizon predictedInputs() const { return u_pred_; }
 
  private:
   // ── acados 内部句柄 ──
