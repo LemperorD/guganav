@@ -354,19 +354,19 @@ controller_server:
       mpc:
         qx: 100.0
         qy: 100.0
-        qtheta: 100.0
-        rvx: 1.0
-        rvy: 1.0
-        romega: 0.5
-        qx_e: 50.0
-        qy_e: 50.0
-        qtheta_e: 25.0
-        vx_min: -2.0
-        vx_max: 2.0
-        vy_min: -2.0
-        vy_max: 2.0
-        omega_min: -1.0
-        omega_max: 1.0
+        qtheta: 500.0
+        rvx: 50.0
+        rvy: 50.0
+        romega: 250.0
+        qx_e: 500.0
+        qy_e: 500.0
+        qtheta_e: 200.0
+        vx_min: -0.5
+        vx_max: 0.5
+        vy_min: -0.5
+        vy_max: 0.5
+        omega_min: -2.0
+        omega_max: 2.0
       local_plan_length: 2.0
 
 local_costmap:

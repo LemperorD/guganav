@@ -1,16 +1,4 @@
-// Copyright 2025 Lihan Chen
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// #define ODEMETRY_DEBUG
 
 #include "fake_vel_transform/fake_vel_transform.hpp"
 
@@ -112,6 +100,10 @@ void FakeVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstShar
 {
   // NOTE: Haven't synced with local_plan
   if ((rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
+#ifdef ODEMETRY_DEBUG
+    std::cout << "odom parent frame: " << msg->header.frame_id << std::endl;
+    std::cout << "odom child frame: " << msg->child_frame_id << std::endl;
+#endif
     current_robot_base_angle_ = tf2::getYaw(msg->pose.pose.orientation);
   }
 }
@@ -125,7 +117,8 @@ void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr
     is_zero_vel ||
     (rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
     // If received velocity cannot be synchronized, publish it directly
-    auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
+    // auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
+    auto aft_tf_vel = *msg; // 尝试暂时禁用速度转换
     cmd_vel_chassis_pub_->publish(aft_tf_vel);
     visualizeVelocity(aft_tf_vel);
   } else {
@@ -223,7 +216,7 @@ void FakeVelTransform::visualizeVelocity(
   double scale = vis_scale_;
 
   visualization_msgs::msg::Marker linear_marker;
-  linear_marker.header.frame_id = fake_robot_base_frame_;
+  linear_marker.header.frame_id = robot_base_frame_;
   linear_marker.header.stamp = now;
   linear_marker.ns = "cmd_vel";
   linear_marker.id = 0;
@@ -255,7 +248,7 @@ void FakeVelTransform::visualizeVelocity(
   vis_marker_pub_->publish(linear_marker);
 
   visualization_msgs::msg::Marker angular_marker;
-  angular_marker.header.frame_id = vis_frame_id_;
+  angular_marker.header.frame_id = robot_base_frame_;
   angular_marker.header.stamp = now;
   angular_marker.ns = "cmd_vel";
   angular_marker.id = 1;
