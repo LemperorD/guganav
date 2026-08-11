@@ -1,3 +1,17 @@
+// Copyright 2025 Lihan Chen
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // #define ODEMETRY_DEBUG
 
 #include "fake_vel_transform/fake_vel_transform.hpp"
@@ -50,9 +64,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   cmd_vel_chassis_pub_ =
     this->create_publisher<geometry_msgs::msg::Twist>(output_cmd_vel_topic_, 1);
 
-  vis_marker_pub_ =
-    this->create_publisher<visualization_msgs::msg::Marker>(
-      vis_cmd_vel_topic_, 10);
+  vis_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(vis_cmd_vel_topic_, 10);
 
   cmd_spin_sub_ = this->create_subscription<example_interfaces::msg::Float32>(
     cmd_spin_topic_, 1, std::bind(&FakeVelTransform::cmdSpinCallback, this, std::placeholders::_1));
@@ -61,7 +73,8 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
     std::bind(&FakeVelTransform::cmdVelCallback, this, std::placeholders::_1));
 
   chassis_mode_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
-    chassis_mode_topic_, 1, std::bind(&FakeVelTransform::chassisModeCallback, this, std::placeholders::_1));
+    chassis_mode_topic_, 1,
+    std::bind(&FakeVelTransform::chassisModeCallback, this, std::placeholders::_1));
 
   odom_sub_filter_.subscribe(this, odom_topic_);
   local_plan_sub_filter_.subscribe(this, local_plan_topic_);
@@ -116,9 +129,11 @@ void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr
   if (
     is_zero_vel ||
     (rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
-    // If received velocity cannot be synchronized, publish it directly
-    // auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
-    auto aft_tf_vel = *msg; // 尝试暂时禁用速度转换
+    // Recovery behaviors do not publish a local plan, but their velocity is
+    // still expressed in fake_robot_base_frame_ and must be transformed.
+    const double yaw_diff =
+      selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, current_robot_base_angle_);
+    auto aft_tf_vel = transformVelocity(msg, yaw_diff);
     cmd_vel_chassis_pub_->publish(aft_tf_vel);
     visualizeVelocity(aft_tf_vel);
   } else {
@@ -144,12 +159,10 @@ void FakeVelTransform::syncCallback(
     }
     current_cmd_vel = latest_cmd_vel_;
   }
-  
-  current_robot_base_angle_ = tf2::getYaw(odom_msg->pose.pose.orientation);
-  float yaw_diff=0.0;
 
-  if(chassis_mode_ == chassisFollowed) yaw_diff = chassis_followed_yaw_;
-  else yaw_diff = current_robot_base_angle_;
+  current_robot_base_angle_ = tf2::getYaw(odom_msg->pose.pose.orientation);
+  const double yaw_diff =
+    selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, current_robot_base_angle_);
 
   geometry_msgs::msg::Twist aft_tf_vel = transformVelocity(current_cmd_vel, yaw_diff);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
@@ -162,22 +175,18 @@ void FakeVelTransform::updateGimbalYaw()
     auto tf = tf_buffer_->lookupTransform(chassis_frame_, robot_base_frame_, tf2::TimePointZero);
 
     tf2::Quaternion q(
-      tf.transform.rotation.x,
-      tf.transform.rotation.y,
-      tf.transform.rotation.z,
+      tf.transform.rotation.x, tf.transform.rotation.y, tf.transform.rotation.z,
       tf.transform.rotation.w);
 
     double roll, pitch, yaw;
     tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
     chassis_followed_yaw_ = yaw;
-  }
-  catch (const tf2::TransformException & ex) {
+  } catch (const tf2::TransformException & ex) {
     RCLCPP_WARN_THROTTLE(
-      get_logger(), *get_clock(), 2000,
-      "Failed to lookup TF %s->%s: %s", chassis_frame_.c_str(), robot_base_frame_.c_str(), ex.what());
+      get_logger(), *get_clock(), 2000, "Failed to lookup TF %s->%s: %s", chassis_frame_.c_str(),
+      robot_base_frame_.c_str(), ex.what());
   }
 }
-
 
 void FakeVelTransform::publishTransform()
 {
@@ -187,8 +196,10 @@ void FakeVelTransform::publishTransform()
   t.child_frame_id = fake_robot_base_frame_;
 
   double tf_yaw = 0.0;
-  if (chassis_mode_ == chassisFollowed) tf_yaw = -chassis_followed_yaw_;
-  else tf_yaw = -current_robot_base_angle_;
+  if (chassis_mode_ == chassisFollowed)
+    tf_yaw = -chassis_followed_yaw_;
+  else
+    tf_yaw = -current_robot_base_angle_;
 
   tf2::Quaternion q;
   q.setRPY(0.0, 0.0, tf_yaw);
@@ -196,21 +207,34 @@ void FakeVelTransform::publishTransform()
   tf_broadcaster_->sendTransform(t);
 }
 
-geometry_msgs::msg::Twist FakeVelTransform::transformVelocity( const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff) { 
-  geometry_msgs::msg::Twist out;
-  out.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff); 
-  out.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
-  if(chassis_mode_ == chassisFollowed){  
-    out.angular.z = twist->angular.z; 
-  } 
-  else{
-    out.angular.z = twist->angular.z + spin_speed_;
-  } 
+double FakeVelTransform::selectVelocityYawDiff(
+  uint8_t chassis_mode, double chassis_followed_yaw, double robot_base_angle)
+{
+  return chassis_mode == chassisFollowed ? chassis_followed_yaw : robot_base_angle;
+}
+
+geometry_msgs::msg::Twist FakeVelTransform::rotateVelocity(
+  const geometry_msgs::msg::Twist & twist, double yaw_diff)
+{
+  geometry_msgs::msg::Twist out = twist;
+  out.linear.x = twist.linear.x * std::cos(yaw_diff) + twist.linear.y * std::sin(yaw_diff);
+  out.linear.y = -twist.linear.x * std::sin(yaw_diff) + twist.linear.y * std::cos(yaw_diff);
   return out;
 }
 
-void FakeVelTransform::visualizeVelocity(
-  const geometry_msgs::msg::Twist & vel)
+geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
+  const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff)
+{
+  auto out = rotateVelocity(*twist, yaw_diff);
+  if (chassis_mode_ == chassisFollowed) {
+    out.angular.z = twist->angular.z;
+  } else {
+    out.angular.z = twist->angular.z + spin_speed_;
+  }
+  return out;
+}
+
+void FakeVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist & vel)
 {
   auto now = this->get_clock()->now();
   double scale = vis_scale_;
