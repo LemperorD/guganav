@@ -36,6 +36,9 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("cmd_spin_topic", "cmd_spin");
   this->declare_parameter<std::string>("input_cmd_vel_topic", "");
   this->declare_parameter<std::string>("output_cmd_vel_topic", "");
+  this->declare_parameter<std::string>("vis_cmd_vel_topic", "cmd_vel_marker");
+  this->declare_parameter<std::string>("vis_frame_id", "base_link");
+  this->declare_parameter<double>("vis_scale", 1.0);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
   this->declare_parameter<float>("init_spin_speed", 0.0);
 
@@ -47,6 +50,8 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->get_parameter("cmd_spin_topic", cmd_spin_topic_);
   this->get_parameter("input_cmd_vel_topic", input_cmd_vel_topic_);
   this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
+  this->get_parameter("vis_cmd_vel_topic", vis_cmd_vel_topic_);
+  this->get_parameter("vis_scale", vis_scale_);
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
 
@@ -56,6 +61,10 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
 
   cmd_vel_chassis_pub_ =
     this->create_publisher<geometry_msgs::msg::Twist>(output_cmd_vel_topic_, 1);
+
+  vis_marker_pub_ =
+    this->create_publisher<visualization_msgs::msg::Marker>(
+      vis_cmd_vel_topic_, 10);
 
   cmd_spin_sub_ = this->create_subscription<example_interfaces::msg::Float32>(
     cmd_spin_topic_, 1, std::bind(&FakeVelTransform::cmdSpinCallback, this, std::placeholders::_1));
@@ -118,6 +127,7 @@ void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr
     // If received velocity cannot be synchronized, publish it directly
     auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
     cmd_vel_chassis_pub_->publish(aft_tf_vel);
+    visualizeVelocity(aft_tf_vel);
   } else {
     latest_cmd_vel_ = msg;
   }
@@ -150,6 +160,7 @@ void FakeVelTransform::syncCallback(
 
   geometry_msgs::msg::Twist aft_tf_vel = transformVelocity(current_cmd_vel, yaw_diff);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
+  visualizeVelocity(aft_tf_vel);
 }
 
 void FakeVelTransform::updateGimbalYaw()
@@ -202,7 +213,79 @@ geometry_msgs::msg::Twist FakeVelTransform::transformVelocity( const geometry_ms
   else{
     out.angular.z = twist->angular.z + spin_speed_;
   } 
-  return out; 
+  return out;
+}
+
+void FakeVelTransform::visualizeVelocity(
+  const geometry_msgs::msg::Twist & vel)
+{
+  auto now = this->get_clock()->now();
+  double scale = vis_scale_;
+
+  visualization_msgs::msg::Marker linear_marker;
+  linear_marker.header.frame_id = fake_robot_base_frame_;
+  linear_marker.header.stamp = now;
+  linear_marker.ns = "cmd_vel";
+  linear_marker.id = 0;
+  linear_marker.type = visualization_msgs::msg::Marker::ARROW;
+  linear_marker.action = visualization_msgs::msg::Marker::ADD;
+  linear_marker.pose.orientation.w = 1.0;
+  linear_marker.scale.x = 0.06;
+  linear_marker.scale.y = 0.12;
+  linear_marker.scale.z = 0.0;
+  linear_marker.color.r = 0.0;
+  linear_marker.color.g = 1.0;
+  linear_marker.color.b = 0.0;
+  linear_marker.color.a = 0.8;
+  linear_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
+
+  geometry_msgs::msg::Point start;
+  start.x = 0.0;
+  start.y = 0.0;
+  start.z = 0.0;
+
+  geometry_msgs::msg::Point end;
+  end.x = vel.linear.x * scale;
+  end.y = vel.linear.y * scale;
+  end.z = 0.0;
+
+  linear_marker.points.push_back(start);
+  linear_marker.points.push_back(end);
+
+  vis_marker_pub_->publish(linear_marker);
+
+  visualization_msgs::msg::Marker angular_marker;
+  angular_marker.header.frame_id = vis_frame_id_;
+  angular_marker.header.stamp = now;
+  angular_marker.ns = "cmd_vel";
+  angular_marker.id = 1;
+  angular_marker.type = visualization_msgs::msg::Marker::ARROW;
+  angular_marker.action = visualization_msgs::msg::Marker::ADD;
+  angular_marker.pose.position.z = 0.05;
+  angular_marker.pose.orientation.w = 1.0;
+  angular_marker.scale.x = 0.04;
+  angular_marker.scale.y = 0.08;
+  angular_marker.scale.z = 0.0;
+  angular_marker.color.r = 1.0;
+  angular_marker.color.g = 0.5;
+  angular_marker.color.b = 0.0;
+  angular_marker.color.a = 0.8;
+  angular_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
+
+  geometry_msgs::msg::Point z_start;
+  z_start.x = 0.0;
+  z_start.y = 0.0;
+  z_start.z = 0.0;
+
+  geometry_msgs::msg::Point z_end;
+  z_end.x = 0.0;
+  z_end.y = 0.0;
+  z_end.z = vel.angular.z * scale * 0.5;
+
+  angular_marker.points.push_back(z_start);
+  angular_marker.points.push_back(z_end);
+
+  vis_marker_pub_->publish(angular_marker);
 }
 
 }  // namespace fake_vel_transform

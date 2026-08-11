@@ -32,6 +32,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 
 typedef enum
@@ -61,6 +62,7 @@ private:
   void publishTransform();
   geometry_msgs::msg::Twist transformVelocity(
     const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff);
+  void visualizeVelocity(const geometry_msgs::msg::Twist & vel);
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<example_interfaces::msg::Float32>::SharedPtr cmd_spin_sub_;
@@ -73,6 +75,7 @@ private:
   std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_chassis_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr vis_marker_pub_;
 
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
@@ -89,6 +92,9 @@ private:
   std::string cmd_spin_topic_;
   std::string input_cmd_vel_topic_;
   std::string output_cmd_vel_topic_;
+  std::string vis_cmd_vel_topic_;
+  std::string vis_frame_id_;
+  double vis_scale_{1.0};
   std::string chassis_mode_topic_;
   float spin_speed_;
   uint8_t chassis_mode_=1;
