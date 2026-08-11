@@ -1,6 +1,9 @@
 #ifndef MPC_CONTROLLER_NODE_HPP_
 #define MPC_CONTROLLER_NODE_HPP_
 
+#define HUHU // DEBUG模式下打印调试信息
+
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <string>

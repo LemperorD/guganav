@@ -54,6 +54,7 @@ void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   global_plan_ = path;
+  std::cout << "[MpcControllerNode] setPlan: global_plan_.poses.size()=" << global_plan_.poses.size() << std::endl;
 }
 
 geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
@@ -69,11 +70,25 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   cmd_vel.twist.angular.z = 0.0;
 
   if (global_plan_.poses.empty()) { return cmd_vel; }
+  std::cout << "11111" << std::endl;
+#ifdef HUHU
+  std::cout << "11112" << std::endl;
+  std::printf("\033[1;32mstart computeVelocityCommands, global_plan_.poses.size()=%zu\033[0m\n", global_plan_.poses.size());
+#endif
 
   // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
   geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
+#ifdef HUHU
+  std::printf("\033[1;32m坐标转换成功\033[0m\n");
+#endif
   StateBound x0 = Point2State(global_pose);
+#ifdef HUHU
+  std::printf("\033[1;32m转换为StateBound成功\033[0m\n");
+#endif.
   mpc_wrapper_->setInitialState(x0);
+#ifdef HUHU
+  std::printf("\033[1;32m成功设置初始状态\033[0m\n");
+#endif
 
   auto local_plan = getLocalPlan(global_pose);
   local_plan_pub_->publish(local_plan);
