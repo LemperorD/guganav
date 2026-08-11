@@ -1,7 +1,9 @@
 #ifndef MPC_CONTROLLER_NODE_HPP_
 #define MPC_CONTROLLER_NODE_HPP_
 
-// #define HUHU // DEBUG模式下打印调试信息
+// #define PREDICTED_PLAN_DEBUG
+// #define SOLVE_TIME_DEBUG
+#define REFERENCE_DEBUG
 
 #include <iostream>
 #include <memory>
@@ -109,7 +111,7 @@ private:
   MpcConfig mpc_config_;
 
   // 局部规划路径长度
-  double local_plan_length_{6.0};
+  double local_plan_length_{2.0};
 
   inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(const geometry_msgs::msg::PoseStamped & pose) const;
 };
@@ -167,13 +169,22 @@ inline const geometry_msgs::msg::Twist Ctrl2Vel (const Input& vel)
   return twist;
 }
 
-inline const nav_msgs::msg::Path StateHorizon2Path(const StateHorizon& state_horizon)
+inline const nav_msgs::msg::Path StateHorizon2Path(const nav_msgs::msg::Path& global_plan, const StateHorizon& state_horizon)
 {
   nav_msgs::msg::Path path;
   path.poses.reserve(state_horizon.cols());
   for (int i = 0; i < state_horizon.cols(); ++i) {
-    path.poses.push_back(State2Point(state_horizon.col(i)));
+    auto pose = State2Point(state_horizon.col(i));
+    pose.header = global_plan.header;
+    path.poses.push_back(pose);
+#ifdef PREDICTED_PLAN_DEBUG
+    std::cout << "\033[1;33mPredicted point " << i << ": "
+              << "x: " << pose.pose.position.x << ", "
+              << "y: " << pose.pose.position.y << ", "
+              << "theta: " << pose.pose.orientation.z << "\033[0m" << std::endl;
+#endif
   }
+  path.header.frame_id = global_plan.header.frame_id;
   return path;
 }
 

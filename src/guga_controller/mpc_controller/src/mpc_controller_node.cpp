@@ -63,72 +63,79 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   (void)goal_checker;
   (void)velocity;
 
+  // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
+  geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
+  StateBound x0 = Point2State(global_pose);
+  mpc_wrapper_->setInitialState(x0);
+
   geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header = pose.header;
+  cmd_vel.header = global_pose.header;
   cmd_vel.twist.linear.x = 0.0;
   cmd_vel.twist.linear.y = 0.0;
   cmd_vel.twist.angular.z = 0.0;
 
   if (global_plan_.poses.empty()) { return cmd_vel; }
-#ifdef HUHU
-  std::cout << "\033[1;32mstart compute velocity commands\033[0m" << std::endl;
-#endif
 
-  // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
-  geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
-#ifdef HUHU
-  std::cout << "\033[1;32m坐标转换成功\033[0m" << std::endl;
-#endif
-  StateBound x0 = Point2State(global_pose);
-#ifdef HUHU
-  std::cout << "\033[1;32m转换为StateBound成功\033[0m" << std::endl;
-#endif
-  mpc_wrapper_->setInitialState(x0);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态\033[0m" << std::endl;
-#endif
-
+  // 计算局部路径并写入参考轨迹
   auto local_plan = getLocalPlan(global_pose);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态1\033[0m" << std::endl;
-#endif
   local_plan_pub_->publish(local_plan);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态2\033[0m" << std::endl;
-#endif
-
   auto ref_traj = getReferenceHorizon(local_plan);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态3\033[0m" << std::endl;
-#endif
   TerminalRef end_ref = ref_traj.col(kHorizonSteps - 1).head<3>();
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态4\033[0m" << std::endl;
-#endif
-  mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态56\033[0m" << std::endl;
-#endif
-  auto predicted_states = mpc_wrapper_->predictedStates();
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态7\033[0m" << std::endl;
-#endif
-  auto predicted_plan = StateHorizon2Path(predicted_states);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态8\033[0m" << std::endl;
-#endif
-  predicted_plan_pub_->publish(predicted_plan);
-#ifdef HUHU
-  std::cout << "\033[1;32m成功设置初始状态9\033[0m" << std::endl;
+
+#ifdef REFERENCE_DEBUG
+  std::cout << "\033[1;33mReference trajectory: \033[0m" << std::endl;
+  for (int i = 0; i < ref_traj.cols(); ++i) {
+    std::cout << "\033[1;33mPoint " << i << ": x=" << ref_traj(0, i) << ", y=" << ref_traj(1, i) << ", theta=" << ref_traj(2, i) << "\033[0m" << std::endl;
+  }
+  std::cout << "\033[1;34mTerminal reference: x=" << end_ref(0) << ", y=" << end_ref(1) << ", theta=" << end_ref(2) << "\033[0m" << std::endl;
 #endif
 
+  mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
+
+  // 求解MPC并获取预测状态轨迹
+  auto predicted_states = mpc_wrapper_->predictedStates();
+  if (predicted_states.size() != 0) {
+    auto predicted_plan = StateHorizon2Path(global_plan_, predicted_states);
+    predicted_plan_pub_->publish(predicted_plan);
+#ifdef PREDICTED_PLAN_DEBUG
+    std::cout << "\033[1;32mPredicted plan published,"
+              << "size: " << predicted_plan.poses.size() << ", "
+              << "frame: " << predicted_plan.header.frame_id
+              << "\033[0m" << std::endl;
+#endif
+  } else {
+    std::cout << "\033[1;31mPredicted states are empty\033[0m" << std::endl;
+  }
+  
+  // 求解
   Input u_opt = mpc_wrapper_->solve();
+
+#ifdef SOLVE_TIME_DEBUG
   double solve_time = mpc_wrapper_->solve_time();
-  RCLCPP_INFO(logger_, "MPC solve time: %.6f seconds", solve_time);
+  std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
+#endif
 
   cmd_vel.twist.linear.x = u_opt[0];
   cmd_vel.twist.linear.y = u_opt[1];
   cmd_vel.twist.angular.z = u_opt[2];
+  // double theta = global_pose.pose.orientation.z;
+
+
+  // double vx_world = u_opt[0];
+  // double vy_world = u_opt[1];
+
+
+  // cmd_vel.twist.linear.x =
+  //     cos(theta)*vx_world +
+  //     sin(theta)*vy_world;
+
+
+  // cmd_vel.twist.linear.y =
+  //   -sin(theta)*vx_world +
+  //     cos(theta)*vy_world;
+
+
+  // cmd_vel.twist.angular.z = u_opt[2];
 
   return cmd_vel;
 }
