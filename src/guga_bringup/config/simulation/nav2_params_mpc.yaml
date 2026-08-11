@@ -367,6 +367,7 @@ controller_server:
         vy_max: 2.0
         omega_min: -1.0
         omega_max: 1.0
+      local_plan_length: 2.0
 
 local_costmap:
   local_costmap:

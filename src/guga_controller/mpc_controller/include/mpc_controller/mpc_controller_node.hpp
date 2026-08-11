@@ -4,6 +4,7 @@
 // #define PREDICTED_PLAN_DEBUG
 // #define SOLVE_TIME_DEBUG
 #define REFERENCE_DEBUG
+// #define LOCAL_PLAN_LENGTH_DEBUG
 
 #include <iostream>
 #include <memory>

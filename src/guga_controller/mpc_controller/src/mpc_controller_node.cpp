@@ -34,19 +34,21 @@ void MpcControllerNode::configure(
 void MpcControllerNode::activate()
 {
   if (local_plan_pub_) { local_plan_pub_->on_activate(); }
+  if (predicted_plan_pub_) { predicted_plan_pub_->on_activate(); }
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Activated");
 }
 
 void MpcControllerNode::deactivate()
 {
   if (local_plan_pub_) { local_plan_pub_->on_deactivate(); }
+  if (predicted_plan_pub_) { predicted_plan_pub_->on_deactivate(); }
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Deactivated");
 }
 
 void MpcControllerNode::cleanup()
 {
   local_plan_pub_.reset();
-
+  predicted_plan_pub_.reset();
   costmap_ros_.reset(); tf_buffer_.reset();
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Cleaned up");
 }
@@ -159,6 +161,10 @@ nav_msgs::msg::Path MpcControllerNode::getLocalPlan(const geometry_msgs::msg::Po
 
   // 2. 从最近点开始沿路径前进, 累计距离不超过 local_plan_length_
   local_plan.poses.push_back(*closest);
+
+#ifdef LOCAL_PLAN_LENGTH_DEBUG
+  std::cout << "local_plan_length: " << local_plan_length_ << std::endl;
+#endif
 
   double cum_dist = 0.0;
   for (auto it = closest; it + 1 != global_plan_.poses.end(); ++it) {
