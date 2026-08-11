@@ -20,7 +20,8 @@
         "pointLIO",
         "test",
         "common",
-        "planner"
+        "planner",
+        "fakevel"
     ],
     "ROS2.distro": "humble",
     "python.autoComplete.extraPaths": [
