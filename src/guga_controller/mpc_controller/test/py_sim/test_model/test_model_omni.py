@@ -208,6 +208,7 @@ def test_closed_loop_mpc(
 
     plt.tight_layout()
     out_path = os.path.join(dir_path + f"/../results/{mpc_solver.model.name}" + f"/{mpc_solver.model.name}_{trajectory_type}.png")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     plt.savefig(out_path, dpi=150)
     print(f"  图表已保存: {out_path}")
     plt.close()
