@@ -57,9 +57,9 @@ namespace serial_driver {
 
     // ---- 编解码（供桥接器回调使用） ----
     /**
-     * @brief 将 Twist 消息编码为 26 字节运动帧 payload。
+     * @brief 将 Twist 消息编码为 17 字节运动帧 payload。
      * @param msg 输入速度指令。
-     * @return 26 字节 payload，按值返回避免堆分配和悬垂指针。
+     * @return 17 字节 payload，按值返回避免堆分配和悬垂指针。
      */
     MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg) const;
 
@@ -69,13 +69,6 @@ namespace serial_driver {
      * @return 包含 yaw 角度差（弧度）的 Float32 消息。
      */
     std_msgs::msg::Float32 decodeYaw(const uint8_t* payload);
-
-    /**
-     * @brief 从运动帧 payload 解码 TES 线速度。
-     * @param payload 运动帧 payload 指针。
-     * @return 包含角速度 z 的 Twist 消息。
-     */
-    static geometry_msgs::msg::Twist decodeTESspeed(const uint8_t* payload);
 
     /**
      * @brief 从运动帧 payload 解码敌方位置坐标。
@@ -138,10 +131,10 @@ namespace serial_driver {
 
     // 速度变换
     double vel_trans_scale_{40.0};
-    double angle_init_{};
+    // double angle_init_{};
 
-    // 底盘模式
-    uint8_t chassis_mode_{1};  // 默认 chassisFollowed
+    // // 底盘模式
+    // uint8_t chassis_mode_{1};  // 默认 chassisFollowed
 
     // 雷达连接参数
     std::string lidar_ip_{"192.168.1.2"};
@@ -155,8 +148,6 @@ namespace serial_driver {
         bridge_twist_pc_;
     std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>>
         bridge_yaw_mcu_;
-    std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Twist>>
-        bridge_tes_speed_mcu_;
     std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>>
         bridge_enemy_pos_mcu_;
 
@@ -177,8 +168,6 @@ namespace serial_driver {
     rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr
         rfid_status_pub_;
 
-    // 底盘模式订阅
-    rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr chassis_mode_sub_;
   };
 
 }  // namespace serial_driver

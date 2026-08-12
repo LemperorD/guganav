@@ -19,6 +19,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(guga_interfaces REQUIRED)
+find_package(guga_common REQUIRED)
 
 # ---- 串口底层库 (lib) ----
 add_library(serial_driver_main SHARED
@@ -29,9 +30,13 @@ target_include_directories(serial_driver_main PUBLIC
 ament_target_dependencies(serial_driver_main
   rclcpp)
 # 链接系统库: 串口 和 文件系统
-target_link_libraries(serial_driver_main
-  stdc++fs
+add_executable(test_serial_driver
+  src/test.cpp
 )
+
+target_link_libraries(test_serial_driver
+  serial_driver_main
+  )
 
 # ---- ROS2 节点层库 (lib) ----
 add_library(serial_driver_node SHARED
@@ -46,8 +51,11 @@ ament_target_dependencies(serial_driver_node
   tf2
   tf2_ros
   guga_interfaces
+  guga_common
 )
-
+ament_target_dependencies(test_serial_driver
+geometry_msgs
+)
 # 注册为 rclcpp component，同时生成独立可执行文件
 rclcpp_components_register_node(serial_driver_node
   PLUGIN "serial_driver::SerialDriverNode"
@@ -58,6 +66,7 @@ rclcpp_components_register_node(serial_driver_node
 install(TARGETS
   serial_driver_main
   serial_driver_node
+  test_serial_driver
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
