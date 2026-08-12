@@ -1,16 +1,11 @@
-#include "terrain_analysis/terrain_analysis.hpp"
+#include "terrain_analysis/terrain_analysis_node.hpp"
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto nodeptr = rclcpp::Node::make_shared("terrainAnalysis");
 
   TerrainAnalysis terrain(nodeptr.get());
-  terrain.initialize();
-
-  rclcpp::Rate rate(100);
-  while (terrain.processOnce()) {
-    rate.sleep();
-  }
+  rclcpp::spin(nodeptr);
 
   rclcpp::shutdown();
   return 0;

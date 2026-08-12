@@ -1,0 +1,7 @@
+<launch>
+
+  <node pkg="terrain_analysis_ext" exec="terrainAnalysisExt" name="terrainAnalysisExt" output="screen">
+    <param name="localTerrainMapRadius" value="4.0" />
+  </node>
+
+</launch>

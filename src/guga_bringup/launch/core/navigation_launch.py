@@ -111,7 +111,7 @@ def generate_launch_description():
     )
 
     start_terrain_analysis_ext_cmd = Node(
-        package="terrain_analysis",
+        package="terrain_analysis_ext",
         executable="terrainAnalysisExt",
         name="terrain_analysis_ext",
         output="screen",

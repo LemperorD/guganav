@@ -125,8 +125,11 @@ def generate_launch_description():
 
     declare_use_composition_cmd = DeclareLaunchArgument(
         "use_composition",
-        default_value="True",
-        description="Whether to use composed bringup",
+        default_value="False",
+        description=(
+            "Whether to use composed bringup. Disabled by default in simulation "
+            "to avoid ROS 2 Humble LoadComposableNodes shutdown races."
+        ),
     )
 
     declare_use_respawn_cmd = DeclareLaunchArgument(

@@ -2,6 +2,14 @@
 set -euo pipefail
 
 WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+if [ -z "${SIMULATION_SESSION_ID:-}" ]; then
+  export SIMULATION_SESSION_ID="$$-${RANDOM:-0}"
+  rm -f "/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
+else
+  export SIMULATION_SESSION_ID
+fi
+SIMULATION_SHUTDOWN_FILE="/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
+SIMULATION_CLEANUP_STARTED=0
 
 usage() {
   cat <<'EOF'
@@ -117,6 +125,83 @@ EOF
   done
 }
 
+cleanup_simulation_processes() {
+  local launch_pids=()
+  local simulation_pids=()
+  local pid
+  local pattern
+  local launch_patterns=(
+    "ros2 launch rmu_gazebo_simulator bringup_sim.launch.py"
+    "ros2 launch guga_bringup simulation_launch.py"
+  )
+  local simulation_patterns=(
+    "rviz2"
+    "gzserver"
+    "gzclient"
+    "gz sim"
+    "ign gazebo"
+  )
+
+  if [ "$SIMULATION_CLEANUP_STARTED" -eq 1 ]; then
+    return 0
+  fi
+  SIMULATION_CLEANUP_STARTED=1
+
+  touch "$SIMULATION_SHUTDOWN_FILE" 2>/dev/null || true
+
+  for pattern in "${launch_patterns[@]}"; do
+    while IFS= read -r pid; do
+      if [ -n "$pid" ] && [ "$pid" != "$$" ] && [ "$pid" != "${BASHPID:-$$}" ]; then
+        launch_pids+=("$pid")
+      fi
+    done < <(pgrep -f "$pattern" 2>/dev/null || true)
+  done
+
+  if [ "${#launch_pids[@]}" -gt 0 ]; then
+    printf "%s\n" "${launch_pids[@]}" | sort -u | xargs -r kill -INT -- 2>/dev/null || true
+    sleep 1
+  fi
+
+  for pattern in "${simulation_patterns[@]}"; do
+    while IFS= read -r pid; do
+      if [ -n "$pid" ] && [ "$pid" != "$$" ] && [ "$pid" != "${BASHPID:-$$}" ]; then
+        simulation_pids+=("$pid")
+      fi
+    done < <(pgrep -f "$pattern" 2>/dev/null || true)
+  done
+
+  if [ "${#simulation_pids[@]}" -gt 0 ]; then
+    printf "%s\n" "${simulation_pids[@]}" | sort -u | xargs -r kill -TERM -- 2>/dev/null || true
+  fi
+}
+
+exit_with_launch_status() {
+  local status=$1
+
+  if [ "$status" -ne 0 ] && [ -f "$SIMULATION_SHUTDOWN_FILE" ]; then
+    exit 0
+  fi
+
+  exit "$status"
+}
+
+install_simulation_cleanup_traps() {
+  trap 'cleanup_simulation_processes' EXIT
+  trap 'cleanup_simulation_processes; exit 130' INT
+  trap 'cleanup_simulation_processes; exit 143' TERM HUP
+}
+
+wait_for_simulation_terminal_close() {
+  if [ -t 0 ] && [ -t 1 ]; then
+    echo "Close this terminal or press Ctrl-C to stop gazebo and rviz."
+    install_simulation_cleanup_traps
+    while true; do
+      sleep 3600 &
+      wait $!
+    done
+  fi
+}
+
 ensure_simulation_prior_pcd() {
   local world_arg=$1
   local prior_pcd_arg=${2:-}
@@ -216,10 +301,12 @@ run_complete_simulation() {
     sleep "$start_delay"
     if run_in_terminal "guganav ${run_mode}" "$WS/scripts/simulation.sh" "$nav_mode" "$@"; then
       echo "Started complete simulation: gazebo + ${run_mode}/rviz"
+      wait_for_simulation_terminal_close
       return 0
     fi
 
     echo "Could not open a second terminal; running ${run_mode}/rviz in current terminal." >&2
+    install_simulation_cleanup_traps
     "$WS/scripts/simulation.sh" "$nav_mode" "$@"
     return 0
   fi
@@ -227,7 +314,9 @@ run_complete_simulation() {
   echo "No supported terminal emulator found; running gazebo in background." >&2
   "$WS/scripts/simulation.sh" __gazebo world:="$world_arg" &
   local gazebo_pid=$!
-  trap 'if [ -n "${gazebo_pid:-}" ]; then kill "$gazebo_pid" 2>/dev/null || true; fi' EXIT
+  trap 'if [ -n "${gazebo_pid:-}" ]; then kill "$gazebo_pid" 2>/dev/null || true; fi; cleanup_simulation_processes' EXIT
+  trap 'if [ -n "${gazebo_pid:-}" ]; then kill "$gazebo_pid" 2>/dev/null || true; fi; cleanup_simulation_processes; exit 130' INT
+  trap 'if [ -n "${gazebo_pid:-}" ]; then kill "$gazebo_pid" 2>/dev/null || true; fi; cleanup_simulation_processes; exit 143' TERM HUP
   sleep "$start_delay"
   "$WS/scripts/simulation.sh" "$nav_mode" "$@"
 }
@@ -277,7 +366,11 @@ case "$mode" in
       shift
       gazebo_args+=("$@")
     fi
-    exec ros2 launch rmu_gazebo_simulator bringup_sim.launch.py "${gazebo_args[@]}"
+    set +e
+    ros2 launch rmu_gazebo_simulator bringup_sim.launch.py "${gazebo_args[@]}"
+    launch_status=$?
+    set -e
+    exit_with_launch_status "$launch_status"
     ;;
   -h | --help | help)
     usage
@@ -324,7 +417,11 @@ fi
 
 require_workspace_setup
 
-exec ros2 launch guga_bringup simulation_launch.py \
+set +e
+ros2 launch guga_bringup simulation_launch.py \
   world:="$world" \
   slam:="$slam" \
   "${launch_args[@]}"
+launch_status=$?
+set -e
+exit_with_launch_status "$launch_status"

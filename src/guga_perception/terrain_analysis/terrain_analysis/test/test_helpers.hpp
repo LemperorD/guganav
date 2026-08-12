@@ -1,13 +1,10 @@
 #pragma once
 
-#include "terrain_analysis/core/context.hpp"
+#include "terrain_analysis/core/config.hpp"
+#include "terrain_analysis/core/state.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-
-inline TerrainConfig DefaultTerrainConfig() {
-  return {};
-}
 
 inline auto MakeCloud(float x, float y, float z) {
   auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();

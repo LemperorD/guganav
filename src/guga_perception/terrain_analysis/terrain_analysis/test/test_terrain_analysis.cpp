@@ -1,4 +1,4 @@
-#include "terrain_analysis/terrain_analysis.hpp"
+#include "terrain_analysis/terrain_analysis_node.hpp"
 #include "terrain_analysis/core/algorithm.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
@@ -24,12 +24,14 @@ protected:
   }
 
   void sendOdom(double x, double y, double z, double yaw) {
-    terrain_->context_.onOdometry(x, y, z, 0.0, 0.0, yaw);
+    terrain_analysis::algorithm::ingestOdometry(
+        terrain_->config(), terrain_->state(), x, y, z, 0.0, 0.0, yaw);
   }
 
   void sendCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                  double timestamp_sec) {
-    terrain_->context_.onLaserCloud(cloud, timestamp_sec);
+    terrain_analysis::algorithm::ingestLaserCloud(
+        terrain_->config(), terrain_->state(), cloud, timestamp_sec);
   }
 
   rclcpp::Node::SharedPtr node_;
@@ -42,12 +44,12 @@ TEST_F(TerrainAnalysisTest, Run_FlatGround_OutputsLowIntensity) {
 
   auto cloud = MakeGroundCloud(21, 0.1, 0.01);
   sendCloud(cloud, 100.0);
-  TerrainAlgorithm::run(terrain_->context_.cfg, terrain_->context_.state);
+  terrain_analysis::algorithm::run(terrain_->config(), terrain_->state());
 
-  EXPECT_GT(terrain_->context_.state.terrainCloudElev().points.size(), 0U);
+  EXPECT_GT(terrain_->state().terrain_cloud_elev->points.size(), 0U);
 
   float max_intensity = 0;
-  for (const auto& p : terrain_->context_.state.terrainCloudElev().points) {
+  for (const auto& p : terrain_->state().terrain_cloud_elev->points) {
     max_intensity = std::max(max_intensity, p.intensity);
   }
   EXPECT_LT(max_intensity, 0.5F) << "Flat ground should produce small heights";
@@ -59,12 +61,12 @@ TEST_F(TerrainAnalysisTest, Run_ObstacleAboveGround_OutputsNonZeroIntensity) {
 
   auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.15);
   sendCloud(cloud, 100.0);
-  TerrainAlgorithm::run(terrain_->context_.cfg, terrain_->context_.state);
+  terrain_analysis::algorithm::run(terrain_->config(), terrain_->state());
 
-  EXPECT_GT(terrain_->context_.state.terrainCloudElev().points.size(), 0U);
+  EXPECT_GT(terrain_->state().terrain_cloud_elev->points.size(), 0U);
 
   float max_intensity = 0;
-  for (const auto& p : terrain_->context_.state.terrainCloudElev().points) {
+  for (const auto& p : terrain_->state().terrain_cloud_elev->points) {
     max_intensity = std::max(max_intensity, p.intensity);
   }
   EXPECT_GT(max_intensity, 0.05F)
@@ -80,10 +82,10 @@ TEST_F(TerrainAnalysisTest,
   pcl::PointXYZI obs{3.0F, 3.0F, 0.3F, 0};
   cloud->push_back(obs);
   sendCloud(cloud, 100.0);
-  TerrainAlgorithm::run(terrain_->context_.cfg, terrain_->context_.state);
+  terrain_analysis::algorithm::run(terrain_->config(), terrain_->state());
 
   bool found_isolated = false;
-  for (const auto& p : terrain_->context_.state.terrainCloudElev().points) {
+  for (const auto& p : terrain_->state().terrain_cloud_elev->points) {
     if (p.x > 2.5F && p.intensity > 0.1F) {
       found_isolated = true;
       break;

@@ -435,7 +435,7 @@ local_costmap:
       height: 10
       resolution: 0.05
       footprint: "[[-0.31, -0.24], [-0.31, 0.24], [0.31, 0.24], [0.31, -0.24]]"
-      plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+      plugins: ["static_layer", "intensity_voxel_layer",  "inflation_layer"]
       intensity_voxel_layer:
         plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
         enabled: true
@@ -464,19 +464,6 @@ local_costmap:
           obstacle_max_range: 5.0
           obstacle_min_range: 0.2
           observation_persistence: 3.0
-      esdf_layer:
-        plugin: rog_map_layer::EsdfLayer
-        enabled: true
-        max_distance: 2.0
-        publish_esdf_grid: true
-        write_to_master: true
-        incremental_update: true
-        full_update_ratio: 0.3
-        obstacle_threshold: 254
-        enable_parallel: true
-        num_threads: 3
-        tile_size: 32
-        seam_iterations: 2
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -498,7 +485,7 @@ global_costmap:
       robot_base_frame: base_footprint
       footprint: "[[-0.31, -0.24], [-0.31, 0.24], [0.31, 0.24], [0.31, -0.24]]"
       resolution: 0.05
-      plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+      plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
         enabled: true
@@ -527,19 +514,6 @@ global_costmap:
           obstacle_max_range: 10.0
           obstacle_min_range: 0.2
           observation_persistence: 3.0
-      esdf_layer:
-        plugin: rog_map_layer::EsdfLayer
-        enabled: true
-        max_distance: 3.0
-        publish_esdf_grid: true
-        write_to_master: true
-        incremental_update: true
-        full_update_ratio: 0.3
-        obstacle_threshold: 254
-        enable_parallel: true
-        num_threads: 3
-        tile_size: 32
-        seam_iterations: 2
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True

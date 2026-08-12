@@ -13,14 +13,14 @@ dynamic_obstacle_node:
     # 初始位置
     start_x: -2.0
     start_y: 0.0
-    start_z: 1.0
+    start_z: 0.7
 
     # 运动范围
     min_x: -2.0
     max_x: 2.0
 
     # 障碍物运动速度 m/s
-    speed: 0.5
+    speed: 5.0
 
     # 控制频率 Hz
     update_rate: 10.0

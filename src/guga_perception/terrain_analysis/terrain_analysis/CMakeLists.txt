@@ -32,7 +32,7 @@ find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 
 # Library
-add_library(terrain_analysis_lib src/terrainAnalysis.cpp src/core/context.cpp src/core/algorithm.cpp)
+add_library(terrain_analysis_lib src/terrain_analysis_node.cpp src/core/algorithm.cpp)
 target_include_directories(terrain_analysis_lib PUBLIC include)
 ament_target_dependencies(
   terrain_analysis_lib
@@ -53,10 +53,6 @@ add_executable(terrainAnalysis src/main.cpp)
 target_link_libraries(terrainAnalysis terrain_analysis_lib)
 install(TARGETS terrainAnalysis DESTINATION lib/${PROJECT_NAME})
 
-add_executable(terrainAnalysisExt src/main_ext.cpp)
-target_link_libraries(terrainAnalysisExt terrain_analysis_lib)
-install(TARGETS terrainAnalysisExt DESTINATION lib/${PROJECT_NAME})
-
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
@@ -65,20 +61,14 @@ if(BUILD_TESTING)
   target_include_directories(test_terrain_analysis PRIVATE test)
   target_link_libraries(test_terrain_analysis terrain_analysis_lib)
 
-  ament_add_gtest(test_context test/test_context.cpp)
-  target_include_directories(test_context PRIVATE test)
-  target_link_libraries(test_context terrain_analysis_lib)
+  ament_add_gtest(test_state_ingest test/test_state_ingest.cpp)
+  target_include_directories(test_state_ingest PRIVATE test)
+  target_link_libraries(test_state_ingest terrain_analysis_lib)
 
   ament_add_gtest(test_algorithm test/test_algorithm.cpp)
   target_include_directories(test_algorithm PRIVATE test)
   target_link_libraries(test_algorithm terrain_analysis_lib)
 
-  ament_add_gtest(test_connectivity test/test_connectivity.cpp)
-  target_include_directories(test_connectivity PRIVATE test)
-  target_link_libraries(test_connectivity terrain_analysis_lib)
-
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
 endif()
 
 ament_package()
