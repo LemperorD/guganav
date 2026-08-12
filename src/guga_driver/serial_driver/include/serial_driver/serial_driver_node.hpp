@@ -32,8 +32,8 @@ namespace serial_driver {
    * 职责：
    *  - 从参数服务器读取串口配置（port_name, baud_rate 等）。
    *  - 持有并管理 SerialDriverMain 实例的生命周期。
-   *  - 创建 4 路 RosMcuBridge 桥接通道（/cmd_vel, /serial/Yaw,
-   * /serial/TES_speed, /serial/EnemyPos）。
+   *  - 创建 4 路桥接通道（/cmd_vel, /serial/Yaw, /serial/TES_speed,
+   * /serial/EnemyPos），分别使用 RosToSerialBridge 和 SerialToRosBridge。
    *  - 定时发布裁判系统数据（RobotStatus, GameStatus, RfidStatus）。
    *  - 广播 gimbal_yaw_vision tf（由 odom→base_footprint 推导）。
    *  - 提供 DWA 滑动窗口滤波和速度坐标系变换工具方法。
@@ -55,7 +55,7 @@ namespace serial_driver {
     /** @brief 声明并从参数服务器加载所有运行参数。 */
     void onConfigure();
 
-    // ---- 编解码（供 RosMcuBridge 回调使用） ----
+    // ---- 编解码（供桥接器回调使用） ----
     /**
      * @brief 将 Twist 消息编码为 26 字节运动帧 payload。
      * @param msg 输入速度指令。
@@ -151,11 +151,13 @@ namespace serial_driver {
     std::shared_ptr<SerialDriverMain> serial_driver_main_;
 
     // 四路消息桥接器
-    std::shared_ptr<RosMcuBridge<geometry_msgs::msg::Twist>> bridge_twist_pc_;
-    std::shared_ptr<RosMcuBridge<std_msgs::msg::Float32>> bridge_yaw_mcu_;
-    std::shared_ptr<RosMcuBridge<geometry_msgs::msg::Twist>>
+    std::shared_ptr<RosToSerialBridge<geometry_msgs::msg::Twist>>
+        bridge_twist_pc_;
+    std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>>
+        bridge_yaw_mcu_;
+    std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Twist>>
         bridge_tes_speed_mcu_;
-    std::shared_ptr<RosMcuBridge<geometry_msgs::msg::Point>>
+    std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>>
         bridge_enemy_pos_mcu_;
 
     // 定时器

@@ -35,43 +35,41 @@ namespace serial_driver {
               << '\n';
 
     bridge_twist_pc_ =
-        std::make_shared<RosMcuBridge<geometry_msgs::msg::Twist>>(
-            this, "/cmd_vel", true,
+        std::make_shared<RosToSerialBridge<geometry_msgs::msg::Twist>>(
+            this, "/cmd_vel",
             [this](const geometry_msgs::msg::Twist& msg) {
               return encodeTwist(msg);
             },
-            nullptr,
             [this](const uint8_t* data, size_t len) {
               serial_driver_main_->sendDataFrame(data, len);
-            },
-            nullptr);
+            });
 
-    bridge_yaw_mcu_ = std::make_shared<RosMcuBridge<std_msgs::msg::Float32>>(
-        this, "/serial/Yaw", false, nullptr,
-        [this](const uint8_t* payload) -> std_msgs::msg::Float32 {
-          return decodeYaw(payload);
-        },
-        nullptr,
-        [this]() { return serial_driver_main_->receiveDataFrameSnapshot(); });
+    bridge_yaw_mcu_ =
+        std::make_shared<SerialToRosBridge<std_msgs::msg::Float32>>(
+            this, "/serial/Yaw",
+            [this](const uint8_t* payload) -> std_msgs::msg::Float32 {
+              return decodeYaw(payload);
+            },
+            [this]() {
+              return serial_driver_main_->receiveDataFrameSnapshot();
+            });
 
     bridge_tes_speed_mcu_ =
-        std::make_shared<RosMcuBridge<geometry_msgs::msg::Twist>>(
-            this, "/serial/TES_speed", false, nullptr,
+        std::make_shared<SerialToRosBridge<geometry_msgs::msg::Twist>>(
+            this, "/serial/TES_speed",
             [](const uint8_t* payload) -> geometry_msgs::msg::Twist {
               return decodeTESspeed(payload);
             },
-            nullptr,
             [this]() {
               return serial_driver_main_->receiveDataFrameSnapshot();
             });
 
     bridge_enemy_pos_mcu_ =
-        std::make_shared<RosMcuBridge<geometry_msgs::msg::Point>>(
-            this, "/serial/EnemyPos", false, nullptr,
+        std::make_shared<SerialToRosBridge<geometry_msgs::msg::Point>>(
+            this, "/serial/EnemyPos",
             [](const uint8_t* payload) -> geometry_msgs::msg::Point {
               return decodeEnemyPos(payload);
             },
-            nullptr,
             [this]() {
               return serial_driver_main_->receiveDataFrameSnapshot();
             });
