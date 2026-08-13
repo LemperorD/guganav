@@ -6,7 +6,7 @@
 
 | Launch | 用途 |
 | --- | --- |
-| `reality_launch.py` | 实车导航/建图入口，由 `scripts/map.sh` 和 `scripts/nav_decision.sh` 调用。 |
+| `reality_launch.py` | 实车导航/建图入口；`use_decision:=True` 时同时启动 `simple_decision`。 |
 | `simulation_launch.py` | 仿真导航/建图入口，由 `scripts/simulation.sh` 调用。支持 `jps_pid` 和 `2d_mppi` 两种导航组合。 |
 
 ## 仿真导航组合
@@ -14,7 +14,7 @@
 `simulation_launch.py` 的 `navigation_profile` 默认值为 `jps_pid`：
 
 - `jps_pid`：`jps_planner/JPSPlanner` + `pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode`。
-- `2d_mppi`：`nav2_smac_planner/SmacPlanner2D` + `nav2_mppi_controller::MPPIController`。
+- `2d_mppi`：`nav2_smac_planner/SmacPlanner2D` + `guga_mppi_controller::MPPIController`（工作区源码构建）。
 
 示例：
 
@@ -53,3 +53,6 @@ scripts/simulation.sh nav rmul_2025 navigation_profile:=2d_mppi
 | `support/robot_state_publisher_launch.py` | 独立导航时的 robot state publisher。 |
 | `support/static_tf_publisher_launch.py` | 不启动 robot state publisher 时的静态 TF。 |
 | `support/rviz_launch.py` | RViz。 |
+
+`scripts/nav_decision.sh` 会显式传入 `use_decision:=True`，启动决策节点并发布
+`chassis_mode`/`cmd_spin`。普通 `reality_launch.py` 默认不启动决策，便于手动导航。

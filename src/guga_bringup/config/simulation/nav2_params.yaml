@@ -368,6 +368,7 @@ controller_server:
       v_linear_max: 2.5
       v_angular_min: -3.0
       v_angular_max: 3.0
+      spin_speed: 2.0                                  # LITTLE_TES 默认目标角速度 (rad/s)
       curvature_min: 0.4                                # 低曲率阈值，低于此值不减速。
       curvature_max: 0.7                                # 高曲率阈值，高于此值大幅减速。
       reduction_ratio_at_high_curvature: 0.5            # 高曲率时的速度降低比例。 0.5 (即减速 50%)
