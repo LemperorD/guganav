@@ -350,12 +350,7 @@ controller_server:
       # ackermann:
       #   plugin: "mppi::AckermannMotionModel"
       #   min_turning_r: 0.2
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic", "SpinCritic"]
-      SpinCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 20.0
-        max_spin_speed: 2.0
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
       ConstraintCritic:
         enabled: true
         cost_power: 1
