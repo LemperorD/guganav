@@ -6,4 +6,5 @@ slam:=True \
 use_robot_state_pub:=False \
 use_rviz:=True \
 use_communication:=True \
+use_decision:=True \
 behavior_tree_type:=manual
