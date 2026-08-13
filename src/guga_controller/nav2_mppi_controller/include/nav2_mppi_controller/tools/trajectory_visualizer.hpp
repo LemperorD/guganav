@@ -95,20 +95,21 @@ public:
   void reset();
 
 protected:
-  std::string frame_id_;
+  std::string frame_id_;  ///< 可视化消息使用的坐标系。
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
-  trajectories_publisher_;
-  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> transformed_path_pub_;
+  trajectories_publisher_;  ///< 候选轨迹和最优轨迹标记发布器。
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>>
+  transformed_path_pub_;  ///< 局部参考路径发布器。
 
-  std::unique_ptr<visualization_msgs::msg::MarkerArray> points_;
-  int marker_id_ = 0;
+  std::unique_ptr<visualization_msgs::msg::MarkerArray> points_;  ///< 待发布的轨迹标记缓存。
+  int marker_id_ = 0;  ///< 下一条可视化标记的编号。
 
-  ParametersHandler * parameters_handler_;
+  ParametersHandler * parameters_handler_;  ///< 动态参数处理器的非持有指针。
 
-  size_t trajectory_step_{0};
-  size_t time_step_{0};
+  size_t trajectory_step_{0};  ///< 候选轨迹的抽样间隔。
+  size_t time_step_{0};  ///< 单条轨迹中位姿点的抽样间隔。
 
-  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 可视化器日志记录器。
 };
 
 }  // namespace mppi

@@ -110,23 +110,22 @@ namespace nav2_mppi_controller {
      */
     void visualize(nav_msgs::msg::Path transformed_plan);
 
-    std::string name_;
-    rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
-    rclcpp::Clock::SharedPtr clock_;
-    rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
-    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::string name_;  ///< 控制器插件实例名称及参数命名空间。
+    rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;  ///< 控制器服务器生命周期节点。
+    rclcpp::Clock::SharedPtr clock_;  ///< 用于控制周期超时判断的时钟。
+    rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 控制器日志记录器。
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;  ///< 局部代价地图接口。
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;  ///< 坐标变换查询缓冲区。
 
-    std::unique_ptr<ParametersHandler> parameters_handler_;
-    Optimizer optimizer_;
-    PathHandler path_handler_;
-    TrajectoryVisualizer trajectory_visualizer_;
+    std::unique_ptr<ParametersHandler> parameters_handler_;  ///< 动态参数处理器。
+    Optimizer optimizer_;  ///< 轨迹采样与控制序列优化器。
+    PathHandler path_handler_;  ///< 全局路径裁剪和坐标变换处理器。
+    TrajectoryVisualizer trajectory_visualizer_;  ///< 轨迹调试可视化器。
 
-    bool visualize_;
+    bool visualize_;  ///< 是否发布候选轨迹和最优轨迹。
 
-    double reset_period_;
-    // 上一次调用 computeVelocityCommands() 的时间，用于判断是否需要重置优化器。
-    rclcpp::Time last_time_called_;
+    double reset_period_;  ///< 两次控制调用超过该时长时重置优化器。
+    rclcpp::Time last_time_called_;  ///< 上一次计算速度指令的时间。
   };
 
 }  // namespace nav2_mppi_controller

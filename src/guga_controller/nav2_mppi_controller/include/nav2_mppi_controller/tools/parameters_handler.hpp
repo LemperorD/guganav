@@ -146,20 +146,20 @@ protected:
   template<typename T>
   static auto as(const rclcpp::Parameter & parameter);
 
-  std::mutex parameters_change_mutex_;
-  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+  std::mutex parameters_change_mutex_;  ///< 保护参数读取和动态更新过程。
+  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 参数处理日志记录器。
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
-    on_set_param_handler_;
-  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
-  std::string node_name_;
+    on_set_param_handler_;  ///< 动态参数回调的注册句柄。
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;  ///< 参数所属的生命周期节点。
+  std::string node_name_;  ///< 参数所属节点名称，用于日志输出。
 
-  bool verbose_{false};
+  bool verbose_{false};  ///< 是否输出详细的参数变更日志。
 
   std::unordered_map<std::string, std::function<get_param_func_t>>
-  get_param_callbacks_;
+  get_param_callbacks_;  ///< 按完整参数名索引的动态更新函数。
 
-  std::vector<std::function<pre_callback_t>> pre_callbacks_;
-  std::vector<std::function<post_callback_t>> post_callbacks_;
+  std::vector<std::function<pre_callback_t>> pre_callbacks_;  ///< 参数更新前执行的回调。
+  std::vector<std::function<post_callback_t>> post_callbacks_;  ///< 参数更新后执行的回调。
 };
 
 inline auto ParametersHandler::getParamGetter(const std::string & ns)

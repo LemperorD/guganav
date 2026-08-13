@@ -24,9 +24,13 @@ namespace mppi::models
  */
 struct ControlConstraints
 {
+  // 纵向速度上限。
   float vx_max;
+  // 纵向速度下限，负值表示允许倒车。
   float vx_min;
+  // 横向速度绝对值上限。
   float vy;
+  // 偏航角速度绝对值上限。
   float wz;
 };
 
@@ -36,8 +40,11 @@ struct ControlConstraints
  */
 struct SamplingStd
 {
+  // 纵向速度采样噪声的标准差。
   float vx;
+  // 横向速度采样噪声的标准差。
   float vy;
+  // 偏航角速度采样噪声的标准差。
   float wz;
 };
 

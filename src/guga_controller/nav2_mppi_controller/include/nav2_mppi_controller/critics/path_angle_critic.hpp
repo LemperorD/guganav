@@ -41,15 +41,15 @@ public:
   void score(CriticData & data) override;
 
 protected:
-  float max_angle_to_furthest_{0};
-  float threshold_to_consider_{0};
+  float max_angle_to_furthest_{0};  ///< 轨迹朝向相对前视点允许的最大角误差。
+  float threshold_to_consider_{0};  ///< 停止计算路径角度代价的近目标距离。
 
-  size_t offset_from_furthest_{0};
-  bool reversing_allowed_{true};
-  bool forward_preference_{true};
+  size_t offset_from_furthest_{0};  ///< 最远到达路径点之后的前视点偏移量。
+  bool reversing_allowed_{true};  ///< 当前速度约束是否允许倒车。
+  bool forward_preference_{true};  ///< 计算角误差时是否只偏好正向朝向。
 
-  unsigned int power_{0};
-  float weight_{0};
+  unsigned int power_{0};  ///< 路径角度代价的幂次。
+  float weight_{0};  ///< 路径角度代价的权重。
 };
 
 }  // namespace mppi::critics

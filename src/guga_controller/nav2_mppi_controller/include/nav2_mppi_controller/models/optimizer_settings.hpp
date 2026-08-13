@@ -27,16 +27,27 @@ namespace mppi::models
  */
 struct OptimizerSettings
 {
+  // 参数配置的原始速度约束，不受运行时限速影响。
   models::ControlConstraints base_constraints{0, 0, 0, 0};
+  // 当前生效的速度约束，可能被运行时限速修改。
   models::ControlConstraints constraints{0, 0, 0, 0};
+  // 三个控制维度的采样噪声标准差。
   models::SamplingStd sampling_std{0, 0, 0};
+  // 相邻预测状态之间的积分时间间隔。
   float model_dt{0};
+  // 轨迹成本转换为权重时使用的温度参数。
   float temperature{0};
+  // 控制扰动成本的正则化系数。
   float gamma{0};
+  // 每轮优化生成的候选轨迹数量。
   unsigned int batch_size{0};
+  // 每条候选轨迹包含的预测时间步数。
   unsigned int time_steps{0};
+  // 每个控制周期执行的优化迭代次数。
   unsigned int iteration_count{0};
+  // 是否在控制周期结束后将最优控制序列前移一位。
   bool shift_control_sequence{false};
+  // 全部候选轨迹失败时允许重新采样的次数。
   size_t retry_attempt_limit{0};
 };
 

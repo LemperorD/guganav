@@ -43,13 +43,13 @@ public:
   void score(CriticData & data) override;
 
 protected:
-  size_t offset_from_furthest_{0};
-  int trajectory_point_step_{0};
-  float threshold_to_consider_{0};
-  float max_path_occupancy_ratio_{0};
-  bool use_path_orientations_{false};
-  unsigned int power_{0};
-  float weight_{0};
+  size_t offset_from_furthest_{0};  ///< 最远到达路径点之后额外考虑的点数。
+  int trajectory_point_step_{0};  ///< 候选轨迹参与对齐评分的采样间隔。
+  float threshold_to_consider_{0};  ///< 停止计算路径对齐代价的近目标距离。
+  float max_path_occupancy_ratio_{0};  ///< 允许局部路径被障碍占用的最大比例。
+  bool use_path_orientations_{false};  ///< 是否在对齐距离中加入路径航向误差。
+  unsigned int power_{0};  ///< 路径对齐代价的幂次。
+  float weight_{0};  ///< 路径对齐代价的权重。
 };
 
 }  // namespace mppi::critics

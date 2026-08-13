@@ -29,15 +29,23 @@ namespace mppi::models
  */
 struct State
 {
+  // 各候选轨迹在预测时域内的纵向速度。
   xt::xtensor<float, 2> vx;
+  // 各候选轨迹在预测时域内的横向速度。
   xt::xtensor<float, 2> vy;
+  // 各候选轨迹在预测时域内的偏航角速度。
   xt::xtensor<float, 2> wz;
 
+  // 添加采样噪声后的纵向控制速度。
   xt::xtensor<float, 2> cvx;
+  // 添加采样噪声后的横向控制速度。
   xt::xtensor<float, 2> cvy;
+  // 添加采样噪声后的偏航控制速度。
   xt::xtensor<float, 2> cwz;
 
+  // 当前机器人位姿，作为轨迹展开的起点。
   geometry_msgs::msg::PoseStamped pose;
+  // 当前机器人实测速度，作为状态传播的初值。
   geometry_msgs::msg::Twist speed;
 
   /**

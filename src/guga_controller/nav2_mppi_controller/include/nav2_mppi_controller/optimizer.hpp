@@ -232,31 +232,32 @@ protected:
   bool fallback(bool fail);
 
 protected:
-  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-  nav2_costmap_2d::Costmap2D * costmap_;
-  std::string name_;
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;  ///< 控制器服务器生命周期节点。
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;  ///< 局部代价地图接口。
+  nav2_costmap_2d::Costmap2D * costmap_;  ///< 代价地图数据的非持有指针。
+  std::string name_;  ///< 控制器插件实例名称及参数命名空间。
 
-  std::shared_ptr<MotionModel> motion_model_;
+  std::shared_ptr<MotionModel> motion_model_;  ///< 当前底盘运动模型。
 
-  ParametersHandler * parameters_handler_;
-  CriticManager critic_manager_;
-  NoiseGenerator noise_generator_;
+  ParametersHandler * parameters_handler_;  ///< 动态参数处理器的非持有指针。
+  CriticManager critic_manager_;  ///< 候选轨迹评分器管理器。
+  NoiseGenerator noise_generator_;  ///< 批量控制噪声生成器。
 
-  models::OptimizerSettings settings_;
+  models::OptimizerSettings settings_;  ///< 优化器参数和当前生效约束。
 
-  models::State state_;
-  models::ControlSequence control_sequence_;
-  std::array<mppi::models::Control, 4> control_history_;
-  models::Trajectories generated_trajectories_;
-  models::Path path_;
-  xt::xtensor<float, 1> costs_;
+  models::State state_;  ///< 本轮优化的状态与批量控制样本。
+  models::ControlSequence control_sequence_;  ///< 当前最优控制序列。
+  std::array<mppi::models::Control, 4> control_history_;  ///< 平滑序列边界所需的历史控制量。
+  models::Trajectories generated_trajectories_;  ///< 本轮生成的候选轨迹。
+  models::Path path_;  ///< 当前局部参考路径张量。
+  xt::xtensor<float, 1> costs_;  ///< 各候选轨迹的累计成本。
 
+  /// 传递给评分器的共享数据，其中包含对以上成员的引用。
   CriticData critics_data_ =
   {state_, generated_trajectories_, path_, costs_, settings_.model_dt, false, nullptr, nullptr,
-    std::nullopt, std::nullopt};  /// 注意：此结构保存成员引用，成员声明顺序不可随意调整。
+    std::nullopt, std::nullopt};  ///< 成员声明顺序不可随意调整。
 
-  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 优化器日志记录器。
 };
 
 template<typename E>

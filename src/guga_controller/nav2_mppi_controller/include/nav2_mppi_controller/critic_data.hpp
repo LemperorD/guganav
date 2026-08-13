@@ -36,18 +36,18 @@ namespace mppi
  */
 struct CriticData
 {
-  const models::State & state;
-  const models::Trajectories & trajectories;
-  const models::Path & path;
+  const models::State & state;  ///< 本轮优化使用的机器人状态和控制样本。
+  const models::Trajectories & trajectories;  ///< 待评分的候选轨迹集合。
+  const models::Path & path;  ///< 转换到控制坐标系的参考路径。
 
-  xt::xtensor<float, 1> & costs;
-  float & model_dt;
+  xt::xtensor<float, 1> & costs;  ///< 各候选轨迹的累计成本。
+  float & model_dt;  ///< 运动模型的积分时间间隔。
 
-  bool fail_flag;
-  nav2_core::GoalChecker * goal_checker;
-  std::shared_ptr<MotionModel> motion_model;
-  std::optional<std::vector<bool>> path_pts_valid;
-  std::optional<size_t> furthest_reached_path_point;
+  bool fail_flag;  ///< 是否所有候选轨迹均不可用。
+  nav2_core::GoalChecker * goal_checker;  ///< 当前导航任务的目标检查器。
+  std::shared_ptr<MotionModel> motion_model;  ///< 当前底盘运动模型。
+  std::optional<std::vector<bool>> path_pts_valid;  ///< 参考路径点有效性缓存。
+  std::optional<size_t> furthest_reached_path_point;  ///< 候选轨迹到达的最远路径点缓存。
 };
 
 }  // namespace mppi

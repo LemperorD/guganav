@@ -88,6 +88,8 @@ class AckermannMotionModel : public MotionModel
 public:
   /**
     * @brief 构造阿克曼运动模型并读取最小转弯半径
+    * @param param_handler: 用于读取运动模型参数的参数处理器
+    * @param name: 控制器参数命名空间名称
     */
   explicit AckermannMotionModel(ParametersHandler * param_handler, const std::string & name)
   {
@@ -128,7 +130,7 @@ public:
   float getMinTurningRadius() {return min_turning_r_;}
 
 private:
-  float min_turning_r_{0};
+  float min_turning_r_{0};  ///< 阿克曼底盘允许的最小转弯半径。
 };
 
 /**

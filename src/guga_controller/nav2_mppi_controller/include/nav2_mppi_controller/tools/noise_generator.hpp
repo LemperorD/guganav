@@ -90,17 +90,19 @@ protected:
    */
   void generateNoisedControls();
 
-  xt::xtensor<float, 2> noises_vx_;
-  xt::xtensor<float, 2> noises_vy_;
-  xt::xtensor<float, 2> noises_wz_;
+  xt::xtensor<float, 2> noises_vx_;  ///< 纵向速度的批量高斯噪声。
+  xt::xtensor<float, 2> noises_vy_;  ///< 横向速度的批量高斯噪声。
+  xt::xtensor<float, 2> noises_wz_;  ///< 偏航角速度的批量高斯噪声。
 
-  mppi::models::OptimizerSettings settings_;
-  bool is_holonomic_;
+  mppi::models::OptimizerSettings settings_;  ///< 生成噪声所需的采样设置副本。
+  bool is_holonomic_;  ///< 是否需要生成横向速度噪声。
 
-  std::thread noise_thread_;
-  std::condition_variable noise_cond_;
-  std::mutex noise_lock_;
-  bool active_{false}, ready_{false}, regenerate_noises_{false};
+  std::thread noise_thread_;  ///< 后台噪声生成线程。
+  std::condition_variable noise_cond_;  ///< 唤醒后台线程的条件变量。
+  std::mutex noise_lock_;  ///< 保护线程状态和噪声张量。
+  bool active_{false};  ///< 后台线程是否继续运行。
+  bool ready_{false};  ///< 后台线程是否收到生成任务。
+  bool regenerate_noises_{false};  ///< 每轮优化是否重新生成噪声。
 };
 
 }  // namespace mppi

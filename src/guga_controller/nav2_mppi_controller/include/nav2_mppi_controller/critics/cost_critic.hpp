@@ -74,20 +74,20 @@ protected:
 
 protected:
   nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *>
-  collision_checker_{nullptr};
-  float possibly_inscribed_cost_;
+  collision_checker_{nullptr};  ///< 机器人轮廓碰撞检查器。
+  float possibly_inscribed_cost_;  ///< 需要执行完整轮廓检查的临界代价值。
 
-  bool consider_footprint_{true};
-  float circumscribed_radius_{0};
-  float circumscribed_cost_{0};
-  float collision_cost_{0};
-  float critical_cost_{0};
-  float weight_{0};
+  bool consider_footprint_{true};  ///< 是否使用机器人轮廓判断碰撞。
+  float circumscribed_radius_{0};  ///< 最近一次计算临界代价时的外接圆半径。
+  float circumscribed_cost_{0};  ///< 外接圆半径对应的膨胀代价值。
+  float collision_cost_{0};  ///< 整条轨迹发生碰撞时施加的成本。
+  float critical_cost_{0};  ///< 轨迹点进入内切障碍区域时施加的成本。
+  float weight_{0};  ///< 障碍代价权重，内部按代价值范围归一化。
 
-  float near_goal_distance_;
-  std::string inflation_layer_name_;
+  float near_goal_distance_;  ///< 停用近目标障碍偏好项的距离阈值。
+  std::string inflation_layer_name_;  ///< 指定用于计算临界代价的膨胀层名称。
 
-  unsigned int power_{0};
+  unsigned int power_{0};  ///< 障碍代价的幂次。
 };
 
 }  // namespace mppi::critics

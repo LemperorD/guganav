@@ -53,10 +53,10 @@ public:
   float getMinVelConstraint() {return min_vel_;}
 
 protected:
-  unsigned int power_{0};
-  float weight_{0};
-  float min_vel_;
-  float max_vel_;
+  unsigned int power_{0};  ///< 速度约束代价的幂次。
+  float weight_{0};  ///< 速度约束代价的权重。
+  float min_vel_;  ///< 合成平移速度的允许下限。
+  float max_vel_;  ///< 合成平移速度的允许上限。
 };
 
 }  // namespace mppi::critics

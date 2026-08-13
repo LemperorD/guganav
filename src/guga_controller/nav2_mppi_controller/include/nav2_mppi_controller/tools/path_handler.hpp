@@ -136,22 +136,22 @@ protected:
     */
   bool isWithinInversionTolerances(const geometry_msgs::msg::PoseStamped & robot_pose);
 
-  std::string name_;
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_;
-  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-  ParametersHandler * parameters_handler_;
+  std::string name_;  ///< 控制器插件实例名称及参数命名空间。
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_;  ///< 局部代价地图接口。
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;  ///< 路径坐标变换缓冲区。
+  ParametersHandler * parameters_handler_;  ///< 动态参数处理器的非持有指针。
 
-  nav_msgs::msg::Path global_plan_;
-  nav_msgs::msg::Path global_plan_up_to_inversion_;
-  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+  nav_msgs::msg::Path global_plan_;  ///< 当前完整全局参考路径。
+  nav_msgs::msg::Path global_plan_up_to_inversion_;  ///< 截止到下一换向点的路径段。
+  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 路径处理日志记录器。
 
-  double max_robot_pose_search_dist_{0};
-  double prune_distance_{0};
-  double transform_tolerance_{0};
-  float inversion_xy_tolerance_{0.2};
-  float inversion_yaw_tolerance{0.4};
-  bool enforce_path_inversion_{false};
-  unsigned int inversion_locale_{0u};
+  double max_robot_pose_search_dist_{0};  ///< 最近路径点的最大搜索距离。
+  double prune_distance_{0};  ///< 保留机器人前方路径的裁剪距离。
+  double transform_tolerance_{0};  ///< 坐标变换允许的时间容差。
+  float inversion_xy_tolerance_{0.2};  ///< 到达换向点的位置容差。
+  float inversion_yaw_tolerance{0.4};  ///< 到达换向点的航向容差。
+  bool enforce_path_inversion_{false};  ///< 是否按路径尖点强制分段换向。
+  unsigned int inversion_locale_{0u};  ///< 当前换向点在全局路径中的索引。
 };
 }  // namespace mppi
 

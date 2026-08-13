@@ -78,19 +78,22 @@ protected:
 
 protected:
   nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *>
-  collision_checker_{nullptr};
+  collision_checker_{nullptr};  ///< 机器人轮廓碰撞检查器。
 
-  bool consider_footprint_{true};
-  float collision_cost_{0};
-  float inflation_scale_factor_{0}, inflation_radius_{0};
+  bool consider_footprint_{true};  ///< 是否使用机器人轮廓判断碰撞。
+  float collision_cost_{0};  ///< 整条轨迹发生碰撞时施加的成本。
+  float inflation_scale_factor_{0};  ///< 膨胀代价随距离衰减的比例系数。
+  float inflation_radius_{0};  ///< 障碍膨胀作用半径。
 
-  float possibly_inscribed_cost_;
-  float collision_margin_distance_;
-  float near_goal_distance_;
-  float circumscribed_cost_{0}, circumscribed_radius_{0};
+  float possibly_inscribed_cost_;  ///< 需要执行完整轮廓检查的临界代价值。
+  float collision_margin_distance_;  ///< 开始施加强烈近碰撞惩罚的距离。
+  float near_goal_distance_;  ///< 停用近目标排斥偏好项的距离阈值。
+  float circumscribed_cost_{0};  ///< 外接圆半径对应的膨胀代价值。
+  float circumscribed_radius_{0};  ///< 最近一次计算临界代价时的外接圆半径。
 
-  unsigned int power_{0};
-  float repulsion_weight_, critical_weight_{0};
+  unsigned int power_{0};  ///< 障碍距离代价的幂次。
+  float repulsion_weight_;  ///< 远离障碍物的排斥代价权重。
+  float critical_weight_{0};  ///< 接近碰撞区域的关键代价权重。
 };
 
 }  // namespace mppi::critics

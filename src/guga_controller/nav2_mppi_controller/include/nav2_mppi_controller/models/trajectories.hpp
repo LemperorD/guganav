@@ -27,8 +27,11 @@ namespace mppi::models
  */
 struct Trajectories
 {
+  // 各候选轨迹在预测时域内的横轴坐标。
   xt::xtensor<float, 2> x;
+  // 各候选轨迹在预测时域内的纵轴坐标。
   xt::xtensor<float, 2> y;
+  // 各候选轨迹在预测时域内的航向角。
   xt::xtensor<float, 2> yaws;
 
   /**

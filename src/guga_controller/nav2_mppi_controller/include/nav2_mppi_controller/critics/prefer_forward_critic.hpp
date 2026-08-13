@@ -40,9 +40,9 @@ public:
   void score(CriticData & data) override;
 
 protected:
-  unsigned int power_{0};
-  float weight_{0};
-  float threshold_to_consider_{0};
+  unsigned int power_{0};  ///< 倒车惩罚代价的幂次。
+  float weight_{0};  ///< 倒车惩罚代价的权重。
+  float threshold_to_consider_{0};  ///< 停止施加前向偏好代价的近目标距离。
 };
 
 }  // namespace mppi::critics

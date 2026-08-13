@@ -26,8 +26,11 @@ namespace mppi::models
  */
 struct Path
 {
+  // 各参考路径点的横轴坐标。
   xt::xtensor<float, 1> x;
+  // 各参考路径点的纵轴坐标。
   xt::xtensor<float, 1> y;
+  // 各参考路径点的航向角。
   xt::xtensor<float, 1> yaws;
 
   /**

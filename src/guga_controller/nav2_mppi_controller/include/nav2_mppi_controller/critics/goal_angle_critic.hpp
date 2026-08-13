@@ -41,10 +41,10 @@ public:
   void score(CriticData & data) override;
 
 protected:
-  bool symmetric_yaw_tolerance_{false};
-  float threshold_to_consider_{0};
-  unsigned int power_{0};
-  float weight_{0};
+  bool symmetric_yaw_tolerance_{false};  ///< 是否将相差半圈的航向视为等价目标。
+  float threshold_to_consider_{0};  ///< 开始计算目标航向代价的距离阈值。
+  unsigned int power_{0};  ///< 目标航向代价的幂次。
+  float weight_{0};  ///< 目标航向代价的权重。
 };
 
 }  // namespace mppi::critics

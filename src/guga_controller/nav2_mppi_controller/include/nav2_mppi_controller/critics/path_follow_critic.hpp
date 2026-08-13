@@ -44,11 +44,11 @@ public:
   void score(CriticData & data) override;
 
 protected:
-  float threshold_to_consider_{0};
-  size_t offset_from_furthest_{0};
+  float threshold_to_consider_{0};  ///< 停止计算路径跟随代价的近目标距离。
+  size_t offset_from_furthest_{0};  ///< 最远到达路径点之后的前视点偏移量。
 
-  unsigned int power_{0};
-  float weight_{0};
+  unsigned int power_{0};  ///< 路径跟随代价的幂次。
+  float weight_{0};  ///< 路径跟随代价的权重。
 };
 
 }  // namespace mppi::critics

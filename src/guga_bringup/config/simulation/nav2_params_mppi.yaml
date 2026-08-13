@@ -322,7 +322,7 @@ controller_server:
     odom_topic: odometry
     controller_frequency: 30.0
     FollowPath:
-      plugin: "guga_mppi_controller::MPPIController"
+      plugin: "guga_source_mppi_controller::MPPIController"
       time_steps: 56
       model_dt: 0.035
       batch_size: 2000

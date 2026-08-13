@@ -88,16 +88,16 @@ protected:
   std::string getFullName(const std::string & name);
 
 protected:
-  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-  std::string name_;
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;  ///< 控制器服务器生命周期节点。
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;  ///< 评分器共享的代价地图接口。
+  std::string name_;  ///< 所属控制器的插件实例名称。
 
-  ParametersHandler * parameters_handler_;
-  std::vector<std::string> critic_names_;
-  std::unique_ptr<pluginlib::ClassLoader<critics::CriticFunction>> loader_;
-  std::vector<std::unique_ptr<critics::CriticFunction>> critics_;
+  ParametersHandler * parameters_handler_;  ///< 动态参数处理器的非持有指针。
+  std::vector<std::string> critic_names_;  ///< 参数配置的评分器名称列表。
+  std::unique_ptr<pluginlib::ClassLoader<critics::CriticFunction>> loader_;  ///< 评分插件加载器。
+  std::vector<std::unique_ptr<critics::CriticFunction>> critics_;  ///< 已实例化的评分器列表。
 
-  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 管理器日志记录器。
 };
 
 }  // namespace mppi

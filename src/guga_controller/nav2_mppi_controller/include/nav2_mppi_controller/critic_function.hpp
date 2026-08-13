@@ -33,8 +33,8 @@ namespace mppi::critics
  */
 struct CollisionCost
 {
-  float cost{0};
-  bool using_footprint{false};
+  float cost{0};  ///< 位姿对应的代价地图值。
+  bool using_footprint{false};  ///< 该代价是否通过机器人轮廓计算。
 };
 
 /**
@@ -104,14 +104,14 @@ public:
   }
 
 protected:
-  bool enabled_;
-  std::string name_, parent_name_;
-  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-  nav2_costmap_2d::Costmap2D * costmap_{nullptr};
+  bool enabled_;  ///< 是否启用当前评分器。
+  std::string name_, parent_name_;  ///< 评分器实例名称和所属控制器名称。
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;  ///< 控制器服务器生命周期节点。
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;  ///< 代价地图接口。
+  nav2_costmap_2d::Costmap2D * costmap_{nullptr};  ///< 代价地图数据的非持有指针。
 
-  ParametersHandler * parameters_handler_;
-  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+  ParametersHandler * parameters_handler_;  ///< 动态参数处理器的非持有指针。
+  rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 评分器日志记录器。
 };
 
 }  // namespace mppi::critics

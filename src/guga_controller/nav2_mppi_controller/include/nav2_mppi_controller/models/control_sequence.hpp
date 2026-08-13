@@ -26,6 +26,7 @@ namespace mppi::models
  */
 struct Control
 {
+  // 单个时间步的纵向速度、横向速度和偏航角速度。
   float vx, vy, wz;
 };
 
@@ -35,8 +36,11 @@ struct Control
  */
 struct ControlSequence
 {
+  // 预测时域内的纵向速度序列。
   xt::xtensor<float, 1> vx;
+  // 预测时域内的横向速度序列。
   xt::xtensor<float, 1> vy;
+  // 预测时域内的偏航角速度序列。
   xt::xtensor<float, 1> wz;
 
   void reset(unsigned int time_steps)
