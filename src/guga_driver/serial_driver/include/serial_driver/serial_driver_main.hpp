@@ -20,6 +20,7 @@ namespace serial_driver {
   static constexpr size_t MAX_FRAMES_PER_LOOP{10};
 
   // CRC8 查表是算法实现细节；协议参数 CRC8_INIT 位于 br_protocol_types.hpp。
+  //查表法计算CRC-8/MAXIM（多项式0x31，初值0xFF）。查表比逐位计算快4-5倍。
   static const std::array<uint8_t, 256> CRC8_TABLE{
       0x00, 0x5e, 0xbc, 0xe2, 0x61, 0x3f, 0xdd, 0x83, 0xc2, 0x9c, 0x7e, 0x20,
       0xa3, 0xfd, 0x1f, 0x41, 0x9d, 0xc3, 0x21, 0x7f, 0xfc, 0xa2, 0x40, 0x1e,
@@ -216,7 +217,7 @@ namespace serial_driver {
     std::array<uint8_t, BUFFER_SIZE> buffer_{};
     size_t buffer_index_{};
 
-    // 最新运动控制帧 payload 缓冲（26 字节）
+    // 最新运动控制帧 payload 缓冲（17 字节）
     MotionPayload frame_buffer_{};
 
     // 裁判系统帧 payload 缓冲（13 字节）

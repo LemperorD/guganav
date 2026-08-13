@@ -30,48 +30,36 @@ namespace serial_driver {
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
-    const bool lidar_connected = isLidarConnected();
+    const bool lidar_connected = false;
     std::cout << "Lidar connected: " << std::boolalpha << lidar_connected
               << '\n';
 
     bridge_twist_pc_ =
-        std::make_shared<RosMcuBridge<geometry_msgs::msg::Twist>>(
-            this, "/cmd_vel", true,
+        std::make_shared<RosToSerialBridge<geometry_msgs::msg::Twist>>(
+            this, "/cmd_vel",
             [this](const geometry_msgs::msg::Twist& msg) {
               return encodeTwist(msg);
             },
-            nullptr,
             [this](const uint8_t* data, size_t len) {
               serial_driver_main_->sendDataFrame(data, len);
-            },
-            nullptr);
+            });
 
-    bridge_yaw_mcu_ = std::make_shared<RosMcuBridge<std_msgs::msg::Float32>>(
-        this, "/serial/Yaw", false, nullptr,
-        [this](const uint8_t* payload) -> std_msgs::msg::Float32 {
-          return decodeYaw(payload);
-        },
-        nullptr,
-        [this]() { return serial_driver_main_->receiveDataFrameSnapshot(); });
-
-    bridge_tes_speed_mcu_ =
-        std::make_shared<RosMcuBridge<geometry_msgs::msg::Twist>>(
-            this, "/serial/TES_speed", false, nullptr,
-            [](const uint8_t* payload) -> geometry_msgs::msg::Twist {
-              return decodeTESspeed(payload);
+    bridge_yaw_mcu_ =
+        std::make_shared<SerialToRosBridge<std_msgs::msg::Float32>>(
+            this, "/serial/Yaw",
+            [this](const uint8_t* payload) -> std_msgs::msg::Float32 {
+              return decodeYaw(payload);
             },
-            nullptr,
             [this]() {
               return serial_driver_main_->receiveDataFrameSnapshot();
             });
 
     bridge_enemy_pos_mcu_ =
-        std::make_shared<RosMcuBridge<geometry_msgs::msg::Point>>(
-            this, "/serial/EnemyPos", false, nullptr,
+        std::make_shared<SerialToRosBridge<geometry_msgs::msg::Point>>(
+            this, "/serial/EnemyPos",
             [](const uint8_t* payload) -> geometry_msgs::msg::Point {
               return decodeEnemyPos(payload);
             },
-            nullptr,
             [this]() {
               return serial_driver_main_->receiveDataFrameSnapshot();
             });
@@ -81,11 +69,6 @@ namespace serial_driver {
         [this]() { publishTransformGimbalVision(); });
     referee_rx_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(20), [this]() { publishRefereeData(); });
-
-    chassis_mode_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
-        "chassis_mode", 10, [this](const std_msgs::msg::UInt8::SharedPtr msg) {
-          chassis_mode_ = static_cast<uint8_t>(msg->data);
-        });
 
     robot_status_pub_ =
         this->create_publisher<guga_interfaces::msg::RobotStatus>(
@@ -104,10 +87,10 @@ namespace serial_driver {
 
     bridge_twist_pc_.reset();
     bridge_yaw_mcu_.reset();
-    bridge_tes_speed_mcu_.reset();
+    // bridge_tes_speed_mcu_.reset();
     bridge_enemy_pos_mcu_.reset();
 
-    chassis_mode_sub_.reset();
+    // chassis_mode_sub_.reset();
     robot_status_pub_.reset();
     game_status_pub_.reset();
     rfid_status_pub_.reset();
@@ -133,32 +116,21 @@ namespace serial_driver {
     this->get_parameter("lidar_port", lidar_port_);
   }
 
-  MotionPayload
-  SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
-    geometry_msgs::msg::Twist twist_chassis = transformVelocityToChassis(
-        msg, yaw_diff_ * M_PI / 180.0);
-
+  MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
     const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
     const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
     const auto wz = static_cast<float>(msg.angular.z);
-    const auto vx_y = static_cast<float>(vel_trans_scale_
-                                         * twist_chassis.linear.x);
-    const auto vy_y = static_cast<float>(vel_trans_scale_
-                                         * twist_chassis.linear.y);
 
     MotionPayload payload{};
-    payload[downlink_offset::CHASSIS_MODE] = chassis_mode_;
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::ANGLE_INIT],
-                                   static_cast<float>(angle_init_));
-    payload[downlink_offset::FLAG] = 1;
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX_Y], vx_y);
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY_Y], vy_y);
+    payload.fill(0);  // 全部初始化为 0
+
+    // 按头文件定义写入三个速度字段（VX=0, VY=4, WZ_NEG=8）
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx);
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy);
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], -wz);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], wz);
 
     return payload;
-  }
+}
 
   std_msgs::msg::Float32 SerialDriverNode::decodeYaw(const uint8_t* payload) {
     std_msgs::msg::Float32 msg;
@@ -168,21 +140,13 @@ namespace serial_driver {
     return msg;
   }
 
-  geometry_msgs::msg::Twist SerialDriverNode::decodeTESspeed(
-      const uint8_t* payload) {
-    geometry_msgs::msg::Twist msg;
-    msg.angular.z = static_cast<double>(
-        SerialDriverMain::readFloatLE(&payload[uplink_offset::TES_ANGULAR_Z]));
-    return msg;
-  }
-
   geometry_msgs::msg::Point SerialDriverNode::decodeEnemyPos(
       const uint8_t* payload) {
     geometry_msgs::msg::Point msg;
     msg.x = static_cast<double>(
-        SerialDriverMain::readInt16LE(&payload[uplink_offset::ENEMY_X]));
+        SerialDriverMain::readFloatLE(&payload[uplink_offset::ENEMY_X]));
     msg.y = static_cast<double>(
-        SerialDriverMain::readInt16LE(&payload[uplink_offset::ENEMY_Y]));
+        SerialDriverMain::readFloatLE(&payload[uplink_offset::ENEMY_Y]));
     return msg;
   }
 
@@ -254,13 +218,6 @@ namespace serial_driver {
     const int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
       std::cerr << "Socket creation failed\n";
-      return false;
-    }
-
-    const int flags = fcntl(sock, F_GETFL, 0);
-    if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
-      std::cerr << "Failed to configure nonblocking socket\n";
-      close(sock);
       return false;
     }
 
