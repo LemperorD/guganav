@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(fake_vel_transform)
+project(gimbal_cmd_vel_adapter)
 
 ## Use C++14
 set(CMAKE_CXX_STANDARD 14)
@@ -24,11 +24,11 @@ ament_auto_find_build_dependencies()
 ###########
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/fake_vel_transform.cpp
+  src/gimbal_cmd_vel_adapter.cpp
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN fake_vel_transform::FakeVelTransform
+  PLUGIN gimbal_cmd_vel_adapter::GimbalCmdVelAdapter
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
