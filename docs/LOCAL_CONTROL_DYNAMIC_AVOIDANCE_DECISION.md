@@ -1,6 +1,6 @@
 # RoboMaster 哨兵局部路径跟踪与动态避障控制方案决策报告
 
-> 状态：技术评审稿（仅调研，不含代码变更）
+> 状态：技术评审稿（已同步当前小陀螺控制实现）
 > 仓库快照：`/home/rog/guganav`，2026-08-06（Asia/Shanghai）
 > 目标平台：ROS 2 Humble + Nav2，i9-12900H，两全两舵，控制量 `vx/vy/wz`，目标控制频率 ≥10 Hz、峰值速度约 3 m/s
 > 资料检索截止：2026-08-06；网页均于该日访问
@@ -17,7 +17,7 @@
 
 **前卫路线：在 HERO 二阶模型上扩展全向 NMPC/MPCC + 动态目标预测 + 拓扑多初值/概率约束。** 其理论上限最高：可统一处理 `vx/vy/wz`、加速度/jerk、舵轮转角与转速、静态 ESDF、动态机器人预测和不同绕行拓扑。T-MPC++/SH-MPC 的公开论文与工程实现证明了动态环境中并行拓扑轨迹和概率碰撞约束的可行性，公开工程报告典型 20–30 Hz；但其示例模型主要是二阶单车模型，不是本项目的全向 Nav2 插件，论文结果还主要使用商业 Forces Pro。HERO 代码提供了有价值的全向 acados 起点，却尚未实现上述障碍/概率/拓扑约束，故只建议作为并行研发，不阻塞 MPPI 落地。[R9][R10][R11][R21]
 
-**最重要的非算法结论：** 3 m/s 下的安全和“高精度穿越”不能由任一局部规划算法单独保证，坡道更不能沿用平地速度上限。必须先闭合 footprint、上下坡实测制动/回退距离、坡中驻车能力、最终小陀螺指令、串口 watchdog/量纲、时间同步和动态障碍观测延迟。现链路在控制器和速度平滑器之后才叠加小陀螺角速度，控制器并不知道最终 `wz`；串口 payload 没有可见的时间戳/序号/ACK，PC 侧也未见 NaN/限幅和断流制动逻辑。MCU 是否有坡中断流保持/watchdog 尚未核验。
+**最重要的非算法结论：** 3 m/s 下的安全和“高精度穿越”不能由任一局部规划算法单独保证，坡道更不能沿用平地速度上限。必须先闭合 footprint、上下坡实测制动/回退距离、坡中驻车能力、最终小陀螺指令、串口 watchdog/量纲、时间同步和动态障碍观测延迟。当前 PID 已在 controller 内生成小陀螺完整 `wz`，MPPI profile 也通过 `SpinCritic` 在 rollout 中评分目标 `wz`，二者都经过 velocity smoother；但 Collision Monitor、坡道禁转包络以及 MCU watchdog/限幅仍未闭合。串口 payload 也没有可见的时间戳/序号/ACK。
 
 ## 2. 当前项目审计
 
@@ -25,14 +25,13 @@
 
 ```text
 Point-LIO /aft_mapped_to_init -> loam_interface /lidar_odometry
-  -> sensor_scan_generation /odometry -> controller / velocity_smoother / fake_vel_transform
+  -> sensor_scan_generation /odometry -> controller / velocity_smoother
 
 terrain_map / terrain_map_ext
   -> IntensityVoxelLayer -> ESDF -> Inflation -> local/global costmap
   -> JPS (global) -> 7 阶 B-spline（显式 ESDF 梯度优化为可选）-> nav_msgs/Path
   -> Omni PID Pursuit @ 20 Hz -> cmd_vel_controller
-  -> Nav2 velocity_smoother @ 20 Hz -> cmd_vel_nav2_result
-  -> fake_vel_transform（坐标旋转；非 FOLLOW 模式叠加 spin_speed）
+  -> Nav2 velocity_smoother @ 20 Hz
   -> /cmd_vel -> serial_driver -> BR/0xCD/26B payload -> MCU
 ```
 
@@ -43,7 +42,7 @@ terrain_map / terrain_map_ext
 | 当前控制器 | 全向 `vx/vy/wz`、20 Hz、速度前视、曲率/接近减速、横向误差修正、模式切换 | 只跟踪 path；碰撞检测是路径中心点采样，不是控制轨迹的 footprint 碰撞；`setSpeedLimit()` 未实现 |
 | Nav2 参数 | `v_xy<=2.5 m/s`，平滑器 `a_xy<=4.5 m/s²`；目标容差 0.15 m | `min_y_velocity_threshold=0.5 m/s` 会把低于阈值的实测横向速度当作 0，直接损害全向精细闭环；`yaw_goal_tolerance=6.28` 等于不约束终点朝向 |
 | 坡道处理 | Point-LIO 保留 6DoF pose；terrain analysis 能避免连续坡面被整体投成障碍 | `/odometry` 未输出可审计的融合速度/协方差；`/terrain_map` 的 intensity 只是离地高度，不是坡度或可通行性。controller、smoother 和串口上限仍为平地常数，未见坡度/附着/打滑速度包络或驻坡策略 [R23][R24] |
-| 小陀螺 | `fake_vel_transform` 在非 FOLLOW 模式向最终命令叠加默认 `3.14 rad/s` | 叠加发生在控制器和 smoother 之后；局部规划没有评价最终角速度下的扫掠体积、跟踪误差和舵轮可实现性 |
+| 小陀螺 | `simple_decision` 发布模式和转速；PID 直接输出目标 `wz`；MPPI 用 `SpinCritic`；`gimbal_cmd_vel_adapter` 不在主链 | 已经过 smoother，但仍需 Collision Monitor、坡道禁转包络和旋转 footprint 扫掠验证 |
 | 串口 | `/cmd_vel` 到 26B BR 帧；CRC8；传 `vx/vy` 两套坐标值和 `-wz`；115200 baud | 消息触发式发送；单次写最长等待 100 ms；可见协议无时间戳/序号/ACK；配置注释称 m/s→mm/s 理论比例 1000，但实际 YAML 为 50，必须核对 MCU 单位和标定 |
 | 自研 MPC | acados 全向运动学模型、`vx/vy/wz` 输入上界、Nav2 插件外壳 | 未启用；状态被固定为 `{0,0,0}`；只追一个 lookahead 点；无障碍、加速度、舵轮约束；求解失败后仍读取输出；`setSpeedLimit()` 为空。当前只能视为求解器接线原型 |
 
@@ -57,7 +56,7 @@ terrain_map / terrain_map_ext
 Point-LIO `aft_mapped_to_init`（6DoF pose）
   -> loam_interface `/lidar_odometry`（转换到 odom，child=`front_mid360`）
   -> sensor_scan_generation `/odometry`（转换到 `gimbal_yaw`）
-  -> Nav2 controller / velocity_smoother / fake_vel_transform
+  -> Nav2 controller / velocity_smoother
 ```
 
 - Point-LIO 实车配置启用 IMU 测量与逐传播时刻 odometry 发布（`mapping.imu_en=True`、`publish_odometry_without_downsample=True`），但采用 `use_imu_as_input=False` 的 30 维 IMU-as-output 模式，且不发布自身 TF。配置重力向量约为 `[0, 0.187, -0.955]`；它可能是雷达安装姿态补偿，也可能是遗留标定，必须用静止多姿态与已知坡角重新核验，不能直接当真实坡度零点。
@@ -92,7 +91,7 @@ Point-LIO `aft_mapped_to_init`（6DoF pose）
 - HERO 的行为树以 15 Hz 重跑 planner+smoother；MINCO 使用五次多项式和 L-BFGS，将 ESDF 距离、速度、加速度作为离散积分的**软惩罚**，实际 YAML 为 `safe_distance=0.3 m`、`max_vel=2.2 m/s`、`max_acc=3.0 m/s²`。MPC 是世界系双积分器：状态 `[x,y,yaw,vx,vy,wz]`，控制 `[ax,ay,alpha]`，40 步/2 s，SQP-RTI+HPIPM，速度和加速度为箱约束，配置控制频率 100 Hz。[R21][R22]
 - 必须区分 HERO 的两层能力：**MINCO 负责当前 costmap/ESDF 的反应式重规划，MPC 只负责时间轨迹全状态跟踪。** `hero_mpc_controller` 不查询 costmap、不含障碍/footprint/对手预测约束，`setPlan()` 只缓存而不使用 Nav2 path，实际订阅专用 MINCO 多项式话题。因此它不是“动态障碍 NMPC”，更不是带概率安全保证的局部 MPC。
 - 公开快照的工程风险也需计入：MPC 初始速度明确使用上一周期预测指令而非实测里程计速度；TF 变换失败时继续把原 frame 的 pose 当 map pose；`get_next_state()` 实际取预测第 3 阶段；`setSpeedLimit()` 未实现；MINCO 已接收 footprint subscriber 但优化只查询轨迹中心点 ESDF；优化后未见独立连续 footprint 碰撞复核。规划包未见单元/基准测试，仓库未附 acados 本体，且 `pb_minco_smoother/package.xml` 声明 `rmoss_interfaces`、CMake/源码却使用 `interfaces`。这些不否定其赛场价值，但意味着移植前必须先做可复现构建和故障审计。[R21]
-- 北极熊战队 `pb2025_sentry_nav` 是与本项目最接近且持续维护的公开工程：ROS 2 Humble、Nav2、Mid360/Point-LIO、terrain analysis、`fake_vel_transform` 和 `pb_omni_pid_pursuit_controller`；其 README 明确使用 Nav2 Global Planner + Omni PID Pursuit。[R7] 它证明当前框架具备 Sim2Real 工程基础，但没有证明 3 m/s 动态避障或带预测的局部规划上限。
+- 北极熊战队 `pb2025_sentry_nav` 是与本项目最接近且持续维护的公开工程：ROS 2 Humble、Nav2、Mid360/Point-LIO、terrain analysis、`gimbal_cmd_vel_adapter` 和 `pb_omni_pid_pursuit_controller`；其 README 明确使用 Nav2 Global Planner + Omni PID Pursuit。[R7] 它证明当前框架具备 Sim2Real 工程基础，但没有证明 3 m/s 动态避障或带预测的局部规划上限。
 - 西电 IRobot、华科 HUST 等也公开过哨兵 SLAM/导航仓库，更多证明 LIO + ROS 导航是常见路线。[R8] 注意 **HUST 是华中科技大学，不是 HITWH 哈工大（威海）HERO**，不能混作 HERO 证据。
 
 ## 3. 能力分层：不要混淆理论、开源实现和本项目代码
@@ -137,7 +136,7 @@ MPPI 从上一周期控制序列出发，加入高斯扰动形成批量候选，
 - 坡道先使用同一 MPPI 算法的独立 `Slope` 参数/限速模式，而不是立刻切换另一套规划器：抑制横坡 `vy` 和大 `wz`，上下坡分别使用实测速度/加减速度包络；坡度状态不可信时按更保守包络运行。是否需要单独加载 `MPPISlope` 插件实例，由参数切换原子性和 A/B 结果决定。
 - 可增加 terrain critic，对候选轨迹沿途的坡度、横坡、粗糙度和坡顶盲区代价评分；它负责“选哪条路”，独立监督器负责“这条指令是否仍在实测牵引/制动包络内”。Critic 软代价不得代替下游限幅和驻坡。
 - 使用实测多边形 footprint，开启 footprint-aware cost critic；狭窄区由地形/语义层降低限速，不用单一全局膨胀半径同时承担安全和舒适距离。
-- 普通模式由 MPPI 输出完整 `vx/vy/wz`；小陀螺模式若继续外加 `wz`，最终组合命令必须再经过 collision monitor，且测试扫掠 footprint。
+- 普通模式和小陀螺模式都由 controller 输出完整 `vx/vy/wz`；`SpinCritic` 让 MPPI rollout 包含目标旋转。禁止在 smoother/串口/MCU 再叠加第二份 `wz`，最终命令仍必须经过 Collision Monitor 并测试扫掠 footprint。
 - 保留失败计数、最后可行解年龄和 deadline miss；超限先零速过渡，再切限速 DWB，仍无合法轨迹则停车，不能复用未确认的旧控制量。
 
 ### S2（哨兵专项备选）：HERO MINCO + 二阶全向 MPC
@@ -243,7 +242,7 @@ acados 支持 OCP-NLP、约束、软约束、控制变化率和 RTI，并能拆�
                          |
        坡度/牵引监督器（上下坡非对称速度、加减速度、wz 包络）
                          |
-       坐标变换 + 模式管理（含最终小陀螺 wz）
+       controller 内模式管理（PID/MPPI 均输出完整小陀螺 wz）
                          |
       Collision Monitor（最终命令、原始近场点云）
                          |
@@ -272,7 +271,7 @@ acados 支持 OCP-NLP、约束、软约束、控制变化率和 RTI，并能拆�
 |---|---|---|
 | footprint/传感误差不明 | 窄门擦碰或不敢通过 | 实测外形、外参、定位/障碍误差分布，定义 3σ margin |
 | MCU 量纲/watchdog 未核验 | 速度比例错误、断流继续运动 | 台架核对 `vel_trans_scale`、符号、饱和、超时零速、ACK/反馈 |
-| 小陀螺后叠加 | 预测指令与执行指令不一致 | 记录最终命令；safety filter 位于叠加后；完成旋转扫掠测试 |
+| MCU/末端重复叠加小陀螺 | 预测指令与执行指令不一致 | MCU 只执行 payload `wz`；记录最终命令；完成旋转扫掠测试 |
 | 下坡制动能力未知 | 动态障碍前停车距离不足 | 按坡度/方向/载荷/地面测 p05 制动曲线，速度包络使用下坡实测值 |
 | 坡中驻车或断流保持未知 | 回退、侧滑或二次碰撞 | 验证 MCU hill-hold、断流、重启和通信超时；物理防护下完成坡中停启 |
 | 坡顶/坡底点云与定位畸变 | 假障碍、漏检或控制突跳 | 双方向 bags 验证地面分割、外参、pitch/roll TF 和 costmap 连续性；盲区内强制限速 |
@@ -358,7 +357,7 @@ acados 支持 OCP-NLP、约束、软约束、控制变化率和 RTI，并能拆�
 1. 冻结实车 footprint、速度单位、平地及上下坡制动曲线、坡中保持、MCU watchdog 和端到端时延；修正/验证 `min_y_velocity_threshold`。
 2. 先关闭状态语义缺口：建立 conditioning/fusion odom，修正 body twist 坐标、滤波/协方差/age/valid，TF 失败不再产生单位变换；同时核验 Point-LIO 重力/外参与坡道姿态误差。
 3. 将现有 terrain map 限定为障碍高度层，核对 connectivity 参数名和 no-data 策略；新增 terrain slope/横坡/roughness/confidence/age/drop descriptor，并接入只记录不干预的 slope/slip telemetry。
-4. 建立独立坡度/牵引监督器和 `FLAT/SLOPE/STOP` 包络，再建立 MPPI/DWB/PID controller selector、单发布者规则和“主控→DWB→停车”仲裁；安全层置于最终小陀螺叠加之后。
+4. 建立独立坡度/牵引监督器和 `FLAT/SLOPE/STOP` 包络，再建立 MPPI/DWB/PID controller selector、单发布者规则和“主控→DWB→停车”仲裁；Collision Monitor 处理 controller 输出并经 smoother 后的完整小陀螺指令。
 5. 将 HERO 固定提交单独做可复现构建和 shadow：先测 MINCO p99、轨迹连续性与 MPC 状态误差；其平面双积分器未加入坡度项前，不进入坡道实机 A/B。
 6. 用 rosbag shadow + 含重力/摩擦的闭环仿真完成平地 0.5–3 m/s、坡道按制动能力分级；MPPI 通过后进入实机 A/B。HERO 候选按其公开 2.2 m/s 平地边界先验收再讨论提速。
 7. 第二阶段加入动态目标 tracker，并先作为记录/评估输出；确认预测优于常速度基线后，再接 MPPI 自定义 critic。
@@ -409,7 +408,7 @@ acados 支持 OCP-NLP、约束、软约束、控制变化率和 RTI，并能拆�
 - 导航启动/速度 remap：[`src/guga_bringup/launch/core/navigation_launch.py`](../src/guga_bringup/launch/core/navigation_launch.py)
 - 当前 PID 控制器：[`src/guga_controller/pb_omni_pid_pursuit_controller`](../src/guga_controller/pb_omni_pid_pursuit_controller)
 - acados MPC 原型：[`src/guga_controller/mpc_controller`](../src/guga_controller/mpc_controller)
-- 小陀螺/速度坐标变换：[`src/guga_controller/fake_vel_transform`](../src/guga_controller/fake_vel_transform)
+- 小陀螺/速度坐标变换：[`src/guga_controller/gimbal_cmd_vel_adapter`](../src/guga_controller/gimbal_cmd_vel_adapter)
 - 串口速度链：[`src/guga_driver/serial_driver`](../src/guga_driver/serial_driver)
 - JPS/B-spline/ESDF 设计：[`src/guga_planner/jps_planner/DESIGN.md`](../src/guga_planner/jps_planner/DESIGN.md)
 - Point-LIO odometry 发布：[`src/guga_localization/point_lio/src/laserMapping.cpp`](../src/guga_localization/point_lio/src/laserMapping.cpp)

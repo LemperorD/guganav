@@ -80,6 +80,10 @@ Offset  Size  字段           类型        说明
 [22-25] 4     -wz            float LE    角速度 z 取反
 ```
 
+`chassis_mode` 取值统一为 `1=CHASSIS_FOLLOWED`、`2=LITTLE_TES`、
+`3=GO_HOME`。模式 2 下目标自旋速度已经包含在 `wz` 字段中；MCU 只执行该
+`wz`，不得因 `chassis_mode=2` 再额外叠加内部固定角速度。
+
 **注意**: 速度值经过 `vel_trans_scale_`（默认 40.0）线性缩放，由 `float` 转 `uint8_t[4]` 小端序写入。
 `vx_Y` / `vy_Y` 经过 `yaw_diff` 从云台系旋转变换到底盘系。
 

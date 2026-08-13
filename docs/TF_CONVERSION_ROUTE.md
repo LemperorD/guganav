@@ -20,7 +20,7 @@ map
 
 ```text
 gimbal_yaw
-`-- gimbal_yaw_fake               fake_vel_transform 动态发布
+`-- gimbal_yaw_fake               gimbal_cmd_vel_adapter 动态发布
 ```
 
 旧配置曾把 `gimbal_yaw_fake` 配置为 `robot_base_frame`；当前试验配置已经统一改为 `base_footprint`。
@@ -84,9 +84,9 @@ odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 
 Point-LIO 默认只发布 `aft_mapped_to_init` 话题；其 TF 发布开关 `tf_send_en` 在当前配置中关闭，因此 `loam_interface` 负责把激光里程计接入项目的 `odom` 系。
 
-## 4. `gimbal_yaw_fake` 的转换
+## 4. `gimbal_yaw_fake` 的历史转换
 
-实现见 [fake_vel_transform.cpp](../src/guga_controller/fake_vel_transform/src/fake_vel_transform.cpp)：
+实现见 [gimbal_cmd_vel_adapter.cpp](../src/guga_controller/gimbal_cmd_vel_adapter/src/gimbal_cmd_vel_adapter.cpp)：
 
 ```text
 输入 TF: chassis -> gimbal_yaw
@@ -101,7 +101,7 @@ yaw(chassis -> gimbal_yaw_fake) = 0
 
 这使 fake frame 的方向接近底盘方向，但它仍位于云台链上。非 `chassisFollowed` 模式下，代码使用 odometry 中的 `odom -> gimbal_yaw` yaw，行为会切换为接近世界/odom 对齐。
 
-fake 节点还将 `cmd_vel_nav2_result` 转换后发布到 `cmd_vel`，并处理 `cmd_spin`、`chassis_mode`、超时直通和角速度反向。
+该兼容节点还能将 `cmd_vel_nav2_result` 转换后发布到 `cmd_vel`，并处理 `cmd_spin`、`chassis_mode`、超时直通和角速度反向。当前主 bringup 已不再启动该节点。
 
 ## 5. 速度坐标系现状
 
@@ -112,8 +112,13 @@ MPPI/controller_server
     -> cmd_vel_controller
 velocity_smoother
     -> cmd_vel
-底盘控制器
+串口驱动 -> MCU
 ```
+
+小陀螺也不需要额外 TF。`simple_decision` 发布 `chassis_mode=2` 与
+`cmd_spin`：Omni PID 直接把该角速度作为完整 `wz` 输出；MPPI profile 通过
+`guga_mppi_critics/SpinCritic` 在候选控制序列中优化该 `wz`。两条链路均先经过
+`velocity_smoother`，不会在 `/cmd_vel` 后再次叠加角速度。
 
 `sensor_scan_generation::publishOdometry()` 先对相邻 `odom -> base_footprint`
 位姿做差，得到 `odom` 轴的线速度和角速度，再乘当前姿态的逆旋转，将其
