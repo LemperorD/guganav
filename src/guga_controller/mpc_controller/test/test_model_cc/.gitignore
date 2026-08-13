@@ -1,2 +1,5 @@
 data/*
 !data/.gitkeep
+
+data_omni/*
+!data_omni/.gitkeep

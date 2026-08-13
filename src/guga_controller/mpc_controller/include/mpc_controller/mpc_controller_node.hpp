@@ -6,7 +6,7 @@
 // #define REFERENCE_DEBUG
 // #define LOCAL_PLAN_LENGTH_DEBUG
 // #define PREDICT_INPUT_DEBUG
-#define WRITE_FILE_DEBUG
+// #define WRITE_FILE_DEBUG
 
 #include <iostream>
 #include <fstream>
@@ -117,6 +117,8 @@ private:
   // 局部规划路径长度
   double local_plan_length_{2.0};
 
+  double last_yaw_{0.0};
+
   inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(const geometry_msgs::msg::PoseStamped & pose) const;
 
 #ifdef PREDICT_INPUT
@@ -196,6 +198,17 @@ inline const nav_msgs::msg::Path StateHorizon2Path(const nav_msgs::msg::Path& gl
   }
   path.header.frame_id = global_plan.header.frame_id;
   return path;
+}
+
+ double unwrap_angle(double current, double previous)
+{
+    while (current - previous > M_PI)
+        current -= 2.0 * M_PI;
+
+    while (current - previous < -M_PI)
+        current += 2.0 * M_PI;
+
+    return current;
 }
 
 #endif  // MPC_CONTROLLER_NODE_HPP_

@@ -81,7 +81,10 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
   geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
   StateBound x0 = Point2State(global_pose);
+  double current_yaw = x0[2];
+  x0[2] = unwrap_angle(current_yaw, last_yaw_);
   mpc_wrapper_->setInitialState(x0);
+  last_yaw_ = x0[2];
 
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header = global_pose.header;
@@ -130,9 +133,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
 #endif
 
-  // cmd_vel.twist.linear.x = u_opt[0];
-  // cmd_vel.twist.linear.y = u_opt[1];
-  // cmd_vel.twist.angular.z = u_opt[2];
+  cmd_vel.twist.linear.x = u_opt[0];
+  cmd_vel.twist.linear.y = u_opt[1];
+  cmd_vel.twist.angular.z = u_opt[2];
 
   double yaw = tf2::getYaw(global_pose.pose.orientation);
 
@@ -146,9 +149,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   double vy_body = -sin_yaw * vx_map + cos_yaw * vy_map;
 
 
-  cmd_vel.twist.linear.x = vx_body;
-  cmd_vel.twist.linear.y = vy_body;
-  cmd_vel.twist.angular.z = u_opt[2];
+  // cmd_vel.twist.linear.x = vx_body;
+  // cmd_vel.twist.linear.y = vy_body;
+  // cmd_vel.twist.angular.z = u_opt[2];
 
 #ifdef WRITE_FILE_DEBUG
   // 打开日志文件 (首次调用时)

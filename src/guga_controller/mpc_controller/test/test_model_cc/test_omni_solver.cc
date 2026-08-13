@@ -1,16 +1,21 @@
 /**
- * @file test_unicycle_solver.cc
- * @brief 测试 acados 生成的 unicycle OCP C 代码 — 闭环 MPC 仿真。
+ * @file test_omni_solver.cc
+ * @brief 测试 acados 生成的 omni (全向) OCP C 代码 — 闭环 MPC 仿真。
+ *
+ * 模型: x = [px, py, theta], u = [vx, vy, omega]
+ *        px_dot = vx*cos(theta) - vy*sin(theta)
+ *        py_dot = vx*sin(theta) + vy*cos(theta)
+ *        theta_dot = omega
  *
  * 运行两条轨迹 (圆 / 8字) 的闭环 MPC 路径跟踪仿真，
- * 输出 CSV 数据文件供 plot_results.py 绘图。
+ * 输出 CSV 数据文件供 plot_omni_results.py 绘图。
  *
  * 不依赖 ROS, 仅链接 acados 运行时库和生成的 solver。
  *
  * 使用方法:
  *   cd test_model_cc && mkdir build && cd build
- *   cmake .. && make && ./test_unicycle_solver
- *   python3 ../plot_results.py
+ *   cmake .. && make && ./test_omni_solver
+ *   python3 ../plot_omni_results.py
  */
 
 #include <cstdio>
@@ -27,33 +32,40 @@
 #include "acados/utils/print.h"
 
 extern "C" {
-#include "acados_solver_unicycle.h"
-#include "acados_sim_solver_unicycle.h"
+#include "acados_solver_omni.h"
+#include "acados_sim_solver_omni.h"
 }
 
-#define NX   UNICYCLE_NX
-#define NU   UNICYCLE_NU
-#define N    UNICYCLE_N
-#define NY   UNICYCLE_NY
-#define NYN  UNICYCLE_NYN
-#define NBX0 UNICYCLE_NBX0
+#define NX   OMNI_NX
+#define NU   OMNI_NU
+#define N    OMNI_N
+#define NY   OMNI_NY
+#define NYN  OMNI_NYN
+#define NBX0 OMNI_NBX0
+
+// 全向模型动力学: x=[px,py,theta], u=[vx,vy,omega]
+static void omni_dynamics(const double x[3], const double u[3],
+                          double xdot[3]) {
+    double c = cos(x[2]), s = sin(x[2]);
+    xdot[0] = u[0]*c - u[1]*s;
+    xdot[1] = u[0]*s + u[1]*c;
+    xdot[2] = u[2];
+}
 
 // 辅助: RK4 积分
-static void rk4_step(const double x[3], const double u[2], double dt,
+static void rk4_step(const double x[3], const double u[3], double dt,
                      double x_next[3]) {
-    double k1[3] = {u[0]*cos(x[2]), u[0]*sin(x[2]), u[1]};
-    double xk[3];
+    double k1[3], k2[3], k3[3], k4[3], xk[3];
+    omni_dynamics(x, u, k1);
     xk[0]=x[0]+0.5*dt*k1[0]; xk[1]=x[1]+0.5*dt*k1[1]; xk[2]=x[2]+0.5*dt*k1[2];
-    double k2[3] = {u[0]*cos(xk[2]), u[0]*sin(xk[2]), u[1]};
+    omni_dynamics(xk, u, k2);
     xk[0]=x[0]+0.5*dt*k2[0]; xk[1]=x[1]+0.5*dt*k2[1]; xk[2]=x[2]+0.5*dt*k2[2];
-    double k3[3] = {u[0]*cos(xk[2]), u[0]*sin(xk[2]), u[1]};
+    omni_dynamics(xk, u, k3);
     xk[0]=x[0]+dt*k3[0]; xk[1]=x[1]+dt*k3[1]; xk[2]=x[2]+dt*k3[2];
-    double k4[3] = {u[0]*cos(xk[2]), u[0]*sin(xk[2]), u[1]};
+    omni_dynamics(xk, u, k4);
     x_next[0]=x[0]+(dt/6.0)*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
     x_next[1]=x[1]+(dt/6.0)*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
     x_next[2]=x[2]+(dt/6.0)*(k1[2]+2*k2[2]+2*k3[2]+k4[2]);
-    // while (x_next[2] >  M_PI) x_next[2]-=2*M_PI;
-    // while (x_next[2] < -M_PI) x_next[2]+=2*M_PI;
 }
 
 static double unwrap_angle(double current, double previous)
@@ -84,7 +96,6 @@ static void generate_reference(TrajectoryType type, double t, double ref[3]) {
                      ax*sin(w*(t+eps))-ax*sin(w*(t-eps)));
         ref[2]=unwrap_angle(ref[2], last_ref_theta);
         last_ref_theta = ref[2];
-
     }
 }
 
@@ -113,13 +124,13 @@ static void write_csv_mat(const char *path, const char *hdr,
 // Test 1: Smoke
 static bool test_create_destroy() {
     std::printf("--- Test 1: Create & Destroy ---\n");
-    unicycle_solver_capsule *c = unicycle_acados_create_capsule();
+    omni_solver_capsule *c = omni_acados_create_capsule();
     if (!c) { std::printf("  FAIL\n"); return false; }
-    int s = unicycle_acados_create_with_discretization(c, N, nullptr);
-    if (s) { std::printf("  FAIL\n"); unicycle_acados_free_capsule(c); return false; }
-    s = unicycle_acados_free(c);
-    if (s) { std::printf("  FAIL\n"); unicycle_acados_free_capsule(c); return false; }
-    unicycle_acados_free_capsule(c);
+    int s = omni_acados_create_with_discretization(c, N, nullptr);
+    if (s) { std::printf("  FAIL\n"); omni_acados_free_capsule(c); return false; }
+    s = omni_acados_free(c);
+    if (s) { std::printf("  FAIL\n"); omni_acados_free_capsule(c); return false; }
+    omni_acados_free_capsule(c);
     std::printf("  PASS\n");
     return true;
 }
@@ -137,7 +148,8 @@ static void setup_solver(
     for (int i=0;i<N;++i) {
         double ref[3];
         generate_reference(type,t_start+i*dt,ref);
-        double yref[NY]={ref[0],ref[1],ref[2],0.0,0.0};
+        // y = [px, py, theta, vx, vy, omega], 控制参考暂置 0 (同 unicycle 测试)
+        double yref[NY]={ref[0],ref[1],ref[2],0.0,0.0,0.0};
         ocp_nlp_cost_model_set(cfg,dims,in,i,"y_ref",void_ptr(yref));
     }
     double ref[3];
@@ -151,19 +163,19 @@ static bool test_closed_loop_mpc(TrajectoryType type,
                                   const char *tag, const char *csv_dir) {
     std::printf("--- Test: Closed-Loop MPC (%s) ---\n", tag);
 
-    const double dt    = 1.0/N;
+    const double dt    = 0.5/N;      // tf=0.5
     const double T_sim = 10.0;
-    const int n_sim    = static_cast<int>(T_sim/dt) - N;  // 180
+    const int n_sim    = static_cast<int>(T_sim/dt) - N;  // 190
 
-    unicycle_solver_capsule *c = unicycle_acados_create_capsule();
-    int s = unicycle_acados_create_with_discretization(c, N, nullptr);
+    omni_solver_capsule *c = omni_acados_create_capsule();
+    int s = omni_acados_create_with_discretization(c, N, nullptr);
     if (s) { std::printf("  FAIL: create\n"); return false; }
 
-    ocp_nlp_config *cfg=unicycle_acados_get_nlp_config(c);
-    ocp_nlp_dims  *dims=unicycle_acados_get_nlp_dims(c);
-    ocp_nlp_in    *in  =unicycle_acados_get_nlp_in(c);
-    ocp_nlp_out   *out =unicycle_acados_get_nlp_out(c);
-    ocp_nlp_solver *slv=unicycle_acados_get_nlp_solver(c);
+    ocp_nlp_config *cfg=omni_acados_get_nlp_config(c);
+    ocp_nlp_dims  *dims=omni_acados_get_nlp_dims(c);
+    ocp_nlp_in    *in  =omni_acados_get_nlp_in(c);
+    ocp_nlp_out   *out =omni_acados_get_nlp_out(c);
+    ocp_nlp_solver *slv=omni_acados_get_nlp_solver(c);
 
     auto *x_hist   =new double[(n_sim+1)*NX]();
     auto *u_hist   =new double[n_sim*NU]();
@@ -182,7 +194,7 @@ static bool test_closed_loop_mpc(TrajectoryType type,
     for (int k=0;k<n_sim;++k) {
         setup_solver(cfg,dims,in,out,x_cur,type,k*dt,dt);
 
-        s = unicycle_acados_solve(c);
+        s = omni_acados_solve(c);
         if (s!=ACADOS_SUCCESS) {
             std::printf("  FAIL: solve at step %d\n",k);
             goto fail;
@@ -206,9 +218,9 @@ static bool test_closed_loop_mpc(TrajectoryType type,
         }
 
         // 前向仿真
-        // TODO: 使用 acados_sim_solver_unicycle 进行前向仿真
+        // TODO: 使用 acados_sim_solver_omni 进行前向仿真
         {
-            double u_opt[2]={u_hist[k*NU],u_hist[k*NU+1]};
+            double u_opt[3]={u_hist[k*NU],u_hist[k*NU+1],u_hist[k*NU+2]};
             rk4_step(x_cur,u_opt,dt,x_cur);
         }
 
@@ -217,9 +229,9 @@ static bool test_closed_loop_mpc(TrajectoryType type,
         x_hist[(k+1)*NX+2]=x_cur[2];
 
         if (k%50==0)
-            std::printf("  step %3d/%d: pos=(%6.2f,%6.2f) u=(%6.2f,%6.2f) t=%.3fms\n",
+            std::printf("  step %3d/%d: pos=(%6.2f,%6.2f) u=(%6.2f,%6.2f,%6.2f) t=%.3fms\n",
                         k,n_sim,x_cur[0],x_cur[1],
-                        u_hist[k*NU],u_hist[k*NU+1],t_hist[k]);
+                        u_hist[k*NU],u_hist[k*NU+1],u_hist[k*NU+2],t_hist[k]);
     }
 
     // 统计
@@ -245,7 +257,7 @@ static bool test_closed_loop_mpc(TrajectoryType type,
         write_csv_mat((base+"/x_history_"+tag+".csv").c_str(),
                        "px,py,theta",x_hist,n_sim+1,NX);
         write_csv_mat((base+"/u_history_"+tag+".csv").c_str(),
-                       "v,omega",u_hist,n_sim,NU);
+                       "vx,vy,omega",u_hist,n_sim,NU);
         write_csv_mat((base+"/ref_history_"+tag+".csv").c_str(),
                        "x_ref,y_ref,theta_ref",ref_hist,n_sim,3);
         // solve times
@@ -262,13 +274,13 @@ static bool test_closed_loop_mpc(TrajectoryType type,
     }
 
     delete[] x_hist; delete[] u_hist; delete[] ref_hist; delete[] t_hist;
-    unicycle_acados_free(c); unicycle_acados_free_capsule(c);
+    omni_acados_free(c); omni_acados_free_capsule(c);
     std::printf("  PASS\n");
     return true;
 
 fail:
     delete[] x_hist; delete[] u_hist; delete[] ref_hist; delete[] t_hist;
-    unicycle_acados_free(c); unicycle_acados_free_capsule(c);
+    omni_acados_free(c); omni_acados_free_capsule(c);
     return false;
 }
 
@@ -279,7 +291,7 @@ static bool test_open_loop_model(const char *csv_dir) {
     const int n_steps=20;
     const double dt=0.05;
     double x0[3]={0.0,0.0,0.5*M_PI};
-    double u0[2]={1.0,0.5};
+    double u0[3]={1.0,0.3,0.5};
 
     double xk[3]={x0[0],x0[1],x0[2]};
     auto *xt = new double[(n_steps+1)*NX];
@@ -301,7 +313,8 @@ static bool test_open_loop_model(const char *csv_dir) {
         FILE *f=fopen((base+"/open_loop_params.csv").c_str(),"w");
         if (f) {
             fprintf(f,"param,value\nx0_px,%.4f\nx0_py,%.4f\nx0_theta,%.4f\n",x0[0],x0[1],x0[2]);
-            fprintf(f,"u_v,%.4f\nu_omega,%.4f\ndt,%.4f\nn_steps,%d\n",u0[0],u0[1],dt,n_steps);
+            fprintf(f,"u_vx,%.4f\nu_vy,%.4f\nu_omega,%.4f\ndt,%.4f\nn_steps,%d\n",
+                    u0[0],u0[1],u0[2],dt,n_steps);
             fclose(f);
         }
     }
@@ -312,11 +325,11 @@ static bool test_open_loop_model(const char *csv_dir) {
 }
 
 int main() {
-    const char *out = "../data";
+    const char *out = "../data_omni";
     ensure_dir(out);
 
     std::printf("============================================================\n");
-    std::printf("acados Unicycle Solver C - Closed-Loop MPC Test\n");
+    std::printf("acados Omni Solver C - Closed-Loop MPC Test\n");
     std::printf("  NX=%d, NU=%d, N=%d\n",NX,NU,N);
     std::printf("  Output: %s/\n",out);
     std::printf("============================================================\n\n");
@@ -330,7 +343,7 @@ int main() {
     std::printf("============================================================\n");
     std::printf("Results: %d/%d\n",pass,total);
     std::printf("CSV data: %s/\n",out);
-    std::printf("Run: python3 ../plot_results.py\n");
+    std::printf("Run: python3 ../plot_omni_results.py\n");
     std::printf("============================================================\n");
 
     return (pass==total)?0:1;
