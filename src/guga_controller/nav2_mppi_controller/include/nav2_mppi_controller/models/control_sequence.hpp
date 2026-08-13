@@ -22,7 +22,7 @@ namespace mppi::models
 
 /**
  * @struct mppi::models::Control
- * @brief A set of controls
+ * @brief 单个时间步的底盘控制量
  */
 struct Control
 {
@@ -31,7 +31,7 @@ struct Control
 
 /**
  * @struct mppi::models::ControlSequence
- * @brief A control sequence over time (e.g. trajectory)
+ * @brief 沿预测时域排列的控制序列
  */
 struct ControlSequence
 {

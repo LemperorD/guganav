@@ -45,21 +45,21 @@ void PathAlignCritic::initialize()
 
 void PathAlignCritic::score(CriticData & data)
 {
-  // Don't apply close to goal, let the goal critics take over
+  // 接近目标时不应用该代价，交由目标 critics 处理。
   if (!enabled_ ||
     utils::withinPositionGoalTolerance(threshold_to_consider_, data.state.pose.pose, data.path))
   {
     return;
   }
 
-  // Don't apply when first getting bearing w.r.t. the path
+  // 首次获取相对于路径的方向时不应用该代价。
   utils::setPathFurthestPointIfNotSet(data);
-  const size_t path_segments_count = *data.furthest_reached_path_point;  // up to furthest only
+  const size_t path_segments_count = *data.furthest_reached_path_point;  // 仅处理到最远路径点
   if (path_segments_count < offset_from_furthest_) {
     return;
   }
 
-  // Don't apply when dynamic obstacles are blocking significant proportions of the local path
+  // 动态障碍物阻挡局部路径较大比例时不应用该代价。
   utils::setPathCostsIfNotSet(data, costmap_ros_);
   const size_t closest_initial_path_point = utils::findPathTrajectoryInitialPoint(data);
   unsigned int invalid_ctr = 0;
@@ -71,15 +71,15 @@ void PathAlignCritic::score(CriticData & data)
     }
   }
 
-  const auto P_x = xt::view(data.path.x, xt::range(_, -1));  // path points
-  const auto P_y = xt::view(data.path.y, xt::range(_, -1));  // path points
-  const auto P_yaw = xt::view(data.path.yaws, xt::range(_, -1));  // path points
+  const auto P_x = xt::view(data.path.x, xt::range(_, -1));  // 路径点
+  const auto P_y = xt::view(data.path.y, xt::range(_, -1));  // 路径点
+  const auto P_yaw = xt::view(data.path.yaws, xt::range(_, -1));  // 路径点
 
   const size_t batch_size = data.trajectories.x.shape(0);
   const size_t time_steps = data.trajectories.x.shape(1);
   auto && cost = xt::xtensor<float, 1>::from_shape({data.costs.shape(0)});
 
-  // Find integrated distance in the path
+  // 计算路径上的累计距离。
   std::vector<float> path_integrated_distances(path_segments_count, 0.0f);
   float dx = 0.0f, dy = 0.0f;
   for (unsigned int i = 1; i != path_segments_count; i++) {
@@ -110,8 +110,8 @@ void PathAlignCritic::score(CriticData & data)
       path_pt = utils::findClosestPathPt(
         path_integrated_distances, traj_integrated_distance, path_pt);
 
-      // The nearest path point to align to needs to be not in collision, else
-      // let the obstacle critic take over in this region due to dynamic obstacles
+      // 用于对齐的最近路径点不能处于碰撞状态，否则在动态障碍物影响下
+      // 交由 obstacle critic 负责该区域。
       if ((*data.path_pts_valid)[path_pt]) {
         dx = P_x(path_pt) - Tx;
         dy = P_y(path_pt) - Ty;

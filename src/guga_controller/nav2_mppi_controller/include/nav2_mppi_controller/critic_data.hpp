@@ -32,8 +32,7 @@ namespace mppi
 
 /**
  * @struct mppi::CriticData
- * @brief Data to pass to critics for scoring, including state, trajectories, path, costs, and
- * important parameters to share
+ * @brief 传递给 critics 的评分数据，包括状态、轨迹、路径、成本以及需要共享的重要参数
  */
 struct CriticData
 {

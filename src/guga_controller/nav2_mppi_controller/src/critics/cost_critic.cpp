@@ -31,10 +31,10 @@ void CostCritic::initialize()
   getParam(near_goal_distance_, "near_goal_distance", 0.5);
   getParam(inflation_layer_name_, "inflation_layer_name", std::string(""));
 
-  // Normalized by cost value to put in same regime as other weights
+  // 按代价值归一化，使其与其他权重处于相同量级。
   weight_ /= 254.0f;
 
-  // Normalize weight when parameter is changed dynamically as well
+  // 参数动态变化时同样重新归一化权重。
   auto weightDynamicCb = [&](const rclcpp::Parameter & weight) {
       weight_ = weight.as_double() / 254.0f;
     };
@@ -80,11 +80,11 @@ float CostCritic::findCircumscribedCost(
   double result = -1.0;
   const double circum_radius = costmap->getLayeredCostmap()->getCircumscribedRadius();
   if (static_cast<float>(circum_radius) == circumscribed_radius_) {
-    // early return if footprint size is unchanged
+    // footprint 尺寸未变化时提前返回。
     return circumscribed_cost_;
   }
 
-  // check if the costmap has an inflation layer
+  // 检查代价地图是否包含 inflation layer。
   for (auto layer = costmap->getLayeredCostmap()->getPlugins()->begin();
     layer != costmap->getLayeredCostmap()->getPlugins()->end();
     ++layer)
@@ -126,11 +126,11 @@ void CostCritic::score(CriticData & data)
   }
 
   if (consider_footprint_) {
-    // footprint may have changed since initialization if user has dynamic footprints
+    // 如果用户启用了动态 footprint，其尺寸可能在初始化后发生变化。
     possibly_inscribed_cost_ = findCircumscribedCost(costmap_ros_);
   }
 
-  // If near the goal, don't apply the preferential term since the goal is near obstacles
+  // 接近目标时不应用偏好项，因为目标可能靠近障碍物。
   bool near_goal = false;
   if (utils::withinPositionGoalTolerance(near_goal_distance_, data.state.pose.pose, data.path)) {
     near_goal = true;
@@ -147,24 +147,23 @@ void CostCritic::score(CriticData & data)
     float pose_cost;
 
     for (size_t j = 0; j < traj_len; j++) {
-      // The costAtPose doesn't use orientation
-      // The footprintCostAtPose will always return "INSCRIBED" if footprint is over it
-      // So the center point has more information than the footprint
+      // costAtPose 不使用方向信息。
+      // 如果 footprint 覆盖障碍物，footprintCostAtPose 总会返回 "INSCRIBED"。
+      // 因此中心点代价包含比 footprint 代价更多的信息。
       pose_cost = costAtPose(traj.x(i, j), traj.y(i, j));
-      if (pose_cost < 1.0f) {continue;}  // In free space
+      if (pose_cost < 1.0f) {continue;}  // 位于自由空间
 
       if (inCollision(pose_cost, traj.x(i, j), traj.y(i, j), traj.yaws(i, j))) {
         trajectory_collide = true;
         break;
       }
 
-      // Let near-collision trajectory points be punished severely
-      // Note that we collision check based on the footprint actual,
-      // but score based on the center-point cost regardless
+      // 对接近碰撞的轨迹点施加强烈惩罚。
+      // 碰撞检查基于实际 footprint，但评分始终使用中心点代价。
       using namespace nav2_costmap_2d; // NOLINT
       if (pose_cost >= INSCRIBED_INFLATED_OBSTACLE) {
         repulsive_cost[i] += critical_cost_;
-      } else if (!near_goal) {  // Generally prefer trajectories further from obstacles
+      } else if (!near_goal) {  // 通常偏好距离障碍物更远的轨迹
         repulsive_cost[i] += pose_cost;
       }
     }
@@ -181,16 +180,16 @@ void CostCritic::score(CriticData & data)
 }
 
 /**
-  * @brief Checks if cost represents a collision
-  * @param cost Costmap cost
-  * @return bool if in collision
+  * @brief 判断给定代价值是否表示碰撞
+  * @param cost: 待判断的代价地图代价值
+  * @return 返回值: 表示碰撞时为 true，供轨迹评分决定是否施加碰撞成本
   */
 bool CostCritic::inCollision(float cost, float x, float y, float theta)
 {
   bool is_tracking_unknown =
     costmap_ros_->getLayeredCostmap()->isTrackingUnknown();
 
-  // If consider_footprint_ check footprint scort for collision
+  // 如果启用 consider_footprint_，则检查 footprint 是否碰撞。
   if (consider_footprint_ &&
     (cost >= possibly_inscribed_cost_ || possibly_inscribed_cost_ < 1.0f))
   {

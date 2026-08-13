@@ -24,7 +24,7 @@ void VelocityDeadbandCritic::initialize()
   getParam(power_, "cost_power", 1);
   getParam(weight_, "cost_weight", 35.0);
 
-  // Recast double to float
+  // 将 double 重新转换为 float。
   std::vector<double> deadband_velocities{0.0, 0.0, 0.0};
   getParam(deadband_velocities, "deadband_velocities", std::vector<double>{0.0, 0.0, 0.0});
   std::transform(

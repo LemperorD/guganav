@@ -71,11 +71,11 @@ float ObstaclesCritic::findCircumscribedCost(
 
   const double circum_radius = costmap->getLayeredCostmap()->getCircumscribedRadius();
   if (static_cast<float>(circum_radius) == circumscribed_radius_) {
-    // early return if footprint size is unchanged
+    // footprint 尺寸未变化时提前返回。
     return circumscribed_cost_;
   }
 
-  // check if the costmap has an inflation layer
+  // 检查代价地图是否包含 inflation layer。
   for (auto layer = costmap->getLayeredCostmap()->getPlugins()->begin();
     layer != costmap->getLayeredCostmap()->getPlugins()->end();
     ++layer)
@@ -115,8 +115,8 @@ float ObstaclesCritic::distanceToObstacle(const CollisionCost & cost)
   const float min_radius = costmap_ros_->getLayeredCostmap()->getInscribedRadius();
   float dist_to_obj = (scale_factor * min_radius - log(cost.cost) + log(253.0f)) / scale_factor;
 
-  // If not footprint collision checking, the cost is using the center point cost and
-  // needs the radius subtracted to obtain the closest distance to the object
+  // 未启用 footprint 碰撞检查时，代价使用中心点代价，
+  // 需要减去半径才能得到到物体的最近距离。
   if (!cost.using_footprint) {
     dist_to_obj -= min_radius;
   }
@@ -132,11 +132,11 @@ void ObstaclesCritic::score(CriticData & data)
   }
 
   if (consider_footprint_) {
-    // footprint may have changed since initialization if user has dynamic footprints
+    // 如果用户启用了动态 footprint，其尺寸可能在初始化后发生变化。
     possibly_inscribed_cost_ = findCircumscribedCost(costmap_ros_);
   }
 
-  // If near the goal, don't apply the preferential term since the goal is near obstacles
+  // 接近目标时不应用偏好项，因为目标可能靠近障碍物。
   bool near_goal = false;
   if (utils::withinPositionGoalTolerance(near_goal_distance_, data.state.pose.pose, data.path)) {
     near_goal = true;
@@ -157,24 +157,24 @@ void ObstaclesCritic::score(CriticData & data)
 
     for (size_t j = 0; j < traj_len; j++) {
       pose_cost = costAtPose(traj.x(i, j), traj.y(i, j), traj.yaws(i, j));
-      if (pose_cost.cost < 1.0f) {continue;}  // In free space
+      if (pose_cost.cost < 1.0f) {continue;}  // 位于自由空间
 
       if (inCollision(pose_cost.cost)) {
         trajectory_collide = true;
         break;
       }
 
-      // Cannot process repulsion if inflation layer does not exist
+      // 没有 inflation layer 时无法计算排斥代价。
       if (inflation_radius_ == 0.0f || inflation_scale_factor_ == 0.0f) {
         continue;
       }
 
       const float dist_to_obj = distanceToObstacle(pose_cost);
 
-      // Let near-collision trajectory points be punished severely
+      // 对接近碰撞的轨迹点施加强烈惩罚。
       if (dist_to_obj < collision_margin_distance_) {
         traj_cost += (collision_margin_distance_ - dist_to_obj);
-      } else if (!near_goal) {  // Generally prefer trajectories further from obstacles
+      } else if (!near_goal) {  // 通常偏好距离障碍物更远的轨迹
         repulsive_cost[i] += (inflation_radius_ - dist_to_obj);
       }
     }
@@ -191,9 +191,9 @@ void ObstaclesCritic::score(CriticData & data)
 }
 
 /**
-  * @brief Checks if cost represents a collision
-  * @param cost Costmap cost
-  * @return bool if in collision
+  * @brief 判断给定代价值是否表示碰撞
+  * @param cost: 待判断的代价地图代价值
+  * @return 返回值: 表示碰撞时为 true，供障碍物评分决定是否施加碰撞成本
   */
 bool ObstaclesCritic::inCollision(float cost) const
 {

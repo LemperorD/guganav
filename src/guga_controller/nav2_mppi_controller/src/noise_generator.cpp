@@ -53,8 +53,7 @@ void NoiseGenerator::shutdown()
 
 void NoiseGenerator::generateNextNoises()
 {
-  // Trigger the thread to run in parallel to this iteration
-  // to generate the next iteration's noises (if applicable).
+  // 触发后台线程与当前迭代并行运行，以生成下一次迭代所需的噪声（如果适用）。
   {
     std::unique_lock<std::mutex> guard(noise_lock_);
     ready_ = true;
@@ -78,7 +77,7 @@ void NoiseGenerator::reset(mppi::models::OptimizerSettings & settings, bool is_h
   settings_ = settings;
   is_holonomic_ = is_holonomic;
 
-  // Recompute the noises on reset, initialization, and fallback
+  // 在重置、初始化和回退时重新计算噪声。
   {
     std::unique_lock<std::mutex> guard(noise_lock_);
     xt::noalias(noises_vx_) = xt::zeros<float>({settings_.batch_size, settings_.time_steps});

@@ -20,7 +20,7 @@ namespace mppi::models
 
 /**
  * @struct mppi::models::ControlConstraints
- * @brief Constraints on control
+ * @brief 控制量的速度与角速度约束
  */
 struct ControlConstraints
 {
@@ -32,7 +32,7 @@ struct ControlConstraints
 
 /**
  * @struct mppi::models::SamplingStd
- * @brief Noise parameters for sampling trajectories
+ * @brief 轨迹采样噪声的标准差参数
  */
 struct SamplingStd
 {

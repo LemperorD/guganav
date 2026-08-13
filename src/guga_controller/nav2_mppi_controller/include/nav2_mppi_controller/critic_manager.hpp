@@ -37,51 +37,53 @@ namespace mppi
 
 /**
  * @class mppi::CriticManager
- * @brief Manager of objective function plugins for scoring trajectories
+ * @brief 加载并调度轨迹评分 critic 插件的管理器
  */
 class CriticManager
 {
 public:
   /**
-    * @brief Constructor for mppi::CriticManager
+    * @brief 构造 critic 管理器
     */
   CriticManager() = default;
 
   /**
-    * @brief Virtual Destructor for mppi::CriticManager
+    * @brief 析构 critic 管理器并释放插件实例
     */
   virtual ~CriticManager() = default;
 
   /**
-    * @brief Configure critic manager on bringup and load plugins
-    * @param parent WeakPtr to node
-    * @param name Name of plugin
-    * @param costmap_ros Costmap2DROS object of environment
-    * @param dynamic_parameter_handler Parameter handler object
+    * @brief 配置管理器并加载参数指定的 critic 插件
+    * @param parent: 控制器服务器生命周期节点的弱引用
+    * @param name: 控制器插件名称
+    * @param costmap_ros: 提供环境代价地图的对象
+    * @param dynamic_parameter_handler: 动态参数处理器
     */
   void on_configure(
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string & name,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS>, ParametersHandler *);
 
   /**
-    * @brief Score trajectories by the set of loaded critic functions
-    * @param CriticData Struct of necessary information to pass to the critic functions
+    * @brief 依次调用已加载 critics 对候选轨迹评分
+    * @param data: 传递给各 critic 的评分上下文，成本将在其中累加
     */
   void evalTrajectoriesScores(CriticData & data) const;
 
 protected:
   /**
-    * @brief Get parameters (critics to load)
+    * @brief 读取待加载的 critic 名称列表
     */
   void getParams();
 
   /**
-    * @brief Load the critic plugins
+    * @brief 通过 pluginlib 实例化 critic 插件
     */
   virtual void loadCritics();
 
   /**
-    * @brief Get full-name namespaced critic IDs
+    * @brief 将配置名称展开为完整命名空间下的 critic ID
+    * @param name: 配置中的 critic 简称或完整名称
+    * @return 返回值: 完整 critic ID，供 pluginlib 创建对应插件实例
     */
   std::string getFullName(const std::string & name);
 

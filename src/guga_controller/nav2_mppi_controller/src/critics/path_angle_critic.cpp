@@ -25,9 +25,9 @@ void PathAngleCritic::initialize()
   auto getParentParam = parameters_handler_->getParamGetter(parent_name_);
   float vx_min;
   getParentParam(vx_min, "vx_min", -0.35);
-  if (fabs(vx_min) < 1e-6) {  // zero
+  if (fabs(vx_min) < 1e-6) {  // 最小纵向速度为零
     reversing_allowed_ = false;
-  } else if (vx_min < 0.0) {   // reversing possible
+  } else if (vx_min < 0.0) {   // 允许倒车
     reversing_allowed_ = true;
   }
 

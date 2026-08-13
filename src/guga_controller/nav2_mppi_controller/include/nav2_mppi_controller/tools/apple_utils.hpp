@@ -20,7 +20,9 @@
 namespace mppi::utils
 {
 /**
- * @brief Manual cumsum for 1D tensors (X, Y integration)
+ * @brief 在 Apple 平台手动计算一维累加和
+ * @param expression: 待累加的一维表达式
+ * @return 返回值: 一维累加结果，供位置或航向积分使用
  */
 template<typename E>
 xt::xtensor<float, 1> manual_cumsum_1d(const E & expression)
@@ -36,7 +38,10 @@ xt::xtensor<float, 1> manual_cumsum_1d(const E & expression)
 }
 
 /**
- * @brief Manual cumsum for 2D tensors (Trajectory integration)
+ * @brief 在 Apple 平台沿指定轴手动计算二维累加和
+ * @param expression: 待累加的二维表达式
+ * @param axis: 执行累加的张量轴
+ * @return 返回值: 二维累加结果，供批量轨迹积分使用
  */
 template<typename E>
 xt::xtensor<float, 2> manual_cumsum_2d(const E & expression, int axis)

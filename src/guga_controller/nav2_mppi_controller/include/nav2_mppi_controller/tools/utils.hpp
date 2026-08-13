@@ -54,11 +54,11 @@ namespace mppi::utils
 using xt::evaluation_strategy::immediate;
 
 /**
- * @brief Convert data into pose
- * @param x X position
- * @param y Y position
- * @param z Z position
- * @return Pose object
+ * @brief 将位置坐标转换为单位姿态四元数的 Pose
+ * @param x: X 坐标
+ * @param y: Y 坐标
+ * @param z: Z 坐标
+ * @return 返回值: 构造后的位姿，供轨迹可视化标记使用
  */
 inline geometry_msgs::msg::Pose createPose(double x, double y, double z)
 {
@@ -74,11 +74,11 @@ inline geometry_msgs::msg::Pose createPose(double x, double y, double z)
 }
 
 /**
- * @brief Convert data into scale
- * @param x X scale
- * @param y Y scale
- * @param z Z scale
- * @return Scale object
+ * @brief 构造三维缩放向量
+ * @param x: X 方向尺寸
+ * @param y: Y 方向尺寸
+ * @param z: Z 方向尺寸
+ * @return 返回值: 缩放向量，供可视化标记设置尺寸
  */
 inline geometry_msgs::msg::Vector3 createScale(double x, double y, double z)
 {
@@ -90,12 +90,12 @@ inline geometry_msgs::msg::Vector3 createScale(double x, double y, double z)
 }
 
 /**
- * @brief Convert data into color
- * @param r Red component
- * @param g Green component
- * @param b Blue component
- * @param a Alpha component (transparency)
- * @return Color object
+ * @brief 构造 RGBA 颜色消息
+ * @param r: 红色分量
+ * @param g: 绿色分量
+ * @param b: 蓝色分量
+ * @param a: 透明度分量
+ * @return 返回值: 颜色消息，供可视化标记设置颜色
  */
 inline std_msgs::msg::ColorRGBA createColor(float r, float g, float b, float a)
 {
@@ -108,13 +108,14 @@ inline std_msgs::msg::ColorRGBA createColor(float r, float g, float b, float a)
 }
 
 /**
- * @brief Convert data into a Maarker
- * @param id Marker ID
- * @param pose Marker pose
- * @param scale Marker scale
- * @param color Marker color
- * @param frame Reference frame to use
- * @return Visualization Marker
+ * @brief 将位姿、尺寸和颜色组合为球形可视化标记
+ * @param id: 标记 ID
+ * @param pose: 标记位姿
+ * @param scale: 标记尺寸
+ * @param color: 标记颜色
+ * @param frame_id: 标记坐标系
+ * @param ns: 标记命名空间
+ * @return 返回值: 可视化标记，供 TrajectoryVisualizer 汇总发布
  */
 inline visualization_msgs::msg::Marker createMarker(
   int id, const geometry_msgs::msg::Pose & pose, const geometry_msgs::msg::Vector3 & scale,
@@ -136,11 +137,12 @@ inline visualization_msgs::msg::Marker createMarker(
 }
 
 /**
- * @brief Convert data into TwistStamped
- * @param vx X velocity
- * @param wz Angular velocity
- * @param stamp Timestamp
- * @param frame Reference frame to use
+ * @brief 将差速控制量转换为带时间戳的速度消息
+ * @param vx: 纵向线速度
+ * @param wz: Z 轴角速度
+ * @param stamp: 消息时间戳
+ * @param frame: 速度参考坐标系
+ * @return 返回值: 差速底盘速度消息，供控制器输出链执行
  */
 inline geometry_msgs::msg::TwistStamped toTwistStamped(
   float vx, float wz, const builtin_interfaces::msg::Time & stamp, const std::string & frame)
@@ -155,12 +157,13 @@ inline geometry_msgs::msg::TwistStamped toTwistStamped(
 }
 
 /**
- * @brief Convert data into TwistStamped
- * @param vx X velocity
- * @param vy Y velocity
- * @param wz Angular velocity
- * @param stamp Timestamp
- * @param frame Reference frame to use
+ * @brief 将全向控制量转换为带时间戳的速度消息
+ * @param vx: 纵向线速度
+ * @param vy: 横向线速度
+ * @param wz: Z 轴角速度
+ * @param stamp: 消息时间戳
+ * @param frame: 速度参考坐标系
+ * @return 返回值: 全向底盘速度消息，供控制器输出链执行
  */
 inline geometry_msgs::msg::TwistStamped toTwistStamped(
   float vx, float vy, float wz, const builtin_interfaces::msg::Time & stamp,
@@ -173,9 +176,9 @@ inline geometry_msgs::msg::TwistStamped toTwistStamped(
 }
 
 /**
- * @brief Convert path to a tensor
- * @param path Path to convert
- * @return Path tensor
+ * @brief 将 ROS 路径消息转换为优化器路径张量
+ * @param path: 待转换的路径消息
+ * @return 返回值: `x/y/yaw` 路径张量，供 critics 批量评分
  */
 inline models::Path toTensor(const nav_msgs::msg::Path & path)
 {
@@ -192,11 +195,11 @@ inline models::Path toTensor(const nav_msgs::msg::Path & path)
 }
 
 /**
- * @brief Check if the robot pose is within the Goal Checker's tolerances to goal
- * @param global_checker Pointer to the goal checker
- * @param robot Pose of robot
- * @param path Path to retreive goal pose from
- * @return bool If robot is within goal checker tolerances to the goal
+ * @brief 按 GoalChecker 容差判断机器人是否接近路径终点
+ * @param goal_checker: 目标检查器
+ * @param robot: 机器人当前位姿
+ * @param path: 提供终点位置的路径张量
+ * @return 返回值: 位于目标位置容差内时为 true，critics 据此切换近目标评分逻辑
  */
 inline bool withinPositionGoalTolerance(
   nav2_core::GoalChecker * goal_checker,
@@ -228,11 +231,11 @@ inline bool withinPositionGoalTolerance(
 }
 
 /**
- * @brief Check if the robot pose is within tolerance to the goal
- * @param pose_tolerance Pose tolerance to use
- * @param robot Pose of robot
- * @param path Path to retreive goal pose from
- * @return bool If robot is within tolerance to the goal
+ * @brief 按给定距离容差判断机器人是否接近路径终点
+ * @param pose_tolerance: 位置容差
+ * @param robot: 机器人当前位姿
+ * @param path: 提供终点位置的路径张量
+ * @return 返回值: 位于目标位置容差内时为 true，critics 据此停用远距离评分项
  */
 inline bool withinPositionGoalTolerance(
   float pose_tolerance,
@@ -258,11 +261,9 @@ inline bool withinPositionGoalTolerance(
 }
 
 /**
-  * @brief normalize
-  * Normalizes the angle to be -M_PI circle to +M_PI circle
-  * It takes and returns radians.
-  * @param angles Angles to normalize
-  * @return normalized angles
+  * @brief 将弧度角归一化到 `[-pi, pi]`
+  * @param angles: 待归一化的标量或张量角度
+  * @return 返回值: 归一化角度，供航向误差和轨迹积分计算使用
   */
 template<typename T>
 auto normalize_angles(const T & angles)
@@ -272,17 +273,10 @@ auto normalize_angles(const T & angles)
 }
 
 /**
-  * @brief shortest_angular_distance
-  *
-  * Given 2 angles, this returns the shortest angular
-  * difference.  The inputs and ouputs are of course radians.
-  *
-  * The result
-  * would always be -pi <= result <= pi.  Adding the result
-  * to "from" will always get you an equivelent angle to "to".
-  * @param from Start angle
-  * @param to End angle
-  * @return Shortest distance between angles
+  * @brief 计算两个弧度角之间的最短有符号角距离
+  * @param from: 起始角度
+  * @param to: 目标角度
+  * @return 返回值: `[-pi, pi]` 范围内的角差，供航向 critic 计算误差
   */
 template<typename F, typename T>
 auto shortest_angular_distance(
@@ -293,10 +287,9 @@ auto shortest_angular_distance(
 }
 
 /**
- * @brief Evaluate furthest point idx of data.path which is
- * nearset to some trajectory in data.trajectories
- * @param data Data to use
- * @return Idx of furthest path point reached by a set of trajectories
+ * @brief 计算候选轨迹集合到达的最远参考路径点索引
+ * @param data: 包含候选轨迹和参考路径的评分上下文
+ * @return 返回值: 最远路径点索引，供路径跟随和对齐 critics 选择前视目标
  */
 inline size_t findPathFurthestReachedPoint(const CriticData & data)
 {
@@ -328,14 +321,13 @@ inline size_t findPathFurthestReachedPoint(const CriticData & data)
 }
 
 /**
- * @brief Evaluate closest point idx of data.path which is
- * nearset to the start of the trajectory in data.trajectories
- * @param data Data to use
- * @return Idx of closest path point at start of the trajectories
+ * @brief 计算候选轨迹起点最近的参考路径点索引
+ * @param data: 包含候选轨迹和参考路径的评分上下文
+ * @return 返回值: 最近路径点索引，供路径对齐 critic 限定搜索起点
  */
 inline size_t findPathTrajectoryInitialPoint(const CriticData & data)
 {
-  // First point should be the same for all trajectories from initial conditions
+  // 所有候选轨迹从同一初始状态出发，因此只需使用第一条轨迹的首点。
   const auto dx = data.path.x - data.trajectories.x(0, 0);
   const auto dy = data.path.y - data.trajectories.y(0, 0);
   const auto dists = dx * dx + dy * dy;
@@ -353,8 +345,8 @@ inline size_t findPathTrajectoryInitialPoint(const CriticData & data)
 }
 
 /**
- * @brief evaluate path furthest point if it is not set
- * @param data Data to use
+ * @brief 在尚未缓存时计算最远到达路径点
+ * @param data: 接收缓存索引的评分上下文
  */
 inline void setPathFurthestPointIfNotSet(CriticData & data)
 {
@@ -364,8 +356,9 @@ inline void setPathFurthestPointIfNotSet(CriticData & data)
 }
 
 /**
- * @brief evaluate path costs
- * @param data Data to use
+ * @brief 根据代价地图计算参考路径点有效性
+ * @param data: 接收路径有效性缓存的评分上下文
+ * @param costmap_ros: 提供路径点代价值和未知空间策略的对象
  */
 inline void findPathCosts(
   CriticData & data,
@@ -403,8 +396,9 @@ inline void findPathCosts(
 }
 
 /**
- * @brief evaluate path costs if it is not set
- * @param data Data to use
+ * @brief 在尚未缓存时计算参考路径点有效性
+ * @param data: 接收路径有效性缓存的评分上下文
+ * @param costmap_ros: 提供路径点代价值的对象
  */
 inline void setPathCostsIfNotSet(
   CriticData & data,
@@ -416,12 +410,12 @@ inline void setPathCostsIfNotSet(
 }
 
 /**
- * @brief evaluate angle from pose (have angle) to point (no angle)
- * @param pose pose
- * @param point_x Point to find angle relative to X axis
- * @param point_y Point to find angle relative to Y axis
- * @param forward_preference If reversing direction is valid
- * @return Angle between two points
+ * @brief 计算带航向位姿指向目标点的角误差
+ * @param pose: 起始位姿
+ * @param point_x: 目标点 X 坐标
+ * @param point_y: 目标点 Y 坐标
+ * @param forward_preference: 是否只考虑正向朝向
+ * @return 返回值: 最小绝对角误差，供 PathAngleCritic 评价轨迹朝向
  */
 inline float posePointAngle(
   const geometry_msgs::msg::Pose & pose, double point_x, double point_y, bool forward_preference)
@@ -432,7 +426,7 @@ inline float posePointAngle(
 
   float yaw = atan2f(point_y - pose_y, point_x - pose_x);
 
-  // If no preference for forward, return smallest angle either in heading or 180 of heading
+  // 允许倒车时，在正向航向与反向航向中选择更小的角误差。
   if (!forward_preference) {
     return std::min(
       fabs(angles::shortest_angular_distance(yaw, pose_yaw)),
@@ -443,23 +437,23 @@ inline float posePointAngle(
 }
 
 /**
- * @brief Apply Savisky-Golay filter to optimal trajectory
- * @param control_sequence Sequence to apply filter to
- * @param control_history Recent set of controls for edge-case handling
- * @param Settings Settings to use
+ * @brief 对最优控制序列应用 Savitzky-Golay 平滑滤波
+ * @param control_sequence: 待就地平滑的控制序列
+ * @param control_history: 用于处理序列前端边界的历史控制量
+ * @param settings: 用于选择实际输出偏移的优化器设置
  */
 inline void savitskyGolayFilter(
   models::ControlSequence & control_sequence,
   std::array<mppi::models::Control, 4> & control_history,
   const models::OptimizerSettings & settings)
 {
-  // Savitzky-Golay Quadratic, 9-point Coefficients
+  // 二次九点 Savitzky-Golay 滤波系数。
   xt::xtensor<float, 1> filter = {-21.0, 14.0, 39.0, 54.0, 59.0, 54.0, 39.0, 14.0, -21.0};
   filter /= 231.0;
 
   const unsigned int num_sequences = control_sequence.vx.shape(0) - 1;
 
-  // Too short to smooth meaningfully
+  // 序列过短时滤波没有稳定意义。
   if (num_sequences < 20) {
     return;
   }
@@ -591,7 +585,7 @@ inline void savitskyGolayFilter(
         sequence(idx)});
     };
 
-  // Filter trajectories
+  // 分别平滑三个控制轴。
   applyFilterOverAxis(
     control_sequence.vx, control_history[0].vx,
     control_history[1].vx, control_history[2].vx, control_history[3].vx);
@@ -602,7 +596,7 @@ inline void savitskyGolayFilter(
     control_sequence.wz, control_history[0].wz,
     control_history[1].wz, control_history[2].wz, control_history[3].wz);
 
-  // Update control history
+  // 更新历史控制量，为下一周期的序列前端滤波提供边界数据。
   unsigned int offset = settings.shift_control_sequence ? 1 : 0;
   control_history[0] = control_history[1];
   control_history[1] = control_history[2];
@@ -614,20 +608,20 @@ inline void savitskyGolayFilter(
 }
 
 /**
- * @brief Find the iterator of the first pose at which there is an inversion on the path,
- * @param path to check for inversion
- * @return the first point after the inversion found in the path
+ * @brief 查找路径首次方向反转后的第一个点
+ * @param path: 待检查的路径
+ * @return 返回值: 换向后首点索引；没有换向时返回路径长度，供路径分段使用
  */
 inline unsigned int findFirstPathInversion(nav_msgs::msg::Path & path)
 {
-  // At least 3 poses for a possible inversion
+  // 至少需要三个点才能判断相邻线段是否反向。
   if (path.poses.size() < 3) {
     return path.poses.size();
   }
 
-  // Iterating through the path to determine the position of the path inversion
+  // 逐点检查相邻路径线段的方向关系。
   for (unsigned int idx = 1; idx < path.poses.size() - 1; ++idx) {
-    // We have two vectors for the dot product OA and AB. Determining the vectors.
+    // 构造换向点前后的 OA、AB 两个路径向量。
     float oa_x = path.poses[idx].pose.position.x -
       path.poses[idx - 1].pose.position.x;
     float oa_y = path.poses[idx].pose.position.y -
@@ -637,7 +631,7 @@ inline unsigned int findFirstPathInversion(nav_msgs::msg::Path & path)
     float ab_y = path.poses[idx + 1].pose.position.y -
       path.poses[idx].pose.position.y;
 
-    // Checking for the existance of cusp, in the path, using the dot product.
+    // 点积为负表示两段方向相反，即路径出现尖点换向。
     float dot_product = (oa_x * ab_x) + (oa_y * ab_y);
     if (dot_product < 0.0) {
       return idx + 1;
@@ -648,9 +642,9 @@ inline unsigned int findFirstPathInversion(nav_msgs::msg::Path & path)
 }
 
 /**
- * @brief Find and remove poses after the first inversion in the path
- * @param path to check for inversion
- * @return The location of the inversion, return 0 if none exist
+ * @brief 删除首次换向点之后的路径
+ * @param path: 待就地截断的路径
+ * @return 返回值: 换向位置索引；无换向时返回 0，供路径处理器记录后续切换位置
  */
 inline unsigned int removePosesAfterFirstInversion(nav_msgs::msg::Path & path)
 {
@@ -667,9 +661,11 @@ inline unsigned int removePosesAfterFirstInversion(nav_msgs::msg::Path & path)
 }
 
 /**
- * @brief Compare to trajectory points to find closest path point along integrated distances
- * @param vec Vect to check
- * @return dist Distance to look for
+ * @brief 在累计路径距离数组中查找最接近目标距离的路径点
+ * @param vec: 单调递增的累计距离数组
+ * @param dist: 目标累计距离
+ * @param init: 搜索起始索引
+ * @return 返回值: 最近路径点索引，供 critics 按前视距离选择评分点
  */
 inline size_t findClosestPathPt(const std::vector<float> & vec, float dist, size_t init = 0)
 {

@@ -30,48 +30,45 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::CostCritic
- * @brief Critic objective function for avoiding obstacles using costmap's inflated cost
+ * @brief 使用代价地图膨胀代价值评价候选轨迹的避障安全性
  */
 class CostCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化代价地图 critic 参数和碰撞检查器
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to obstacle avoidance
-   *
-   * @param costs [out] add obstacle cost values to this tensor
+   * @brief 计算障碍代价并累加到总成本
+   * @param data: 评分上下文，其中的成本和碰撞标志将被就地更新
    */
   void score(CriticData & data) override;
 
 protected:
   /**
-    * @brief Checks if cost represents a collision
-    * @param cost Point cost at pose center
-    * @param x X of pose
-    * @param y Y of pose
-    * @param theta theta of pose
-    * @return bool if in collision
+    * @brief 判断给定位姿是否发生碰撞
+    * @param cost: 位姿中心对应的代价值
+    * @param x: 位姿 X 坐标
+    * @param y: 位姿 Y 坐标
+    * @param theta: 位姿航向角
+    * @return 返回值: 碰撞时为 true，评分器据此标记整条候选轨迹无效
     */
   bool inCollision(float cost, float x, float y, float theta);
 
   /**
-    * @brief cost at a robot pose
-    * @param x X of pose
-    * @param y Y of pose
-    * @return Collision information at pose
+    * @brief 查询机器人位姿中心的代价值
+    * @param x: 位姿 X 坐标
+    * @param y: 位姿 Y 坐标
+    * @return 返回值: 代价值，供碰撞判定和障碍惩罚计算使用
     */
   float costAtPose(float x, float y);
 
   /**
-    * @brief Find the min cost of the inflation decay function for which the robot MAY be
-    * in collision in any orientation
-    * @param costmap Costmap2DROS to get minimum inscribed cost (e.g. 128 in inflation layer documentation)
-    * @return double circumscribed cost, any higher than this and need to do full footprint collision checking
-    * since some element of the robot could be in collision
+    * @brief 计算可能需要完整 footprint 碰撞检查的最小膨胀代价值
+    * @param costmap: 提供膨胀层参数和机器人半径的代价地图对象
+    * @return 返回值: 外接圆临界代价；高于该值时评分器会执行完整 footprint 碰撞检查
     */
   float findCircumscribedCost(std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap);
 

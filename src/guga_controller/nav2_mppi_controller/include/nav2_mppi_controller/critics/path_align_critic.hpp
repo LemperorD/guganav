@@ -24,23 +24,21 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::ConstraintCritic
- * @brief Critic objective function for aligning to the path. Note:
- * High settings of this will follow the path more precisely, but also makes it
- * difficult (or impossible) to deviate in the presence of dynamic obstacles.
- * This is an important critic to tune and consider in tandem with Obstacle.
+ * @brief 按候选轨迹与参考路径的横向偏差评分
+ * 较高权重会提高路径贴合精度，但也会削弱绕开动态障碍的能力，
+ * 因此应与障碍 critic 的权重配合调整。
  */
 class PathAlignCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化路径对齐 critic 参数
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to trajectories path alignment
-   *
-   * @param costs [out] add reference cost values to this tensor
+   * @brief 计算路径对齐代价并累加到总成本
+   * @param data: 评分上下文，其中的成本张量将被就地更新
    */
   void score(CriticData & data) override;
 

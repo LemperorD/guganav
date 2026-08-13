@@ -34,63 +34,59 @@ namespace mppi
 
 /**
  * @class mppi::NoiseGenerator
- * @brief Generates noise trajectories from optimal trajectory
+ * @brief 围绕当前最优控制序列生成随机采样控制
  */
 class NoiseGenerator
 {
 public:
   /**
-    * @brief Constructor for mppi::NoiseGenerator
+    * @brief 构造噪声生成器
     */
   NoiseGenerator() = default;
 
   /**
-   * @brief Initialize noise generator with settings and model types
-   * @param settings Settings of controller
-   * @param is_holonomic If base is holonomic
-   * @param name Namespace for configs
-   * @param param_handler Get parameters util
+   * @brief 使用优化器设置和运动模型初始化噪声生成器
+   * @param settings: 优化器采样规模和标准差设置
+   * @param is_holonomic: 底盘是否支持横向速度
+   * @param name: 参数命名空间
+   * @param param_handler: 参数读取工具
    */
   void initialize(
     mppi::models::OptimizerSettings & settings,
     bool is_holonomic, const std::string & name, ParametersHandler * param_handler);
 
   /**
-   * @brief Shutdown noise generator thread
+   * @brief 关闭噪声生成线程
    */
   void shutdown();
 
   /**
-   * @brief Signal to the noise thread the controller is ready to generate a new
-   * noised control for the next iteration
+   * @brief 通知后台线程为下一次优化迭代生成新噪声
    */
   void generateNextNoises();
 
   /**
-   * @brief set noised control_sequence to state controls
-   * @return noises vx, vy, wz
+   * @brief 将噪声叠加到控制序列并写入状态控制张量
+   * @param state: 接收批量 `cvx/cvy/cwz` 采样控制的状态张量
+   * @param control_sequence: 作为采样均值的当前最优控制序列
    */
   void setNoisedControls(models::State & state, const models::ControlSequence & control_sequence);
 
   /**
-   * @brief Reset noise generator with settings and model types
-   * @param settings Settings of controller
-   * @param is_holonomic If base is holonomic
+   * @brief 使用新设置重置噪声张量
+   * @param settings: 新的优化器采样设置
+   * @param is_holonomic: 底盘是否支持横向速度
    */
   void reset(mppi::models::OptimizerSettings & settings, bool is_holonomic);
 
 protected:
   /**
-   * @brief Thread to execute noise generation process
+   * @brief 后台执行噪声生成任务的线程入口
    */
   void noiseThread();
 
   /**
-   * @brief Generate random controls by gaussian noise with mean in
-   * control_sequence_
-   *
-   * @return tensor of shape [ batch_size_, time_steps_, 2]
-   * where 2 stands for v, w
+   * @brief 生成满足配置标准差的高斯控制噪声并写入内部张量
    */
   void generateNoisedControls();
 

@@ -25,20 +25,19 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::ConstraintCritic
- * @brief Critic objective function for driving towards goal
+ * @brief 按轨迹终点到目标位置的距离评分
  */
 class GoalCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化目标位置 critic 参数
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to goal following
-   *
-   * @param costs [out] add reference cost values to this tensor
+   * @brief 计算目标位置代价并累加到总成本
+   * @param data: 评分上下文，其中的成本张量将被就地更新
    */
   void score(CriticData & data) override;
 

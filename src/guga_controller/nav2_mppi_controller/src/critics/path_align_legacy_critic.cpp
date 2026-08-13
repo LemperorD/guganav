@@ -45,20 +45,20 @@ void PathAlignLegacyCritic::initialize()
 
 void PathAlignLegacyCritic::score(CriticData & data)
 {
-  // Don't apply close to goal, let the goal critics take over
+  // 接近目标时不应用该代价，交由目标 critics 处理。
   if (!enabled_ ||
     utils::withinPositionGoalTolerance(threshold_to_consider_, data.state.pose.pose, data.path))
   {
     return;
   }
 
-  // Don't apply when first getting bearing w.r.t. the path
+  // 首次获取相对于路径的方向时不应用该代价。
   utils::setPathFurthestPointIfNotSet(data);
   if (*data.furthest_reached_path_point < offset_from_furthest_) {
     return;
   }
 
-  // Don't apply when dynamic obstacles are blocking significant proportions of the local path
+  // 动态障碍物阻挡局部路径较大比例时不应用该代价。
   utils::setPathCostsIfNotSet(data, costmap_ros_);
   const size_t closest_initial_path_point = utils::findPathTrajectoryInitialPoint(data);
   unsigned int invalid_ctr = 0;
@@ -74,9 +74,9 @@ void PathAlignLegacyCritic::score(CriticData & data)
   const auto & T_y = data.trajectories.y;
   const auto & T_yaw = data.trajectories.yaws;
 
-  const auto P_x = xt::view(data.path.x, xt::range(_, -1));  // path points
-  const auto P_y = xt::view(data.path.y, xt::range(_, -1));  // path points
-  const auto P_yaw = xt::view(data.path.yaws, xt::range(_, -1));  // path points
+  const auto P_x = xt::view(data.path.x, xt::range(_, -1));  // 路径点
+  const auto P_y = xt::view(data.path.y, xt::range(_, -1));  // 路径点
+  const auto P_yaw = xt::view(data.path.yaws, xt::range(_, -1));  // 路径点
 
   const size_t batch_size = T_x.shape(0);
   const size_t time_steps = T_x.shape(1);
@@ -98,7 +98,7 @@ void PathAlignLegacyCritic::score(CriticData & data)
       min_dist_sq = std::numeric_limits<float>::max();
       min_s = 0;
 
-      // Find closest path segment to the trajectory point
+      // 查找距离轨迹点最近的路径段。
       for (size_t s = 0; s < path_segments_count - 1; s++) {
         xt::xtensor_fixed<float, xt::xshape<2>> P;
         dx = P_x(s) - T_x(t, p);
@@ -115,8 +115,8 @@ void PathAlignLegacyCritic::score(CriticData & data)
         }
       }
 
-      // The nearest path point to align to needs to be not in collision, else
-      // let the obstacle critic take over in this region due to dynamic obstacles
+      // 用于对齐的最近路径点不能处于碰撞状态，否则在动态障碍物影响下
+      // 交由 obstacle critic 负责该区域。
       if (min_s != 0 && (*data.path_pts_valid)[min_s]) {
         summed_dist += sqrtf(min_dist_sq);
       }

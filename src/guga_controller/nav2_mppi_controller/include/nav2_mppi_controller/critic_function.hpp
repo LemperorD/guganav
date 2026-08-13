@@ -29,7 +29,7 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::CollisionCost
- * @brief Utility for storing cost information
+ * @brief 保存单个位姿碰撞代价及 footprint 检查状态
  */
 struct CollisionCost
 {
@@ -39,28 +39,28 @@ struct CollisionCost
 
 /**
  * @class mppi::critics::CriticFunction
- * @brief Abstract critic objective function to score trajectories
+ * @brief 对候选轨迹评分的 critic 抽象接口
  */
 class CriticFunction
 {
 public:
   /**
-    * @brief Constructor for mppi::critics::CriticFunction
+    * @brief 构造 critic 基类
     */
   CriticFunction() = default;
 
   /**
-    * @brief Destructor for mppi::critics::CriticFunction
+    * @brief 析构 critic 基类
     */
   virtual ~CriticFunction() = default;
 
   /**
-    * @brief Configure critic on bringup
-    * @param parent WeakPtr to node
-    * @param parent_name name of the controller
-    * @param name Name of plugin
-    * @param costmap_ros Costmap2DROS object of environment
-    * @param dynamic_parameter_handler Parameter handler object
+    * @brief 配置 critic 并读取公共参数
+    * @param parent: 控制器服务器生命周期节点的弱引用
+    * @param parent_name: 所属控制器名称
+    * @param name: critic 插件实例名称
+    * @param costmap_ros: 提供环境代价地图的对象
+    * @param param_handler: 动态参数处理器
     */
   void on_configure(
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent,
@@ -84,18 +84,19 @@ public:
   }
 
   /**
-    * @brief Main function to score trajectory
-    * @param data Critic data to use in scoring
+    * @brief 计算本 critic 的轨迹代价并累加到总成本
+    * @param data: 包含状态、轨迹、路径和累计成本的评分上下文
     */
   virtual void score(CriticData & data) = 0;
 
   /**
-    * @brief Initialize critic
+    * @brief 初始化具体 critic 的参数和缓存
     */
   virtual void initialize() = 0;
 
   /**
-    * @brief Get name of critic
+    * @brief 获取 critic 插件实例名称
+    * @return 返回值: critic 名称，供日志、诊断和插件管理使用
     */
   std::string getName()
   {

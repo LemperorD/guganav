@@ -23,7 +23,7 @@ namespace mppi::models
 
 /**
  * @struct mppi::models::OptimizerSettings
- * @brief Settings for the optimizer to use
+ * @brief 优化器使用的约束、采样规模和迭代设置
  */
 struct OptimizerSettings
 {

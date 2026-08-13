@@ -24,24 +24,32 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::ConstraintCritic
- * @brief Critic objective function for enforcing feasible constraints
+ * @brief 对违反底盘可行速度约束的轨迹施加代价
  */
 class ConstraintCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化约束 critic 参数
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to goal following
-   *
-   * @param costs [out] add reference cost values to this tensor
+   * @brief 计算速度约束代价并累加到总成本
+   * @param data: 评分上下文，其中的成本张量将被就地更新
    */
   void score(CriticData & data) override;
 
+  /**
+   * @brief 获取当前最大纵向速度约束
+   * @return 返回值: 最大速度约束，供单元测试验证参数加载结果
+   */
   float getMaxVelConstraint() {return max_vel_;}
+
+  /**
+   * @brief 获取当前最小纵向速度约束
+   * @return 返回值: 最小速度约束，供单元测试验证参数加载结果
+   */
   float getMinVelConstraint() {return min_vel_;}
 
 protected:

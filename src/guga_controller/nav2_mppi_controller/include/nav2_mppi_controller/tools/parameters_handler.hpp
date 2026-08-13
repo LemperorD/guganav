@@ -36,7 +36,7 @@ enum class ParameterType { Dynamic, Static };
 
 /**
  * @class mppi::ParametersHandler
- * @brief Handles getting parameters and dynamic parmaeter changes
+ * @brief 统一处理参数声明、读取和动态更新
  */
 class ParametersHandler
 {
@@ -46,62 +46,62 @@ public:
   using pre_callback_t = void ();
 
   /**
-    * @brief Constructor for mppi::ParametersHandler
+    * @brief 构造未绑定节点的参数处理器
     */
   ParametersHandler() = default;
 
   /**
-    * @brief Constructor for mppi::ParametersHandler
-    * @param parent Weak ptr to node
+    * @brief 构造参数处理器并绑定生命周期节点
+    * @param parent: 参数所属生命周期节点的弱引用
     */
   explicit ParametersHandler(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent);
 
   /**
-    * @brief Starts processing dynamic parameter changes
+    * @brief 注册并开始处理动态参数更新
     */
   void start();
 
   /**
-    * @brief Dynamic parameter callback
-    * @param parameter Parameter changes to process
-    * @return Set Parameter Result
+    * @brief 校验并应用一批动态参数更新
+    * @param parameters: 待处理的参数更新列表
+    * @return 返回值: 参数设置结果，ROS 2 参数服务据此接受或拒绝整批更新
     */
   rcl_interfaces::msg::SetParametersResult dynamicParamsCallback(
     std::vector<rclcpp::Parameter> parameters);
 
   /**
-    * @brief Get an object to retreive parameters
-    * @param ns Namespace to get parameters within
-    * @return Parameter getter object
+    * @brief 创建绑定指定命名空间的参数读取函数
+    * @param ns: 参数命名空间
+    * @return 返回值: 参数读取闭包，调用方用它声明、读取并注册动态参数
     */
   inline auto getParamGetter(const std::string & ns);
 
   /**
-    * @brief Set a callback to process after parameter changes
-    * @param callback Callback function
+    * @brief 注册参数更新完成后的回调
+    * @param callback: 更新完成后执行的函数
     */
   template<typename T>
   void addPostCallback(T && callback);
 
   /**
-    * @brief Set a callback to process before parameter changes
-    * @param callback Callback function
+    * @brief 注册参数更新开始前的回调
+    * @param callback: 更新开始前执行的函数
     */
   template<typename T>
   void addPreCallback(T && callback);
 
   /**
-    * @brief Set a parameter to a dynamic parameter callback
-    * @param setting Parameter
-    * @param name Name of parameter
+    * @brief 为参数绑定自动写入目标变量的动态更新回调
+    * @param setting: 参数更新时要写入的目标变量
+    * @param name: 完整参数名
     */
   template<typename T>
   void setDynamicParamCallback(T & setting, const std::string & name);
 
   /**
-    * @brief Get mutex lock for changing parameters
-    * @return Pointer to mutex
+    * @brief 获取保护参数更新过程的互斥锁
+    * @return 返回值: 互斥锁指针，优化器用它避免计算期间参数被并发修改
     */
   std::mutex * getLock()
   {
@@ -109,20 +109,20 @@ public:
   }
 
   /**
-    * @brief Set a parameter to a dynamic parameter callback
-    * @param name Name of parameter
-    * @param callback Parameter callback
+    * @brief 注册自定义动态参数回调
+    * @param name: 完整参数名
+    * @param callback: 参数变化时执行的函数
     */
   template<typename T>
   void addDynamicParamCallback(const std::string & name, T && callback);
 
 protected:
   /**
-    * @brief Gets parameter
-    * @param setting Return Parameter type
-    * @param name Parameter name
-    * @param default_value Default parameter value
-    * @param param_type Type of parameter (dynamic or static)
+    * @brief 声明并读取参数，必要时注册动态更新
+    * @param setting: 接收参数值的目标变量
+    * @param name: 完整参数名
+    * @param default_value: 参数默认值
+    * @param param_type: 参数为动态或静态
     */
   template<typename SettingT, typename ParamT>
   void getParam(
@@ -130,18 +130,18 @@ protected:
     ParameterType param_type = ParameterType::Dynamic);
 
   /**
-    * @brief Set a parameter
-    * @param setting Return Parameter type
-    * @param name Parameter name
-    * @param node Node to set parameter via
+    * @brief 从节点读取参数并转换后写入目标变量
+    * @param setting: 接收参数值的目标变量
+    * @param name: 完整参数名
+    * @param node: 提供参数接口的节点
     */
   template<typename ParamT, typename SettingT, typename NodeT>
   void setParam(SettingT & setting, const std::string & name, NodeT node) const;
 
   /**
-    * @brief Converts parameter type to real types
-    * @param parameter Parameter to convert into real type
-    * @return parameter as a functional type
+    * @brief 将 ROS 参数转换为目标 C++ 类型
+    * @param parameter: 待转换的 ROS 参数
+    * @return 返回值: 与模板类型匹配的值，供动态回调写入配置变量
     */
   template<typename T>
   static auto as(const rclcpp::Parameter & parameter);

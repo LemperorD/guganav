@@ -47,8 +47,8 @@ void PathFollowCritic::score(CriticData & data)
   auto offseted_idx = std::min(
     *data.furthest_reached_path_point + offset_from_furthest_, path_size);
 
-  // Drive to the first valid path point, in case of dynamic obstacles on path
-  // we want to drive past it, not through it
+  // 驶向第一个有效路径点；路径上存在动态障碍物时，
+  // 应绕过该点，而不是直接穿过障碍物。
   bool valid = false;
   while (!valid && offseted_idx < path_size - 1) {
     valid = (*data.path_pts_valid)[offseted_idx];

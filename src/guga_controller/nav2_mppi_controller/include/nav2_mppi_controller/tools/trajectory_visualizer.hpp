@@ -33,62 +33,64 @@ namespace mppi
 
 /**
  * @class mppi::TrajectoryVisualizer
- * @brief Visualizes trajectories for debugging
+ * @brief 将候选轨迹、最优轨迹和参考路径发布为调试可视化消息
  */
 class TrajectoryVisualizer
 {
 public:
   /**
-    * @brief Constructor for mppi::TrajectoryVisualizer
+    * @brief 构造轨迹可视化器
     */
   TrajectoryVisualizer() = default;
 
   /**
-    * @brief Configure trajectory visualizer
-    * @param parent WeakPtr to node
-    * @param name Name of plugin
-    * @param frame_id Frame to publish trajectories in
-    * @param dynamic_parameter_handler Parameter handler object
+    * @brief 配置可视化发布器和抽样步长
+    * @param parent: 控制器服务器生命周期节点的弱引用
+    * @param name: 控制器插件名称
+    * @param frame_id: 可视化消息使用的坐标系
+    * @param parameters_handler: 动态参数处理器
     */
   void on_configure(
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string & name,
     const std::string & frame_id, ParametersHandler * parameters_handler);
 
   /**
-    * @brief Cleanup object on shutdown
+    * @brief 关闭时清理可视化资源
     */
   void on_cleanup();
 
   /**
-    * @brief Activate object
+    * @brief 激活生命周期发布器
     */
   void on_activate();
 
   /**
-    * @brief Deactivate object
+    * @brief 停用生命周期发布器
     */
   void on_deactivate();
 
   /**
-    * @brief Add an optimal trajectory to visualize
-    * @param trajectory Optimal trajectory
+    * @brief 将最优轨迹转换为待发布标记
+    * @param trajectory: 最优位姿轨迹张量
+    * @param marker_namespace: 区分标记集合的命名空间
     */
   void add(const xt::xtensor<float, 2> & trajectory, const std::string & marker_namespace);
 
   /**
-    * @brief Add candidate trajectories to visualize
-    * @param trajectories Candidate trajectories
+    * @brief 将候选轨迹按配置步长转换为待发布标记
+    * @param trajectories: 批量候选轨迹
+    * @param marker_namespace: 区分标记集合的命名空间
     */
   void add(const models::Trajectories & trajectories, const std::string & marker_namespace);
 
   /**
-    * @brief Visualize the plan
-    * @param plan Plan to visualize
+    * @brief 发布累计轨迹标记和局部参考路径
+    * @param plan: 要同步发布的局部参考路径
     */
   void visualize(const nav_msgs::msg::Path & plan);
 
   /**
-    * @brief Reset object
+    * @brief 清空尚未发布的轨迹标记
     */
   void reset();
 

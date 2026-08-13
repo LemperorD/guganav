@@ -53,13 +53,13 @@ PathHandler::getGlobalPlanConsideringBoundsInCostmapFrame(
 
   auto begin = global_plan_up_to_inversion_.poses.begin();
 
-  // Limit the search for the closest pose up to max_robot_pose_search_dist on the path
+  // 将路径上最近位姿的搜索范围限制在 max_robot_pose_search_dist 以内。
   auto closest_pose_upper_bound =
     nav2_util::geometry_utils::first_after_integrated_distance(
     global_plan_up_to_inversion_.poses.begin(), global_plan_up_to_inversion_.poses.end(),
     max_robot_pose_search_dist_);
 
-  // Find closest point to the robot
+  // 查找距离机器人最近的路径点。
   auto closest_point = nav2_util::geometry_utils::min_by(
     begin, closest_pose_upper_bound,
     [&global_pose](const geometry_msgs::msg::PoseStamped & ps) {
@@ -75,26 +75,25 @@ PathHandler::getGlobalPlanConsideringBoundsInCostmapFrame(
     closest_point, global_plan_up_to_inversion_.poses.end(), prune_distance_);
 
   unsigned int mx, my;
-  // Find the furthest relevent pose on the path to consider within costmap
-  // bounds
-  // Transforming it to the costmap frame in the same loop
+  // 查找代价地图范围内需要考虑的路径最远相关位姿。
+  // 在同一循环中将其转换到代价地图坐标系。
   for (auto global_plan_pose = closest_point; global_plan_pose != pruned_plan_end;
     ++global_plan_pose)
   {
-    // Transform from global plan frame to costmap frame
+    // 从全局规划坐标系转换到代价地图坐标系。
     geometry_msgs::msg::PoseStamped costmap_plan_pose;
     global_plan_pose->header.stamp = global_pose.header.stamp;
     global_plan_pose->header.frame_id = global_plan_.header.frame_id;
     transformPose(costmap_->getGlobalFrameID(), *global_plan_pose, costmap_plan_pose);
 
-    // Check if pose is inside the costmap
+    // 检查位姿是否位于代价地图内。
     if (!costmap_->getCostmap()->worldToMap(
         costmap_plan_pose.pose.position.x, costmap_plan_pose.pose.position.y, mx, my))
     {
       return {transformed_plan, closest_point};
     }
 
-    // Filling the transformed plan to return with the transformed pose
+    // 用转换后的位姿填充待返回的局部路径。
     transformed_plan.poses.push_back(costmap_plan_pose);
   }
 
@@ -120,7 +119,7 @@ geometry_msgs::msg::PoseStamped PathHandler::transformToGlobalPlanFrame(
 nav_msgs::msg::Path PathHandler::transformPath(
   const geometry_msgs::msg::PoseStamped & robot_pose)
 {
-  // Find relevent bounds of path to use
+  // 查找需要使用的路径范围。
   geometry_msgs::msg::PoseStamped global_pose =
     transformToGlobalPlanFrame(robot_pose);
   auto [transformed_plan, lower_bound] = getGlobalPlanConsideringBoundsInCostmapFrame(global_pose);
@@ -188,7 +187,7 @@ void PathHandler::prunePlan(nav_msgs::msg::Path & plan, const PathIterator end)
 
 bool PathHandler::isWithinInversionTolerances(const geometry_msgs::msg::PoseStamped & robot_pose)
 {
-  // Keep full path if we are within tolerance of the inversion pose
+  // 如果距离换向位姿在容差范围内，则保留完整路径。
   const auto last_pose = global_plan_up_to_inversion_.poses.back();
   float distance = hypotf(
     robot_pose.pose.position.x - last_pose.pose.position.x,

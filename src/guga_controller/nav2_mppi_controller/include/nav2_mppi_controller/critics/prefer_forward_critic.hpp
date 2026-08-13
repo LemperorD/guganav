@@ -23,21 +23,19 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::ConstraintCritic
- * @brief Critic objective function for preferring forward motion
+ * @brief 对倒车运动施加代价以偏好向前行驶
  */
 class PreferForwardCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化前向偏好 critic 参数
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to robot orientation at goal pose
-   * (considered only if robot near last goal in current plan)
-   *
-   * @param costs [out] add goal angle cost values to this tensor
+   * @brief 计算倒车惩罚并累加到总成本
+   * @param data: 评分上下文，其中的成本张量将被就地更新
    */
   void score(CriticData & data) override;
 

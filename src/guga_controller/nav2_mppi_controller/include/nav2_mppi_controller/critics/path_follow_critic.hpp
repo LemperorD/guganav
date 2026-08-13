@@ -25,25 +25,21 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::ConstraintCritic
- * @brief Critic objective function for following the path approximately
- * To allow for deviation from path in case of dynamic obstacles. Path Align
- * is what aligns the trajectories to the path more or less precisely, if desireable.
- * A higher weight here with an offset > 1 will accelerate the samples to full speed
- * faster and push the follow point further ahead, creating some shortcutting.
+ * @brief 按轨迹末端到前视路径点的距离评分，实现近似路径跟随
+ * 该 critic 允许轨迹为绕障偏离路径；精确贴合由 PathAlignCritic 控制。
+ * 当前视偏移大于 1 时，提高权重会推动采样更快达到全速并产生一定切弯效果。
  */
 class PathFollowCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化路径跟随 critic 参数
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to robot orientation at goal pose
-   * (considered only if robot near last goal in current plan)
-   *
-   * @param costs [out] add goal angle cost values to this tensor
+   * @brief 计算前视路径点跟随代价并累加到总成本
+   * @param data: 评分上下文，其中的成本张量将被就地更新
    */
   void score(CriticData & data) override;
 

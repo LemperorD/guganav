@@ -28,56 +28,51 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::ConstraintCritic
- * @brief Critic objective function for avoiding obstacles, allowing it to deviate off
- * the planned path. This is important to tune in tandem with PathAlign to make a balance
- * between path-tracking and dynamic obstacle avoidance capabilities as desirable for a
- * particular application
+ * @brief 按障碍距离评价轨迹并允许为绕障偏离参考路径
+ * 该 critic 应与 PathAlignCritic 配合调参，以平衡路径跟踪精度和动态绕障能力。
  */
 class ObstaclesCritic : public CriticFunction
 {
 public:
   /**
-    * @brief Initialize critic
+    * @brief 初始化障碍距离 critic 参数和碰撞检查器
     */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to obstacle avoidance
-   *
-   * @param costs [out] add obstacle cost values to this tensor
+   * @brief 计算障碍距离代价并累加到总成本
+   * @param data: 评分上下文，其中的成本和碰撞标志将被就地更新
    */
   void score(CriticData & data) override;
 
 protected:
   /**
-    * @brief Checks if cost represents a collision
-    * @param cost Costmap cost
-    * @return bool if in collision
+    * @brief 判断代价值是否表示碰撞
+    * @param cost: 代价地图中的栅格代价值
+    * @return 返回值: 碰撞时为 true，评分器据此标记轨迹无效
     */
   inline bool inCollision(float cost) const;
 
   /**
-    * @brief cost at a robot pose
-    * @param x X of pose
-    * @param y Y of pose
-    * @param theta theta of pose
-    * @return Collision information at pose
+    * @brief 查询给定机器人位姿的障碍代价和碰撞状态
+    * @param x: 位姿 X 坐标
+    * @param y: 位姿 Y 坐标
+    * @param theta: 位姿航向角
+    * @return 返回值: 碰撞代价结构，供距离反算和轨迹碰撞标记使用
     */
   inline CollisionCost costAtPose(float x, float y, float theta);
 
   /**
-    * @brief Distance to obstacle from cost
-    * @param cost Costmap cost
-    * @return float Distance to the obstacle represented by cost
+    * @brief 根据膨胀代价反算到最近障碍的距离
+    * @param cost: 位姿碰撞代价结构
+    * @return 返回值: 障碍距离，供障碍接近代价累计使用
     */
   inline float distanceToObstacle(const CollisionCost & cost);
 
   /**
-    * @brief Find the min cost of the inflation decay function for which the robot MAY be
-    * in collision in any orientation
-    * @param costmap Costmap2DROS to get minimum inscribed cost (e.g. 128 in inflation layer documentation)
-    * @return double circumscribed cost, any higher than this and need to do full footprint collision checking
-    * since some element of the robot could be in collision
+    * @brief 计算可能需要完整 footprint 碰撞检查的最小膨胀代价值
+    * @param costmap: 提供膨胀层参数和机器人半径的代价地图对象
+    * @return 返回值: 外接圆临界代价；高于该值时评分器会执行完整 footprint 碰撞检查
     */
   float findCircumscribedCost(std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap);
 

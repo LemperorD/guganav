@@ -40,29 +40,29 @@ using PathRange = std::pair<PathIterator, PathIterator>;
 
 /**
  * @class mppi::PathHandler
- * @brief Manager of incoming reference paths for transformation and processing
+ * @brief 负责参考路径坐标变换、裁剪和方向反转处理
  */
 
 class PathHandler
 {
 public:
   /**
-    * @brief Constructor for mppi::PathHandler
+    * @brief 构造路径处理器
     */
   PathHandler() = default;
 
   /**
-    * @brief Destructor for mppi::PathHandler
+    * @brief 析构路径处理器
     */
   ~PathHandler() = default;
 
   /**
-    * @brief Initialize path handler on bringup
-    * @param parent WeakPtr to node
-    * @param name Name of plugin
-    * @param costmap_ros Costmap2DROS object of environment
-    * @param tf TF buffer for transformations
-    * @param dynamic_parameter_handler Parameter handler object
+    * @brief 启动时初始化路径处理器
+    * @param parent: 控制器服务器生命周期节点的弱引用
+    * @param name: 控制器插件名称
+    * @param costmap_ros: 提供局部地图尺寸和坐标系的对象
+    * @param tf: 用于路径坐标变换的 TF 缓冲区
+    * @param dynamic_parameter_handler: 动态参数处理器
     */
   void initialize(
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string & name,
@@ -70,71 +70,69 @@ public:
     std::shared_ptr<tf2_ros::Buffer>, ParametersHandler *);
 
   /**
-    * @brief Set new reference path
-    * @param Plan Path to use
+    * @brief 设置新的全局参考路径
+    * @param plan: 全局规划器输出的路径
     */
   void setPath(const nav_msgs::msg::Path & plan);
 
   /**
-    * @brief Get reference path
-    * @return Path
+    * @brief 获取当前保存的全局参考路径
+    * @return 返回值: 路径引用，供控制器检查、转换和可视化使用
     */
   nav_msgs::msg::Path & getPath();
 
   /**
-   * @brief transform global plan to local applying constraints,
-   * then prune global plan
-   * @param robot_pose Pose of robot
-   * @return global plan in local frame
+   * @brief 将全局路径转换并裁剪到局部代价地图范围
+   * @param robot_pose: 机器人当前位姿
+   * @return 返回值: 局部坐标系下的有效路径，供 MPPI 轨迹评分与跟踪使用
    */
   nav_msgs::msg::Path transformPath(const geometry_msgs::msg::PoseStamped & robot_pose);
 
 protected:
   /**
-    * @brief Transform a pose to another frame
-    * @param frame Frame to transform to
-    * @param in_pose Input pose
-    * @param out_pose Output pose
-    * @return Bool if successful
+    * @brief 将位姿转换到指定坐标系
+    * @param frame: 目标坐标系
+    * @param in_pose: 输入位姿
+    * @param out_pose: 接收转换结果的输出位姿
+    * @return 返回值: 成功时为 true，调用方据此决定是否继续路径处理
     */
   bool transformPose(
     const std::string & frame, const geometry_msgs::msg::PoseStamped & in_pose,
     geometry_msgs::msg::PoseStamped & out_pose) const;
 
   /**
-    * @brief Get largest dimension of costmap (radially)
-    * @return Max distance from center of costmap to edge
+    * @brief 获取局部代价地图中心到边缘的最大径向距离
+    * @return 返回值: 路径截取半径，用于限制进入优化器的路径范围
     */
   double getMaxCostmapDist();
 
   /**
-    * @brief Transform a pose to the global reference frame
-    * @param pose Current pose
-    * @return output poose in global reference frame
+    * @brief 将位姿转换到全局路径坐标系
+    * @param pose: 当前位姿
+    * @return 返回值: 全局路径坐标系中的位姿，供最近路径点搜索使用
     */
   geometry_msgs::msg::PoseStamped
   transformToGlobalPlanFrame(const geometry_msgs::msg::PoseStamped & pose);
 
   /**
-    * @brief Get global plan within window of the local costmap size
-    * @param global_pose Robot pose
-    * @return plan transformed in the costmap frame and iterator to the first pose of the global
-    * plan (for pruning)
+    * @brief 获取落在局部代价地图窗口内的全局路径段
+    * @param global_pose: 全局路径坐标系中的机器人位姿
+    * @return 返回值: 转换后的局部路径及首个全局路径迭代器，后者用于裁剪已走过的路径
     */
   std::pair<nav_msgs::msg::Path, PathIterator> getGlobalPlanConsideringBoundsInCostmapFrame(
     const geometry_msgs::msg::PoseStamped & global_pose);
 
   /**
-    * @brief Prune a path to only interesting portions
-    * @param plan Plan to prune
-    * @param end Final path iterator
+    * @brief 从全局路径删除已通过的部分
+    * @param plan: 待同步更新的路径消息
+    * @param end: 要删除区间的末端迭代器
     */
   void prunePlan(nav_msgs::msg::Path & plan, const PathIterator end);
 
   /**
-    * @brief Check if the robot pose is within the set inversion tolerances
-    * @param robot_pose Robot's current pose to check
-    * @return bool If the robot pose is within the set inversion tolerances
+    * @brief 判断机器人是否已到达路径换向点容差范围
+    * @param robot_pose: 机器人当前位姿
+    * @return 返回值: 达到容差时为 true，路径处理器据此切换到换向点之后的路径段
     */
   bool isWithinInversionTolerances(const geometry_msgs::msg::PoseStamped & robot_pose);
 

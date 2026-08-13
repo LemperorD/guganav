@@ -32,24 +32,24 @@ namespace mppi
 
 /**
  * @class mppi::MotionModel
- * @brief Abstract motion model for modeling a vehicle
+ * @brief 描述底盘运动学约束的抽象运动模型
  */
 class MotionModel
 {
 public:
   /**
-    * @brief Constructor for mppi::MotionModel
+    * @brief 构造运动模型
     */
   MotionModel() = default;
 
   /**
-    * @brief Destructor for mppi::MotionModel
+    * @brief 析构运动模型
     */
   virtual ~MotionModel() = default;
 
   /**
-   * @brief With input velocities, find the vehicle's output velocities
-   * @param state Contains control velocities to use to populate vehicle velocities
+   * @brief 根据采样控制量预测底盘各时间步的速度
+   * @param state: 包含采样控制量并接收预测速度的状态张量
    */
   virtual void predict(models::State & state)
   {
@@ -67,27 +67,27 @@ public:
   }
 
   /**
-   * @brief Whether the motion model is holonomic, using Y axis
-   * @return Bool If holonomic
+   * @brief 判断运动模型是否支持横向速度
+   * @return 返回值: 为 true 时优化器会启用 `vy` 采样、约束和轨迹积分
    */
   virtual bool isHolonomic() = 0;
 
   /**
-   * @brief Apply hard vehicle constraints to a control sequence
-   * @param control_sequence Control sequence to apply constraints to
+   * @brief 对控制序列施加运动模型专属硬约束
+   * @param control_sequence: 待就地约束的控制序列
    */
   virtual void applyConstraints(models::ControlSequence & /*control_sequence*/) {}
 };
 
 /**
  * @class mppi::AckermannMotionModel
- * @brief Ackermann motion model
+ * @brief 阿克曼转向运动模型
  */
 class AckermannMotionModel : public MotionModel
 {
 public:
   /**
-    * @brief Constructor for mppi::AckermannMotionModel
+    * @brief 构造阿克曼运动模型并读取最小转弯半径
     */
   explicit AckermannMotionModel(ParametersHandler * param_handler, const std::string & name)
   {
@@ -96,8 +96,8 @@ public:
   }
 
   /**
-   * @brief Whether the motion model is holonomic, using Y axis
-   * @return Bool If holonomic
+   * @brief 判断阿克曼模型是否支持横向速度
+   * @return 返回值: 固定返回 false，使优化器禁用 `vy`
    */
   bool isHolonomic() override
   {
@@ -105,8 +105,8 @@ public:
   }
 
   /**
-   * @brief Apply hard vehicle constraints to a control sequence
-   * @param control_sequence Control sequence to apply constraints to
+   * @brief 按最小转弯半径限制角速度
+   * @param control_sequence: 待就地修正的 `vx/wz` 控制序列
    */
   void applyConstraints(models::ControlSequence & control_sequence) override
   {
@@ -122,8 +122,8 @@ public:
   }
 
   /**
-   * @brief Get minimum turning radius of ackermann drive
-   * @return Minimum turning radius
+   * @brief 获取阿克曼底盘最小转弯半径
+   * @return 返回值: 最小转弯半径，供约束测试和外部诊断使用
    */
   float getMinTurningRadius() {return min_turning_r_;}
 
@@ -133,19 +133,19 @@ private:
 
 /**
  * @class mppi::DiffDriveMotionModel
- * @brief Differential drive motion model
+ * @brief 差速底盘运动模型
  */
 class DiffDriveMotionModel : public MotionModel
 {
 public:
   /**
-    * @brief Constructor for mppi::DiffDriveMotionModel
+    * @brief 构造差速运动模型
     */
   DiffDriveMotionModel() = default;
 
   /**
-   * @brief Whether the motion model is holonomic, using Y axis
-   * @return Bool If holonomic
+   * @brief 判断差速模型是否支持横向速度
+   * @return 返回值: 固定返回 false，使优化器禁用 `vy`
    */
   bool isHolonomic() override
   {
@@ -155,19 +155,19 @@ public:
 
 /**
  * @class mppi::OmniMotionModel
- * @brief Omnidirectional motion model
+ * @brief 全向底盘运动模型
  */
 class OmniMotionModel : public MotionModel
 {
 public:
   /**
-    * @brief Constructor for mppi::OmniMotionModel
+    * @brief 构造全向运动模型
     */
   OmniMotionModel() = default;
 
   /**
-   * @brief Whether the motion model is holonomic, using Y axis
-   * @return Bool If holonomic
+   * @brief 判断全向模型是否支持横向速度
+   * @return 返回值: 固定返回 true，使优化器启用 `vy`
    */
   bool isHolonomic() override
   {

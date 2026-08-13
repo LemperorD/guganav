@@ -49,7 +49,7 @@ void GoalAngleCritic::score(CriticData & data)
     xt::eval(xt::fabs(utils::shortest_angular_distance(data.trajectories.yaws, goal_yaw)));
 
   if (symmetric_yaw_tolerance_) {
-    // For symmetric robots: use minimum distance to either goal orientation or goal + 180°
+    // 对于对称机器人，取目标方向与目标方向加 180 度之间的最小距离。
     const float symmetric_goal_yaw = angles::normalize_angle(goal_yaw + M_PI);
     auto symmetric_distances =
       xt::eval(

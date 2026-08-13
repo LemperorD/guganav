@@ -26,20 +26,19 @@ namespace mppi::critics
 
 /**
  * @class mppi::critics::VelocityDeadbandCritic
- * @brief Critic objective function for enforcing feasible constraints
+ * @brief 对落入底盘不可执行速度死区的控制量施加代价
  */
 class VelocityDeadbandCritic : public CriticFunction
 {
 public:
   /**
-   * @brief Initialize critic
+    * @brief 初始化速度死区 critic 参数
    */
   void initialize() override;
 
   /**
-   * @brief Evaluate cost related to goal following
-   *
-   * @param costs [out] add reference cost values to this tensor
+   * @brief 计算速度死区代价并累加到总成本
+   * @param data: 评分上下文，其中的成本张量将被就地更新
    */
   void score(CriticData & data) override;
 

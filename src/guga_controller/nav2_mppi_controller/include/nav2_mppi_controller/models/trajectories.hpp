@@ -23,7 +23,7 @@ namespace mppi::models
 
 /**
  * @class mppi::models::Trajectories
- * @brief Candidate Trajectories
+ * @brief 批量候选位姿轨迹
  */
 struct Trajectories
 {
@@ -32,7 +32,9 @@ struct Trajectories
   xt::xtensor<float, 2> yaws;
 
   /**
-    * @brief Reset state data
+    * @brief 按采样规模和预测步数重新分配并清零轨迹张量
+    * @param batch_size: 候选轨迹数量
+    * @param time_steps: 每条轨迹的预测时间步数
     */
   void reset(unsigned int batch_size, unsigned int time_steps)
   {

@@ -22,7 +22,7 @@ namespace mppi::models
 
 /**
  * @struct mppi::models::Path
- * @brief Path represented as a tensor
+ * @brief 以位置和航向张量表示的参考路径
  */
 struct Path
 {
@@ -31,7 +31,8 @@ struct Path
   xt::xtensor<float, 1> yaws;
 
   /**
-    * @brief Reset path data
+    * @brief 按指定点数重新分配并清零路径张量
+    * @param size: 路径点数量
     */
   void reset(unsigned int size)
   {

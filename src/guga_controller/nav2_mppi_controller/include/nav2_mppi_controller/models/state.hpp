@@ -25,7 +25,7 @@ namespace mppi::models
 
 /**
  * @struct mppi::models::State
- * @brief State information: velocities, controls, poses, speed
+ * @brief 保存批量速度、采样控制量及机器人当前状态
  */
 struct State
 {
@@ -41,7 +41,9 @@ struct State
   geometry_msgs::msg::Twist speed;
 
   /**
-    * @brief Reset state data
+    * @brief 按采样规模和预测步数重新分配并清零状态张量
+    * @param batch_size: 候选轨迹数量
+    * @param time_steps: 每条轨迹的预测时间步数
     */
   void reset(unsigned int batch_size, unsigned int time_steps)
   {

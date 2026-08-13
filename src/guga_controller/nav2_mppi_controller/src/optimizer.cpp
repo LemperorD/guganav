@@ -429,14 +429,14 @@ void Optimizer::setSpeedLimit(double speed_limit, bool percentage)
     s.constraints.wz = s.base_constraints.wz;
   } else {
     if (percentage) {
-      // Speed limit is expressed in % from maximum speed of robot
+      // 速度限制表示为机器人最大速度的百分比。
       double ratio = speed_limit / 100.0;
       s.constraints.vx_max = s.base_constraints.vx_max * ratio;
       s.constraints.vx_min = s.base_constraints.vx_min * ratio;
       s.constraints.vy = s.base_constraints.vy * ratio;
       s.constraints.wz = s.base_constraints.wz * ratio;
     } else {
-      // Speed limit is expressed in absolute value
+      // 速度限制表示为绝对值。
       double ratio = speed_limit / s.base_constraints.vx_max;
       s.constraints.vx_max = s.base_constraints.vx_max * ratio;
       s.constraints.vx_min = s.base_constraints.vx_min * ratio;
