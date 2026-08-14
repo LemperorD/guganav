@@ -80,15 +80,38 @@ private:
   double max_linear_velocity_{10.0};
   double max_angular_velocity_{20.0};
   
-private: // 优化: 使用单独的四个线程执行本功能包的四个并行人物
+private: // 优化: 使用单独的四个线程执行本功能包的四个并行任务
+  // 线程内调用的成员变量
+  tf2::Transform tf_odom_to_lidar_;
   tf2::Transform tf_odom_to_robot_base_;
   tf2::Transform tf_odom_to_chassis_;
-  sensor_msgs::msg::PointCloud2 out;
+  sensor_msgs::msg::PointCloud2 in_;
+  sensor_msgs::msg::PointCloud2 out_;
 
+  // 线程对象
   std::thread chassis_tf_thread_;
   std::thread chassis_odom_thread_;
   std::thread robot_base_odom_thread_;
   std::thread sensor_scan_thread_;
+
+  // 线程函数
+  void updateChassisTF();
+  void updateChassisOdometry();
+  void updateRobotBaseOdometry();
+  void updateSensorScan();
+
+  // 线程同步机制
+  std::mutex sensor_scan_mutex_;
+  std::mutex chassis_odom_mutex_;
+  std::mutex robot_base_odom_mutex_;
+  std::mutex chassis_tf_mutex_;
+  std::condition_variable sensor_scan_cv_;
+  std::condition_variable chassis_odom_cv_;
+  std::condition_variable robot_base_odom_cv_;
+  std::condition_variable chassis_tf_cv_;
+
+  // 线程间共享的标志变量
+  bool sensor_scan_ready_{false};
 };
 
 }  // namespace sensor_scan_generation
