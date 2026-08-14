@@ -183,9 +183,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   solve_end_time_ = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> solve_duration = solve_end_time_ - solve_start_time_;
   #ifdef WRITE_FILE_DEBUG
-    std::cout << CYAN << BOLD << "Total compute time (have write_file_debug): " << solve_duration.count() << " ms" << RESET << std::endl;
+    std::cout << CYAN_LIGHT << BOLD << "Total compute time (have write_file_debug): " << solve_duration.count() << " ms" << RESET << std::endl;
   #else
-    std::cout << CYAN << BOLD << "Total compute time: " << solve_duration.count() << " ms" << RESET << std::endl;
+    std::cout << CYAN_LIGHT << BOLD << "Total compute time: " << solve_duration.count() << " ms" << RESET << std::endl;
   #endif
 #endif
 

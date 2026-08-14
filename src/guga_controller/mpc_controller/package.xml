@@ -3,7 +3,7 @@
 <package format="3">
   <name>mpc_controller</name>
   <version>1.0.0</version>
-  <description>MPC path tracking controller with B-spline/MINCO trajectory optimization for omnidirectional mobile robots</description>
+  <description>MPC path tracking controller</description>
   <maintainer email="ld2382619813@163.com">ld</maintainer>
   <license>Apache-2.0</license>
 

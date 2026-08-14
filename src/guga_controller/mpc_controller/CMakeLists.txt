@@ -65,7 +65,9 @@ rclcpp_components_register_node(${PROJECT_NAME}_node
 target_link_libraries(${PROJECT_NAME}_node
   mpc_wrapper
   dw
+  ${guga_common_LIBRARIES}
 )
+
 target_compile_definitions(${PROJECT_NAME}_node PRIVATE BACKWARD_HAS_DW=1)
 
 if(BUILD_TESTING)
