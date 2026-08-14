@@ -74,6 +74,10 @@ void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 
 geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
 {
+#ifdef SOLVE_TIME_DEBUG
+  solve_start_time_ = std::chrono::high_resolution_clock::now();
+#endif
+
   std::lock_guard<std::mutex> lock(mutex_);
   (void)goal_checker;
   (void)velocity;
@@ -92,22 +96,13 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   cmd_vel.twist.linear.y = 0.0;
   cmd_vel.twist.angular.z = 0.0;
 
-  if (global_plan_.poses.empty()) { return cmd_vel; }
+  if (global_plan_.poses.empty()) { return cmd_vel; } // 没有全局路径, 返回零速度
 
   // 计算局部路径并写入参考轨迹
   auto local_plan = getLocalPlan(global_pose);
   local_plan_pub_->publish(local_plan);
   auto ref_traj = getReferenceHorizon(local_plan);
   TerminalRef end_ref = ref_traj.col(kHorizonSteps - 1).head<3>();
-
-#ifdef REFERENCE_DEBUG
-  std::cout << "\033[1;33mReference trajectory: \033[0m" << std::endl;
-  for (int i = 0; i < ref_traj.cols(); ++i) {
-    std::cout << "\033[1;33mPoint " << i << ": x=" << ref_traj(0, i) << ", y=" << ref_traj(1, i) << ", theta=" << ref_traj(2, i) << "\033[0m" << std::endl;
-  }
-  std::cout << "\033[1;34mTerminal reference: x=" << end_ref(0) << ", y=" << end_ref(1) << ", theta=" << end_ref(2) << "\033[0m" << std::endl;
-#endif
-
   mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
 
   // 求解MPC并获取预测状态轨迹
@@ -115,14 +110,8 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   if (predicted_states.size() != 0) {
     auto predicted_plan = StateHorizon2Path(global_plan_, predicted_states);
     predicted_plan_pub_->publish(predicted_plan);
-#ifdef PREDICTED_PLAN_DEBUG
-    std::cout << "\033[1;32mPredicted plan published,"
-              << "size: " << predicted_plan.poses.size() << ", "
-              << "frame: " << predicted_plan.header.frame_id
-              << "\033[0m" << std::endl;
-#endif
   } else {
-    std::cout << "\033[1;31mPredicted states are empty\033[0m" << std::endl;
+    std::cout << RED << "Predicted states are empty" << RESET << std::endl;
   }
   
   // 求解
@@ -130,28 +119,12 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 
 #ifdef SOLVE_TIME_DEBUG
   double solve_time = mpc_wrapper_->solve_time();
-  std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
+  std::cout << BLUE << "MPC solve time: " << solve_time*1000 << " ms" << RESET << std::endl;
 #endif
 
   cmd_vel.twist.linear.x = u_opt[0];
   cmd_vel.twist.linear.y = u_opt[1];
   cmd_vel.twist.angular.z = u_opt[2];
-
-  double yaw = tf2::getYaw(global_pose.pose.orientation);
-
-  double vx_map = u_opt[0];
-  double vy_map = u_opt[1];
-
-  double cos_yaw = std::cos(yaw);
-  double sin_yaw = std::sin(yaw);
-
-  double vx_body =  cos_yaw * vx_map + sin_yaw * vy_map;
-  double vy_body = -sin_yaw * vx_map + cos_yaw * vy_map;
-
-
-  // cmd_vel.twist.linear.x = vx_body;
-  // cmd_vel.twist.linear.y = vy_body;
-  // cmd_vel.twist.angular.z = u_opt[2];
 
 #ifdef WRITE_FILE_DEBUG
   // 打开日志文件 (首次调用时)
@@ -168,7 +141,6 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 
     // 初始状态 x0
     g_debug_file << "X0 " << x0(0) << " " << x0(1) << " " << x0(2) << "\n";
-    g_debug_file << "YAW " << yaw << "\n";
 
     // 局部规划路径
     g_debug_file << "LOCAL_PLAN " << local_plan.poses.size() << "\n";
@@ -187,8 +159,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
     }
 
     // 终端参考
-    g_debug_file << "END_REF " << end_ref(0) << " " << end_ref(1) << " "
-                 << end_ref(2) << "\n";
+    g_debug_file << "END_REF " << end_ref(0) << " " << end_ref(1) << " " << end_ref(2) << "\n";
 
     // 预测状态 (solve 后的结果: kHorizonSteps+1 个点, 每个 3 维)
     auto ps = mpc_wrapper_->predictedStates();
@@ -198,17 +169,24 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
                    << ps(2, i) << "\n";
     }
 
-    // 控制输出 (map 帧 + body 帧)
-    g_debug_file << "U_OPT_MAP " << vx_map << " " << vy_map << " "
-                 << u_opt[2] << "\n";
-    g_debug_file << "U_OPT_BODY " << vx_body << " " << vy_body << " "
-                 << u_opt[2] << "\n";
+    // 控制输出 (chassis坐标系)
+    g_debug_file << "U_OPT " << u_opt[0] << " " << u_opt[1] << " " << u_opt[2] << "\n";
 
     // 求解时间
     g_debug_file << "SOLVE_TIME " << mpc_wrapper_->solve_time() << "\n";
     g_debug_file << "END_FRAME\n";
     g_debug_file.flush();
   }
+#endif
+
+#ifdef SOLVE_TIME_DEBUG
+  solve_end_time_ = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> solve_duration = solve_end_time_ - solve_start_time_;
+  #ifdef WRITE_FILE_DEBUG
+    std::cout << CYAN << BOLD << "Total compute time (have write_file_debug): " << solve_duration.count() << " ms" << RESET << std::endl;
+  #else
+    std::cout << CYAN << BOLD << "Total compute time: " << solve_duration.count() << " ms" << RESET << std::endl;
+  #endif
 #endif
 
   return cmd_vel;
@@ -266,8 +244,7 @@ RefHorizon MpcControllerNode::getReferenceHorizon(const nav_msgs::msg::Path & lo
 
   const double total_len = arc_len.back();
 
-  // 2. 沿路径均匀采样 N 个参考点
-  //    stage 0 对应最近的参考, stage N-1 对应最远的参考
+  // 2. 沿路径均匀采样 N 个参考点, stage 0 对应最近的参考, stage N-1 对应最远的参考
   const double step = total_len / kHorizonSteps;
 
   double prev_theta = 0.0;     // 上一个参考点的角度, 用于 unwrap
@@ -431,14 +408,6 @@ inline geometry_msgs::msg::PoseStamped MpcControllerNode::transformPoseToGlobal(
   }
   return transformed_pose;
 }
-
-// geometry_msgs::msg::Twist MpcControllerNode::transformVelocity( const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff) { 
-//   geometry_msgs::msg::Twist out;
-//   out.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff); 
-//   out.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
-//   out.angular.z = twist->angular.z; 
-//   return out;
-// }
 
 #ifdef PREDICT_INPUT
 void MpcControllerNode::predictInputThreadFunction()

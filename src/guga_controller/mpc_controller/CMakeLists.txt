@@ -62,7 +62,7 @@ rclcpp_components_register_node(${PROJECT_NAME}_node
   PLUGIN "mpc_controller::MpcControllerNode"
   EXECUTABLE ${PROJECT_NAME}_node_exe
 )
-target_link_libraries(${PROJECT_NAME}_node 
+target_link_libraries(${PROJECT_NAME}_node
   mpc_wrapper
   dw
 )
