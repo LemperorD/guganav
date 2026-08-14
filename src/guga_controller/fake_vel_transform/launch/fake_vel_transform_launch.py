@@ -21,15 +21,15 @@ from launch_ros.actions import Node
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time", default="True")
 
-    gimbal_cmd_vel_adapter_node = Node(
-        package="gimbal_cmd_vel_adapter",
-        executable="gimbal_cmd_vel_adapter_node",
+    fake_vel_transform_node = Node(
+        package="fake_vel_transform",
+        executable="fake_vel_transform_node",
         output="screen",
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
     ld = LaunchDescription()
 
-    ld.add_action(gimbal_cmd_vel_adapter_node)
+    ld.add_action(fake_vel_transform_node)
 
     return ld

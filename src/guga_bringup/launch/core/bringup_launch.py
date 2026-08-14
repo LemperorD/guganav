@@ -35,6 +35,7 @@ def generate_launch_description():
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    navigation_profile = LaunchConfiguration("navigation_profile")
 
     params_file = ReplaceString(
         condition=LaunchConfigurationEquals("namespace", ""),
@@ -66,6 +67,10 @@ def generate_launch_description():
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace", default_value="", description="Top-level namespace"
+    )
+
+    declare_navigation_profile_cmd = DeclareLaunchArgument(
+        "navigation_profile", default_value="jps_pid", description="Navigation stack profile"
     )
 
     declare_slam_cmd = DeclareLaunchArgument(
@@ -171,6 +176,7 @@ def generate_launch_description():
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
+                    "navigation_profile": navigation_profile,
                 }.items(),
             ),
         ]
@@ -185,6 +191,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_navigation_profile_cmd)
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)

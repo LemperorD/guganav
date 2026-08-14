@@ -88,10 +88,10 @@ def generate_launch_description():
     declare_navigation_profile_cmd = DeclareLaunchArgument(
         "navigation_profile",
         default_value="jps_pid",
-        choices=["jps_pid", "2d_mppi"],
+        choices=["jps_pid", "2d_mppi", "jps_mpc"],
         description=(
-            "Navigation stack profile: jps_pid (JPS + omni PID) or "
-            "2d_mppi (SmacPlanner2D + MPPI)"
+            "Navigation stack profile: jps_pid (JPS + omni PID), "
+            "2d_mppi (SmacPlanner2D + MPPI), or jps_mpc (JPS + MPC)"
         ),
     )
 
@@ -106,6 +106,12 @@ def generate_launch_description():
                 "' == '2d_mppi' and '",
                 os.path.join(
                     bringup_dir, "config", "simulation", "nav2_params_mppi.yaml"
+                ),
+                "' or '",
+                navigation_profile,
+                "' == 'jps_mpc' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "nav2_params_mpc.yaml"
                 ),
                 "' or '",
                 os.path.join(
@@ -140,7 +146,7 @@ def generate_launch_description():
 
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         "rviz_config_file",
-        default_value=os.path.join(bringup_dir, "rviz", "nav2_default_view.rviz"),
+        default_value=os.path.join(bringup_dir, "rviz", "nav2_default_view_mpc.rviz"),
         description="Full path to the RVIZ config file to use",
     )
 
@@ -189,6 +195,7 @@ def generate_launch_description():
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
+            "navigation_profile": navigation_profile,
         }.items(),
     )
 

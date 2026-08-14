@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(gimbal_cmd_vel_adapter)
+project(fake_vel_transform)
 
 ## Use C++14
 set(CMAKE_CXX_STANDARD 14)
@@ -24,11 +24,11 @@ ament_auto_find_build_dependencies()
 ###########
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/gimbal_cmd_vel_adapter.cpp
+  src/fake_vel_transform.cpp
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN gimbal_cmd_vel_adapter::GimbalCmdVelAdapter
+  PLUGIN fake_vel_transform::FakeVelTransform
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
@@ -37,13 +37,21 @@ rclcpp_components_register_node(${PROJECT_NAME}
 #############
 
 if(BUILD_TESTING)
-set(ament_cmake_clang_format_CONFIG_FILE "${CMAKE_SOURCE_DIR}/.clang-format")
-find_package(ament_lint_auto REQUIRED)
+  set(ament_cmake_clang_format_CONFIG_FILE "${CMAKE_SOURCE_DIR}/.clang-format")
+  find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_gtest REQUIRED)
   list(APPEND AMENT_LINT_AUTO_EXCLUDE
     ament_cmake_uncrustify
     ament_cmake_flake8
   )
   ament_lint_auto_find_test_dependencies()
+
+  ament_add_gtest(fake_vel_transform_test
+    test/fake_vel_transform_test.cpp
+  )
+  target_link_libraries(fake_vel_transform_test
+    fake_vel_transform
+  )
 endif()
 
 #############

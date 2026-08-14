@@ -23,6 +23,7 @@ def generate_launch_description():
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    navigation_profile = LaunchConfiguration("navigation_profile")
 
     lifecycle_nodes = [
         "controller_server",
@@ -55,6 +56,10 @@ def generate_launch_description():
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace", default_value="", description="Top-level namespace"
+    )
+
+    declare_navigation_profile_cmd = DeclareLaunchArgument(
+        "navigation_profile", default_value="jps_pid", description="Navigation stack profile"
     )
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -219,17 +224,21 @@ def generate_launch_description():
                 ],
             ),
             Node(
-                package="gimbal_cmd_vel_adapter",
-                executable="gimbal_cmd_vel_adapter_node",
-                name="gimbal_cmd_vel_adapter",
+                package="fake_vel_transform",
+                executable="fake_vel_transform_node",
+                name="fake_vel_transform",
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[
                     {
                         "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nav2_robot_base_frame": "base_footprint_fake",
+                        "robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw' or 'base_footprint'",
+                        ]),
+                        "fake_robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw_fake' or 'base_footprint_fake'",
+                        ]),
                         "chassis_frame": "chassis",
                         "odom_topic": "odometry",
                         "local_plan_topic": "local_plan",
@@ -323,14 +332,18 @@ def generate_launch_description():
                 ],
             ),
             ComposableNode(
-                package="gimbal_cmd_vel_adapter",
-                plugin="gimbal_cmd_vel_adapter::GimbalCmdVelAdapter",
-                name="gimbal_cmd_vel_adapter",
+                package="fake_vel_transform",
+                plugin="fake_vel_transform::FakeVelTransform",
+                name="fake_vel_transform",
                 parameters=[
                     {
                         "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nav2_robot_base_frame": "base_footprint_fake",
+                        "robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw' or 'base_footprint'",
+                        ]),
+                        "fake_robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw_fake' or 'base_footprint_fake'",
+                        ]),
                         "chassis_frame": "chassis",
                         "odom_topic": "odometry",
                         "local_plan_topic": "local_plan",
@@ -365,6 +378,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_navigation_profile_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

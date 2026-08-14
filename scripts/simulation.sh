@@ -26,6 +26,7 @@ Examples:
 Navigation profiles:
   navigation_profile:=jps_pid  JPS global planner + omni PID controller (default)
   navigation_profile:=2d_mppi  SmacPlanner2D global planner + MPPI controller
+  navigation_profile:=jps_mpc  JPS global planner + MPC controller
 
 When a navigation command is run from a terminal without
 navigation_profile:=..., an interactive profile menu is shown.
@@ -103,6 +104,7 @@ select_navigation_profile() {
 Select navigation profile:
   1) JPS global planner + omni PID controller (jps_pid)
   2) SmacPlanner2D + MPPI controller (2d_mppi)
+  3) JPS + MPC controller (jps_mpc)
 EOF
   while true; do
     printf 'Profile [1]: ' >&2
@@ -118,8 +120,12 @@ EOF
         printf 'navigation_profile:=2d_mppi'
         return 0
         ;;
+      3)
+        printf 'navigation_profile:=jps_mpc'
+        return 0
+        ;;
       *)
-        echo "Please select 1 or 2." >&2
+        echo "Please select 1, 2, or 3." >&2
         ;;
     esac
   done
@@ -366,6 +372,7 @@ case "$mode" in
       shift
       gazebo_args+=("$@")
     fi
+    install_simulation_cleanup_traps
     set +e
     ros2 launch rmu_gazebo_simulator bringup_sim.launch.py "${gazebo_args[@]}"
     launch_status=$?
@@ -417,6 +424,7 @@ fi
 
 require_workspace_setup
 
+install_simulation_cleanup_traps
 set +e
 ros2 launch guga_bringup simulation_launch.py \
   world:="$world" \
