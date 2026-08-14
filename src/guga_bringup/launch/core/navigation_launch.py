@@ -259,9 +259,9 @@ def generate_launch_description():
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
-                package="sensor_scan_generation",
-                plugin="sensor_scan_generation::SensorScanGenerationNode",
-                name="sensor_scan_generation",
+                package="sensor_scan_generation_old",
+                plugin="sensor_scan_generation_old::SensorScanGenerationNode",
+                name="sensor_scan_generation_old",
                 parameters=[configured_params],
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
