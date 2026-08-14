@@ -216,8 +216,30 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel"),  # final chassis velocity
                 ],
+            ),
+            Node(
+                package="gimbal_cmd_vel_adapter",
+                executable="gimbal_cmd_vel_adapter_node",
+                name="gimbal_cmd_vel_adapter",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    {
+                        "use_sim_time": use_sim_time,
+                        "robot_base_frame": "base_footprint",
+                        "nav2_robot_base_frame": "base_footprint_fake",
+                        "chassis_frame": "chassis",
+                        "odom_topic": "odometry",
+                        "local_plan_topic": "local_plan",
+                        "input_cmd_vel_topic": "cmd_vel_smoothed",
+                        "output_cmd_vel_topic": "cmd_vel",
+                        "cmd_spin_topic": "cmd_spin",
+                        "chassis_mode_topic": "chassis_mode",
+                    }
+                ],
+                arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
                 package="nav2_lifecycle_manager",
@@ -298,7 +320,25 @@ def generate_launch_description():
                 parameters=[configured_params],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel"),  # final chassis velocity
+                ],
+            ),
+            ComposableNode(
+                package="gimbal_cmd_vel_adapter",
+                plugin="gimbal_cmd_vel_adapter::GimbalCmdVelAdapter",
+                name="gimbal_cmd_vel_adapter",
+                parameters=[
+                    {
+                        "use_sim_time": use_sim_time,
+                        "robot_base_frame": "base_footprint",
+                        "nav2_robot_base_frame": "base_footprint_fake",
+                        "chassis_frame": "chassis",
+                        "odom_topic": "odometry",
+                        "local_plan_topic": "local_plan",
+                        "input_cmd_vel_topic": "cmd_vel_smoothed",
+                        "output_cmd_vel_topic": "cmd_vel",
+                        "cmd_spin_topic": "cmd_spin",
+                        "chassis_mode_topic": "chassis_mode",
+                    }
                 ],
             ),
             ComposableNode(
