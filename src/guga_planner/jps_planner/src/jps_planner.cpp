@@ -25,7 +25,6 @@ namespace jps_planner {
   namespace {
 
     constexpr unsigned char UNKNOWN_COST = 255;
-    constexpr unsigned char INSCRIBED_COST = 253;
     constexpr size_t MIN_BSPLINE_WAYPOINTS = 8;
     constexpr double BSPLINE_DENSIFY_STEP_CELLS = 2.0;
     constexpr double MIN_DENSIFY_STEP_CELLS = 0.5;
@@ -107,7 +106,7 @@ namespace jps_planner {
 
     [[nodiscard]] bool isWorldPointAllowed(
         const nav2_costmap_2d::Costmap2D& costmap, double wx, double wy,
-        bool allow_unknown) {
+        bool allow_unknown, int cost_threshold) {
       unsigned int mx{};
       unsigned int my{};
       if (!costmap.worldToMap(wx, wy, mx, my)) {
@@ -118,12 +117,12 @@ namespace jps_planner {
       if (cost == UNKNOWN_COST) {
         return allow_unknown;
       }
-      return cost < INSCRIBED_COST;
+      return cost < cost_threshold;
     }
 
     [[nodiscard]] bool isWorldSegmentAllowed(
         const nav2_costmap_2d::Costmap2D& costmap, double x0, double y0,
-        double x1, double y1, bool allow_unknown) {
+        double x1, double y1, bool allow_unknown, int cost_threshold) {
       double length = std::hypot(x1 - x0, y1 - y0);
       double step = std::max(costmap.getResolution() * 0.5, 1e-3);
       int samples = std::max(1, static_cast<int>(std::ceil(length / step)));
@@ -132,7 +131,8 @@ namespace jps_planner {
         double t = static_cast<double>(i) / static_cast<double>(samples);
         double wx = x0 + (t * (x1 - x0));
         double wy = y0 + (t * (y1 - y0));
-        if (!isWorldPointAllowed(costmap, wx, wy, allow_unknown)) {
+        if (!isWorldPointAllowed(
+                costmap, wx, wy, allow_unknown, cost_threshold)) {
           return false;
         }
       }
@@ -141,14 +141,16 @@ namespace jps_planner {
 
     [[nodiscard]] bool isPathCollisionFree(
         const nav_msgs::msg::Path& plan,
-        const nav2_costmap_2d::Costmap2D& costmap, bool allow_unknown) {
+        const nav2_costmap_2d::Costmap2D& costmap, bool allow_unknown,
+        int cost_threshold) {
       if (plan.poses.empty()) {
         return false;
       }
 
       for (size_t i = 0; i < plan.poses.size(); ++i) {
         const auto& point = plan.poses[i].pose.position;
-        if (!isWorldPointAllowed(costmap, point.x, point.y, allow_unknown)) {
+        if (!isWorldPointAllowed(
+                costmap, point.x, point.y, allow_unknown, cost_threshold)) {
           return false;
         }
 
@@ -158,7 +160,7 @@ namespace jps_planner {
 
         const auto& prev = plan.poses[i - 1].pose.position;
         if (!isWorldSegmentAllowed(costmap, prev.x, prev.y, point.x, point.y,
-                                   allow_unknown)) {
+                                   allow_unknown, cost_threshold)) {
           return false;
         }
       }
@@ -226,21 +228,27 @@ namespace jps_planner {
         node, name_ + ".esdf_safe_distance", rclcpp::ParameterValue(0.6));
     nav2_util::declare_parameter_if_not_declared(
         node, name_ + ".corridor_halfwidth", rclcpp::ParameterValue(8.0));
-
+    // B-spline 平滑路径碰撞判定阈值 (253 严格 / 254 宽松)
+    nav2_util::declare_parameter_if_not_declared(
+        node, name_ + ".collision_cost_threshold",
+        rclcpp::ParameterValue(253));
     node->get_parameter(name_ + ".enable_esdf", enable_esdf_);
     node->get_parameter(name_ + ".esdf_weight", esdf_weight_);
     node->get_parameter(name_ + ".esdf_safe_distance", esdf_safe_distance_);
     node->get_parameter(name_ + ".corridor_halfwidth", corridor_halfwidth_);
     bspline_config_.corridor_halfwidth = corridor_halfwidth_;
+    node->get_parameter(name_ + ".collision_cost_threshold",
+                        collision_cost_threshold_);
 
     RCLCPP_INFO(
         logger_,
         "JPSPlanner configured: w_traversal=%.2f w_euc=%.2f "
         "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d enable_esdf=%d "
-        "esdf_safe_distance=%.2f corridor_halfwidth=%.1f",
+        "esdf_safe_distance=%.2f corridor_halfwidth=%.1f "
+        "collision_threshold=%d",
         config_.w_traversal_cost, config_.w_euc_cost, config_.w_heuristic_cost,
         config_.allow_unknown, enable_bspline_, enable_esdf_,
-        esdf_safe_distance_, corridor_halfwidth_);
+        esdf_safe_distance_, corridor_halfwidth_, collision_cost_threshold_);
 
     // 初始化共享内存写入端 — 将规划结果推送给 Pangolin UI 渲染
     shm_ready_ = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
@@ -355,6 +363,11 @@ namespace jps_planner {
       return plan;
     }
 
+    // 贴障碍的对角段改写为正交移动, 避免 B-spline 平滑切角产生锯齿/回退
+    map_path = detourCornerHuggingDiagonals(
+        map_path, state.costmap_data, state.size_x, state.size_y,
+        config_.allow_unknown);
+
     RCLCPP_INFO(logger_, "JPSPlanner: path found with %zu waypoints",
                 map_path.size());
 
@@ -365,19 +378,17 @@ namespace jps_planner {
         };
 
     // ── 第 2 步: B-spline 平滑 + (可选) ESDF 梯度优化 ──
-    // 7 阶 B-spline 需要 ≥ 8 个输入点；JPS 跳点太少时先在地图坐标补密。
+    // 7 阶 B-spline 在稀疏跳点间容易过冲切角 (尤其对角贴障碍段),
+    // 所以先按 ≤2 格步长在地图坐标补密, 再进入插值。
     if (enable_bspline_) {
-      auto spline_path = map_path;
-      if (spline_path.size() < MIN_BSPLINE_WAYPOINTS) {
-        spline_path = densifyMapPath(map_path, BSPLINE_DENSIFY_STEP_CELLS,
-                                     MIN_BSPLINE_WAYPOINTS);
-        if (spline_path.size() > map_path.size()) {
-          RCLCPP_INFO(
-              logger_,
-              "JPSPlanner: densified path from %zu to %zu waypoints for "
-              "B-spline",
-              map_path.size(), spline_path.size());
-        }
+      auto spline_path = densifyMapPath(
+          map_path, BSPLINE_DENSIFY_STEP_CELLS, MIN_BSPLINE_WAYPOINTS);
+      if (spline_path.size() > map_path.size()) {
+        RCLCPP_INFO(
+            logger_,
+            "JPSPlanner: densified path from %zu to %zu waypoints for "
+            "B-spline",
+            map_path.size(), spline_path.size());
       }
 
       if (spline_path.size() >= MIN_BSPLINE_WAYPOINTS) {
@@ -387,7 +398,8 @@ namespace jps_planner {
                              costmap_->getResolution());
         RCLCPP_INFO(logger_, "JPSPlanner: B-spline smooth applied, %zu poses",
                     plan.poses.size());
-        if (!isPathCollisionFree(plan, *costmap_, config_.allow_unknown)) {
+        if (!isPathCollisionFree(plan, *costmap_, config_.allow_unknown,
+                                 collision_cost_threshold_)) {
           RCLCPP_WARN(logger_,
                       "JPSPlanner: smoothed path collides with costmap, "
                       "falling back to linear JPS path");
@@ -404,7 +416,8 @@ namespace jps_planner {
       plan = make_linear_plan(map_path);
     }
 
-    if (!isPathCollisionFree(plan, *costmap_, config_.allow_unknown)) {
+    if (!isPathCollisionFree(plan, *costmap_, config_.allow_unknown,
+                             collision_cost_threshold_)) {
       RCLCPP_ERROR(logger_,
                    "JPSPlanner: final path collides with costmap, "
                    "returning empty plan");
@@ -427,17 +440,12 @@ namespace jps_planner {
   // bsplineSmooth — B-spline 拟合 + 可选的 ESDF 梯度优化
   //
   // 数学原理:
-  //   代价函数 J(P) = w_s·J_smooth + w_d·J_dist + w_o·J_obs + w_e·J_esdf
+  //   代价函数 J(P) = w_s·J_smooth + w_d·J_dist + w_e·J_esdf
   //
   //   其中各分量分别为:
   //     J_smooth = ∫‖C''‖² du          — 曲率能量, 保持路径平滑
   //     J_dist   = Σ‖C(τ_i)-q_i‖²     — 偏离原始 JPS 航点的距离
-  //     J_obs    = Σ δ_i·w_o·(1+‖p_i-c_i‖) — 二元障碍物惩罚 (cost≥253)
   //     J_esdf   = Σ [max(0, d_safe - d_esdf(p_i))]² — 连续距离场避障
-  //
-  //   ESDF (Euclidean Signed Distance Field) 提供每个格元到最近障碍物的
-  //   精确欧几里得距离。通过双线性插值在连续坐标上查询, 产生平滑的梯度。
-  //   代价随距离减小而二次增长, 将路径推向远离障碍物的方向。
   //
   //   ESDF 代价 J_esdf 仅在启用 enable_esdf 时计算,
   //   此时会自动开启梯度下降 (enable_gradient_descent=true)。
@@ -493,7 +501,7 @@ namespace jps_planner {
         RCLCPP_WARN(logger_,
                     "JPSPlanner: ESDF enabled but EsdfLayer not found in "
                     "costmap plugins, "
-                    "falling back to binary obstacle avoidance.");
+                    "falling back to control-point spiral projection.");
       }
     }
 
@@ -509,7 +517,7 @@ namespace jps_planner {
       return linearInterpolation(world_path, resolution);
     }
 
-    // 注入代价地图 — 用于二元障碍物检查 (cost ≥ 253 = 障碍物)
+    // 注入代价地图 — 用于内部控制点的障碍物避让 (cost ≥ 253 = 障碍物)
     opt.state().costmap_data = costmap_data;
     opt.state().costmap_w = cm_w;
     opt.state().costmap_h = cm_h;
@@ -541,23 +549,17 @@ namespace jps_planner {
       opt.state().esdf_max_distance = esdf_max_distance;
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // 第 4 步: 运行优化
-    //
-    // (a) 梯度下降 (仅 enabled):
-    //     变量 = 内部控制点 [2*(M-2) 维]
-    //     方法 = 数值中心差分 (h=0.5 格元) + 回溯线搜索
-    //     约束 = |x_i - x_init| ≤ corridor_halfwidth (走廊约束)
-    //
-    // (b) 障碍物投射 (始终执行):
-    //     螺旋搜索 (半径 8 格元) 将落在障碍物内的控制点投射到最近空闲格元
-    //     对采样路径点逐一同样操作
-    //
-    // (c) 输出:
-    //     smoothed_path (N 个 (x,y) 点)
-    //     curvature_profile (每个点的曲率 κ)
-    // ════════════════════════════════════════════════════════════════════════
-    int num_samples = std::max(100, static_cast<int>(map_path.size()) * 5);
+    // ── 第 4 步: 运行优化 ──
+    // 变量 = 内部控制点 [2*(M-2) 维]
+    // 方法 = 解析梯度 (平滑/距离/ESDF) + 回溯线搜索
+    // 约束 = |x_i - x_init| ≤ corridor_halfwidth (走廊约束)
+    // 避障 = (a) ESDF 梯度平滑推离 (启用时)
+    //        (b) 控制点螺旋搜索投射到最近空闲格元
+    // 输出 = smoothed_path + curvature_profile
+    // 输出航点数量上限: 长路径下防止采样点过多拖慢后处理和下游 controller。
+    // 1000 个点按 0.05m 分辨率覆盖 50m 路径, 足够稠密。
+    int num_samples = std::min(
+        1000, std::max(100, static_cast<int>(map_path.size()) * 5));
     auto result = opt.optimize(num_samples);
 
     // ── 第 5 步: 地图坐标 → 世界坐标 ──

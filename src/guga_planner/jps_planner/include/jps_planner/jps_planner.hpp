@@ -14,11 +14,11 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "tf2_ros/buffer.h"
-#include "rog_map_layer/esdf_layer.hpp"
-#include "rog_map_layer/esdf_map.hpp"
 
 #include "guga_ui_common/shm_writer.hpp"
 #include "guga_ui_common/ui_types.hpp"
+#include "rog_map_layer/esdf_layer.hpp"
+#include "rog_map_layer/esdf_map.hpp"
 
 namespace jps_planner {
 
@@ -83,11 +83,16 @@ namespace jps_planner {
 
     bspline_opt::BSplineConfig bspline_config_{};
     bool enable_bspline_{true};  // enable B-spline smoothing
-    bool enable_esdf_{false};    // enable ESDF gradient optimisation
+    bool enable_esdf_{true};    // enable ESDF gradient optimisation
     double esdf_weight_{
         100.0};  // ESDF distance field obstacle-avoidance weight
     double esdf_safe_distance_{0.6};  // ESDF safe distance
     double corridor_halfwidth_{8.0};  // B-spline control point movement bound
+
+    // B-spline 平滑路径的碰撞判定阈值: cost >= 该值视为碰撞。
+    // 默认 253 (INSCRIBED, 严格); 调到 254 只把 LETHAL 当障碍,
+    // 允许平滑曲线擦过 INSCRIBED 格 (判定更宽松, 回退更少)。
+    int collision_cost_threshold_{253};
 
   private:
     // 使用共享内存进行性能监控

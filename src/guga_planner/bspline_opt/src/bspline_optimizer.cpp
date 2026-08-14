@@ -14,7 +14,7 @@ namespace
 {
 
 // ══════════════════════════════════════════════════════════
-// B-spline 求值辅助函数
+// 障碍物避让辅助函数
 // ══════════════════════════════════════════════════════════
 
 // 读取代价地图中整数格元坐标处的值 (带边界检查)
@@ -104,77 +104,340 @@ inline float esdfDistanceAt(
   return d0 * static_cast<float>(1.0 - dy) + d1 * static_cast<float>(dy);
 }
 
-static double evalCost(
-  const std::vector<double> & params, const Eigen::VectorXd & knots,
-  const std::vector<Eigen::Vector2d> & orig_points,
-  const Eigen::VectorXd & orig_params,
-  double first_x, double first_y, double last_x, double last_y,
-  int M, double w_smooth, double w_dist, double w_obs,
-  const unsigned char * costmap, int cm_w, int cm_h,
-  const float * esdf_dist, int esdf_w, int esdf_h,
-  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
-  double esdf_safe_dist, double w_esdf)
+// 双线性插值 ESDF 梯度场 (世界坐标 → (gx, gy), 单位: 距离(米)/格元)
+inline void esdfGradientAt(
+  const float * esdf_gx, const float * esdf_gy,
+  int esdf_w, int esdf_h, double resolution, double origin_x, double origin_y,
+  double wx, double wy, double & gx, double & gy)
 {
-  Eigen::MatrixXd ctrl(2, M);
+  gx = 0.0; gy = 0.0;
+  if (!esdf_gx || !esdf_gy) {return;}
+
+  double fx = (wx - origin_x) / resolution;
+  double fy = (wy - origin_y) / resolution;
+
+  int ix = static_cast<int>(fx);
+  int iy = static_cast<int>(fy);
+
+  if (ix < 0 || ix + 1 >= esdf_w || iy < 0 || iy + 1 >= esdf_h) {return;}
+
+  double dx = fx - static_cast<double>(ix);
+  double dy = fy - static_cast<double>(iy);
+
+  size_t idx00 = static_cast<size_t>(iy) * static_cast<size_t>(esdf_w) +
+    static_cast<size_t>(ix);
+  size_t idx10 = idx00 + 1;
+  size_t idx01 = idx00 + static_cast<size_t>(esdf_w);
+  size_t idx11 = idx01 + 1;
+
+  float g00x = esdf_gx[idx00]; float g10x = esdf_gx[idx10];
+  float g01x = esdf_gx[idx01]; float g11x = esdf_gx[idx11];
+  float g0x = static_cast<float>(static_cast<double>(g00x) * (1.0 - dx) +
+    static_cast<double>(g10x) * dx);
+  float g1x = static_cast<float>(static_cast<double>(g01x) * (1.0 - dx) +
+    static_cast<double>(g11x) * dx);
+  gx = static_cast<double>(g0x * static_cast<float>(1.0 - dy) +
+    g1x * static_cast<float>(dy));
+
+  float g00y = esdf_gy[idx00]; float g10y = esdf_gy[idx10];
+  float g01y = esdf_gy[idx01]; float g11y = esdf_gy[idx11];
+  float g0y = static_cast<float>(static_cast<double>(g00y) * (1.0 - dx) +
+    static_cast<double>(g10y) * dx);
+  float g1y = static_cast<float>(static_cast<double>(g01y) * (1.0 - dx) +
+    static_cast<double>(g11y) * dx);
+  gy = static_cast<double>(g0y * static_cast<float>(1.0 - dy) +
+    g1y * static_cast<float>(dy));
+}
+
+// ══════════════════════════════════════════════════════════
+// B-spline 基函数预计算
+//
+// 梯度下降的代价函数在固定的参数网格上反复求值, 而样条对控制点是
+// 线性的: C(u) = Σ N_i(u)·c_i。把基函数值 (及其二阶导) 一次性算出,
+// 后续每次代价/梯度计算都只是几条带宽 ≤ degree+1 的带状点积,
+// 不再为每个参数扰动重新构造/求值 Eigen Spline。
+// ══════════════════════════════════════════════════════════
+
+constexpr int kSplineDegree = 7;
+
+// 查找参数 u 所在的节点区间 [knots(j), knots(j+1))
+inline int findSpan(double u, const Eigen::RowVectorXd & knots, int n, int p)
+{
+  if (u >= knots(n + 1)) {return n;}
+  if (u <= knots(p)) {return p;}
+  int lo = p;
+  int hi = n + 1;
+  while (lo < hi - 1) {
+    int mid = (lo + hi) / 2;
+    if (u < knots(mid)) {hi = mid;} else {lo = mid;}
+  }
+  return lo;
+}
+
+// 在参数 u 处计算阶数 p 的基函数值, 输出按控制点索引 (0..M-1)。
+inline void basisValuesAt(
+  double u, const Eigen::RowVectorXd & knots, int p, int M,
+  std::vector<double> & out)
+{
+  out.assign(static_cast<size_t>(M), 0.0);
+  const int n = M - 1;
+  const int j = findSpan(u, knots, n, p);
+
+  std::vector<double> N(static_cast<size_t>(p + 1), 0.0);
+  N[0] = 1.0;
+  for (int k = 1; k <= p; ++k) {
+    double saved = 0.0;
+    for (int r = 0; r < k; ++r) {
+      double tmp = N[static_cast<size_t>(r)];
+      double den = knots(j + 1 + r) - knots(j - k + 1 + r);
+      double right = (den != 0.0) ? (knots(j + 1 + r) - u) / den : 0.0;
+      double left = (den != 0.0) ? (u - knots(j - k + 1 + r)) / den : 0.0;
+      N[static_cast<size_t>(r)] = saved + right * tmp;
+      saved = left * tmp;
+    }
+    N[static_cast<size_t>(k)] = saved;
+  }
+
+  for (int r = 0; r <= p; ++r) {
+    int i = j - p + r;
+    if (i >= 0 && i < M) {
+      out[static_cast<size_t>(i)] = N[static_cast<size_t>(r)];
+    }
+  }
+}
+
+// 在参数 u 处计算基函数值 N、一阶导 N1、二阶导 N2 (均按控制点索引)。
+inline void basisDerivsAt(
+  double u, const Eigen::RowVectorXd & knots, int p, int M,
+  std::vector<double> & N, std::vector<double> & N1, std::vector<double> & N2)
+{
+  // NURBS Book Algorithm A2.3 (与 Eigen::Spline::basisFunctionDerivatives
+  // 相同的 ndu 表算法), 正确处理钳制端 (u=0/u=1) 的单边导数。
+  const int n = M - 1;
+  const int span = findSpan(u, knots, n, p);
+  constexpr int kOrder = 2;
+
+  std::vector<double> ndu(static_cast<size_t>((p + 1) * (p + 1)), 0.0);
+  std::vector<double> left(static_cast<size_t>(p + 1), 0.0);
+  std::vector<double> right(static_cast<size_t>(p + 1), 0.0);
+
+  ndu[0] = 1.0;
+  for (int j = 1; j <= p; ++j) {
+    left[static_cast<size_t>(j)] = u - knots(span + 1 - j);
+    right[static_cast<size_t>(j)] = knots(span + j) - u;
+    double saved = 0.0;
+    for (int r = 0; r < j; ++r) {
+      ndu[static_cast<size_t>(j) * (p + 1) + r] =
+        right[static_cast<size_t>(r + 1)] + left[static_cast<size_t>(j - r)];
+      const double temp =
+        ndu[static_cast<size_t>(r) * (p + 1) + (j - 1)] /
+        ndu[static_cast<size_t>(j) * (p + 1) + r];
+      ndu[static_cast<size_t>(r) * (p + 1) + j] =
+        saved + right[static_cast<size_t>(r + 1)] * temp;
+      saved = left[static_cast<size_t>(j - r)] * temp;
+    }
+    ndu[static_cast<size_t>(j) * (p + 1) + j] = saved;
+  }
+
+  N.assign(static_cast<size_t>(M), 0.0);
+  N1.assign(static_cast<size_t>(M), 0.0);
+  N2.assign(static_cast<size_t>(M), 0.0);
+  for (int j = 0; j <= p; ++j) {
+    const int i = span - p + j;
+    if (i >= 0 && i < M) {
+      N[static_cast<size_t>(i)] =
+        ndu[static_cast<size_t>(j) * (p + 1) + p];
+    }
+  }
+
+  std::vector<double> a(2 * static_cast<size_t>(p + 1), 0.0);
+  auto aAt = [&](int row, int col) -> double & {
+      return a[static_cast<size_t>(row) * (p + 1) + col];
+    };
+
+  for (int r = 0; r <= p; ++r) {
+    int s1 = 0;
+    int s2 = 1;
+    aAt(0, 0) = 1.0;
+
+    for (int k = 1; k <= kOrder; ++k) {
+      double d = 0.0;
+      const int rk = r - k;
+      const int pk = p - k;
+
+      if (r >= k) {
+        aAt(s2, 0) = aAt(s1, 0) /
+          ndu[static_cast<size_t>(pk + 1) * (p + 1) + rk];
+        d = aAt(s2, 0) * ndu[static_cast<size_t>(rk) * (p + 1) + pk];
+      }
+
+      const int j1 = (rk >= -1) ? 1 : -rk;
+      const int j2 = (r - 1 <= pk) ? k - 1 : p - r;
+      for (int j = j1; j <= j2; ++j) {
+        aAt(s2, j) = (aAt(s1, j) - aAt(s1, j - 1)) /
+          ndu[static_cast<size_t>(pk + 1) * (p + 1) + (rk + j)];
+        d += aAt(s2, j) * ndu[static_cast<size_t>(rk + j) * (p + 1) + pk];
+      }
+
+      if (r <= pk) {
+        aAt(s2, k) = -aAt(s1, k - 1) /
+          ndu[static_cast<size_t>(pk + 1) * (p + 1) + r];
+        d += aAt(s2, k) * ndu[static_cast<size_t>(r) * (p + 1) + pk];
+      }
+
+      const int i = span - p + r;
+      if (i >= 0 && i < M) {
+        if (k == 1) {
+          N1[static_cast<size_t>(i)] = static_cast<double>(p) * d;
+        } else if (k == 2) {
+          N2[static_cast<size_t>(i)] =
+            static_cast<double>(p * (p - 1)) * d;
+        }
+      }
+      std::swap(s1, s2);
+    }
+  }
+}
+
+// 一条带宽 ≤ degree+1 的基函数行 (只存非零段)
+struct BandRow
+{
+  int start{};
+  int count{};
+  double val[8]{};
+};
+
+inline void rowFromBasis(const std::vector<double> & b, int M, BandRow & row)
+{
+  row.start = 0;
+  row.count = 0;
+  for (int i = 0; i < M; ++i) {
+    double v = b[static_cast<size_t>(i)];
+    if (std::abs(v) > 1e-14) {
+      if (row.count == 0) {row.start = i;}
+      if (row.count < 8) {row.val[row.count] = v;}
+      ++row.count;
+    }
+  }
+}
+
+// 代价函数求值所需的全部预计算数据
+struct CostCache
+{
+  int M{};
+  int Ks{50};
+  int Ke{200};
+  std::vector<BandRow> d2_smooth{};
+  std::vector<BandRow> b_dist{};
+  std::vector<Eigen::Vector2d> dist_q{};
+  std::vector<BandRow> b_esdf{};
+};
+
+// 固定参数网格上的基函数行 (位置/二阶导), 每次 optimize() 构建一次。
+CostCache buildCostCache(
+  const Eigen::RowVectorXd & knots, int M,
+  const std::vector<Eigen::Vector2d> & orig_points,
+  const Eigen::VectorXd & orig_params)
+{
+  CostCache cc;
+  cc.M = M;
+
+  std::vector<double> N, N1, N2;
+  auto pushRow = [&](double u, bool second_deriv, std::vector<BandRow> & rows) {
+      basisDerivsAt(u, knots, kSplineDegree, M, N, N1, N2);
+      BandRow r;
+      rowFromBasis(second_deriv ? N2 : N, M, r);
+      rows.push_back(r);
+    };
+
+  cc.d2_smooth.reserve(static_cast<size_t>(cc.Ks + 1));
+  for (int k = 0; k <= cc.Ks; ++k) {
+    pushRow(static_cast<double>(k) / cc.Ks, true, cc.d2_smooth);
+  }
+
+  // 距离项采样点: 均匀降采样到 ≤256 个原始航点, 控制代价有界。
+  const size_t n = orig_points.size();
+  const size_t stride = (n > 256) ? ((n + 255) / 256) : 1;
+  for (size_t i = 0; i < n; i += stride) {
+    pushRow(orig_params(static_cast<Eigen::Index>(i)), false, cc.b_dist);
+    cc.dist_q.emplace_back(orig_points[i]);
+  }
+  if (n > 0 && (n - 1) % stride != 0) {
+    pushRow(orig_params(static_cast<Eigen::Index>(n - 1)), false, cc.b_dist);
+    cc.dist_q.emplace_back(orig_points[n - 1]);
+  }
+
+  cc.b_esdf.reserve(static_cast<size_t>(cc.Ke + 1));
+  for (int k = 0; k <= cc.Ke; ++k) {
+    pushRow(static_cast<double>(k) / cc.Ke, false, cc.b_esdf);
+  }
+
+  return cc;
+}
+
+inline double bandedDot(const BandRow & row, const Eigen::MatrixXd & ctrl, int dim)
+{
+  double s{};
+  for (int k = 0; k < row.count; ++k) {
+    s += row.val[k] * ctrl(dim, row.start + k);
+  }
+  return s;
+}
+
+inline void fillCtrl(
+  const std::vector<double> & params, double first_x, double first_y,
+  double last_x, double last_y, int M, Eigen::MatrixXd & ctrl)
+{
+  ctrl.resize(2, M);
   ctrl(0, 0) = first_x;  ctrl(1, 0) = first_y;
   ctrl(0, M - 1) = last_x;  ctrl(1, M - 1) = last_y;
   for (int i = 0; i < M - 2; ++i) {
     ctrl(0, i + 1) = params[2 * i];
     ctrl(1, i + 1) = params[2 * i + 1];
   }
-  using Spline2D = Eigen::Spline<double, 2, Eigen::Dynamic>;
-  Spline2D spl(knots, ctrl);
+}
+
+static double evalCost(
+  const std::vector<double> & params, const CostCache & cc,
+  double first_x, double first_y, double last_x, double last_y,
+  double w_smooth, double w_dist,
+  const float * esdf_dist, int esdf_w, int esdf_h,
+  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
+  double esdf_safe_dist, double w_esdf)
+{
+  const int M = cc.M;
+  Eigen::MatrixXd ctrl;
+  fillCtrl(params, first_x, first_y, last_x, last_y, M, ctrl);
 
   double cost{};
 
   if (w_smooth > 0.0) {
-    constexpr int K = 50;
-    for (int i = 0; i <= K; ++i) {
-      double u = static_cast<double>(i) / static_cast<double>(K);
-      auto derivs = spl.derivatives<2>(u);
-      double ddx = derivs(0, 2);
-      double ddy = derivs(1, 2);
-      cost += w_smooth * (ddx * ddx + ddy * ddy);
+    double s{};
+    for (const auto & row : cc.d2_smooth) {
+      double ddx = bandedDot(row, ctrl, 0);
+      double ddy = bandedDot(row, ctrl, 1);
+      s += ddx * ddx + ddy * ddy;
     }
-    cost /= static_cast<double>(K + 1);
+    cost += w_smooth * s / static_cast<double>(cc.d2_smooth.size());
   }
 
   if (w_dist > 0.0) {
-    for (size_t i = 0; i < orig_points.size(); ++i) {
-      double u = orig_params(static_cast<Eigen::Index>(i));
-      Eigen::Vector2d p = spl(u);
-      double dx = p.x() - orig_points[i].x();
-      double dy = p.y() - orig_points[i].y();
+    for (size_t i = 0; i < cc.b_dist.size(); ++i) {
+      double px = bandedDot(cc.b_dist[i], ctrl, 0);
+      double py = bandedDot(cc.b_dist[i], ctrl, 1);
+      double dx = px - cc.dist_q[i].x();
+      double dy = py - cc.dist_q[i].y();
       cost += w_dist * (dx * dx + dy * dy);
-    }
-  }
-
-  if (w_obs > 0.0 && costmap) {
-    constexpr int K = 200;
-    for (int i = 0; i <= K; ++i) {
-      double u = static_cast<double>(i) / static_cast<double>(K);
-      Eigen::Vector2d p = spl(u);
-      int cx = static_cast<int>(p.x());
-      int cy = static_cast<int>(p.y());
-      if (cx >= 0 && cx < cm_w && cy >= 0 && cy < cm_h) {
-        unsigned char v = costmap[static_cast<size_t>(cy * cm_w + cx)];
-        if (v >= 253) {
-          double dx = p.x() - static_cast<double>(cx) - 0.5;
-          double dy = p.y() - static_cast<double>(cy) - 0.5;
-          cost += w_obs * (1.0 + std::abs(dx) + std::abs(dy));
-        }
-      }
     }
   }
 
   // ESDF distance-based obstacle cost (smooth gradient-aware)
   if (w_esdf > 0.0 && esdf_dist) {
-    constexpr int K = 200;
-    for (int i = 0; i <= K; ++i) {
-      double u = static_cast<double>(i) / static_cast<double>(K);
-      Eigen::Vector2d p = spl(u);
-      double wx = p.x() * esdf_res + esdf_ox;
-      double wy = p.y() * esdf_res + esdf_oy;
+    for (const auto & row : cc.b_esdf) {
+      double px = bandedDot(row, ctrl, 0);
+      double py = bandedDot(row, ctrl, 1);
+      double wx = px * esdf_res + esdf_ox;
+      double wy = py * esdf_res + esdf_oy;
       float dist = esdfDistanceAt(
         esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, wx, wy, esdf_max);
       if (dist < static_cast<float>(esdf_safe_dist)) {
@@ -187,97 +450,180 @@ static double evalCost(
   return cost;
 }
 
-static std::vector<double> gradientDescent(
-  const std::vector<double> & init_params,
-  const Eigen::VectorXd & knots,
-  const std::vector<Eigen::Vector2d> & orig_points,
-  const Eigen::VectorXd & orig_params,
+// 解析梯度: 一次前向 (算每个采样点位置/误差) + 一次反向 (沿非零基函数
+// 累加), 取代原先对每个参数做两次有限差分。
+static void computeGradient(
+  const std::vector<double> & params, const CostCache & cc,
   double first_x, double first_y, double last_x, double last_y,
-  int M, double w_smooth, double w_dist, double w_obs,
-  const unsigned char * costmap, int cm_w, int cm_h,
-  const float * esdf_dist, int esdf_w, int esdf_h,
-  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
-  double esdf_safe_dist, double w_esdf,
-  int max_iters, double corridor_hw, bool & converged)
+  double w_smooth, double w_dist,
+  const float * esdf_dist, const float * esdf_gx, const float * esdf_gy,
+  int esdf_w, int esdf_h, double esdf_res, double esdf_ox, double esdf_oy,
+  double esdf_max, double esdf_safe_dist, double w_esdf,
+  std::vector<double> & grad)
+{
+  const int M = cc.M;
+  grad.assign(static_cast<size_t>(2 * (M - 2)), 0.0);
+  Eigen::MatrixXd ctrl;
+  fillCtrl(params, first_x, first_y, last_x, last_y, M, ctrl);
+
+  auto accum = [&](int j, double gx, double gy) {
+      if (j >= 1 && j <= M - 2) {
+        grad[static_cast<size_t>(2 * (j - 1))] += gx;
+        grad[static_cast<size_t>(2 * (j - 1) + 1)] += gy;
+      }
+    };
+
+  if (w_smooth > 0.0) {
+    const double fac = 2.0 * w_smooth /
+      static_cast<double>(cc.d2_smooth.size());
+    for (const auto & row : cc.d2_smooth) {
+      double ddx = bandedDot(row, ctrl, 0);
+      double ddy = bandedDot(row, ctrl, 1);
+      for (int k = 0; k < row.count; ++k) {
+        accum(row.start + k, fac * ddx * row.val[k], fac * ddy * row.val[k]);
+      }
+    }
+  }
+
+  if (w_dist > 0.0) {
+    for (size_t i = 0; i < cc.b_dist.size(); ++i) {
+      const auto & row = cc.b_dist[i];
+      double px = bandedDot(row, ctrl, 0);
+      double py = bandedDot(row, ctrl, 1);
+      double ex = px - cc.dist_q[i].x();
+      double ey = py - cc.dist_q[i].y();
+      for (int k = 0; k < row.count; ++k) {
+        accum(
+          row.start + k,
+          2.0 * w_dist * ex * row.val[k],
+          2.0 * w_dist * ey * row.val[k]);
+      }
+    }
+  }
+
+  if (w_esdf > 0.0 && esdf_dist) {
+    for (const auto & row : cc.b_esdf) {
+      double px = bandedDot(row, ctrl, 0);
+      double py = bandedDot(row, ctrl, 1);
+      double wx = px * esdf_res + esdf_ox;
+      double wy = py * esdf_res + esdf_oy;
+      float dist = esdfDistanceAt(
+        esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, wx, wy, esdf_max);
+      if (dist < static_cast<float>(esdf_safe_dist)) {
+        double gd_x{};
+        double gd_y{};
+        if (esdf_gx && esdf_gy) {
+          esdfGradientAt(
+            esdf_gx, esdf_gy, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy,
+            wx, wy, gd_x, gd_y);
+        } else {
+          // 无梯度场时的回退: 中心差分距离场 (格元单位)
+          gd_x = 0.5 * static_cast<double>(
+            esdfDistanceAt(
+              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
+              esdf_oy, wx + esdf_res, wy, esdf_max) -
+            esdfDistanceAt(
+              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
+              esdf_oy, wx - esdf_res, wy, esdf_max));
+          gd_y = 0.5 * static_cast<double>(
+            esdfDistanceAt(
+              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
+              esdf_oy, wx, wy + esdf_res, esdf_max) -
+            esdfDistanceAt(
+              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
+              esdf_oy, wx, wy - esdf_res, esdf_max));
+        }
+        double fac = -2.0 * w_esdf *
+          (esdf_safe_dist - static_cast<double>(dist));
+        for (int k = 0; k < row.count; ++k) {
+          accum(
+            row.start + k, fac * gd_x * row.val[k], fac * gd_y * row.val[k]);
+        }
+      }
+    }
+  }
+}
+
+static std::vector<double> gradientDescent(
+  const std::vector<double> & init_params, const CostCache & cc,
+  double first_x, double first_y, double last_x, double last_y,
+  double w_smooth, double w_dist,
+  const float * esdf_dist, const float * esdf_gx, const float * esdf_gy,
+  int esdf_w, int esdf_h, double esdf_res, double esdf_ox, double esdf_oy,
+  double esdf_max, double esdf_safe_dist, double w_esdf,
+  int max_iters, double corridor_hw, bool & converged, int & iters_out)
 {
   std::vector<double> x = init_params;
   const int N = static_cast<int>(x.size());
-  if (N == 0) {converged = true; return x;}
+  if (N == 0) {converged = true; iters_out = 0; return x;}
 
   double alpha{1e-3};
-  constexpr double h = 0.5;  // half-cell step to detect obstacle boundaries
   constexpr double gtol = 1e-8;
   constexpr int patience = 20;
 
   double f_best = evalCost(
-    x, knots, orig_points, orig_params,
-    first_x, first_y, last_x, last_y,
-    M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
-    esdf_dist, esdf_w, esdf_h,
-    esdf_res, esdf_ox, esdf_oy, esdf_max,
-    esdf_safe_dist, w_esdf);
+    x, cc, first_x, first_y, last_x, last_y,
+    w_smooth, w_dist, esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy,
+    esdf_max, esdf_safe_dist, w_esdf);
   int no_improve{};
 
   std::vector<double> grad(N);
   std::vector<double> x_try(N);
 
-  for (int iter = 0; iter < max_iters; ++iter) {
-    for (int i = 0; i < N; ++i) {
-      double orig = x[i];
-      x[i] = orig + h;
-      double fp = evalCost(
-        x, knots, orig_points, orig_params,
-        first_x, first_y, last_x, last_y,
-        M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
-        esdf_dist, esdf_w, esdf_h,
-        esdf_res, esdf_ox, esdf_oy, esdf_max,
-        esdf_safe_dist, w_esdf);
-      x[i] = orig - h;
-      double fm = evalCost(
-        x, knots, orig_points, orig_params,
-        first_x, first_y, last_x, last_y,
-        M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
-        esdf_dist, esdf_w, esdf_h,
-        esdf_res, esdf_ox, esdf_oy, esdf_max,
-        esdf_safe_dist, w_esdf);
-      x[i] = orig;
-      grad[i] = (fp - fm) / (2.0 * h);
-    }
+  int iter{};
+  for (; iter < max_iters; ++iter) {
+    computeGradient(
+      x, cc, first_x, first_y, last_x, last_y,
+      w_smooth, w_dist,
+      esdf_dist, esdf_gx, esdf_gy, esdf_w, esdf_h,
+      esdf_res, esdf_ox, esdf_oy, esdf_max, esdf_safe_dist, w_esdf, grad);
 
     double g_norm{};
     for (int i = 0; i < N; ++i) {
-      g_norm += grad[i] * grad[i];
+      g_norm += grad[static_cast<size_t>(i)] * grad[static_cast<size_t>(i)];
     }
     g_norm = std::sqrt(g_norm);
-    if (g_norm < gtol) {converged = true; break;}
+    if (g_norm < gtol) {break;}
 
     alpha = std::min(alpha * 2.0, 0.1);
     bool found{};
     for (int ls = 0; ls < 15; ++ls) {
       for (int i = 0; i < N; ++i) {
-        x_try[i] = x[i] - alpha * grad[i];
+        x_try[static_cast<size_t>(i)] =
+          x[static_cast<size_t>(i)] - alpha * grad[static_cast<size_t>(i)];
+      }
+      for (int i = 0; i < N; ++i) {
+        // 紧邻固定起点/终点的控制点收紧走廊, 防止终点附近过度弯曲。
+        const int ctrl_j = i / 2 + 1;  // 控制点索引 (1..M-2)
+        double corr = corridor_hw;
+        if (ctrl_j == 1 || ctrl_j == cc.M - 2) {
+          corr = std::min(corr, 0.5);
+        }
         // 走廊约束: 限制在初始位置 ± corridor_hw 范围内
-        x_try[i] = std::clamp(
-          x_try[i], init_params[i] - corridor_hw,
-          init_params[i] + corridor_hw);
+        x_try[static_cast<size_t>(i)] = std::clamp(
+          x_try[static_cast<size_t>(i)],
+          init_params[static_cast<size_t>(i)] - corr,
+          init_params[static_cast<size_t>(i)] + corr);
       }
       double f_try = evalCost(
-        x_try, knots, orig_points, orig_params,
-        first_x, first_y, last_x, last_y,
-        M, w_smooth, w_dist, w_obs, costmap, cm_w, cm_h,
-        esdf_dist, esdf_w, esdf_h,
-        esdf_res, esdf_ox, esdf_oy, esdf_max,
-        esdf_safe_dist, w_esdf);
+        x_try, cc, first_x, first_y, last_x, last_y,
+        w_smooth, w_dist, esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
+        esdf_oy, esdf_max, esdf_safe_dist, w_esdf);
       if (f_try < f_best) {
-        x = x_try; f_best = f_try; found = true; no_improve = 0; break;
+        x = x_try;
+        f_best = f_try;
+        found = true;
+        no_improve = 0;
+        break;
       }
       alpha *= 0.5;
     }
     if (!found) {
       no_improve++;
-      if (no_improve >= patience) {converged = true; break;}
+      if (no_improve >= patience) {break;}
     }
   }
+  iters_out = iter;
   converged = true;
   return x;
 }
@@ -374,14 +720,16 @@ bool BSplineOptimizer::fit(
   // 不使用均匀间距, 而是沿 ARC LENGTH 均匀选取原始航点子集对应的参数。
   // 这样可保留路径的几何形状。
   state_.control_points.resize(2, M);
+  int best_idx = 0;
   for (int i = 0; i < M; ++i) {
     // 将索引 i (0..M-1) 映射到弧长比例, 再找到最近的 chord 参数
     double target_arc_frac = static_cast<double>(i) / static_cast<double>(M - 1);
-    int best_idx = 0;
-    double best_dist = 1e9;
-    for (int j = 0; j < n_pts; ++j) {
-      double d = std::abs(state_.parameters(j) - target_arc_frac);
-      if (d < best_dist) {best_dist = d; best_idx = j;}
+    // parameters 单调递增, 用双指针线性扫描代替 O(M·N) 全量搜索。
+    while (best_idx + 1 < n_pts &&
+      std::abs(state_.parameters(best_idx + 1) - target_arc_frac) <
+      std::abs(state_.parameters(best_idx) - target_arc_frac))
+    {
+      ++best_idx;
     }
     // 在此航点的 chord-length 参数处对密集样条求值
     double u = state_.parameters(best_idx);
@@ -477,7 +825,8 @@ double BSplineOptimizer::computeCurvatureEnergy() const
 BSplineResult BSplineOptimizer::optimize(int num_samples)
 {
   BSplineResult result{};
-  if (!fitted_ || !spline_) {return result;}
+  // spline_ 可能为空 (短路径线性兜底分支): 由 sample() 的线性回退处理
+  if (!fitted_) {return result;}
 
   const int M = static_cast<int>(state_.control_points.cols());
   if (M < 3) {
@@ -510,17 +859,20 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     double ly = state_.control_points(1, M - 1);
 
     bool converged{};
+    int iters_out{};
+    const auto cc = buildCostCache(
+      state_.knots, M, state_.original_points, state_.parameters);
     auto opt = gradientDescent(
-      params, state_.knots, state_.original_points, state_.parameters,
-      fx, fy, lx, ly, M,
-      config_.smoothness_weight, config_.distance_weight,
-      config_.obstacle_weight,
-      state_.costmap_data, state_.costmap_w, state_.costmap_h,
-      state_.esdf_distance, state_.esdf_w, state_.esdf_h,
+      params, cc,
+      fx, fy, lx, ly,
+      config_.smoothness_weight, 1.0,  // J_dist 权重固定为 1.0
+      state_.esdf_distance, state_.esdf_gradient_x, state_.esdf_gradient_y,
+      state_.esdf_w, state_.esdf_h,
       state_.esdf_resolution, state_.esdf_origin_x, state_.esdf_origin_y,
       state_.esdf_max_distance,
       config_.esdf_safe_distance, config_.esdf_weight,
-      config_.max_iterations, config_.corridor_halfwidth, converged);
+      config_.max_iterations, config_.corridor_halfwidth, converged, iters_out);
+    result.iterations = iters_out;
 
     for (int i = 0; i < n_interior; ++i) {
       state_.control_points(0, i + 1) = opt[2 * i];
@@ -528,7 +880,7 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     }
   }
 
-  // ── 第2步: 控制点的障碍物避让投射 ──
+  // ── 第2步: 控制点的障碍物避让投射 (螺旋搜索) ──
   if (state_.costmap_data != nullptr) {
     for (int i = 1; i < M - 1; ++i) {
       double & cx = state_.control_points(0, i);
@@ -541,15 +893,8 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
   rebuildSpline();
 
-  // ── 第3步: 采样路径并对每个采样点做障碍物检查 ──
+  // ── 第3步: 采样输出路径 ──
   auto path = sample(num_samples);
-  if (state_.costmap_data != nullptr) {
-    for (auto & [px, py] : path) {
-      projectPointToFree(
-        state_.costmap_data, state_.costmap_w,
-        state_.costmap_h, px, py);
-    }
-  }
 
   result.smoothed_path = std::move(path);
   result.curvature_profile.resize(num_samples);

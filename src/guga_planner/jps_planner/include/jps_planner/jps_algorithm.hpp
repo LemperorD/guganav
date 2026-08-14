@@ -137,4 +137,30 @@ namespace jps_planner {
                                             int y);
   };
 
+  // ────────────────────────────────────────────────────────────
+  // 路径后处理
+  // ────────────────────────────────────────────────────────────
+
+  /**
+   * @brief 把"贴障碍的对角段"改写为两段正交移动 (水平/垂直各一格)。
+   *
+   * JPS 对角规则允许单侧贴障碍 (两个相邻格之一可通行即可), 这类对角段
+   * 经过 B-spline 平滑时会在转角内侧切角, 产生锯齿并触发下游碰撞检查回退。
+   * 本函数在路径层处理:
+   *   对角单位步若恰好一侧相邻格被阻塞 → 改走空闲侧正交格再到对角格
+   *   (纯水平+垂直, 不产生贴障碍对角段);
+   *   两侧都空闲 → 保持对角; 两侧都阻塞 (对角夹缝) → 保持对角。
+   *
+   * @param path          地图坐标路径 (格元中心)。
+   * @param costmap_data  代价地图原始数据 (非拥有, 可为 nullptr)。
+   * @param cm_w, cm_h    代价地图尺寸 (格元)。
+   * @param allow_unknown 未知空间 (255) 是否视为可通行。
+   * @return 处理后的路径。
+   */
+  [[nodiscard]] std::vector<std::pair<double, double>>
+  detourCornerHuggingDiagonals(
+      const std::vector<std::pair<double, double>>& path,
+      const unsigned char* costmap_data, int cm_w, int cm_h,
+      bool allow_unknown);
+
 }  // namespace jps_planner

@@ -72,6 +72,8 @@ namespace jps_planner {
       }
 
       // 禁止从两个阻断格之间斜穿；允许贴着单个阻断格绕角。
+      // 注意: 对角裁剪/强制邻居规则与该行为配套, 不可单独收紧为
+      // "两侧都需可通行"——那会导致绕墙缺口等场景搜不到路径。
       return isTraversableCell(c, s, x + dx, y)
              || isTraversableCell(c, s, x, y + dy);
     }
@@ -527,6 +529,85 @@ namespace jps_planner {
     }
     // 代价值 < 253 的格元可通行
     return cost < INSCRIBED_COST;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // detourCornerHuggingDiagonals — 路径层去对角贴障碍
+  //
+  // JPS 对角规则允许单侧贴障碍 (canStep: 两个相邻格之一可通行即可),
+  // 这类对角段经过 B-spline 平滑时会在转角内侧切角, 产生锯齿并触发
+  // isPathCollisionFree 回退。此处不修改搜索 (搜索的裁剪/强制邻居规则
+  // 与该对角行为配套), 而是在路径层把贴障碍的对角段改写为正交移动。
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  std::vector<std::pair<double, double>> detourCornerHuggingDiagonals(
+      const std::vector<std::pair<double, double>>& path,
+      const unsigned char* costmap_data, int cm_w, int cm_h,
+      bool allow_unknown) {
+    if (path.size() < 2 || costmap_data == nullptr) {
+      return path;
+    }
+
+    auto blocked = [&](double cx, double cy) {
+        const int ix = static_cast<int>(cx);
+        const int iy = static_cast<int>(cy);
+        if (ix < 0 || ix >= cm_w || iy < 0 || iy >= cm_h) {
+          return true;
+        }
+        const unsigned char cost =
+            costmap_data[static_cast<size_t>(iy * cm_w + ix)];
+        if (cost == UNKNOWN_COST) {
+          return !allow_unknown;
+        }
+        return cost >= INSCRIBED_COST;
+      };
+
+    std::vector<std::pair<double, double>> out{};
+    out.reserve(path.size() * 2);
+    out.push_back(path.front());
+
+    for (size_t i = 1; i < path.size(); ++i) {
+      const double x0 = path[i - 1].first;
+      const double y0 = path[i - 1].second;
+      const double x1 = path[i].first;
+      const double y1 = path[i].second;
+      const int adx = static_cast<int>(std::lround(x1 - x0));
+      const int ady = static_cast<int>(std::lround(y1 - y0));
+
+      if (adx == 0 || ady == 0) {
+        out.push_back(path[i]);
+        continue;
+      }
+
+      const int steps = std::max(std::abs(adx), std::abs(ady));
+      const double sx = (adx > 0) ? 1.0 : -1.0;
+      const double sy = (ady > 0) ? 1.0 : -1.0;
+      double cx = x0;
+      double cy = y0;
+
+      for (int s = 0; s < steps; ++s) {
+        const double hx = cx + sx;  // 水平相邻格 (x+dx, y)
+        const double hy = cy;
+        const double vx = cx;       // 垂直相邻格 (x, y+dy)
+        const double vy = cy + sy;
+        const bool h_free = !blocked(hx, hy);
+        const bool v_free = !blocked(vx, vy);
+
+        if (h_free != v_free) {
+          // 恰好一侧被阻塞: 先走空闲侧正交格, 再水平/垂直到对角格
+          if (h_free) {
+            out.emplace_back(hx, hy);
+          } else {
+            out.emplace_back(vx, vy);
+          }
+        }
+
+        cx += sx;
+        cy += sy;
+        out.emplace_back(cx, cy);
+      }
+    }
+    return out;
   }
 
 }  // namespace jps_planner

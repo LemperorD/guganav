@@ -17,6 +17,7 @@
 #define PB_NAV2_PLUGINS__BEHAVIORS__BACK_UP_FREE_SPACE_HPP_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,14 @@ public:
   nav2_behaviors::Status onCycleUpdate() override;
 
 protected:
+  struct EscapeDirection
+  {
+    float angle;
+    float escape_distance;
+    float command_distance;
+    bool started_in_high_cost;
+  };
+
   /**
    * @brief Gather free points within a specified radius from the center in the costmap.
    *
@@ -79,22 +88,44 @@ protected:
   std::vector<geometry_msgs::msg::Point> gatherFreePoints(
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float radius);
 
-  float findBestDirection(
+  /**
+   * @brief Find a collision-free omnidirectional recovery command.
+   *
+   * @param costmap Costmap used to evaluate sampled rays and endpoint footprints.
+   * @param pose Robot pose in the costmap global frame.
+   * @param start_angle First sampled direction in radians.
+   * @param end_angle Last sampled direction in radians.
+   * @param requested_distance Maximum command distance for a normal-cost start.
+   * @param angle_increment Angular spacing between sampled directions in radians.
+   * @return The selected direction, distance to leave the initial high-cost region, and safe
+   * command distance; std::nullopt when no valid direction exists.
+   */
+  std::optional<EscapeDirection> findBestDirection(
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float start_angle,
-    float end_angle, float radius, float angle_increment);
+    float end_angle, float requested_distance, float angle_increment);
+
+  bool isOmniCollisionFree(
+    const double & distance, geometry_msgs::msg::Twist * cmd_vel,
+    geometry_msgs::msg::Pose2D & pose2d);
 
   void visualize(
-    geometry_msgs::msg::Pose2D pose, float radius, float first_safe_angle, float last_unsafe_angle);
+    geometry_msgs::msg::Pose2D pose, float radius, float first_safe_angle, float last_safe_angle,
+    float best_angle);
 
   rclcpp::Client<nav2_msgs::srv::GetCostmap>::SharedPtr costmap_client_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
     marker_pub_;
-  double twist_x_, twist_y_;
+  double twist_x_{0.0};
+  double twist_y_{0.0};
+  double collision_check_start_distance_{0.0};
+  bool escaping_initial_high_cost_{false};
 
   // parameters
   std::string service_name_;
-  double max_radius_;
-  bool visualize_;
+  double max_radius_{1.0};
+  double max_escape_distance_{0.5};
+  double escape_clearance_{0.1};
+  bool visualize_{false};
 };
 
 }  // namespace pb_nav2_behaviors

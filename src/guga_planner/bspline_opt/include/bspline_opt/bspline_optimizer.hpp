@@ -14,8 +14,8 @@ namespace bspline_opt
  * @brief B-spline 轨迹优化的不可变配置。
  *
  * @note  默认值已调校: fit() 生成精确插值样条,
- *        optimize() 仅执行障碍物避让后投射。
- *        梯度下降默认关闭 (精确插值样条无需平滑)。
+ *        optimize() 做几何优化 (平滑 + 距离保持) + ESDF 梯度避障
+ *        与控制点避障投射。
  */
 struct BSplineConfig
 {
@@ -23,14 +23,12 @@ struct BSplineConfig
 
   // ── 优化权重 ──
   double smoothness_weight{0.1};    // 低: 不主导插值精度
-  double distance_weight{10.0};     // 低: 样条已精确插值
-  double obstacle_weight{50000.0};  // 高: 严格障碍物避让
   double esdf_weight{100.0};        // ESDF distance field obstacle-avoidance weight
 
   // ── 调校参数 ──
   int max_iterations{200};          // 梯度下降最大迭代次数
-  bool enable_gradient_descent{false}; // 默认关闭 — 插值已是最优
-  bool enable_esdf{false};          // enable ESDF distance-field gradient optimization
+  bool enable_gradient_descent{true}; // 默认开启几何优化
+  bool enable_esdf{true};          // enable ESDF distance-field gradient optimization
   double esdf_safe_distance{0.3};   // ESDF safe distance (m, min dist from path to obstacle)
   double corridor_halfwidth{2.5};   // 可移动走廊半宽度 (格元)
   int max_control_points{200};      // 默认使用全部插值控制点
@@ -100,7 +98,7 @@ struct BSplineResult
  * @class BSplineOptimizer
  * @brief B-spline 拟合, 支持可选的梯度下降优化。
  *
- * ## 默认算法 (不启用梯度下降)
+ * ## 默认算法 (几何平滑 + ESDF 梯度避障 + 控制点投射)
  *
  * ```
  *   输入: JPS 航点 (N 个)
@@ -111,12 +109,13 @@ struct BSplineResult
  *        ▼ (提取 N 个控制点)
  *   BSplineState::control_points
  *        │
- *        ▼ (控制点 + 采样点的障碍物避让后投射)
+ *        ▼ (可选梯度下降: 平滑/距离/ESDF → 控制点螺旋投射)
  *   rebuildSpline() → sample(N_out) → BSplineResult
  * ```
  *
  * ## 代价函数 (仅在启用梯度下降时)
- *   J(P) = w_s·∫‖C''‖² du + w_d·Σ‖C(τᵢ)–qᵢ‖² + w_o·Σ penalty(障碍物)
+ *   J(P) = w_s·∫‖C''‖² du + w_d·Σ‖C(τᵢ)–qᵢ‖²
+ *        + w_e·Σ [max(0, d_safe - d_esdf(pᵢ))]²
  *
  * @see docs/DESIGN.md 查看完整设计原理。
  */
@@ -129,7 +128,7 @@ public:
    * @brief 通过 SplineFitting::Interpolate 将 7 阶 B-spline 拟合到 JPS 航点。
    *
    * 所有航点被精确插值 (控制点数 = N)。不做降采样 —
-   * 调用 optimize() 进行障碍物避让处理。
+   * 调用 optimize() 进行几何优化与采样。
    *
    * @param path  地图坐标下的 JPS 航点 (≥8 个方可使用完整 B-spline)。
    * @return 拟合成功返回 true。
@@ -138,16 +137,11 @@ public:
     const std::vector<std::pair<double, double>> & path);
 
   /**
-   * @brief 对样条进行后处理, 确保避障。
+   * @brief 对样条进行几何优化, 并对内部控制点做避障投射后采样输出。
    *
-   * 梯度下降关闭时 (默认):
-   *   — 将落在障碍物格元内的控制点投射到最近空闲格元
-   *   — 对采样路径点逐一检查并修正障碍物冲突
-   *   — 返回包含曲率曲线和统计信息的 BSplineResult
-   *
-   * 梯度下降开启时:
-   *   — 先用数值梯度下降优化内部控制点位置
-   *   — 再执行同上后处理
+   * 启用梯度下降时先用代价函数 (平滑 + 距离 + ESDF) 优化内部控制点位置,
+   * 然后对落在障碍物格元内的控制点做螺旋搜索投射 (若注入代价地图),
+   * 最后重建样条并采样, 返回包含曲率曲线和统计信息的 BSplineResult。
    *
    * @param num_samples  输出航点数量。
    * @return 优化结果。
