@@ -100,6 +100,16 @@ sensor_scan_generation:
     max_linear_velocity: 10.0
     max_angular_velocity: 20.0
 
+# sensor_scan_generation_old:
+#   ros__parameters:
+#     use_sim_time: True
+#     lidar_frame: "front_mid360"
+#     base_frame: "base_footprint"
+#     robot_base_frame: "gimbal_yaw"
+#     min_odometry_dt: 0.001
+#     max_linear_velocity: 10.0
+#     max_angular_velocity: 20.0
+
 terrain_analysis:
   ros__parameters:
     scanVoxelSize: 0.05                 # 点云下采样
