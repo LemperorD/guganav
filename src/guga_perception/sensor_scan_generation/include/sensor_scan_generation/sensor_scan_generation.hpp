@@ -112,6 +112,8 @@ private: // 优化: 使用单独的四个线程执行本功能包的四个并行
 
   // 线程间共享的标志变量
   bool sensor_scan_ready_{false};
+  bool chassis_odom_ready_{false};
+  bool robot_base_odom_ready_{false};
 };
 
 }  // namespace sensor_scan_generation

@@ -100,7 +100,11 @@ void SensorScanGenerationNode::laserCloudAndOdometryHandler(
   tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, pcd_msg->header.stamp);
   tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, pcd_msg->header.stamp);
 
-  tf_odom_to_chassis_ = tf_odom_to_lidar_ * tf_lidar_to_chassis;
+  {
+    std::lock_guard<std::mutex> lock(chassis_tf_mutex_);
+    tf_odom_to_chassis_ = tf_odom_to_lidar_ * tf_lidar_to_chassis;
+    chassis_odom_ready_ = true;
+  }
   tf_odom_to_robot_base_ = tf_odom_to_lidar_ * tf_lidar_to_robot_base_;
 
   publishTransform(
