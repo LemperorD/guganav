@@ -66,6 +66,24 @@ SensorScanGenerationNode::SensorScanGenerationNode(const rclcpp::NodeOptions & o
   sync_->registerCallback(std::bind(
     &SensorScanGenerationNode::laserCloudAndOdometryHandler, this, std::placeholders::_1,
     std::placeholders::_2));
+
+  
+}
+
+// 析构函数,释放线程资源
+SensorScanGenerationNode::~SensorScanGenerationNode() {
+  if (chassis_tf_thread_.joinable()) {
+    chassis_tf_thread_.join();
+  }
+  if (chassis_odom_thread_.joinable()) {
+    chassis_odom_thread_.join();
+  }
+  if (robot_base_odom_thread_.joinable()) {
+    robot_base_odom_thread_.join();
+  }
+  if (sensor_scan_thread_.joinable()) {
+    sensor_scan_thread_.join();
+  }
 }
 
 void SensorScanGenerationNode::laserCloudAndOdometryHandler(
@@ -73,21 +91,19 @@ void SensorScanGenerationNode::laserCloudAndOdometryHandler(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pcd_msg)
 {
   tf2::Transform tf_lidar_to_chassis;
-  tf2::Transform tf_odom_to_chassis;
-  tf2::Transform tf_odom_to_robot_base;
   tf2::Transform tf_odom_to_lidar;
 
   tf2::fromMsg(odometry_msg->pose.pose, tf_odom_to_lidar);
   tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, pcd_msg->header.stamp);
   tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, pcd_msg->header.stamp);
 
-  tf_odom_to_chassis = tf_odom_to_lidar * tf_lidar_to_chassis;
-  tf_odom_to_robot_base = tf_odom_to_lidar * tf_lidar_to_robot_base_;
+  tf_odom_to_chassis_ = tf_odom_to_lidar * tf_lidar_to_chassis;
+  tf_odom_to_robot_base_ = tf_odom_to_lidar * tf_lidar_to_robot_base_;
 
   publishTransform(
-    tf_odom_to_chassis, odometry_msg->header.frame_id, base_frame_, pcd_msg->header.stamp);
+    tf_odom_to_chassis_, odometry_msg->header.frame_id, base_frame_, pcd_msg->header.stamp);
   publishOdometry(
-    tf_odom_to_robot_base, odometry_msg->header.frame_id, robot_base_frame_, pcd_msg->header.stamp);
+    tf_odom_to_robot_base_, odometry_msg->header.frame_id, robot_base_frame_, pcd_msg->header.stamp);
 
   sensor_msgs::msg::PointCloud2 out;
   pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar.inverse(), *pcd_msg, out);

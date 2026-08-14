@@ -68,9 +68,10 @@ void LoamInterfaceNode::odometryCallback(const nav_msgs::msg::Odometry::ConstSha
     try {
       auto tf_stamped = tf_buffer_->lookupTransform(
         base_frame_, lidar_frame_, msg->header.stamp, rclcpp::Duration::from_seconds(0.5));
-      tf2::Transform tf_base_frame_to_lidar;
-      tf2::fromMsg(tf_stamped.transform, tf_base_frame_to_lidar);
-      tf_odom_to_lidar_odom_ = tf_base_frame_to_lidar;
+      // tf2::Transform tf_base_frame_to_lidar;
+      // tf2::fromMsg(tf_stamped.transform, tf_base_frame_to_lidar);
+      // tf_odom_to_lidar_odom_ = tf_base_frame_to_lidar;
+      tf2::fromMsg(tf_stamped.transform, tf_odom_to_lidar_odom_); // 这里一条好像够了喵~
       base_frame_to_lidar_initialized_ = true;
     } catch (tf2::TransformException & ex) {
       RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());

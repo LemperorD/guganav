@@ -35,6 +35,7 @@ class SensorScanGenerationNode : public rclcpp::Node
 {
 public:
   explicit SensorScanGenerationNode(const rclcpp::NodeOptions & options);
+  ~SensorScanGenerationNode();
 
 private:
   void laserCloudAndOdometryHandler(
@@ -59,6 +60,7 @@ private:
   std::unique_ptr<tf2_ros::TransformBroadcaster> br_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_laser_cloud_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_chassis_odometry_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_robot_base_odometry_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -77,6 +79,16 @@ private:
   double min_odometry_dt_{1e-3};
   double max_linear_velocity_{10.0};
   double max_angular_velocity_{20.0};
+  
+private: // 优化: 使用单独的四个线程执行本功能包的四个并行人物
+  tf2::Transform tf_odom_to_robot_base_;
+  tf2::Transform tf_odom_to_chassis_;
+  sensor_msgs::msg::PointCloud2 out;
+
+  std::thread chassis_tf_thread_;
+  std::thread chassis_odom_thread_;
+  std::thread robot_base_odom_thread_;
+  std::thread sensor_scan_thread_;
 };
 
 }  // namespace sensor_scan_generation
