@@ -331,7 +331,7 @@ bt_navigator:
 controller_server:
   ros__parameters:
     use_sim_time: True
-    odom_topic: odometry
+    odom_topic: odometry # odom -> gimbal_yaw
     controller_frequency: 60.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5

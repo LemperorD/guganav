@@ -15,8 +15,12 @@
 #ifndef SENSOR_SCAN_GENERATION__SENSOR_SCAN_GENERATION_HPP_
 #define SENSOR_SCAN_GENERATION__SENSOR_SCAN_GENERATION_HPP_
 
+// #define BACKWARD_DEBUG_GUGUGAGA
+#define TEST_TIME
+
 #include <memory>
 #include <string>
+#include <chrono>
 
 #include "message_filters/subscriber.h"
 #include "message_filters/sync_policies/approximate_time.h"
@@ -27,6 +31,16 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
+
+#include "guga_common/backward.hpp"
+#include "guga_common/common_libs.hpp"
+
+#ifdef BACKWARD_DEBUG_GUGUGAGA
+namespace backward{
+  // I'll see u on the dark side of the moon.
+  backward::SignalHandling sh;
+}
+#endif
 
 namespace sensor_scan_generation
 {
@@ -49,13 +63,19 @@ private:
     const tf2::Transform & transform, const std::string & parent_frame,
     const std::string & child_frame, const rclcpp::Time & stamp);
 
-  void publishOdometry(
+  void publishChassisOdometry(
     const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
     const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr);
 
+  void publishRobotBaseOdometry(
+    const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
+    const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr);
+
+  std::string odom_frame_;
   std::string lidar_frame_;
   std::string base_frame_;
   std::string robot_base_frame_;
+  builtin_interfaces::msg::Time last_pcd_stamp_;
 
   std::unique_ptr<tf2_ros::TransformBroadcaster> br_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_laser_cloud_;
@@ -73,9 +93,15 @@ private:
   std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
 
   tf2::Transform tf_lidar_to_robot_base_;
-  tf2::Transform previous_odometry_transform_;
-  rclcpp::Time previous_odometry_stamp_;
-  bool has_previous_odometry_{false};
+
+  tf2::Transform previous_chassis_odometry_transform_;
+  rclcpp::Time previous_chassis_odometry_stamp_;
+  bool has_previous_chassis_odometry_{false};
+
+  tf2::Transform previous_robot_base_odometry_transform_;
+  rclcpp::Time previous_robot_base_odometry_stamp_;
+  bool has_previous_robot_base_odometry_{false};
+
   double min_odometry_dt_{1e-3};
   double max_linear_velocity_{10.0};
   double max_angular_velocity_{20.0};
@@ -113,6 +139,7 @@ private: // 优化: 使用单独的四个线程执行本功能包的四个并行
   // 线程间共享的标志变量
   bool sensor_scan_ready_{false};
   bool chassis_odom_ready_{false};
+  bool chassis_tf_ready_{false};
   bool robot_base_odom_ready_{false};
 };
 

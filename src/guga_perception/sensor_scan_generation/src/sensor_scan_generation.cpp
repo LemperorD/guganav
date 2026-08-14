@@ -46,6 +46,7 @@ SensorScanGenerationNode::SensorScanGenerationNode(const rclcpp::NodeOptions & o
 
   pub_laser_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("sensor_scan", 2);
   pub_chassis_odometry_ = this->create_publisher<nav_msgs::msg::Odometry>("odometry", 2);
+  pub_robot_base_odometry_ = this->create_publisher<nav_msgs::msg::Odometry>("robot_base_odometry", 2);
 
   rmw_qos_profile_t qos_profile = {
     RMW_QOS_POLICY_HISTORY_KEEP_LAST,
@@ -94,27 +95,34 @@ void SensorScanGenerationNode::laserCloudAndOdometryHandler(
   const nav_msgs::msg::Odometry::ConstSharedPtr & odometry_msg,
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pcd_msg)
 {
+#ifdef TEST_TIME
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
+#endif
+
   tf2::Transform tf_lidar_to_chassis;
+  odom_frame_ = odometry_msg->header.frame_id;
+  last_pcd_stamp_ = pcd_msg->header.stamp;
 
   tf2::fromMsg(odometry_msg->pose.pose, tf_odom_to_lidar_);
-  tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, pcd_msg->header.stamp);
-  tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, pcd_msg->header.stamp);
+  tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, last_pcd_stamp_);
+  tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
 
   {
     std::lock_guard<std::mutex> lock(chassis_tf_mutex_);
+    std::lock_guard<std::mutex> lock2(chassis_odom_mutex_);
     tf_odom_to_chassis_ = tf_odom_to_lidar_ * tf_lidar_to_chassis;
     chassis_odom_ready_ = true;
+    chassis_tf_ready_ = true;
   }
-  tf_odom_to_robot_base_ = tf_odom_to_lidar_ * tf_lidar_to_robot_base_;
+  chassis_odom_cv_.notify_one();
+  chassis_tf_cv_.notify_one();
 
-  publishTransform(
-    tf_odom_to_chassis_, odometry_msg->header.frame_id, base_frame_, pcd_msg->header.stamp);
-  publishOdometry(
-    tf_odom_to_robot_base_, odometry_msg->header.frame_id, robot_base_frame_, pcd_msg->header.stamp, pub_chassis_odometry_);
-
-  // sensor_msgs::msg::PointCloud2 out;
-  // pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar.inverse(), *pcd_msg, out);
-  // pub_laser_cloud_->publish(out);
+  {
+    std::lock_guard<std::mutex> lock(robot_base_odom_mutex_);
+    tf_odom_to_robot_base_ = tf_odom_to_lidar_ * tf_lidar_to_robot_base_;
+    robot_base_odom_ready_ = true;
+  }
+  robot_base_odom_cv_.notify_one();
 
   {
     std::lock_guard<std::mutex> lock(sensor_scan_mutex_);
@@ -122,6 +130,12 @@ void SensorScanGenerationNode::laserCloudAndOdometryHandler(
     in_ = *pcd_msg;
   }
   sensor_scan_cv_.notify_one();
+
+#ifdef TEST_TIME
+  std::chrono::time_point<std::chrono::high_resolution_clock> end_time = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> duration = end_time - start_time;
+  std::cout << CYAN_LIGHT <<"laserCloudAndOdometryHandler duration: " << duration.count() << " ms" << RESET << std::endl;
+#endif
 }
 
 tf2::Transform SensorScanGenerationNode::getTransform(
@@ -151,7 +165,7 @@ void SensorScanGenerationNode::publishTransform(
   br_->sendTransform(transform_msg);
 }
 
-void SensorScanGenerationNode::publishOdometry(
+void SensorScanGenerationNode::publishChassisOdometry(
   const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
   const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr)
 {
@@ -166,14 +180,14 @@ void SensorScanGenerationNode::publishOdometry(
   out.pose.pose.position.z = origin.z();
   out.pose.pose.orientation = tf2::toMsg(transform.getRotation());
 
-  if (has_previous_odometry_) {
-    const double dt = (stamp - previous_odometry_stamp_).seconds();
+  if (has_previous_chassis_odometry_) {
+    const double dt = (stamp - previous_chassis_odometry_stamp_).seconds();
     if (dt > min_odometry_dt_) {
       const auto linear_velocity =
-        (transform.getOrigin() - previous_odometry_transform_.getOrigin()) / dt;
+        (transform.getOrigin() - previous_chassis_odometry_transform_.getOrigin()) / dt;
 
       tf2::Quaternion q_diff =
-        transform.getRotation() * previous_odometry_transform_.getRotation().inverse();
+        transform.getRotation() * previous_chassis_odometry_transform_.getRotation().inverse();
       q_diff.normalize();
       const double angle = std::remainder(q_diff.getAngle(), 2.0 * M_PI);
       const auto angular_velocity = q_diff.getAxis() * angle / dt;
@@ -202,40 +216,116 @@ void SensorScanGenerationNode::publishOdometry(
     }
   }
 
-  previous_odometry_transform_ = transform;
-  previous_odometry_stamp_ = stamp;
-  has_previous_odometry_ = true;
+  previous_chassis_odometry_transform_ = transform;
+  previous_chassis_odometry_stamp_ = stamp;
+  has_previous_chassis_odometry_ = true;
+
+  odom_pub_ptr->publish(out);
+}
+
+void SensorScanGenerationNode::publishRobotBaseOdometry(
+  const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
+  const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr)
+{
+  nav_msgs::msg::Odometry out;
+  out.header.stamp = stamp;
+  out.header.frame_id = parent_frame;
+  out.child_frame_id = child_frame;
+
+  const auto & origin = transform.getOrigin();
+  out.pose.pose.position.x = origin.x();
+  out.pose.pose.position.y = origin.y();
+  out.pose.pose.position.z = origin.z();
+  out.pose.pose.orientation = tf2::toMsg(transform.getRotation());
+
+  if (has_previous_robot_base_odometry_) {
+    const double dt = (stamp - previous_robot_base_odometry_stamp_).seconds();
+    if (dt > min_odometry_dt_) {
+      const auto linear_velocity =
+        (transform.getOrigin() - previous_robot_base_odometry_transform_.getOrigin()) / dt;
+
+      tf2::Quaternion q_diff =
+        transform.getRotation() * previous_robot_base_odometry_transform_.getRotation().inverse();
+      q_diff.normalize();
+      const double angle = std::remainder(q_diff.getAngle(), 2.0 * M_PI);
+      const auto angular_velocity = q_diff.getAxis() * angle / dt;
+
+      const double linear_speed = linear_velocity.length();
+      const double angular_speed = angular_velocity.length();
+      if (
+        std::isfinite(linear_speed) && std::isfinite(angular_speed) &&
+        linear_speed <= max_linear_velocity_ && angular_speed <= max_angular_velocity_) {
+        out.twist.twist.linear.x = linear_velocity.x();
+        out.twist.twist.linear.y = linear_velocity.y();
+        out.twist.twist.linear.z = linear_velocity.z();
+        out.twist.twist.angular.x = angular_velocity.x();
+        out.twist.twist.angular.y = angular_velocity.y();
+        out.twist.twist.angular.z = angular_velocity.z();
+      } else {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "Discard odometry twist spike: dt=%.6f, linear=%.3f, angular=%.3f",
+          dt, linear_speed, angular_speed);
+      }
+    } else {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "Skip odometry twist update because dt is too small or non-positive: %.6f", dt);
+    }
+  }
+
+  previous_robot_base_odometry_transform_ = transform;
+  previous_robot_base_odometry_stamp_ = stamp;
+  has_previous_robot_base_odometry_ = true;
 
   odom_pub_ptr->publish(out);
 }
 
 void SensorScanGenerationNode::updateChassisTF() {
-  rclcpp::Rate rate(100); // 100 Hz
   while (rclcpp::ok()) {
-    std::cout << "Updating chassis TF..." << std::endl;
-    // publishTransform(
-    //   tf_odom_to_chassis_, "odom", base_frame_, this->now());
-    rate.sleep();
+    tf2::Transform input;
+    {
+      std::unique_lock<std::mutex> lock(chassis_tf_mutex_);
+      chassis_tf_cv_.wait(lock, [this]() {
+        return chassis_tf_ready_ || !rclcpp::ok();
+      });
+    }
+    input = tf_odom_to_chassis_;
+    chassis_tf_ready_ = false;
+    if (!rclcpp::ok()) { return; }
+    publishTransform(input, odom_frame_, base_frame_, last_pcd_stamp_);
   }
 }
 
 void SensorScanGenerationNode::updateChassisOdometry() {
-  rclcpp::Rate rate(100); // 100 Hz
   while (rclcpp::ok()) {
-    std::cout << "Updating chassis odometry..." << std::endl;
-    // publishOdometry(
-    //   tf_odom_to_chassis_, "odom", base_frame_, this->now(), pub_chassis_odometry_);
-    rate.sleep();
+    tf2::Transform input;
+    {
+      std::unique_lock<std::mutex> lock(chassis_odom_mutex_);
+      chassis_odom_cv_.wait(lock, [this]() {
+        return chassis_odom_ready_ || !rclcpp::ok();
+      });
+    }
+    input = tf_odom_to_chassis_;
+    chassis_odom_ready_ = false;
+    if (!rclcpp::ok()) { return; }
+    publishChassisOdometry(input, odom_frame_, base_frame_, last_pcd_stamp_, pub_chassis_odometry_);
   }
 }
 
 void SensorScanGenerationNode::updateRobotBaseOdometry() {
-  rclcpp::Rate rate(100); // 100 Hz
   while (rclcpp::ok()) {
-    std::cout << "Updating robot base odometry..." << std::endl;
-    // publishOdometry(
-    //   tf_odom_to_robot_base_, "odom", robot_base_frame_, this->now(), pub_robot_base_odometry_);
-    rate.sleep();
+    tf2::Transform input;
+    {
+      std::unique_lock<std::mutex> lock(robot_base_odom_mutex_);
+      robot_base_odom_cv_.wait(lock, [this]() {
+        return robot_base_odom_ready_ || !rclcpp::ok();
+      });
+    }
+    input = tf_odom_to_robot_base_;
+    robot_base_odom_ready_ = false;
+    if (!rclcpp::ok()) { return; }
+    publishRobotBaseOdometry(input, odom_frame_, robot_base_frame_, last_pcd_stamp_, pub_robot_base_odometry_);
   }
 }
 
@@ -252,7 +342,7 @@ void SensorScanGenerationNode::updateSensorScan() {
       input = in_;
       sensor_scan_ready_ = false;
       if (!rclcpp::ok()) { return; }
-      pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar_.inverse(), in_, out_);
+      pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar_.inverse(), input, out_);
     }
     pub_laser_cloud_->publish(out_);
   }
