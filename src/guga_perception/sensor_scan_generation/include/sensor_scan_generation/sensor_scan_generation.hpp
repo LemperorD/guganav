@@ -51,7 +51,7 @@ private:
 
   void publishOdometry(
     const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
-    const rclcpp::Time & stamp);
+    const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr);
 
   std::string lidar_frame_;
   std::string base_frame_;

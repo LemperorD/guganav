@@ -103,7 +103,7 @@ void SensorScanGenerationNode::laserCloudAndOdometryHandler(
   publishTransform(
     tf_odom_to_chassis_, odometry_msg->header.frame_id, base_frame_, pcd_msg->header.stamp);
   publishOdometry(
-    tf_odom_to_robot_base_, odometry_msg->header.frame_id, robot_base_frame_, pcd_msg->header.stamp);
+    tf_odom_to_robot_base_, odometry_msg->header.frame_id, robot_base_frame_, pcd_msg->header.stamp, pub_chassis_odometry_);
 
   sensor_msgs::msg::PointCloud2 out;
   pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar.inverse(), *pcd_msg, out);
@@ -139,7 +139,7 @@ void SensorScanGenerationNode::publishTransform(
 
 void SensorScanGenerationNode::publishOdometry(
   const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
-  const rclcpp::Time & stamp)
+  const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr)
 {
   nav_msgs::msg::Odometry out;
   out.header.stamp = stamp;
@@ -192,7 +192,7 @@ void SensorScanGenerationNode::publishOdometry(
   previous_odometry_stamp_ = stamp;
   has_previous_odometry_ = true;
 
-  pub_chassis_odometry_->publish(out);
+  odom_pub_ptr->publish(out);
 }
 
 }  // namespace sensor_scan_generation
