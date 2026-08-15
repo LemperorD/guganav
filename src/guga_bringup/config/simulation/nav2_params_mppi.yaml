@@ -381,7 +381,7 @@ controller_server:
         enabled: true
         cost_power: 1
         repulsion_weight: 1.0
-        critical_weight: 20.0
+        critical_weight: 25.0
         consider_footprint: false
         collision_cost: 10000.0
         collision_margin_distance: 0.15
@@ -391,7 +391,7 @@ controller_server:
       CostCritic:
         enabled: true
         cost_power: 10
-        cost_weight: 10.0
+        cost_weight: 12.0
         critical_cost: 300.0
         consider_footprint: false
         collision_cost: 1000000.0
@@ -409,7 +409,7 @@ controller_server:
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 12.0
+        cost_weight: 8.0
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
