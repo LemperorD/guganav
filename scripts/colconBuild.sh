@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -t | --tes)
-            PACKAGES_SELECT="point_lio nav2_mppi_controller fake_vel_transform"
+            PACKAGES_SELECT="point_lio nav2_mppi_controller nonrotating_vel_transform"
             SAFE_BUILD=true
             shift
             ;;

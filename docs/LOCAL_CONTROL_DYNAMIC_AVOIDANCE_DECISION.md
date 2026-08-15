@@ -17,7 +17,7 @@
 
 **前卫路线：在 HERO 二阶模型上扩展全向 NMPC/MPCC + 动态目标预测 + 拓扑多初值/概率约束。** 其理论上限最高：可统一处理 `vx/vy/wz`、加速度/jerk、舵轮转角与转速、静态 ESDF、动态机器人预测和不同绕行拓扑。T-MPC++/SH-MPC 的公开论文与工程实现证明了动态环境中并行拓扑轨迹和概率碰撞约束的可行性，公开工程报告典型 20–30 Hz；但其示例模型主要是二阶单车模型，不是本项目的全向 Nav2 插件，论文结果还主要使用商业 Forces Pro。HERO 代码提供了有价值的全向 acados 起点，却尚未实现上述障碍/概率/拓扑约束，故只建议作为并行研发，不阻塞 MPPI 落地。[R9][R10][R11][R21]
 
-**最重要的非算法结论：** 3 m/s 下的安全和“高精度穿越”不能由任一局部规划算法单独保证，坡道更不能沿用平地速度上限。必须先闭合 footprint、上下坡实测制动/回退距离、坡中驻车能力、最终小陀螺指令、串口 watchdog/量纲、时间同步和动态障碍观测延迟。当前 PID 已在 controller 内生成小陀螺完整 `wz`，MPPI profile 也通过 `SpinCritic` 在 rollout 中评分目标 `wz`，二者都经过 velocity smoother；但 Collision Monitor、坡道禁转包络以及 MCU watchdog/限幅仍未闭合。串口 payload 也没有可见的时间戳/序号/ACK。
+**最重要的非算法结论：** 3 m/s 下的安全和“高精度穿越”不能由任一局部规划算法单独保证，坡道更不能沿用平地速度上限。必须先闭合 footprint、上下坡实测制动/回退距离、坡中驻车能力、最终小陀螺指令、串口 watchdog/量纲、时间同步和动态障碍观测延迟。当前小陀螺自旋速度由 `nonrotating_vel_transform` 在 smoother 之后统一叠加 `cmd_spin`（PID/MPPI 在 littleTES 模式下输出 `wz=0`）；MPPI 的 `TwirlingCritic`（2d_mppi profile 默认未启用）可在 rollout 中评分自旋。但 Collision Monitor、坡道禁转包络以及 MCU watchdog/限幅仍未闭合。串口 payload 也没有可见的时间戳/序号/ACK。
 
 ## 2. 当前项目审计
 
@@ -32,7 +32,7 @@ terrain_map / terrain_map_ext
   -> JPS (global) -> 7 阶 B-spline（显式 ESDF 梯度优化为可选）-> nav_msgs/Path
   -> Omni PID Pursuit @ 20 Hz -> cmd_vel_controller
   -> Nav2 velocity_smoother @ 20 Hz
-  -> /cmd_vel -> serial_driver -> BR/0xCD/26B payload -> MCU
+  -> /cmd_vel -> serial_driver -> BR/0xCD/17B payload -> MCU
 ```
 
 | 层 | 当前已有能力 | 评审发现 |
@@ -42,8 +42,8 @@ terrain_map / terrain_map_ext
 | 当前控制器 | 全向 `vx/vy/wz`、20 Hz、速度前视、曲率/接近减速、横向误差修正、模式切换 | 只跟踪 path；碰撞检测是路径中心点采样，不是控制轨迹的 footprint 碰撞；`setSpeedLimit()` 未实现 |
 | Nav2 参数 | `v_xy<=2.5 m/s`，平滑器 `a_xy<=4.5 m/s²`；目标容差 0.15 m | `min_y_velocity_threshold=0.5 m/s` 会把低于阈值的实测横向速度当作 0，直接损害全向精细闭环；`yaw_goal_tolerance=6.28` 等于不约束终点朝向 |
 | 坡道处理 | Point-LIO 保留 6DoF pose；terrain analysis 能避免连续坡面被整体投成障碍 | `/odometry` 未输出可审计的融合速度/协方差；`/terrain_map` 的 intensity 只是离地高度，不是坡度或可通行性。controller、smoother 和串口上限仍为平地常数，未见坡度/附着/打滑速度包络或驻坡策略 [R23][R24] |
-| 小陀螺 | `simple_decision` 发布模式和转速；PID 直接输出目标 `wz`；MPPI 用 `SpinCritic`；`gimbal_cmd_vel_adapter` 不在主链 | 已经过 smoother，但仍需 Collision Monitor、坡道禁转包络和旋转 footprint 扫掠验证 |
-| 串口 | `/cmd_vel` 到 26B BR 帧；CRC8；传 `vx/vy` 两套坐标值和 `-wz`；115200 baud | 消息触发式发送；单次写最长等待 100 ms；可见协议无时间戳/序号/ACK；配置注释称 m/s→mm/s 理论比例 1000，但实际 YAML 为 50，必须核对 MCU 单位和标定 |
+| 小陀螺 | `simple_decision` 发布模式和转速；PID littleTES 下 `wz=0`；MPPI 的 `TwirlingCritic`（默认未启用）；`nonrotating_vel_transform` 负责速度坐标变换并叠加 `cmd_spin` | 已经过 smoother，但仍需 Collision Monitor、坡道禁转包络和旋转 footprint 扫掠验证 |
+| 串口 | `/cmd_vel` 到 17B BR 帧；CRC8；传 `vx/vy`（云台系，×vel_trans_scale）和 `wz`；115200 baud | 消息触发式发送；单次写最长等待 100 ms；可见协议无时间戳/序号/ACK；`vel_trans_scale` 与 MCU 单位的对应关系必须核对 |
 | 自研 MPC | acados 全向运动学模型、`vx/vy/wz` 输入上界、Nav2 插件外壳 | 未启用；状态被固定为 `{0,0,0}`；只追一个 lookahead 点；无障碍、加速度、舵轮约束；求解失败后仍读取输出；`setSpeedLimit()` 为空。当前只能视为求解器接线原型 |
 
 ### 2.2 里程计与 terrain map 专项审计
@@ -55,13 +55,13 @@ terrain_map / terrain_map_ext
 ```text
 Point-LIO `aft_mapped_to_init`（6DoF pose）
   -> loam_interface `/lidar_odometry`（转换到 odom，child=`front_mid360`）
-  -> sensor_scan_generation `/odometry`（转换到 `gimbal_yaw`）
+  -> sensor_scan_generation `/odometry`（转换到 `base_footprint`）
   -> Nav2 controller / velocity_smoother
 ```
 
 - Point-LIO 实车配置启用 IMU 测量与逐传播时刻 odometry 发布（`mapping.imu_en=True`、`publish_odometry_without_downsample=True`），但采用 `use_imu_as_input=False` 的 30 维 IMU-as-output 模式，且不发布自身 TF。配置重力向量约为 `[0, 0.187, -0.955]`；它可能是雷达安装姿态补偿，也可能是遗留标定，必须用静止多姿态与已知坡角重新核验，不能直接当真实坡度零点。
 - Point-LIO 内部状态含速度，但其公开 `Odometry` 这里只填写 pose；`loam_interface` 再次只转发 pose，不写 twist 或 pose/twist covariance。随后 `sensor_scan_generation` 用连续 pose 做一阶有限差分，只以 `10 m/s`、`20 rad/s` 阈值拒绝尖峰，没有滤波、融合状态或置信度。
-- 该差分线速度来自 `odom` 世界系坐标差，却直接写入 `child_frame_id=gimbal_yaw` 的 `twist`。ROS `nav_msgs/Odometry` 规定 pose 在 `header.frame_id`、twist 在 `child_frame_id`，因此这里存在明确的坐标语义风险。[R24] 在横移、旋转、小陀螺和坡面上，这会直接污染 MPPI/DWB 的闭环初速度。
+- 该差分线速度来自 `odom` 世界系坐标差，却直接写入 `child_frame_id=base_footprint` 的 `twist`。ROS `nav_msgs/Odometry` 规定 pose 在 `header.frame_id`、twist 在 `child_frame_id`，因此这里存在明确的坐标语义风险。[R24] 在横移、旋转、小陀螺和坡面上，这会直接污染 MPPI/DWB 的闭环初速度。
 - TF 查询失败时函数返回单位变换并继续发布，而不是丢弃该帧或标记 invalid；所有 covariance 默认为零，消费者无法区分高质量状态、陈旧状态与静默 TF 故障。实车 `controller_server.min_y_velocity_threshold=0.5 m/s` 还会把大量精细横向反馈钳成零；`velocity_smoother` 当前为 `OPEN_LOOP`，其 odom 配置不会弥补上述问题。
 
 **决策**：不要让控制器直接消费当前 `/odometry` 作为最终状态反馈。增加一个 odometry conditioning/fusion 边界：保留 Point-LIO 6DoF pose，优先使用其滤波器速度状态或经时间戳校验的滤波差分，严格转换为底盘/控制 `child_frame` 下的 `vx/vy/wz`，填写 pose/twist covariance，并发布 `valid/age/source/innovation` 质量状态。TF 失败、时间倒退或超龄时不允许 identity 代替真值。Nav2 只消费稳定的水平 `x/y/yaw` 与 body-frame `vx/vy/wz`；完整 `z/roll/pitch`、IMU 和重力方向并行提供给 terrain estimator 与坡度监督器，不建议直接扩进标准 MPPI `Omni` 状态。
@@ -136,7 +136,7 @@ MPPI 从上一周期控制序列出发，加入高斯扰动形成批量候选，
 - 坡道先使用同一 MPPI 算法的独立 `Slope` 参数/限速模式，而不是立刻切换另一套规划器：抑制横坡 `vy` 和大 `wz`，上下坡分别使用实测速度/加减速度包络；坡度状态不可信时按更保守包络运行。是否需要单独加载 `MPPISlope` 插件实例，由参数切换原子性和 A/B 结果决定。
 - 可增加 terrain critic，对候选轨迹沿途的坡度、横坡、粗糙度和坡顶盲区代价评分；它负责“选哪条路”，独立监督器负责“这条指令是否仍在实测牵引/制动包络内”。Critic 软代价不得代替下游限幅和驻坡。
 - 使用实测多边形 footprint，开启 footprint-aware cost critic；狭窄区由地形/语义层降低限速，不用单一全局膨胀半径同时承担安全和舒适距离。
-- 普通模式和小陀螺模式都由 controller 输出完整 `vx/vy/wz`；`SpinCritic` 让 MPPI rollout 包含目标旋转。禁止在 smoother/串口/MCU 再叠加第二份 `wz`，最终命令仍必须经过 Collision Monitor 并测试扫掠 footprint。
+- 普通模式由 controller 输出完整 `vx/vy/wz`；小陀螺模式下 controller 输出 `wz=0`，由 `nonrotating_vel_transform` 在 smoother 之后叠加 `cmd_spin`（smoother/串口/MCU 不叠加）。MPPI 的 `TwirlingCritic` 可让 rollout 包含目标旋转（2d_mppi profile 默认未启用）。最终命令仍必须经过 Collision Monitor 并测试扫掠 footprint。
 - 保留失败计数、最后可行解年龄和 deadline miss；超限先零速过渡，再切限速 DWB，仍无合法轨迹则停车，不能复用未确认的旧控制量。
 
 ### S2（哨兵专项备选）：HERO MINCO + 二阶全向 MPC
@@ -408,7 +408,7 @@ acados 支持 OCP-NLP、约束、软约束、控制变化率和 RTI，并能拆�
 - 导航启动/速度 remap：[`src/guga_bringup/launch/core/navigation_launch.py`](../src/guga_bringup/launch/core/navigation_launch.py)
 - 当前 PID 控制器：[`src/guga_controller/pb_omni_pid_pursuit_controller`](../src/guga_controller/pb_omni_pid_pursuit_controller)
 - acados MPC 原型：[`src/guga_controller/mpc_controller`](../src/guga_controller/mpc_controller)
-- 小陀螺/速度坐标变换：[`src/guga_controller/gimbal_cmd_vel_adapter`](../src/guga_controller/gimbal_cmd_vel_adapter)
+- 小陀螺/速度坐标变换：[`src/guga_controller/nonrotating_vel_transform`](../src/guga_controller/nonrotating_vel_transform)
 - 串口速度链：[`src/guga_driver/serial_driver`](../src/guga_driver/serial_driver)
 - JPS/B-spline/ESDF 设计：[`src/guga_planner/jps_planner/DESIGN.md`](../src/guga_planner/jps_planner/DESIGN.md)
 - Point-LIO odometry 发布：[`src/guga_localization/point_lio/src/laserMapping.cpp`](../src/guga_localization/point_lio/src/laserMapping.cpp)

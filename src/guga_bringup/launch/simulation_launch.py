@@ -91,7 +91,7 @@ def generate_launch_description():
         choices=["jps_pid", "2d_mppi", "jps_mpc"],
         description=(
             "Navigation stack profile: jps_pid (JPS + omni PID), "
-            "2d_mppi (SmacPlanner2D + MPPI), or jps_mpc (JPS + MPC)"
+            "2d_mppi (SmacPlanner2D + MPPI), or jps_mpc (SmacPlannerHybrid + MPC)"
         ),
     )
 

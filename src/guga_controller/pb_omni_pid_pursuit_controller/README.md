@@ -30,9 +30,11 @@ computeVelocityCommands (目标 20Hz)
 
 | 值  | 模式             | enable_rotation | 行为                                    |
 | --- | ---------------- | --------------- | --------------------------------------- |
-| 1   | CHASSIS_FOLLOWED | true            | vx/vy 按路径切向和横向误差分解 + wz 旋转跟踪 |
-| 2   | LITTLE_TES       | false           | vx/vy 沿 carrot 方向分解 + wz=0，纯平移 |
-| 3   | GO_HOME          | —               | 已定义，暂未处理                        |
+| 0   | CHASSIS_FOLLOWED | true            | vx/vy 按路径切向和横向误差分解 + wz 旋转跟踪 |
+| 1   | LITTLE_TES       | false           | vx/vy 沿 carrot 方向分解 + wz=0，纯平移 |
+| 2   | GO_HOME          | —               | 已定义，暂未处理                        |
+
+> 枚举值与 `simple_decision` 对齐（0/1/2），由 `chassis_mode` 话题下发。
 
 ## 参数
 

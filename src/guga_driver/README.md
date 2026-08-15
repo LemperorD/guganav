@@ -6,5 +6,5 @@
 
 - [X] livox
 - [ ] hik
-- [ ] communication (需要重新制定通信协议)
+- [ ] serial_driver 实车测试（BR 协议已重构，见 `src/guga_driver/serial_driver`）
 - [ ] 遥控器/手柄控制

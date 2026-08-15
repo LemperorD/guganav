@@ -78,7 +78,7 @@ namespace serial_driver {
 
     /**
      * @brief 获取最新运动控制帧的 payload 快照。
-     * @return 线程安全复制出的 26 字节 payload。
+     * @return 线程安全复制出的 17 字节 payload。
      */
     [[nodiscard]] MotionPayload receiveDataFrameSnapshot() const;
 
