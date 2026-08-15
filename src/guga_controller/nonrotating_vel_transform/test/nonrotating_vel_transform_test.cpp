@@ -12,30 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fake_vel_transform/fake_vel_transform.hpp"
+#include "nonrotating_vel_transform/nonrotating_vel_transform.hpp"
 
 #include <cmath>
 
 #include "gtest/gtest.h"
 
-namespace fake_vel_transform
+namespace nonrotating_vel_transform
 {
 
-TEST(FakeVelTransformTest, SelectsYawForCurrentChassisMode)
+TEST(NonrotatingVelTransformTest, SelectsYawForCurrentChassisMode)
 {
-  EXPECT_DOUBLE_EQ(FakeVelTransform::selectVelocityYawDiff(chassisFollowed, 0.3, 1.2), 0.3);
-  EXPECT_DOUBLE_EQ(FakeVelTransform::selectVelocityYawDiff(littleTES, 0.3, 1.2), 1.2);
+  EXPECT_DOUBLE_EQ(NonrotatingVelTransform::selectVelocityYawDiff(chassisFollowed, 0.3, 1.2), 0.3);
+  EXPECT_DOUBLE_EQ(NonrotatingVelTransform::selectVelocityYawDiff(littleTES, 0.3, 1.2), 1.2);
 }
 
-TEST(FakeVelTransformTest, RotatesFakeFrameVelocityIntoChassisFrame)
+TEST(NonrotatingVelTransformTest, RotatesNonrotatingFrameVelocityIntoChassisFrame)
 {
   geometry_msgs::msg::Twist input;
   input.linear.x = 1.0;
 
-  const auto output = FakeVelTransform::rotateVelocity(input, std::acos(-1.0) / 2.0);
+  const auto output = NonrotatingVelTransform::rotateVelocity(input, std::acos(-1.0) / 2.0);
 
   EXPECT_NEAR(output.linear.x, 0.0, 1e-12);
   EXPECT_NEAR(output.linear.y, -1.0, 1e-12);
 }
 
-}  // namespace fake_vel_transform
+}  // namespace nonrotating_vel_transform
