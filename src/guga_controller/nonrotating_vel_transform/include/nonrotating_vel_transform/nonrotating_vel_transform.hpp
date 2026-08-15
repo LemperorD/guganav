@@ -40,12 +40,12 @@ typedef enum {
   goHome,
 } ChassisMode;
 
-namespace fake_vel_transform
+namespace nonrotating_vel_transform
 {
-class FakeVelTransform : public rclcpp::Node
+class NonrotatingVelTransform : public rclcpp::Node
 {
 public:
-  explicit FakeVelTransform(const rclcpp::NodeOptions & options);
+  explicit NonrotatingVelTransform(const rclcpp::NodeOptions & options);
 
   static double selectVelocityYawDiff(
     uint8_t chassis_mode, double chassis_followed_yaw, double robot_base_angle);
@@ -88,7 +88,7 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::string robot_base_frame_;
-  std::string fake_robot_base_frame_;
+  std::string nonrotating_robot_base_frame_;
   std::string chassis_frame_;
   std::string odom_topic_;
   std::string local_plan_topic_;
@@ -110,6 +110,6 @@ private:
   rclcpp::Time last_controller_activate_time_;
 };
 
-}  // namespace fake_vel_transform
+}  // namespace nonrotating_vel_transform
 
 #endif  // FAKE_VEL_TRANSFORM__FAKE_VEL_TRANSFORM_HPP_

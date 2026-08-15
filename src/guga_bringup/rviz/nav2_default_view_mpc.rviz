@@ -6,10 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /GimbalYawFake1
         - /Controller1
         - /Path1
-        - /Path1/Status1
         - /Path1/Offset1
         - /Marker1
         - /Marker1/Topic1
@@ -190,9 +188,9 @@ Visualization Manager:
     - Class: rviz_default_plugins/Axes
       Enabled: true
       Length: 0.699999988079071
-      Name: GimbalYawFake
+      Name: BaseFootprintNonrotating
       Radius: 0.07000000029802322
-      Reference Frame: gimbal_yaw_fake
+      Reference Frame: base_footprint_nonrotating
       Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -547,25 +545,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 12.857476234436035
+      Distance: 26.322847366333008
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 5.102096080780029
-        Y: -1.588987112045288
-        Z: 2.87156343460083
+        X: 6.620297431945801
+        Y: -4.049162864685059
+        Z: 2.873136281967163
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.3797965049743652
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 2.7950117588043213
+      Yaw: 3.1150143146514893
     Saved: ~
 Window Geometry:
   Displays:
