@@ -29,10 +29,10 @@
 - `esdf_safe_distance: 1.5`
 - `corridor_halfwidth: 15.0`
 
-为了让障碍周围的不可通行区域更保守，仿真参数中还调大了机器人半径：
+仿真参数中的机器人半径（比真实车体略保守，可按需调整）：
 
-- local costmap: `robot_radius: 0.30`
-- global costmap: `robot_radius: 0.40`
+- local costmap: `robot_radius: 0.25`
+- global costmap: `robot_radius: 0.35`
 
 代码默认值分别是：
 

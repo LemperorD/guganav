@@ -324,16 +324,23 @@ controller_server:
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
       time_steps: 56
-      model_dt: 0.035
+      # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
+      #   - period < model_dt → 仅告警，控制序列移位关闭
+      #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
+      #   - period > model_dt → configure 抛异常，controller_server 起不来
+      # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
+      # 若改 controller_frequency，model_dt 需同步改为 1/频率。
+      model_dt: 0.033333333
       batch_size: 2000
-      vx_std: 1.2
-      vy_std: 1.2
+      vx_std: 0.6
+      vy_std: 0.6
       wz_std: 1.0
-      vx_max: 3.0
-      vx_min: -1.0
-      vy_max: 3.0
+      vx_max: 2.5
+      vx_min: -2.5
+      ax_max: 5.0
+      ay_max: 5.0
+      vy_max: 2.5
       wz_max: 6.0
-      az_max: 0.0
 
       iteration_count: 1
       temperature: 0.3
@@ -402,7 +409,7 @@ controller_server:
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 10.0
+        cost_weight: 12.0
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
@@ -419,7 +426,7 @@ controller_server:
       #   cost_weight: 35.0
       #   deadband_velocities: [0.05, 0.05, 0.05]
       TwirlingCritic:
-        enabled: true
+        enabled: false
         twirling_cost_power: 1
         twirling_cost_weight: 10.0
 
@@ -435,7 +442,7 @@ local_costmap:
       width: 10
       height: 10
       resolution: 0.05
-      robot_radius: 0.4
+      robot_radius: 0.35
       plugins: ["static_layer", "intensity_voxel_layer",  "inflation_layer"]
       intensity_voxel_layer:
         plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
@@ -484,7 +491,7 @@ global_costmap:
       publish_frequency: 2.0
       global_frame: map
       robot_base_frame: base_footprint_nonrotating
-      robot_radius: 0.4
+      robot_radius: 0.35
       resolution: 0.05
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
@@ -544,7 +551,7 @@ map_saver:
 planner_server:
   ros__parameters:
     use_sim_time: True
-    expected_planner_frequency: 1.0
+    expected_planner_frequency: 2.0
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_smac_planner/SmacPlanner2D"

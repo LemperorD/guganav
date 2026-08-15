@@ -268,12 +268,15 @@ build_nav_args() {
   local controller=""
   local arg
   local merged_params
+  local explicit_spec=""
 
   for arg in "$@"; do
     case "$arg" in
       navigation_profile:=* | params_file:=*)
+        # 收集所有显式指定项（可能有多个，比如 nav-only 二次调用时
+        # params_file:= 与 navigation_profile:= 同时出现），不提前 return
         nav_args+=("$arg")
-        return 0
+        explicit_spec=1
         ;;
       planner:=*)
         planner=${arg#planner:=}
@@ -286,6 +289,12 @@ build_nav_args() {
         ;;
     esac
   done
+
+  # 用户已显式指定 navigation_profile:= 或 params_file:= 时，直接透传，
+  # 不再走 planner/controller 选择与合并
+  if [ -n "$explicit_spec" ]; then
+    return 0
+  fi
 
   if [ -n "$planner" ] && ! validate_choice planner "$planner" "$PLANNER_CHOICES"; then
     return 1
@@ -305,6 +314,20 @@ build_nav_args() {
     return 1
   fi
   nav_args+=("params_file:=$merged_params")
+  # controller 决定底盘模式：mppi/mpc → 启动即小陀螺，pid → 跟随。
+  # 必须显式传 navigation_profile，否则 launch 里默认 jps_pid，
+  # nonrotating_vel_transform 的 initial_chassis_mode 会被算成 0（不自旋）。
+  case "$controller" in
+    pid)
+      nav_args+=("navigation_profile:=jps_pid")
+      ;;
+    mppi)
+      nav_args+=("navigation_profile:=2d_mppi")
+      ;;
+    mpc)
+      nav_args+=("navigation_profile:=jps_mpc")
+      ;;
+  esac
 }
 
 cleanup_simulation_processes() {
