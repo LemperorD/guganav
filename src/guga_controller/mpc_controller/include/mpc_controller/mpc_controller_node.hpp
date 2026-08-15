@@ -131,12 +131,13 @@ private: // 尝试使用控制预测序列计算局部规划路径长度
 inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose)
 {
   StateBound state;
-  state << pose.pose.position.x, pose.pose.position.y;
 
   const auto & q = pose.pose.orientation;
   const double siny = 2.0 * (q.w * q.z + q.x * q.y);
   const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  state << std::atan2(siny, cosy);
+
+  // Eigen `<<` 必须一次填充全部元素，分多次会留下未初始化值（yaw 垃圾值）
+  state << pose.pose.position.x, pose.pose.position.y, std::atan2(siny, cosy);
 
   return state;
 }
