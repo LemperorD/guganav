@@ -21,15 +21,29 @@ Examples:
   scripts/simulation.sh nav
   scripts/simulation.sh m rmul_2025
   scripts/simulation.sh map rmul_2025
-  scripts/simulation.sh nav rmuc_2025 navigation_profile:=2d_mppi use_rviz:=False
+  scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
 
-Navigation profiles:
-  navigation_profile:=jps_pid  JPS global planner + omni PID controller (default)
-  navigation_profile:=2d_mppi  SmacPlanner2D global planner + MPPI controller
-  navigation_profile:=jps_mpc  JPS global planner + MPC controller
+Planner (planner:=):
+  planner:=jps         JPS global planner
+  planner:=smac2d      SmacPlanner2D global planner
+  planner:=smachybrid  SmacPlannerHybrid global planner
+
+Controller (controller:=):
+  controller:=pid   omni PID controller (default)
+  controller:=mppi  MPPI controller
+  controller:=mpc   MPC controller
+
+All 9 planner/controller combinations are supported; parameters are
+merged at runtime from the existing nav2_params*.yaml files (no new
+files are added). Default: planner:=jps controller:=pid.
+
+Legacy navigation_profile:=jps_pid|2d_mppi|jps_mpc still works and
+takes precedence over planner:=/controller:=.
 
 When a navigation command is run from a terminal without
-navigation_profile:=..., an interactive profile menu is shown.
+planner:=/controller:= or navigation_profile:=..., an interactive
+numbered selection menu is shown: first the planner (1-3), then the
+controller (1-3).
 EOF
 }
 
@@ -79,49 +93,58 @@ is_true() {
   esac
 }
 
-has_navigation_profile() {
-  local arg
-  for arg in "$@"; do
-    if [[ "$arg" == navigation_profile:=* ]]; then
+PLANNER_CHOICES="jps smac2d smachybrid"
+CONTROLLER_CHOICES="pid mppi mpc"
+
+SIMULATION_PARAMS_DIR="$WS/src/guga_bringup/config/simulation"
+
+validate_choice() {
+  local name=$1
+  local value=$2
+  local valid=$3
+  local choice
+  for choice in $valid; do
+    if [ "$choice" = "$value" ]; then
       return 0
     fi
   done
+  echo "Invalid ${name}: '$value'. Valid values: $valid" >&2
   return 1
 }
 
-select_navigation_profile() {
+select_planner() {
   local selection
 
   # stdout is captured by the caller, so use /dev/tty to detect and read an
   # actual interactive terminal instead of checking stdout's terminal state.
   if [ ! -r /dev/tty ]; then
-    printf 'navigation_profile:=jps_pid'
+    printf 'jps'
     return 0
   fi
 
   cat >&2 <<'EOF'
 
-Select navigation profile:
-  1) JPS global planner + omni PID controller (jps_pid)
-  2) SmacPlanner2D + MPPI controller (2d_mppi)
-  3) JPS + MPC controller (jps_mpc)
+Select global planner:
+  1) JPS (jps)
+  2) SmacPlanner2D (smac2d)
+  3) SmacPlannerHybrid (smachybrid)
 EOF
   while true; do
-    printf 'Profile [1]: ' >&2
+    printf 'Planner [1]: ' >&2
     if ! read -r selection < /dev/tty; then
       selection=1
     fi
     case "${selection:-1}" in
       1)
-        printf 'navigation_profile:=jps_pid'
+        printf 'jps'
         return 0
         ;;
       2)
-        printf 'navigation_profile:=2d_mppi'
+        printf 'smac2d'
         return 0
         ;;
       3)
-        printf 'navigation_profile:=jps_mpc'
+        printf 'smachybrid'
         return 0
         ;;
       *)
@@ -129,6 +152,159 @@ EOF
         ;;
     esac
   done
+}
+
+select_controller() {
+  local selection
+
+  # stdout is captured by the caller, so use /dev/tty to detect and read an
+  # actual interactive terminal instead of checking stdout's terminal state.
+  if [ ! -r /dev/tty ]; then
+    printf 'pid'
+    return 0
+  fi
+
+  cat >&2 <<'EOF'
+
+Select controller:
+  1) omni PID (pid)
+  2) MPPI (mppi)
+  3) MPC (mpc)
+EOF
+  while true; do
+    printf 'Controller [1]: ' >&2
+    if ! read -r selection < /dev/tty; then
+      selection=1
+    fi
+    case "${selection:-1}" in
+      1)
+        printf 'pid'
+        return 0
+        ;;
+      2)
+        printf 'mppi'
+        return 0
+        ;;
+      3)
+        printf 'mpc'
+        return 0
+        ;;
+      *)
+        echo "Please select 1, 2, or 3." >&2
+        ;;
+    esac
+  done
+}
+
+params_file_for_controller() {
+  case "$1" in
+    pid)
+      printf '%s/nav2_params.yaml' "$SIMULATION_PARAMS_DIR"
+      ;;
+    mppi)
+      printf '%s/nav2_params_mppi.yaml' "$SIMULATION_PARAMS_DIR"
+      ;;
+    mpc)
+      printf '%s/nav2_params_mpc.yaml' "$SIMULATION_PARAMS_DIR"
+      ;;
+  esac
+}
+
+planner_params_file_for_planner() {
+  case "$1" in
+    jps)
+      printf '%s/nav2_params.yaml' "$SIMULATION_PARAMS_DIR"
+      ;;
+    smac2d)
+      printf '%s/nav2_params_mppi.yaml' "$SIMULATION_PARAMS_DIR"
+      ;;
+    smachybrid)
+      printf '%s/nav2_params_mpc.yaml' "$SIMULATION_PARAMS_DIR"
+      ;;
+  esac
+}
+
+# Merge the chosen controller's params file (base) with the chosen
+# planner's planner_server section, and print the path of the merged
+# file. The result lives in /tmp; no repo params files are added.
+generate_merged_params() {
+  local planner=$1
+  local controller=$2
+  local base_file
+  local planner_file
+  local merged_file
+  base_file=$(params_file_for_controller "$controller")
+  planner_file=$(planner_params_file_for_planner "$planner")
+  merged_file="/tmp/guganav_nav2_params_${SIMULATION_SESSION_ID}_${planner}_${controller}.yaml"
+
+  python3 - "$base_file" "$planner_file" "$merged_file" <<'PY'
+import sys
+import yaml
+
+base_path, planner_path, out_path = sys.argv[1:4]
+with open(base_path, encoding="utf-8") as f:
+    data = yaml.safe_load(f)
+with open(planner_path, encoding="utf-8") as f:
+    planner_data = yaml.safe_load(f)
+
+data["planner_server"] = planner_data["planner_server"]
+
+with open(out_path, "w", encoding="utf-8") as f:
+    yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+PY
+  if [ $? -ne 0 ]; then
+    echo "Failed to generate merged params file for planner:=$planner controller:=$controller" >&2
+    return 1
+  fi
+  printf '%s' "$merged_file"
+}
+
+# Fill the global nav_args array with the effective launch arguments.
+# Converts separate planner:=/controller:= choices into a runtime-merged
+# params_file:= for the launch stack.
+build_nav_args() {
+  nav_args=()
+  local planner=""
+  local controller=""
+  local arg
+  local merged_params
+
+  for arg in "$@"; do
+    case "$arg" in
+      navigation_profile:=* | params_file:=*)
+        nav_args+=("$arg")
+        return 0
+        ;;
+      planner:=*)
+        planner=${arg#planner:=}
+        ;;
+      controller:=*)
+        controller=${arg#controller:=}
+        ;;
+      *)
+        nav_args+=("$arg")
+        ;;
+    esac
+  done
+
+  if [ -n "$planner" ] && ! validate_choice planner "$planner" "$PLANNER_CHOICES"; then
+    return 1
+  fi
+  if [ -n "$controller" ] && ! validate_choice controller "$controller" "$CONTROLLER_CHOICES"; then
+    return 1
+  fi
+
+  if [ -z "$planner" ]; then
+    planner=$(select_planner) || return 1
+  fi
+  if [ -z "$controller" ]; then
+    controller=$(select_controller) || return 1
+  fi
+
+  if ! merged_params=$(generate_merged_params "$planner" "$controller"); then
+    return 1
+  fi
+  nav_args+=("params_file:=$merged_params")
 }
 
 cleanup_simulation_processes() {
@@ -350,10 +526,7 @@ fi
 
 case "$mode" in
   n | nav | navigation)
-    nav_args=("$@")
-    if ! has_navigation_profile "${nav_args[@]}"; then
-      nav_args+=("$(select_navigation_profile)")
-    fi
+    build_nav_args "$@" || exit 2
     run_complete_simulation nav "${nav_args[@]}"
     exit 0
     ;;
@@ -362,10 +535,7 @@ case "$mode" in
     exit 0
     ;;
   nav-only | navigation-only)
-    nav_args=("$@")
-    if ! has_navigation_profile "${nav_args[@]}"; then
-      nav_args+=("$(select_navigation_profile)")
-    fi
+    build_nav_args "$@" || exit 2
     set -- "${nav_args[@]}"
     slam=False
     ;;
