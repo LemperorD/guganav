@@ -102,7 +102,7 @@ private:
   std::string chassis_mode_topic_;
   float spin_speed_;
   bool output_in_chassis_frame_{false};
-  uint8_t chassis_mode_{chassisFollowed};
+  uint8_t chassis_mode_{littleTES};
   double chassis_followed_yaw_ = 0.0;
 
   std::mutex cmd_vel_mutex_;

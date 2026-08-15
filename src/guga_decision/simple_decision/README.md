@@ -26,9 +26,13 @@ DEFAULT ──(hp低/弹药空)──→ SUPPLY ──(hp恢复)──→ DEFAUL
 
 | 状态 | 底盘模式 | goal |
 |------|---------|------|
-| DEFAULT | CHASSIS_FOLLOWED | 默认坐标 |
+| DEFAULT | CHASSIS_FOLLOWED / LITTLE_TES (受击) | 默认坐标 |
 | ATTACK | CHASSIS_FOLLOWED / LITTLE_TES (受击) | 最近敌人 |
 | SUPPLY | CHASSIS_FOLLOWED | 补给点 |
+
+> 底盘模式列是 `always_tes=false` 时决策层的输出。**默认 `always_tes=true`（启动即小陀螺）**，
+> 此时节点无视状态机对底盘模式的区分，恒发 `LITTLE_TES` 并同步下发 `cmd_spin`
+> 自旋速度；仅在需要验证状态机逻辑时把 `always_tes` 置为 false。
 
 ## 门控
 
@@ -65,6 +69,9 @@ ros2 launch simple_decision simple_decision.py
 | `frame_id` | map | TF 父帧 |
 | `base_frame_id` | base_footprint | TF 子帧 |
 | `tick_hz` | 20.0 | 决策频率 |
+| `always_tes` | true | 启动即小陀螺：恒发 LITTLE_TES + cmd_spin，忽略决策底盘模式 |
+| `spin_speed` | 6.28 | 小陀螺自旋角速度 (rad/s)，经 `cmd_spin` 下发 |
+| `cmd_spin_topic` | cmd_spin | 自旋速度话题（`example_interfaces/Float32`） |
 | `hp_survival_enter` | 120 | HP 低于此值进补给 |
 | `hp_survival_exit` | 300 | HP 高于此值出补给 |
 | `ammo_min` | 0 | 弹药等于此值进补给 |

@@ -19,7 +19,7 @@ GitHub: `https://github.com/LemperorD/guganav`
 | 构建工具 | colcon (`scripts/colconBuild.sh`) |
 | 代码格式化 | clang-format (基于 Google 风格, 列宽 80, 缩进 2) |
 | CI | GitHub Actions (`ros:humble-ros-base` 容器) |
-| Pre-commit | clang-format + 三个核心包测试 |
+| Pre-commit | clang-format + 核心包测试 |
 | 仿真器 | Gazebo / Ignition (rmoss 框架) |
 | 本地依赖 | `/home/ld/3rdparty/` (Pangolin 0.9.4, OpenCV, Ceres, g2o, Sophus, Livox-SDK) |
 
@@ -207,7 +207,7 @@ guga_ui_pangolin
 
 ### CI 系统
 
-`.github/workflows/ci.yml`: 在 `ros:humble-ros-base` 容器中运行 clang-format 检查 + terrain_analysis / PID / simple_decision 的单元测试。
+`.github/workflows/ci.yml`: 在 `ros:humble-ros-base` 容器中运行 clang-format 检查 + terrain_analysis / PID / simple_decision / jps_planner / nav2_mppi_controller 的单元测试。
 
 ---
 

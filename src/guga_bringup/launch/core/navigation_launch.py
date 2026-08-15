@@ -242,6 +242,18 @@ def generate_launch_description():
                         "output_cmd_vel_topic": "cmd_vel",
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
+                        # 2d_mppi / jps_mpc 走 base_footprint_nonrotating，启动即小陀螺；
+                        # jps_pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
+                        "initial_chassis_mode": PythonExpression(
+                            [
+                                "1 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0",
+                            ]
+                        ),
+                        "init_spin_speed": PythonExpression(
+                            [
+                                "6.28 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0.0",
+                            ]
+                        ),
                     }
                 ],
                 arguments=["--ros-args", "--log-level", log_level],
@@ -343,6 +355,18 @@ def generate_launch_description():
                         "output_cmd_vel_topic": "cmd_vel",
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
+                        # 2d_mppi / jps_mpc 走 base_footprint_nonrotating，启动即小陀螺；
+                        # jps_pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
+                        "initial_chassis_mode": PythonExpression(
+                            [
+                                "1 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0",
+                            ]
+                        ),
+                        "init_spin_speed": PythonExpression(
+                            [
+                                "6.28 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0.0",
+                            ]
+                        ),
                     }
                 ],
             ),

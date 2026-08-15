@@ -31,7 +31,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   RCLCPP_INFO(get_logger(), "Start NonrotatingVelTransform!");
 
   this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
-  this->declare_parameter<std::string>("nonrotating_robot_base_frame", "base_footprint_nonrotating");
+  this->declare_parameter<std::string>(
+    "nonrotating_robot_base_frame", "base_footprint_nonrotating");
   this->declare_parameter<std::string>("chassis_frame", "chassis");
   this->declare_parameter<std::string>("odom_topic", "odom");
   this->declare_parameter<std::string>("local_plan_topic", "local_plan");
@@ -42,7 +43,10 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   this->declare_parameter<std::string>("vis_frame_id", "base_link");
   this->declare_parameter<double>("vis_scale", 1.0);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
-  this->declare_parameter<float>("init_spin_speed", 0.0);
+  // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
+  // 之后由 chassis_mode 话题（如 simple_decision）覆盖
+  this->declare_parameter<int>("initial_chassis_mode", 1);
+  this->declare_parameter<float>("init_spin_speed", 6.28);
   this->declare_parameter<bool>("output_in_chassis_frame", false);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
@@ -58,6 +62,10 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
   this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
+  // initial_chassis_mode：启动时默认小陀螺（launch 中按 navigation_profile 区分）
+  int initial_chassis_mode{1};
+  this->get_parameter("initial_chassis_mode", initial_chassis_mode);
+  chassis_mode_ = static_cast<uint8_t>(initial_chassis_mode);
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -69,7 +77,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   vis_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(vis_cmd_vel_topic_, 10);
 
   cmd_spin_sub_ = this->create_subscription<example_interfaces::msg::Float32>(
-    cmd_spin_topic_, 1, std::bind(&NonrotatingVelTransform::cmdSpinCallback, this, std::placeholders::_1));
+    cmd_spin_topic_, 1,
+    std::bind(&NonrotatingVelTransform::cmdSpinCallback, this, std::placeholders::_1));
   cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
     input_cmd_vel_topic_, 10,
     std::bind(&NonrotatingVelTransform::cmdVelCallback, this, std::placeholders::_1));
@@ -91,7 +100,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(100), odom_sub_filter_, local_plan_sub_filter_);
   sync_->registerCallback(
-    std::bind(&NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
+    std::bind(
+      &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
 
   tf_sub_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50), std::bind(&NonrotatingVelTransform::updateGimbalYaw, this));

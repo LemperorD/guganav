@@ -24,6 +24,10 @@ namespace simple_decision {
                                                             "goal_pose");
     chassis_mode_topic_ = this->declare_parameter<std::string>(
         "chassis_mode_topic", "chassis_mode");
+    cmd_spin_topic_ = this->declare_parameter<std::string>("cmd_spin_topic",
+                                                           "cmd_spin");
+    always_tes_ = this->declare_parameter<bool>("always_tes", true);
+    spin_speed_ = this->declare_parameter<double>("spin_speed", 6.28);
     debug_attack_pose_topic_ = this->declare_parameter<std::string>(
         "debug_attack_pose_topic", "debug_attack_pose");
     game_status_topic_ = this->declare_parameter<std::string>(
@@ -72,6 +76,8 @@ namespace simple_decision {
         goal_pose_topic_, rclcpp::SensorDataQoS());
     chassis_mode_pub_ = this->create_publisher<UInt8Msg>(chassis_mode_topic_,
                                                          rclcpp::QoS(10));
+    cmd_spin_pub_ = this->create_publisher<CmdSpinMsg>(cmd_spin_topic_,
+                                                       rclcpp::QoS(10));
     debug_attack_pose_pub_ = this->create_publisher<PoseStampedMsg>(
         debug_attack_pose_topic_, rclcpp::QoS(10));
 
@@ -149,7 +155,15 @@ namespace simple_decision {
       RCLCPP_INFO(this->get_logger(), "State -> %u",
                   static_cast<unsigned>(action.next_state));
     }
-    publishChassisMode(action.chassis_mode);
+    // always_tes=true（启动即小陀螺）时忽略决策输出的底盘模式，恒为 LITTLE_TES
+    const ChassisMode mode = always_tes_ ? ChassisMode::LITTLE_TES
+                                         : action.chassis_mode;
+    publishChassisMode(mode);
+    // 小陀螺模式下同步下发自旋速度；否则不发（nonrotating_vel_transform
+    // 回落到其 init_spin_speed 参数，通常为 0）
+    if (mode == ChassisMode::LITTLE_TES) {
+      publishCmdSpin(spin_speed_);
+    }
 
     if (action.should_publish_goal) {
       const auto goal = makePoseXYZYaw(
@@ -217,6 +231,12 @@ namespace simple_decision {
     UInt8Msg m;
     m.data = static_cast<uint8_t>(mode);
     chassis_mode_pub_->publish(m);
+  }
+
+  void DecisionSimple::publishCmdSpin(double speed) {
+    CmdSpinMsg m;
+    m.data = static_cast<float>(speed);
+    cmd_spin_pub_->publish(m);
   }
 
   void DecisionSimple::publishGoalThrottled(const PoseStampedMsg& goal,

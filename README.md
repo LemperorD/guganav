@@ -298,6 +298,7 @@ scripts/pre-commit/run_terrain_analysis_tests.sh
 scripts/pre-commit/run_pid_tests.sh
 scripts/pre-commit/run_simple_decision_tests.sh
 scripts/pre-commit/run_jps_tests.sh
+scripts/pre-commit/run_mppi_tests.sh
 ```
 
 手动运行 colcon 测试：
@@ -334,6 +335,7 @@ pre-commit install
 | PID 控制器测试 | `pb_omni_pid_pursuit_controller` 和对应测试脚本 |
 | simple_decision 测试 | `simple_decision` 和对应测试脚本 |
 | jps_planner 测试 | `jps_planner` 和对应测试脚本 |
+| MPPI 控制器测试 | `nav2_mppi_controller` 和对应测试脚本 |
 
 手动运行全部检查：
 
