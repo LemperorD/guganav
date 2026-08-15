@@ -31,7 +31,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   RCLCPP_INFO(get_logger(), "Start NonrotatingVelTransform!");
 
   this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
-  this->declare_parameter<std::string>("nonrotating_robot_base_frame", "base_footprint_nonrotating");
+  this->declare_parameter<std::string>(
+    "nonrotating_robot_base_frame", "base_footprint_nonrotating");
   this->declare_parameter<std::string>("chassis_frame", "chassis");
   this->declare_parameter<std::string>("odom_topic", "odom");
   this->declare_parameter<std::string>("local_plan_topic", "local_plan");
@@ -69,7 +70,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   vis_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(vis_cmd_vel_topic_, 10);
 
   cmd_spin_sub_ = this->create_subscription<example_interfaces::msg::Float32>(
-    cmd_spin_topic_, 1, std::bind(&NonrotatingVelTransform::cmdSpinCallback, this, std::placeholders::_1));
+    cmd_spin_topic_, 1,
+    std::bind(&NonrotatingVelTransform::cmdSpinCallback, this, std::placeholders::_1));
   cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
     input_cmd_vel_topic_, 10,
     std::bind(&NonrotatingVelTransform::cmdVelCallback, this, std::placeholders::_1));
@@ -91,7 +93,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(100), odom_sub_filter_, local_plan_sub_filter_);
   sync_->registerCallback(
-    std::bind(&NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
+    std::bind(
+      &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
 
   tf_sub_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50), std::bind(&NonrotatingVelTransform::updateGimbalYaw, this));

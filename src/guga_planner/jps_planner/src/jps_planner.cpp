@@ -131,8 +131,8 @@ namespace jps_planner {
         double t = static_cast<double>(i) / static_cast<double>(samples);
         double wx = x0 + (t * (x1 - x0));
         double wy = y0 + (t * (y1 - y0));
-        if (!isWorldPointAllowed(
-                costmap, wx, wy, allow_unknown, cost_threshold)) {
+        if (!isWorldPointAllowed(costmap, wx, wy, allow_unknown,
+                                 cost_threshold)) {
           return false;
         }
       }
@@ -149,8 +149,8 @@ namespace jps_planner {
 
       for (size_t i = 0; i < plan.poses.size(); ++i) {
         const auto& point = plan.poses[i].pose.position;
-        if (!isWorldPointAllowed(
-                costmap, point.x, point.y, allow_unknown, cost_threshold)) {
+        if (!isWorldPointAllowed(costmap, point.x, point.y, allow_unknown,
+                                 cost_threshold)) {
           return false;
         }
 
@@ -230,8 +230,7 @@ namespace jps_planner {
         node, name_ + ".corridor_halfwidth", rclcpp::ParameterValue(8.0));
     // B-spline 平滑路径碰撞判定阈值 (253 严格 / 254 宽松)
     nav2_util::declare_parameter_if_not_declared(
-        node, name_ + ".collision_cost_threshold",
-        rclcpp::ParameterValue(253));
+        node, name_ + ".collision_cost_threshold", rclcpp::ParameterValue(253));
     node->get_parameter(name_ + ".enable_esdf", enable_esdf_);
     node->get_parameter(name_ + ".esdf_weight", esdf_weight_);
     node->get_parameter(name_ + ".esdf_safe_distance", esdf_safe_distance_);
@@ -364,9 +363,9 @@ namespace jps_planner {
     }
 
     // 贴障碍的对角段改写为正交移动, 避免 B-spline 平滑切角产生锯齿/回退
-    map_path = detourCornerHuggingDiagonals(
-        map_path, state.costmap_data, state.size_x, state.size_y,
-        config_.allow_unknown);
+    map_path = detourCornerHuggingDiagonals(map_path, state.costmap_data,
+                                            state.size_x, state.size_y,
+                                            config_.allow_unknown);
 
     RCLCPP_INFO(logger_, "JPSPlanner: path found with %zu waypoints",
                 map_path.size());
@@ -381,14 +380,13 @@ namespace jps_planner {
     // 7 阶 B-spline 在稀疏跳点间容易过冲切角 (尤其对角贴障碍段),
     // 所以先按 ≤2 格步长在地图坐标补密, 再进入插值。
     if (enable_bspline_) {
-      auto spline_path = densifyMapPath(
-          map_path, BSPLINE_DENSIFY_STEP_CELLS, MIN_BSPLINE_WAYPOINTS);
+      auto spline_path = densifyMapPath(map_path, BSPLINE_DENSIFY_STEP_CELLS,
+                                        MIN_BSPLINE_WAYPOINTS);
       if (spline_path.size() > map_path.size()) {
-        RCLCPP_INFO(
-            logger_,
-            "JPSPlanner: densified path from %zu to %zu waypoints for "
-            "B-spline",
-            map_path.size(), spline_path.size());
+        RCLCPP_INFO(logger_,
+                    "JPSPlanner: densified path from %zu to %zu waypoints for "
+                    "B-spline",
+                    map_path.size(), spline_path.size());
       }
 
       if (spline_path.size() >= MIN_BSPLINE_WAYPOINTS) {

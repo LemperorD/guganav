@@ -51,7 +51,7 @@ jobs:
             --from-paths \
               src/guga_perception/terrain_analysis \
               src/guga_controller/pb_omni_pid_pursuit_controller \
-              src/guga_controller/guga_mppi_critics \
+              src/guga_controller/nav2_mppi_controller \
               src/guga_interfaces \
               src/guga_decision/simple_decision \
               src/guga_planner/jps_planner \
@@ -70,7 +70,6 @@ jobs:
             git ls-files \
               src/guga_perception/terrain_analysis \
               src/guga_controller/pb_omni_pid_pursuit_controller \
-              src/guga_controller/guga_mppi_critics \
               src/guga_decision/simple_decision \
               src/guga_planner/jps_planner \
               | grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
@@ -80,3 +79,4 @@ jobs:
           pre-commit run test-pid-controller --all-files
           pre-commit run test-simple-decision --all-files
           pre-commit run test-jps-planner --all-files
+          pre-commit run test-mppi-controller --all-files

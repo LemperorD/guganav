@@ -63,7 +63,8 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -t | --tes)
-            PACKAGES_SELECT="point_lio nav2_mppi_controller nonrotating_vel_transform"
+            # point_lio 依赖 livox_ros_driver2，清空 install/ 后必须一起构建
+            PACKAGES_SELECT="livox_ros_driver2 point_lio nav2_mppi_controller nonrotating_vel_transform"
             SAFE_BUILD=true
             shift
             ;;

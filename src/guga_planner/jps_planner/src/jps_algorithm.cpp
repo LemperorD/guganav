@@ -549,18 +549,18 @@ namespace jps_planner {
     }
 
     auto blocked = [&](double cx, double cy) {
-        const int ix = static_cast<int>(cx);
-        const int iy = static_cast<int>(cy);
-        if (ix < 0 || ix >= cm_w || iy < 0 || iy >= cm_h) {
-          return true;
-        }
-        const unsigned char cost =
-            costmap_data[static_cast<size_t>(iy * cm_w + ix)];
-        if (cost == UNKNOWN_COST) {
-          return !allow_unknown;
-        }
-        return cost >= INSCRIBED_COST;
-      };
+      const int ix = static_cast<int>(cx);
+      const int iy = static_cast<int>(cy);
+      if (ix < 0 || ix >= cm_w || iy < 0 || iy >= cm_h) {
+        return true;
+      }
+      const unsigned char cost =
+          costmap_data[static_cast<size_t>(iy * cm_w + ix)];
+      if (cost == UNKNOWN_COST) {
+        return !allow_unknown;
+      }
+      return cost >= INSCRIBED_COST;
+    };
 
     std::vector<std::pair<double, double>> out{};
     out.reserve(path.size() * 2);
@@ -588,7 +588,7 @@ namespace jps_planner {
       for (int s = 0; s < steps; ++s) {
         const double hx = cx + sx;  // 水平相邻格 (x+dx, y)
         const double hy = cy;
-        const double vx = cx;       // 垂直相邻格 (x, y+dy)
+        const double vx = cx;  // 垂直相邻格 (x, y+dy)
         const double vy = cy + sy;
         const bool h_free = !blocked(hx, hy);
         const bool v_free = !blocked(vx, vy);

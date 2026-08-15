@@ -83,7 +83,7 @@ namespace jps_planner {
 
     bspline_opt::BSplineConfig bspline_config_{};
     bool enable_bspline_{true};  // enable B-spline smoothing
-    bool enable_esdf_{true};    // enable ESDF gradient optimisation
+    bool enable_esdf_{true};     // enable ESDF gradient optimisation
     double esdf_weight_{
         100.0};  // ESDF distance field obstacle-avoidance weight
     double esdf_safe_distance_{0.6};  // ESDF safe distance
