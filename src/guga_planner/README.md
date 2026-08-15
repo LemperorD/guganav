@@ -4,20 +4,24 @@
 
 ## 当前使用的 planner
 
-当前仓库默认使用的是 `jps_planner/JPSPlanner`，挂在 Nav2 的 `planner_server` 上。
+默认 profile（`jps_pid`）使用的是 `jps_planner/JPSPlanner`，挂在 Nav2 的 `planner_server` 上。
 它先在 costmap 上做 JPS 搜索，再根据参数选择 B-spline 平滑和 ESDF 梯度优化。
 
 ### 配置位置
 
 `scripts/simulation.sh` 默认读取的是 `src/guga_bringup/config/simulation/nav2_params.yaml`。
 如果是实机或别的 launch，再看 `src/guga_bringup/config/reality/nav2_params.yaml` 和
-`src/guga_bringup/config/simulation/nav2_param_mpc.yaml`。
+`src/guga_bringup/config/simulation/nav2_params_mpc.yaml`。
 
-下面这些参数文件都挂的是同一个 planner：
+不同 `navigation_profile` 对应不同参数文件，planner/controller 各不相同：
 
-- `src/guga_bringup/config/simulation/nav2_params.yaml`
-- `src/guga_bringup/config/reality/nav2_params.yaml`
-- `src/guga_bringup/config/simulation/nav2_param_mpc.yaml`
+| profile | 参数文件 | planner | controller |
+|---------|---------|---------|-----------|
+| `jps_pid`（默认） | `simulation/nav2_params.yaml` | `jps_planner/JPSPlanner` | `pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode` |
+| `2d_mppi` | `simulation/nav2_params_mppi.yaml` | `nav2_smac_planner/SmacPlanner2D` | `guga_source_mppi_controller::MPPIController` |
+| `jps_mpc` | `simulation/nav2_params_mpc.yaml` | `nav2_smac_planner/SmacPlannerHybrid`（JPS 已注释） | `mpc_controller::MpcControllerNode` |
+
+> 实车 `reality/nav2_params.yaml` 与默认仿真 profile 一样挂 `jps_planner/JPSPlanner`。
 
 当前仿真里常调的三个值是：
 

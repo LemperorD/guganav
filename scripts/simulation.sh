@@ -26,7 +26,7 @@ Examples:
 Navigation profiles:
   navigation_profile:=jps_pid  JPS global planner + omni PID controller (default)
   navigation_profile:=2d_mppi  SmacPlanner2D global planner + MPPI controller
-  navigation_profile:=jps_mpc  JPS global planner + MPC controller
+  navigation_profile:=jps_mpc  SmacPlannerHybrid global planner + MPC controller
 
 When a navigation command is run from a terminal without
 navigation_profile:=..., an interactive profile menu is shown.
@@ -104,7 +104,7 @@ select_navigation_profile() {
 Select navigation profile:
   1) JPS global planner + omni PID controller (jps_pid)
   2) SmacPlanner2D + MPPI controller (2d_mppi)
-  3) JPS + MPC controller (jps_mpc)
+  3) SmacPlannerHybrid + MPC controller (jps_mpc)
 EOF
   while true; do
     printf 'Profile [1]: ' >&2

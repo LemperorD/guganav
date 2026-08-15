@@ -90,7 +90,7 @@ scripts/test/test_terrain_analysis_coverage.sh
 | `terrainAnalysis`    | `terrain_map`     | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` (intensity_voxel_layer, `pb_nav2_plugins`)  |
 |                      |                   |                           |        | `terrainAnalysisExt` (本包)                                 |
 | `terrainAnalysisExt` | `terrain_map_ext` | `sensor_msgs/PointCloud2` | `odom` | `global_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
-|                      |                   |                           |        | `pointcloud_to_laserscan` (`guga_thirdparty`, 仅 SLAM 模式) |
+|                      |                   |                           |        | `pointcloud_to_laserscan` (`guga_perception`, 仅 SLAM 模式) |
 
 ## 数据流
 

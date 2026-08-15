@@ -4,10 +4,12 @@
 
 namespace pb_omni_pid_pursuit_controller {
 
+  // 与 simple_decision 的 ChassisMode 枚举对齐（0=CHASSIS_FOLLOWED,
+  // 1=LITTLE_TES, 2=GO_HOME）
   enum class ChassisMode : uint8_t {
-    CHASSIS_FOLLOWED = 1,
-    LITTLE_TES = 2,
-    GO_HOME = 3,
+    CHASSIS_FOLLOWED = 0,
+    LITTLE_TES = 1,
+    GO_HOME = 2,
   };
 
   struct ControllerConfig {

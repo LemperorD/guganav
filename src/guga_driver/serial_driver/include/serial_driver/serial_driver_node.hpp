@@ -32,12 +32,11 @@ namespace serial_driver {
    * 职责：
    *  - 从参数服务器读取串口配置（port_name, baud_rate 等）。
    *  - 持有并管理 SerialDriverMain 实例的生命周期。
-   *  - 创建 4 路桥接通道（/cmd_vel, /serial/Yaw, /serial/TES_speed,
-   * /serial/EnemyPos），分别使用 RosToSerialBridge 和 SerialToRosBridge。
+   *  - 创建 3 路桥接通道（/cmd_vel, /serial/Yaw, /serial/EnemyPos），分别使用
+   *    RosToSerialBridge 和 SerialToRosBridge。
    *  - 定时发布裁判系统数据（RobotStatus, GameStatus, RfidStatus）。
    *  - 广播 gimbal_yaw_vision tf（由 odom→base_footprint 推导）。
-   *  - 提供 DWA 滑动窗口滤波和速度坐标系变换工具方法。
-   *  - 监听底盘模式切换（/chassis_mode）。
+   *  - 提供速度坐标系变换工具方法（transformVelocityToChassis）。
    */
   class SerialDriverNode : public rclcpp::Node {
   public:

@@ -73,7 +73,9 @@ guganav/
 │   │
 │   ├── guga_controller/       # [控制层]
 │   │   ├── pb_omni_pid_pursuit_controller/ # 全向 PID 追迹控制器 ★模式B范例
-│   │   └── gimbal_cmd_vel_adapter/  # 速度变换适配
+│   │   ├── nonrotating_vel_transform/  # 速度变换适配（base_footprint → base_footprint_nonrotating）
+│   │   ├── mpc_controller/     #   acados MPC 控制器
+│   │   └── nav2_mppi_controller/ #  MPPI 控制器（输出 nonrotating 系速度）
 │   │
 │   ├── guga_planner/          # [规划层]
 │   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up, intensity_voxel)
@@ -93,12 +95,12 @@ guganav/
 │   │   ├── joint_state_publisher/   # 关节状态发布
 │   │   └── sdformat_tools/   #    SDFormat 工具
 │   │
-│   ├── guga_ui/               # [UI] (开发中, feature_serial 分支)
-│   │   ├── guga_ui_common/    #   共享内存通信库 (header-only, 无 ROS 依赖)
-│   │   └── guga_ui_pangolin/  #   Pangolin 3D 可视化 (独立进程, 读 shm)
-│   │
+│   ├── guga_common/           # [接口] 自定义 ROS2 msg（多包共享）
+│   ├── guga_ui/               # [UI] cmdvel_visualizer（速度可视化）
+│   ├── guga_ui_old/           # [UI-旧] guga_ui_common（共享内存）+ guga_ui_pangolin（Pangolin 3D）
+│   ├── guga_test/             # [测试] (COLCON_IGNORE)
+│   ├── guga_thirdparty/       # [第三方] point_lio 等
 │   ├── guga_vision/           # [视觉] (预留，当前为空)
-│   └── communication_OLD/     # [废弃] 旧版串口通信，将被 serial_driver 替代
 │
 ├── build/                     # colcon 构建输出 (含 COLCON_IGNORE)
 ├── install/                   # colcon 安装输出
@@ -139,7 +141,7 @@ guganav/
 
 - 帧头: `0x42 0x52` ("BR" = Beihang Robotics)
 - 格式: `SOF(2B) | CMD(1B) | LEN(1B) | PAYLOAD(nB) | CRC8(1B)`
-- 命令码: `0xCD` 运动控制帧 (26B payload), `0xD1` 裁判系统帧 (13B payload)
+- 命令码: `0xCD` 运动控制帧 (17B payload), `0xD1` 裁判系统帧 (13B payload)
 - CRC8: poly=0x31, init=0xFF, 查表驱动
 - 物理层: 115200 8N1, 非阻塞读写, 1kHz 轮询线程, 3s 超时自动重连
 
@@ -152,7 +154,7 @@ UI 进程 (`guga_ui_pangolin`) 不链接 ROS2，通过 POSIX 共享内存读取�
     │  ShmWriter::write(&data, 64B)
     ▼
 ┌──────────────────────────┐
-│  POSIX shm "guga_ui_shm" │
+│  POSIX shm "guga_shm"    │
 │  [Header] [Slot×8] [Data]│
 │  lock-free, seq 协议      │
 └──────────────────────────┘
@@ -214,7 +216,7 @@ guga_ui_pangolin
 ### 实车
 
 ```bash
-ros2 launch guga_nav_bringup reality_launch.py
+ros2 launch guga_bringup reality_launch.py
 ```
 
 启动：robot_state_publisher → Livox 雷达 → Nav2 导航栈 → 通信节点(可选)
@@ -222,7 +224,7 @@ ros2 launch guga_nav_bringup reality_launch.py
 ### 仿真
 
 ```bash
-ros2 launch guga_nav_bringup simulation_launch.py
+ros2 launch guga_bringup simulation_launch.py
 # 或
 bash scripts/simulation.sh
 ```
@@ -312,6 +314,6 @@ ros2 run guga_ui_pangolin guga_ui
 | `src/guga_bringup/launch/simulation_launch.py` | 仿真启动入口 |
 | `src/guga_bringup/config/` | Nav2 参数 (reality/simulation) |
 | `src/guga_driver/serial_driver/include/serial_driver/serial_driver_main.hpp` | 串口协议底层 API |
-| `src/guga_ui/guga_ui_common/include/guga_ui_common/ui_types.hpp` | UI 共享内存数据结构 |
-| `src/guga_ui/guga_ui_common/include/guga_ui_common/shm_writer.hpp` | 共享内存写入端 |
-| `src/guga_ui/guga_ui_common/include/guga_ui_common/shm_reader.hpp` | 共享内存读取端 |
+| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/ui_types.hpp` | UI 共享内存数据结构 |
+| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_writer.hpp` | 共享内存写入端 |
+| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_reader.hpp` | 共享内存读取端 |

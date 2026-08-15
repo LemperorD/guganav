@@ -8,7 +8,7 @@
  * 使用方式（每个算法模块中）：
  *
  *   1. 在类成员中声明 ShmWriter writer_;
- *   2. 构造时调用 writer_.init("guga_ui_shm", UiSlotId::DECISION);
+ *   2. 构造时调用 writer_.init("guga_shm", UiSlotId::DECISION);
  *   3. 每次有数据更新时调用 writer_.write(&ui_decision, sizeof(ui_decision));
  *
  * 写入是 lock-free 的：先 memcpy 数据区，再 atomic store 递增 seq。
@@ -78,7 +78,7 @@ public:
   /**
    * @brief 初始化写入端，创建或打开共享内存。
    *
-   * @param name 共享内存名称（如 "guga_ui_shm"）。
+   * @param name 共享内存名称（如 "guga_shm"）。
    * @param slot_id 要写入的槽位 ID（UiSlotId 枚举值）。
    * @return true 成功，false 失败。
    *

@@ -9,21 +9,24 @@
 ```text
 map
 `-- odom                         定位结果
-    `-- base_footprint           机器人位姿
+    `-- base_footprint           机器人位姿（底盘）
         `-- chassis              固定安装关系
             `-- gimbal_yaw_odom  云台里程计关节
                 `-- gimbal_pitch_odom
                     `-- gimbal_yaw
 ```
 
-历史 MPPI 配置曾插入：
+为支持底盘自旋（TES），`nonrotating_vel_transform` 额外发布一个与
+`base_footprint` 共原点、朝向不旋转（odom 对齐）的参考系：
 
 ```text
-gimbal_yaw
-`-- gimbal_yaw_fake               gimbal_cmd_vel_adapter 动态发布
+base_footprint
+`-- base_footprint_nonrotating   nonrotating_vel_transform 动态发布
 ```
 
-旧配置曾把 `gimbal_yaw_fake` 配置为 `robot_base_frame`；当前试验配置已经统一改为 `base_footprint`。
+`base_footprint_nonrotating` 被配置为 costmap 的 `robot_base_frame`，使 Nav2
+在"扣除底盘自旋"的参考系中导航，控制器输出的速度再由
+`nonrotating_vel_transform` 旋转补偿回真实底盘系。
 
 ## 2. 各段 TF 的来源
 
@@ -84,48 +87,52 @@ odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 
 Point-LIO 默认只发布 `aft_mapped_to_init` 话题；其 TF 发布开关 `tf_send_en` 在当前配置中关闭，因此 `loam_interface` 负责把激光里程计接入项目的 `odom` 系。
 
-## 4. `gimbal_yaw_fake` 的历史转换
+## 4. `nonrotating_vel_transform` 的转换
 
-实现见 [gimbal_cmd_vel_adapter.cpp](../src/guga_controller/gimbal_cmd_vel_adapter/src/gimbal_cmd_vel_adapter.cpp)：
-
-```text
-输入 TF: chassis -> gimbal_yaw
-输出 TF: gimbal_yaw -> gimbal_yaw_fake
-```
-
-默认 `chassisFollowed` 模式下，输出 yaw 为 `-yaw(chassis -> gimbal_yaw)`，所以：
+实现见 [nonrotating_vel_transform.cpp](../src/guga_controller/nonrotating_vel_transform/src/nonrotating_vel_transform.cpp)：
 
 ```text
-yaw(chassis -> gimbal_yaw_fake) = 0
+输入 TF: odom -> base_footprint（由 sensor_scan_generation 发布）
+输出 TF: base_footprint -> base_footprint_nonrotating
 ```
 
-这使 fake frame 的方向接近底盘方向，但它仍位于云台链上。非 `chassisFollowed` 模式下，代码使用 odometry 中的 `odom -> gimbal_yaw` yaw，行为会切换为接近世界/odom 对齐。
+`base_footprint_nonrotating` 与 `base_footprint` 共原点，但朝向扣除了机器人在
+odom 系的 yaw，使 Nav2 看到的机器人朝向恒为 odom 对齐（`yaw = 0`）。这为
+底盘自旋（TES）提供了"非旋转"的导航参考系。
 
-该兼容节点还能将 `cmd_vel_nav2_result` 转换后发布到 `cmd_vel`，并处理 `cmd_spin`、`chassis_mode`、超时直通和角速度反向。当前主 bringup 已不再启动该节点。
+`chassis_mode` 决定扣减的 yaw 来源：
+
+- `chassisFollowed`：扣 `yaw(chassis -> robot_base_frame)`（云台转角）。
+- `littleTES`（TES 自旋）：扣 `odometry` 中机器人（base_footprint）的 yaw。
+
+该节点还订阅 `cmd_vel_smoothed`（控制器经 velocity_smoother 输出的速度），
+旋转补偿到真实底盘系后发布 `cmd_vel`，并处理 `cmd_spin`（自旋角速度叠加）与
+`chassis_mode`（模式切换）。
 
 ## 5. 速度坐标系现状
 
-移除 fake 后的速度链为：
+速度链为：
 
 ```text
-MPPI/controller_server
+controller_server
     -> cmd_vel_controller
 velocity_smoother
+    -> cmd_vel_smoothed
+nonrotating_vel_transform（旋转补偿 + 叠加自旋）
     -> cmd_vel
 串口驱动 -> MCU
 ```
 
-小陀螺也不需要额外 TF。`simple_decision` 发布 `chassis_mode=2` 与
-`cmd_spin`：Omni PID 直接把该角速度作为完整 `wz` 输出；MPPI profile 通过
-`guga_mppi_critics/SpinCritic` 在候选控制序列中优化该 `wz`。两条链路均先经过
-`velocity_smoother`，不会在 `/cmd_vel` 后再次叠加角速度。
+`simple_decision` 发布 `chassis_mode` 与 `cmd_spin`：决策层进入 `LITTLE_TES`
+模式时，`nonrotating_vel_transform` 将 `spin_speed_`（来自 `cmd_spin` 话题）
+叠加到输出角速度，实现底盘自旋。
 
 `sensor_scan_generation::publishOdometry()` 先对相邻 `odom -> base_footprint`
 位姿做差，得到 `odom` 轴的线速度和角速度，再乘当前姿态的逆旋转，将其
 转换到 `child_frame_id` (`base_footprint`) 后写入 twist。这符合
 `nav_msgs/Odometry` 对 twist 坐标系的定义。
 
-MPPI 的 `controller_server.odom_topic` 已显式配置为相对话题 `odometry`。
+`controller_server.odom_topic` 已显式配置为相对话题 `odometry`。
 在机器人命名空间下，它订阅 `/red_standard_robot1/odometry`，不会再回退到
 Nav2 默认的 `odom` 话题。
 
@@ -139,6 +146,7 @@ Nav2 默认的 `odom` 话题。
 ros2 topic info -v /red_standard_robot1/odometry
 ros2 topic echo --once /red_standard_robot1/odometry
 ros2 run tf2_ros tf2_echo odom base_footprint
+ros2 run tf2_ros tf2_echo base_footprint base_footprint_nonrotating
 ros2 param get /red_standard_robot1/controller_server odom_topic
 ```
 
@@ -151,10 +159,13 @@ ros2 param get /red_standard_robot1/controller_server odom_topic
 - `Odometry.child_frame_id` 与 `twist` 实际坐标系是否一致。
 - 是否同时存在两个节点发布 `odom -> base_footprint`。
 - `controller_server` 的 `odom_topic` 是否为 `odometry`。
+- `base_footprint -> base_footprint_nonrotating` 是否由 `nonrotating_vel_transform` 发布。
 
 ## 7. 简要结论
 
-对于 MPPI Omni，当前配置使用 `base_footprint` 作为 `robot_base_frame`，
-`odometry.twist` 也转换到同一底盘坐标系，MPPI 明确订阅 `odometry`。
-`gimbal_yaw_fake` 不是 Nav2 必需 TF；它是为独立云台和旧版 `Twist` 接口
-设计的兼容层，当前 bringup 已不再启动它。
+当前配置（MPPI 与 MPC profile 统一）使用 `base_footprint` 作为
+`robot_base_frame`，`nonrotating_vel_transform` 发布
+`base_footprint -> base_footprint_nonrotating` 作为 Nav2 的导航参考系。
+costmap / bt_navigator / behavior_server 均使用 `base_footprint_nonrotating`，
+控制器在"扣除底盘旋转"的参考系中导航，输出由 `nonrotating_vel_transform`
+旋转补偿回真实底盘系。

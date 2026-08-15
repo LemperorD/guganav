@@ -218,14 +218,14 @@ static_assert(std::is_trivially_copyable_v<Odom>);
 // ==================== 云台偏航 ====================
 
 /**
- * @brief 云台 yaw 轴角度差和下位机上报的角速度。
+ * @brief 云台 yaw 轴角度差（TES 角速度字段保留，当前 serial_driver 不再上报）。
  *
- * 写入端: serial_driver_node (decodeYaw / decodeTESspeed)
+ * 写入端: serial_driver_node (decodeYaw)
  */
 struct alignas(64) Yaw {
   /// 下位机上报的 yaw 角度差（弧度）
   double yaw_diff{};
-  /// 下位机上报的 TES 角速度
+  /// TES 角速度（保留字段；HEAD serial_driver 已移除 decodeTESspeed，暂不写入）
   double tes_angular_z{};
 
   uint8_t _pad[48]{};
