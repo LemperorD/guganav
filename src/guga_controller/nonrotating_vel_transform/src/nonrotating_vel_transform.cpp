@@ -43,7 +43,10 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   this->declare_parameter<std::string>("vis_frame_id", "base_link");
   this->declare_parameter<double>("vis_scale", 1.0);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
-  this->declare_parameter<float>("init_spin_speed", 0.0);
+  // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
+  // 之后由 chassis_mode 话题（如 simple_decision）覆盖
+  this->declare_parameter<int>("initial_chassis_mode", 1);
+  this->declare_parameter<float>("init_spin_speed", 6.28);
   this->declare_parameter<bool>("output_in_chassis_frame", false);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
@@ -59,6 +62,10 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
   this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
+  // initial_chassis_mode：启动时默认小陀螺（launch 中按 navigation_profile 区分）
+  int initial_chassis_mode{1};
+  this->get_parameter("initial_chassis_mode", initial_chassis_mode);
+  chassis_mode_ = static_cast<uint8_t>(initial_chassis_mode);
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);

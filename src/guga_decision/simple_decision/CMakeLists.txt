@@ -10,6 +10,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(example_interfaces REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -31,6 +32,7 @@ ament_target_dependencies(simple_decision_component
   rclcpp_components
   std_msgs
   geometry_msgs
+  example_interfaces
   nav_msgs
   tf2
   tf2_geometry_msgs
@@ -71,6 +73,7 @@ if(BUILD_TESTING)
         rclcpp
         std_msgs
         geometry_msgs
+        example_interfaces
         tf2
         tf2_ros
         guga_interfaces

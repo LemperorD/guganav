@@ -13,9 +13,14 @@
 
 | chassis_mode | 含义 | yaw 补偿来源 | 角速度 |
 |--------------|------|--------------|--------|
-| `0` = chassisFollowed（默认） | 云台跟随底盘 | `chassis → base_footprint` 的 yaw（`updateGimbalYaw`） | 直接透传，不叠加自旋 |
+| `0` = chassisFollowed | 云台跟随底盘 | `chassis → base_footprint` 的 yaw（`updateGimbalYaw`） | 直接透传，不叠加自旋 |
 | `1` = littleTES | 小陀螺自旋 | `base_footprint` 在 odom 下的 yaw（`odometryCallback`/`syncCallback`） | 叠加 `cmd_spin` 自旋速度 |
 | `2` = goHome | 回补给点 | 同 littleTES | 叠加 `cmd_spin` 自旋速度 |
+
+> **默认 littleTES（导航启动即小陀螺）**：节点启动时 `chassis_mode` 取
+> `initial_chassis_mode` 参数（默认 1=littleTES），自旋速度取 `init_spin_speed`
+> （默认 6.28 rad/s），因此导航栈一启动底盘即开始自旋，不依赖决策节点。
+> 之后 `chassis_mode` / `cmd_spin` 话题（如 `simple_decision`）可覆盖这两个值。
 
 tf 发布规则：`base_footprint → base_footprint_nonrotating` 的旋转角在
 chassisFollowed 模式下取 `-chassis_yaw`，其余模式取 `-robot_base_angle`。
@@ -50,9 +55,10 @@ Related issue: [Switch from Twist to TwistStamped for cmd_vel #1594](https://git
 * `local_plan_topic` (`string`, default: `local_plan`) - 局部路径规划器的路径话题
 * `cmd_spin_topic` (`string`, default: `cmd_spin`) - 控制底盘固定旋转速度的话题
 * `chassis_mode_topic` (`string`, default: `chassis_mode`) - 底盘模式话题
+* `initial_chassis_mode` (`int`, default: `1`) - **启动时的底盘模式，默认 littleTES（导航启动即小陀螺）**；之后由 `chassis_mode_topic`（如 `simple_decision`）覆盖。launch 中按 `navigation_profile` 区分：`2d_mppi`/`jps_mpc` 为 1，`jps_pid` 为 0（其 costmap 走旋转的 base_footprint，不能自旋）
 * `input_cmd_vel_topic` (`string`, default: `""`) - 输入速度指令的话题（launch 中通常为 `cmd_vel_smoothed`）
 * `output_cmd_vel_topic` (`string`, default: `""`) - 输出速度指令的话题（launch 中通常为 `cmd_vel`）
-* `init_spin_speed` (`float`, default: `0.0`) - 若没有接收 `cmd_spin_topic`，则使用该值作为固定旋转速度
+* `init_spin_speed` (`float`, default: `6.28`) - 若没有接收 `cmd_spin_topic`，则使用该值作为固定旋转速度（rad/s，约每秒一圈）
 * `output_in_chassis_frame` (`bool`, default: `false`) - 输出是否直接变换到 `chassis_frame`（默认 false，输出到 `robot_base_frame`）
 * `vis_cmd_vel_topic` (`string`, default: `cmd_vel_marker`) - 速度可视化 Marker 话题
 * `vis_frame_id` (`string`, default: `base_link`) - 可视化参考坐标系

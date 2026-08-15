@@ -16,8 +16,14 @@ bringup模块，存放launch、参数、rviz等文件
 （odom 对齐）的坐标系，作为 Nav2 的 `robot_base_frame`，支持底盘自旋
 （TES）。`jps_pid` 使用 `base_footprint`，不走该参考系。
 
-TES 自旋：`simple_decision` 发布 `chassis_mode` 与 `cmd_spin`，
-`nonrotating_vel_transform` 将 `cmd_spin` 的角速度叠加到输出。
+**导航启动即小陀螺**：`nonrotating_vel_transform` 启动时默认 `littleTES`
+（`initial_chassis_mode=1`）+ `init_spin_speed=6.28`，所以 `2d_mppi`/`jps_mpc`
+导航栈一启动底盘即自旋，不依赖决策节点；`jps_pid` 在 launch 中显式设为
+跟随模式（`initial_chassis_mode=0`），不自旋。
+
+TES 自旋接管：`simple_decision`（`always_tes` 默认 true）运行后持续发布
+`chassis_mode=LITTLE_TES` 与 `cmd_spin`，`nonrotating_vel_transform` 将
+`cmd_spin` 的角速度叠加到输出。
 
 速度链：
 
