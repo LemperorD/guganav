@@ -9,6 +9,7 @@ else
   export SIMULATION_SESSION_ID
 fi
 SIMULATION_SHUTDOWN_FILE="/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
+SIMULATION_CLEANUP_STARTED=0
 
 usage() {
   cat <<'EOF'
@@ -20,7 +21,15 @@ Examples:
   scripts/simulation.sh nav
   scripts/simulation.sh m rmul_2025
   scripts/simulation.sh map rmul_2025
-  scripts/simulation.sh nav rmuc_2025 use_rviz:=False
+  scripts/simulation.sh nav rmuc_2025 navigation_profile:=2d_mppi use_rviz:=False
+
+Navigation profiles:
+  navigation_profile:=jps_pid  JPS global planner + omni PID controller (default)
+  navigation_profile:=2d_mppi  SmacPlanner2D global planner + MPPI controller
+  navigation_profile:=jps_mpc  JPS global planner + MPC controller
+
+When a navigation command is run from a terminal without
+navigation_profile:=..., an interactive profile menu is shown.
 EOF
 }
 
@@ -70,6 +79,58 @@ is_true() {
   esac
 }
 
+has_navigation_profile() {
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == navigation_profile:=* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+select_navigation_profile() {
+  local selection
+
+  # stdout is captured by the caller, so use /dev/tty to detect and read an
+  # actual interactive terminal instead of checking stdout's terminal state.
+  if [ ! -r /dev/tty ]; then
+    printf 'navigation_profile:=jps_pid'
+    return 0
+  fi
+
+  cat >&2 <<'EOF'
+
+Select navigation profile:
+  1) JPS global planner + omni PID controller (jps_pid)
+  2) SmacPlanner2D + MPPI controller (2d_mppi)
+  3) JPS + MPC controller (jps_mpc)
+EOF
+  while true; do
+    printf 'Profile [1]: ' >&2
+    if ! read -r selection < /dev/tty; then
+      selection=1
+    fi
+    case "${selection:-1}" in
+      1)
+        printf 'navigation_profile:=jps_pid'
+        return 0
+        ;;
+      2)
+        printf 'navigation_profile:=2d_mppi'
+        return 0
+        ;;
+      3)
+        printf 'navigation_profile:=jps_mpc'
+        return 0
+        ;;
+      *)
+        echo "Please select 1, 2, or 3." >&2
+        ;;
+    esac
+  done
+}
+
 cleanup_simulation_processes() {
   local launch_pids=()
   local simulation_pids=()
@@ -86,6 +147,11 @@ cleanup_simulation_processes() {
     "gz sim"
     "ign gazebo"
   )
+
+  if [ "$SIMULATION_CLEANUP_STARTED" -eq 1 ]; then
+    return 0
+  fi
+  SIMULATION_CLEANUP_STARTED=1
 
   touch "$SIMULATION_SHUTDOWN_FILE" 2>/dev/null || true
 
@@ -276,7 +342,11 @@ fi
 
 case "$mode" in
   n | nav | navigation)
-    run_complete_simulation nav "$@"
+    nav_args=("$@")
+    if ! has_navigation_profile "${nav_args[@]}"; then
+      nav_args+=("$(select_navigation_profile)")
+    fi
+    run_complete_simulation nav "${nav_args[@]}"
     exit 0
     ;;
   m | map | mapping | slam)
@@ -284,6 +354,11 @@ case "$mode" in
     exit 0
     ;;
   nav-only | navigation-only)
+    nav_args=("$@")
+    if ! has_navigation_profile "${nav_args[@]}"; then
+      nav_args+=("$(select_navigation_profile)")
+    fi
+    set -- "${nav_args[@]}"
     slam=False
     ;;
   map-only | mapping-only | slam-only)

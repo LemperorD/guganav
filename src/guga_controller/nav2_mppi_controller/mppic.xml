@@ -1,0 +1,10 @@
+<class_libraries>
+  <library path="mppi_controller">
+    <class
+      name="guga_source_mppi_controller::MPPIController"
+      type="nav2_mppi_controller::MPPIController"
+      base_class_type="nav2_core::Controller">
+      <description>Guga source-built MPPI Controller for Nav2</description>
+    </class>
+  </library>
+</class_libraries>

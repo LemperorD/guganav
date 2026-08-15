@@ -2,7 +2,7 @@
 set -euo pipefail
 
 WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)
-PKG=${1:-terrain_analysis}
+TERRAIN_ROOT="$WS/src/guga_perception/terrain_analysis"
 
 source_setup() {
   local setup_file=$1
@@ -16,8 +16,11 @@ source_setup() {
 if [ -z "${ROS_DISTRO:-}" ]; then
   source_setup /opt/ros/humble/setup.bash
 fi
-source_setup "$WS/install/setup.bash"
 cd "$WS"
+
+rm -rf build/terrain_analysis build/terrain_analysis_ext \
+  install/terrain_analysis install/terrain_analysis_ext \
+  log/latest_build/terrain_analysis log/latest_build/terrain_analysis_ext
 
 mkdir -p build/terrain_analysis
 RESULT_FILE=$WS/build/terrain_analysis/coverage_result.ans
@@ -26,28 +29,36 @@ rm -f "$RESULT_FILE"
 echo "=== Clean previous coverage data ===" | tee -a "$RESULT_FILE"
 find build/terrain_analysis -name "*.gcda" -delete 2>/dev/null
 
-echo "=== Build terrain_analysis with coverage flags ===" | tee -a "$RESULT_FILE"
-colcon build --symlink-install --packages-select terrain_analysis \
+echo "=== Build terrain packages with coverage flags ===" | tee -a "$RESULT_FILE"
+colcon build \
+  --base-paths "$TERRAIN_ROOT" \
+  --symlink-install \
+  --parallel-workers 1 \
+  --allow-overriding terrain_analysis \
+  --packages-select terrain_analysis terrain_analysis_ext \
   --event-handlers console_direct+ \
+  --cmake-clean-cache \
   --cmake-args \
     -DBUILD_TESTING=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DCMAKE_CXX_FLAGS="--coverage -O0" \
     -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+    -DCMAKE_SHARED_LINKER_FLAGS="--coverage" \
   2>&1 | tee -a "$RESULT_FILE"
 
 source_setup "$WS/install/setup.bash"
 
 echo "=== Run tests ===" | tee -a "$RESULT_FILE"
 cd "$WS/build/terrain_analysis"
-for test_bin in test_terrain_analysis test_context test_algorithm test_connectivity; do
-  GTEST_COLOR=yes ./$test_bin 2>&1 | grep -E "FAILED|PASSED.*tests" | tee -a "$RESULT_FILE"
+for test_bin in test_terrain_analysis test_state_ingest test_algorithm; do
+  echo "--- $test_bin ---" | tee -a "$RESULT_FILE"
+  GTEST_COLOR=yes ./$test_bin 2>&1 | tee -a "$RESULT_FILE"
 done
 
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Generate coverage report ===" | tee -a "$RESULT_FILE"
 cd "$WS"
-FILTER_BASE='src/guga_perception/terrain_analysis'
+FILTER_BASE='src/guga_perception/terrain_analysis/terrain_analysis'
 gcovr \
   --root . \
   --object-directory build/terrain_analysis \

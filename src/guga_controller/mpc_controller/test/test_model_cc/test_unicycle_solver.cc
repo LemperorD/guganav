@@ -56,6 +56,19 @@ static void rk4_step(const double x[3], const double u[2], double dt,
     // while (x_next[2] < -M_PI) x_next[2]+=2*M_PI;
 }
 
+static double unwrap_angle(double current, double previous)
+{
+    while (current - previous > M_PI)
+        current -= 2.0 * M_PI;
+
+    while (current - previous < -M_PI)
+        current += 2.0 * M_PI;
+
+    return current;
+}
+
+double last_ref_theta = 0.0;
+
 // 参考轨迹
 enum class TrajectoryType { CIRCLE = 0, FIGURE8 = 1 };
 
@@ -69,7 +82,9 @@ static void generate_reference(TrajectoryType type, double t, double ref[3]) {
         double eps=0.001;
         ref[2]=atan2(ay*sin(2.0*w*(t+eps))-ay*sin(2.0*w*(t-eps)),
                      ax*sin(w*(t+eps))-ax*sin(w*(t-eps)));
-        // TODO：unwrap
+        ref[2]=unwrap_angle(ref[2], last_ref_theta);
+        last_ref_theta = ref[2];
+
     }
 }
 

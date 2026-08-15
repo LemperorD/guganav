@@ -12,14 +12,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # find dependencies
-find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
+ament_auto_find_build_dependencies()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MincoTrajectory.msg"
@@ -28,29 +25,17 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 )
 
 # ---- 共享内存通信库 (header-only + cpp) ----
-add_library(guga_shm SHARED
+ament_auto_add_library(guga_shm SHARED
   src/shm/shm_reader.cpp
   src/shm/shm_writer.cpp
-)
-target_include_directories(guga_shm PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
 )
 # 链接 librt（shm_open 需要）
 target_link_libraries(guga_shm
   rt
 )
 
-# ---- 安装 ----
-install(TARGETS guga_shm
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY include/
-  DESTINATION include/${PROJECT_NAME}
+ament_auto_add_library(common_libs SHARED
+  src/common_libs.cpp
 )
 
 if(BUILD_TESTING)
@@ -65,4 +50,6 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-ament_package()
+ament_auto_package(
+  USE_SCOPED_HEADER_INSTALL_DIR
+)

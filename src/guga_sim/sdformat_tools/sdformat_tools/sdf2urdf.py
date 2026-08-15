@@ -3,7 +3,7 @@
 import os
 import sys
 import xml.dom.minidom
-from .sdf_util import parse_model_uri
+from .sdf_util import model_uri_to_urdf_uri
 
 def get_child_node_by_tag(node, name):
     for child in node.childNodes:
@@ -31,7 +31,7 @@ def convert_geometry(in_node, out_doc, out_parent_node):
         if child.nodeType == xml.dom.Node.ELEMENT_NODE:
             if child.tagName == 'mesh':
                 uri_node = get_child_node_by_tag(child, 'uri')
-                uri = 'file://'+parse_model_uri(uri_node.firstChild.data)
+                uri = model_uri_to_urdf_uri(uri_node.firstChild.data)
                 new_mesh_node = create_child_node(out_doc, new_node, 'mesh')
                 new_mesh_node.setAttribute('filename', uri)
                 return True

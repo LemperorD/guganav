@@ -64,7 +64,7 @@ private:
   void updateGimbalYaw();
   void publishTransform();
   geometry_msgs::msg::Twist transformVelocity(
-    const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff);
+    const geometry_msgs::msg::Twist::SharedPtr & twist, double yaw_diff);
   void visualizeVelocity(const geometry_msgs::msg::Twist & vel);
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
@@ -100,6 +100,7 @@ private:
   double vis_scale_{1.0};
   std::string chassis_mode_topic_;
   float spin_speed_;
+  bool output_in_chassis_frame_{false};
   uint8_t chassis_mode_ = 1;
   double chassis_followed_yaw_ = 0.0;
 

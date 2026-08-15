@@ -3,13 +3,11 @@
 
 // #define PREDICTED_PLAN_DEBUG
 // #define SOLVE_TIME_DEBUG
-// #define REFERENCE_DEBUG
+#define REFERENCE_DEBUG
 // #define LOCAL_PLAN_LENGTH_DEBUG
-// #define PREDICT_INPUT_DEBUG
-#define WRITE_FILE_DEBUG
+// #define PREDICT_INPUT
 
 #include <iostream>
-#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -133,11 +131,12 @@ private: // 尝试使用控制预测序列计算局部规划路径长度
 inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose)
 {
   StateBound state;
+  state << pose.pose.position.x, pose.pose.position.y;
 
   const auto & q = pose.pose.orientation;
   const double siny = 2.0 * (q.w * q.z + q.x * q.y);
   const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  state << pose.pose.position.x, pose.pose.position.y, std::atan2(siny, cosy);
+  state << std::atan2(siny, cosy);
 
   return state;
 }

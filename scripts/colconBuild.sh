@@ -14,6 +14,8 @@ Options:
     -r / --release       Release编译
     -d / --debug         Debug编译
     -m / --model         强制重编译控制器模型
+    -p / --packages      仅编译指定包(空格分隔多个包名)
+    -t / --tes           安全编译TES相关包(内存限制+单线程,防死机)
 EOF
 }
 
@@ -27,6 +29,12 @@ BUILD_TYPE=Release
 
 # 是否重新编译MPC控制器模型
 FORCE_MODEL=false
+
+# 仅编译指定包(为空则全量编译)
+PACKAGES_SELECT=""
+
+# 安全编译(单线程+顺序+内存限制,防止编译爆内存死机)
+SAFE_BUILD=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -48,6 +56,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         -fm | --force-model)
             FORCE_MODEL=true
+            shift
+            ;;
+        -p | --packages)
+            PACKAGES_SELECT="$2"
+            shift 2
+            ;;
+        -t | --tes)
+            PACKAGES_SELECT="point_lio nav2_mppi_controller fake_vel_transform"
+            SAFE_BUILD=true
             shift
             ;;
         *)
@@ -117,7 +134,21 @@ else
   BUILD_ARGS+=(--packages-skip hik_driver)
 fi
 
-colcon build "${BUILD_ARGS[@]}" --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+if [ -n "$PACKAGES_SELECT" ]; then
+  echo "Packages   : $PACKAGES_SELECT"
+  # shellcheck disable=SC2086
+  BUILD_ARGS+=(--packages-select $PACKAGES_SELECT)
+fi
+
+if $SAFE_BUILD; then
+  echo "Safe build : systemd-run MemoryMax=6G, -j1, sequential executor"
+  systemd-run --user --scope \
+    -p MemoryHigh=5G \
+    -p MemoryMax=6G \
+    bash -lc "cd '$WS' && export MAKEFLAGS='-j1 -l1' && colcon build ${BUILD_ARGS[*]} --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+else
+  colcon build "${BUILD_ARGS[@]}" --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+fi
 if [ ! -L "$WS/compile_commands.json" ]; then
   ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
   echo "已创建compile_commands.json的软链接, 请设置vscode的c_cpp_properties.json以启用代码补全和跳转功能。"
