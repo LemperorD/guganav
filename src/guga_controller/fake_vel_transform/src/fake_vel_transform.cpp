@@ -43,6 +43,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->declare_parameter<double>("vis_scale", 1.0);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
   this->declare_parameter<float>("init_spin_speed", 0.0);
+  this->declare_parameter<bool>("output_in_chassis_frame", false);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("fake_robot_base_frame", fake_robot_base_frame_);
@@ -56,6 +57,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->get_parameter("vis_scale", vis_scale_);
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
+  this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -223,9 +225,11 @@ geometry_msgs::msg::Twist FakeVelTransform::rotateVelocity(
 }
 
 geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
-  const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff)
+  const geometry_msgs::msg::Twist::SharedPtr & twist, double yaw_diff)
 {
-  auto out = rotateVelocity(*twist, yaw_diff);
+  const double fake_to_chassis_yaw = chassis_followed_yaw_ - yaw_diff;
+  auto out = output_in_chassis_frame_ ? rotateVelocity(*twist, fake_to_chassis_yaw)
+                                      : rotateVelocity(*twist, yaw_diff);
   if (chassis_mode_ == chassisFollowed) {
     out.angular.z = twist->angular.z;
   } else {
@@ -240,7 +244,7 @@ void FakeVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist & vel)
   double scale = vis_scale_;
 
   visualization_msgs::msg::Marker linear_marker;
-  linear_marker.header.frame_id = robot_base_frame_;
+  linear_marker.header.frame_id = output_in_chassis_frame_ ? chassis_frame_ : robot_base_frame_;
   linear_marker.header.stamp = now;
   linear_marker.ns = "cmd_vel";
   linear_marker.id = 0;
@@ -272,7 +276,7 @@ void FakeVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist & vel)
   vis_marker_pub_->publish(linear_marker);
 
   visualization_msgs::msg::Marker angular_marker;
-  angular_marker.header.frame_id = robot_base_frame_;
+  angular_marker.header.frame_id = output_in_chassis_frame_ ? chassis_frame_ : robot_base_frame_;
   angular_marker.header.stamp = now;
   angular_marker.ns = "cmd_vel";
   angular_marker.id = 1;

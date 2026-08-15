@@ -6,7 +6,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVar
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, Node
-from launch_ros.descriptions import ComposableNode, ParameterFile
+from launch_ros.descriptions import ComposableNode, ParameterFile, ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
@@ -244,6 +244,13 @@ def generate_launch_description():
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
                         "output_cmd_vel_topic": "cmd_vel",
+                        "output_in_chassis_frame": ParameterValue(
+                            PythonExpression([
+                                "'", use_sim_time, "'.lower() == 'true' and '",
+                                navigation_profile, "' == 'jps_mpc'",
+                            ]),
+                            value_type=bool,
+                        ),
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
                     }
@@ -349,6 +356,13 @@ def generate_launch_description():
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
                         "output_cmd_vel_topic": "cmd_vel",
+                        "output_in_chassis_frame": ParameterValue(
+                            PythonExpression([
+                                "'", use_sim_time, "'.lower() == 'true' and '",
+                                navigation_profile, "' == 'jps_mpc'",
+                            ]),
+                            value_type=bool,
+                        ),
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
                     }

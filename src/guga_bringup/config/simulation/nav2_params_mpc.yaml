@@ -95,7 +95,7 @@ sensor_scan_generation:
     use_sim_time: True
     lidar_frame: "front_mid360"
     base_frame: "base_footprint"
-    robot_base_frame: "base_footprint"
+    robot_base_frame: "gimbal_yaw"
     min_odometry_dt: 0.001
     max_linear_velocity: 10.0
     max_angular_velocity: 20.0
@@ -261,7 +261,7 @@ bt_navigator:
   ros__parameters:
     use_sim_time: True
     global_frame: map
-    robot_base_frame: base_footprint
+    robot_base_frame: gimbal_yaw_fake
     odom_topic: odometry
     bt_loop_duration: 10
     default_server_timeout: 100
@@ -343,19 +343,19 @@ controller_server:
       mpc:
         qx: 100.0
         qy: 100.0
-        qtheta: 100.0
-        rvx: 1.0
-        rvy: 1.0
-        romega: 0.5
-        qx_e: 50.0
-        qy_e: 50.0
-        qtheta_e: 25.0
-        vx_min: -2.0
-        vx_max: 2.0
-        vy_min: -2.0
-        vy_max: 2.0
-        omega_min: -1.0
-        omega_max: 1.0
+        qtheta: 500.0
+        rvx: 50.0
+        rvy: 50.0
+        romega: 250.0
+        qx_e: 500.0
+        qy_e: 500.0
+        qtheta_e: 200.0
+        vx_min: -0.5
+        vx_max: 0.5
+        vy_min: -0.5
+        vy_max: 0.5
+        omega_min: -2.0
+        omega_max: 2.0
       local_plan_length: 2.0
 
 local_costmap:
@@ -365,7 +365,7 @@ local_costmap:
       update_frequency: 10.0
       publish_frequency: 5.0
       global_frame: odom
-      robot_base_frame: base_footprint
+      robot_base_frame: gimbal_yaw_fake
       rolling_window: true
       width: 5
       height: 5
@@ -600,7 +600,7 @@ behavior_server:
       plugin: "nav2_behaviors/AssistedTeleop"
     local_frame: odom
     global_frame: map
-    robot_base_frame: base_footprint
+    robot_base_frame: gimbal_yaw_fake
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0

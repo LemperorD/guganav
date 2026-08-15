@@ -28,6 +28,11 @@ void MpcControllerNode::configure(
   // 加载参数并配置wrapper
   loadParameters(); ConfigMpcWrapper(mpc_config_);
 
+#ifdef PREDICT_INPUT
+  // 初始化预测输入线程, 1Hz
+  predict_thread_ = std::thread(&MpcControllerNode::predictInputThreadFunction, this);
+#endif
+
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Configured");
 }
 
@@ -117,27 +122,25 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
 #endif
 
-  cmd_vel.twist.linear.x = u_opt[0];
-  cmd_vel.twist.linear.y = u_opt[1];
-  cmd_vel.twist.angular.z = u_opt[2];
-  // double theta = global_pose.pose.orientation.z;
-
-
-  // double vx_world = u_opt[0];
-  // double vy_world = u_opt[1];
-
-
-  // cmd_vel.twist.linear.x =
-  //     cos(theta)*vx_world +
-  //     sin(theta)*vy_world;
-
-
-  // cmd_vel.twist.linear.y =
-  //   -sin(theta)*vx_world +
-  //     cos(theta)*vy_world;
-
-
+  // cmd_vel.twist.linear.x = u_opt[0];
+  // cmd_vel.twist.linear.y = u_opt[1];
   // cmd_vel.twist.angular.z = u_opt[2];
+
+  double yaw = tf2::getYaw(global_pose.pose.orientation);
+
+  double vx_map = u_opt[0];
+  double vy_map = u_opt[1];
+
+  double cos_yaw = std::cos(yaw);
+  double sin_yaw = std::sin(yaw);
+
+  double vx_body =  cos_yaw * vx_map + sin_yaw * vy_map;
+  double vy_body = -sin_yaw * vx_map + cos_yaw * vy_map;
+
+
+  cmd_vel.twist.linear.x = vx_body;
+  cmd_vel.twist.linear.y = vy_body;
+  cmd_vel.twist.angular.z = -u_opt[2];
 
   return cmd_vel;
 }
@@ -341,6 +344,21 @@ inline geometry_msgs::msg::PoseStamped MpcControllerNode::transformPoseToGlobal(
   }
   return transformed_pose;
 }
+
+// geometry_msgs::msg::Twist MpcControllerNode::transformVelocity( const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff) {
+//   geometry_msgs::msg::Twist out;
+//   out.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
+//   out.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
+//   out.angular.z = twist->angular.z;
+//   return out;
+// }
+
+#ifdef PREDICT_INPUT
+void MpcControllerNode::predictInputThreadFunction()
+{
+  predicted_inputs_ = mpc_wrapper_->predictedInputs();
+}
+#endif
 
 } // namespace mpc_controller
 

@@ -5,6 +5,7 @@
 // #define SOLVE_TIME_DEBUG
 #define REFERENCE_DEBUG
 // #define LOCAL_PLAN_LENGTH_DEBUG
+// #define PREDICT_INPUT
 
 #include <iostream>
 #include <memory>
@@ -115,6 +116,13 @@ private:
   double local_plan_length_{2.0};
 
   inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(const geometry_msgs::msg::PoseStamped & pose) const;
+
+#ifdef PREDICT_INPUT
+private: // 尝试使用控制预测序列计算局部规划路径长度
+  InputHorizon predicted_inputs_;
+  std::thread predict_thread_;
+  void predictInputThreadFunction();
+#endif
 };
 
 }  // namespace mpc_controller
