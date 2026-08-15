@@ -5,7 +5,7 @@
 ## 架构
 
 ```
-ROS2 消息 → TerrainAnalysisContext → TerrainAlgorithm.run() → publish → ROS2 消息
+ROS2 消息 → TerrainBlackboard → TerrainAlgorithm.run() → publish → ROS2 消息
  (订阅)      (config/state 汇总)       (10 阶段管线)         (发布)     (terrain_map)
 ```
 
@@ -34,7 +34,7 @@ rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
 | `voxelize`                    | 当前帧点云按空间位置分配到地形体素格子             |
 | `updateVoxels`                | 逐个格子降采样 + 时间衰减 + 空间过滤               |
 | `extractTerrainCloud`         | 提取车辆周边 11×11 格子的累积地形点                |
-| `estimateGround`              | 点云膨胀到 planar voxel，为后续高度估算准备        |
+| `estimateGround`              | 点云膨胀到 planar voxel，为后续高度估算准备；越界点跳过 |
 | `detectDynamicObstacles`      | 用仰角 + 传感器 FOV 检测潜在动态障碍               |
 | `filterDynamicObstaclePoints` | 当前帧高角度点反向印证，清除头顶固定结构的误报     |
 | `computeElevation`            | 对每个 planar voxel 估算地面高度（分位数或最小值） |
@@ -44,6 +44,9 @@ rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
 ## 测试
 
 ```bash
+# 单元测试（构建两个 terrain 包并运行 terrain_analysis 测试）
+scripts/pre-commit/run_terrain_analysis_tests.sh
+
 # 覆盖率（编译 + 运行 + gcovr 报告）
 scripts/test/test_terrain_analysis_coverage.sh
 ```
@@ -52,7 +55,16 @@ scripts/test/test_terrain_analysis_coverage.sh
 | --------------- | -------------------------------------- |
 | Html 覆盖率报告 | `build/terrain_analysis/coverage.html` |
 | lcov 信息       | `lcov.info`                            |
-| 测试日志        | `test_result.ans`                      |
+| 测试日志        | `build/terrain_analysis/coverage_result.ans` |
+
+当前 `terrain_analysis` 测试套件：
+
+- `test_terrain_analysis`：完整管线行为
+- `test_state_ingest`：里程计、点云和清除状态接收
+- `test_algorithm`：体素、地面估计、动态障碍和边界处理
+
+`estimateGround` 会在计算 planar voxel 线性索引前检查行列范围；超出
+`51×51` planar grid 的点会被忽略，避免数组越界。
 
 ## 网格参数
 

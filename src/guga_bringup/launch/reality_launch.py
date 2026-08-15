@@ -32,6 +32,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
     use_ui = LaunchConfiguration("use_ui")
+    use_decision = LaunchConfiguration("use_decision")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -134,6 +135,12 @@ def generate_launch_description():
         description="Whether to start the guga_ui_pangolin process",
     )
 
+    declare_use_decision_cmd = DeclareLaunchArgument(
+        "use_decision",
+        default_value="False",
+        description="Whether to start simple_decision",
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     configured_params = ParameterFile(
@@ -227,6 +234,18 @@ def generate_launch_description():
         condition=IfCondition(use_ui),
     )
 
+    decision_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("simple_decision"),
+                "launch",
+                "simple_decision.launch.py",
+            )
+        ),
+        condition=IfCondition(use_decision),
+        launch_arguments={"namespace": namespace}.items(),
+    )
+
     ld = LaunchDescription()
 
     # Declare the launch options
@@ -244,6 +263,7 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
     ld.add_action(declare_use_ui_cmd)
+    ld.add_action(declare_use_decision_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     # Add the actions to launch all of the navigation nodes
@@ -254,5 +274,6 @@ def generate_launch_description():
     ld.add_action(rviz_cmd)
     ld.add_action(communication_cmd)
     ld.add_action(guga_ui_cmd)
+    ld.add_action(decision_cmd)
 
     return ld
