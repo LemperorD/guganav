@@ -122,25 +122,12 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
 #endif
 
-  // cmd_vel.twist.linear.x = u_opt[0];
-  // cmd_vel.twist.linear.y = u_opt[1];
-  // cmd_vel.twist.angular.z = u_opt[2];
-
-  double yaw = tf2::getYaw(global_pose.pose.orientation);
-
-  double vx_map = u_opt[0];
-  double vy_map = u_opt[1];
-
-  double cos_yaw = std::cos(yaw);
-  double sin_yaw = std::sin(yaw);
-
-  double vx_body =  cos_yaw * vx_map + sin_yaw * vy_map;
-  double vy_body = -sin_yaw * vx_map + cos_yaw * vy_map;
-
-
-  cmd_vel.twist.linear.x = vx_body;
-  cmd_vel.twist.linear.y = vy_body;
-  cmd_vel.twist.angular.z = -u_opt[2];
+  // acados 模型将 u=[vx,vy,omega] 建模为 body 系速度
+  // (x_dot = vx*cos(theta) - vy*sin(theta))，Nav2 cmd_vel 也是 body 系，
+  // 因此直接输出，不做任何旋转。
+  cmd_vel.twist.linear.x = u_opt[0];
+  cmd_vel.twist.linear.y = u_opt[1];
+  cmd_vel.twist.angular.z = u_opt[2];
 
   return cmd_vel;
 }

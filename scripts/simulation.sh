@@ -132,20 +132,19 @@ EOF
 }
 
 cleanup_simulation_processes() {
-  local launch_pids=()
-  local simulation_pids=()
+  local all_pids=()
   local pid
   local pattern
-  local launch_patterns=(
+  # 覆盖 launch、Gazebo/Ignition 服务端/客户端、RViz、以及 Gazebo 生成的机器人节点。
+  local patterns=(
     "ros2 launch rmu_gazebo_simulator bringup_sim.launch.py"
     "ros2 launch guga_bringup simulation_launch.py"
-  )
-  local simulation_patterns=(
-    "rviz2"
+    "ign gazebo"
     "gzserver"
     "gzclient"
     "gz sim"
-    "ign gazebo"
+    "rviz2"
+    "rmua19_robot_base"
   )
 
   if [ "$SIMULATION_CLEANUP_STARTED" -eq 1 ]; then
@@ -155,36 +154,43 @@ cleanup_simulation_processes() {
 
   touch "$SIMULATION_SHUTDOWN_FILE" 2>/dev/null || true
 
-  for pattern in "${launch_patterns[@]}"; do
+  # 收集所有相关进程并去重
+  for pattern in "${patterns[@]}"; do
     while IFS= read -r pid; do
       if [ -n "$pid" ] && [ "$pid" != "$$" ] && [ "$pid" != "${BASHPID:-$$}" ]; then
-        launch_pids+=("$pid")
+        all_pids+=("$pid")
       fi
     done < <(pgrep -f "$pattern" 2>/dev/null || true)
   done
+  mapfile -t all_pids < <(printf "%s\n" "${all_pids[@]}" | sort -u | grep -v '^$')
 
-  if [ "${#launch_pids[@]}" -gt 0 ]; then
-    printf "%s\n" "${launch_pids[@]}" | sort -u | xargs -r kill -INT -- 2>/dev/null || true
-    sleep 1
+  if [ "${#all_pids[@]}" -eq 0 ]; then
+    return 0
   fi
 
-  for pattern in "${simulation_patterns[@]}"; do
-    while IFS= read -r pid; do
-      if [ -n "$pid" ] && [ "$pid" != "$$" ] && [ "$pid" != "${BASHPID:-$$}" ]; then
-        simulation_pids+=("$pid")
-      fi
-    done < <(pgrep -f "$pattern" 2>/dev/null || true)
-  done
+  # 第一阶段：优雅终止，给 Gazebo/Ignition 短暂关闭时间
+  printf "%s\n" "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
+  sleep 3
 
-  if [ "${#simulation_pids[@]}" -gt 0 ]; then
-    printf "%s\n" "${simulation_pids[@]}" | sort -u | xargs -r kill -TERM -- 2>/dev/null || true
+  # 第二阶段：仍有残留则强制终止，避免拖慢下次仿真启动
+  local remaining=()
+  for pid in "${all_pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      remaining+=("$pid")
+    fi
+  done
+  if [ "${#remaining[@]}" -gt 0 ]; then
+    printf "%s\n" "${remaining[@]}" | xargs -r kill -KILL -- 2>/dev/null || true
   fi
 }
 
 exit_with_launch_status() {
   local status=$1
 
-  if [ "$status" -ne 0 ] && [ -f "$SIMULATION_SHUTDOWN_FILE" ]; then
+  # 130=SIGINT(Ctrl-C)、143=SIGTERM：主动关闭信号，视为正常退出；
+  # 或者 SHUTDOWN_FILE 已创建（清理函数已执行）也视为主动关闭。
+  if [ "$status" -eq 130 ] || [ "$status" -eq 143 ] || \
+     { [ "$status" -ne 0 ] && [ -f "$SIMULATION_SHUTDOWN_FILE" ]; }; then
     exit 0
   fi
 
@@ -193,8 +199,10 @@ exit_with_launch_status() {
 
 install_simulation_cleanup_traps() {
   trap 'cleanup_simulation_processes' EXIT
-  trap 'cleanup_simulation_processes; exit 130' INT
-  trap 'cleanup_simulation_processes; exit 143' TERM HUP
+  # 主动关闭（Ctrl-C / 终端关闭 / TERM）视为正常退出，退出码 0，
+  # 避免终端提示 "Press Enter to close"。
+  trap 'cleanup_simulation_processes; exit 0' INT
+  trap 'cleanup_simulation_processes; exit 0' TERM HUP
 }
 
 wait_for_simulation_terminal_close() {
