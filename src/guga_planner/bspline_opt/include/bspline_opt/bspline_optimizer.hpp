@@ -23,6 +23,7 @@ struct BSplineConfig
 
   // ── 优化权重 ──
   double smoothness_weight{0.1};    // 低: 不主导插值精度
+  double distance_weight{1.0};      // 距原始航点偏差代价权重 (相对平滑项)
   double esdf_weight{100.0};        // ESDF distance field obstacle-avoidance weight
 
   // ── 调校参数 ──

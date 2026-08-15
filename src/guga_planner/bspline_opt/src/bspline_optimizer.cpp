@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <numeric>
 #include <utility>
 
 #include <unsupported/Eigen/Splines>
@@ -397,42 +398,36 @@ inline void fillCtrl(
   }
 }
 
-static double evalCost(
+// 计算三个代价分量 (不乘权重): js=曲率能量均值, jd=距离平方和, je=ESDF 违反平方和
+static void evalTerms(
   const std::vector<double> & params, const CostCache & cc,
   double first_x, double first_y, double last_x, double last_y,
-  double w_smooth, double w_dist,
   const float * esdf_dist, int esdf_w, int esdf_h,
   double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
-  double esdf_safe_dist, double w_esdf)
+  double esdf_safe_dist,
+  double & js, double & jd, double & je)
 {
   const int M = cc.M;
   Eigen::MatrixXd ctrl;
   fillCtrl(params, first_x, first_y, last_x, last_y, M, ctrl);
+  js = 0.0; jd = 0.0; je = 0.0;
 
-  double cost{};
+  for (const auto & row : cc.d2_smooth) {
+    double ddx = bandedDot(row, ctrl, 0);
+    double ddy = bandedDot(row, ctrl, 1);
+    js += ddx * ddx + ddy * ddy;
+  }
+  js /= static_cast<double>(cc.d2_smooth.size());
 
-  if (w_smooth > 0.0) {
-    double s{};
-    for (const auto & row : cc.d2_smooth) {
-      double ddx = bandedDot(row, ctrl, 0);
-      double ddy = bandedDot(row, ctrl, 1);
-      s += ddx * ddx + ddy * ddy;
-    }
-    cost += w_smooth * s / static_cast<double>(cc.d2_smooth.size());
+  for (size_t i = 0; i < cc.b_dist.size(); ++i) {
+    double px = bandedDot(cc.b_dist[i], ctrl, 0);
+    double py = bandedDot(cc.b_dist[i], ctrl, 1);
+    double dx = px - cc.dist_q[i].x();
+    double dy = py - cc.dist_q[i].y();
+    jd += dx * dx + dy * dy;
   }
 
-  if (w_dist > 0.0) {
-    for (size_t i = 0; i < cc.b_dist.size(); ++i) {
-      double px = bandedDot(cc.b_dist[i], ctrl, 0);
-      double py = bandedDot(cc.b_dist[i], ctrl, 1);
-      double dx = px - cc.dist_q[i].x();
-      double dy = py - cc.dist_q[i].y();
-      cost += w_dist * (dx * dx + dy * dy);
-    }
-  }
-
-  // ESDF distance-based obstacle cost (smooth gradient-aware)
-  if (w_esdf > 0.0 && esdf_dist) {
+  if (esdf_dist) {
     for (const auto & row : cc.b_esdf) {
       double px = bandedDot(row, ctrl, 0);
       double py = bandedDot(row, ctrl, 1);
@@ -442,11 +437,30 @@ static double evalCost(
         esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, wx, wy, esdf_max);
       if (dist < static_cast<float>(esdf_safe_dist)) {
         double violation = esdf_safe_dist - static_cast<double>(dist);
-        cost += w_esdf * violation * violation;
+        je += violation * violation;
       }
     }
   }
+}
 
+static double evalCost(
+  const std::vector<double> & params, const CostCache & cc,
+  double first_x, double first_y, double last_x, double last_y,
+  double w_smooth, double w_dist,
+  const float * esdf_dist, int esdf_w, int esdf_h,
+  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
+  double esdf_safe_dist, double w_esdf,
+  double js0, double jd0, double je0)
+{
+  double js, jd, je;
+  evalTerms(
+    params, cc, first_x, first_y, last_x, last_y,
+    esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, esdf_max,
+    esdf_safe_dist, js, jd, je);
+  double cost = 0.0;
+  if (w_smooth > 0.0 && js0 > 1e-12) {cost += w_smooth * (js / js0);}
+  if (w_dist > 0.0 && jd0 > 1e-12) {cost += w_dist * (jd / jd0);}
+  if (w_esdf > 0.0 && je0 > 1e-12) {cost += w_esdf * (je / je0);}
   return cost;
 }
 
@@ -459,6 +473,7 @@ static void computeGradient(
   const float * esdf_dist, const float * esdf_gx, const float * esdf_gy,
   int esdf_w, int esdf_h, double esdf_res, double esdf_ox, double esdf_oy,
   double esdf_max, double esdf_safe_dist, double w_esdf,
+  double js0, double jd0, double je0,
   std::vector<double> & grad)
 {
   const int M = cc.M;
@@ -473,9 +488,8 @@ static void computeGradient(
       }
     };
 
-  if (w_smooth > 0.0) {
-    const double fac = 2.0 * w_smooth /
-      static_cast<double>(cc.d2_smooth.size());
+  if (w_smooth > 0.0 && js0 > 1e-12) {
+    const double fac = 2.0 * w_smooth / (js0 * static_cast<double>(cc.d2_smooth.size()));
     for (const auto & row : cc.d2_smooth) {
       double ddx = bandedDot(row, ctrl, 0);
       double ddy = bandedDot(row, ctrl, 1);
@@ -485,7 +499,8 @@ static void computeGradient(
     }
   }
 
-  if (w_dist > 0.0) {
+  if (w_dist > 0.0 && jd0 > 1e-12) {
+    const double fac = 2.0 * w_dist / jd0;
     for (size_t i = 0; i < cc.b_dist.size(); ++i) {
       const auto & row = cc.b_dist[i];
       double px = bandedDot(row, ctrl, 0);
@@ -494,14 +509,15 @@ static void computeGradient(
       double ey = py - cc.dist_q[i].y();
       for (int k = 0; k < row.count; ++k) {
         accum(
-          row.start + k,
-          2.0 * w_dist * ex * row.val[k],
-          2.0 * w_dist * ey * row.val[k]);
+          row.start + k, fac * ex * row.val[k], fac * ey * row.val[k]);
       }
     }
   }
 
-  if (w_esdf > 0.0 && esdf_dist) {
+  if (w_esdf > 0.0 && je0 > 1e-12 && esdf_dist) {
+    // 梯度下降沿 -∇J 移动; ∇J_esdf = -2·w·(d_safe-d)·∇d,
+    // 因此系数必须为负, 使曲线朝远离障碍物的方向移动。
+    const double fac = -2.0 * w_esdf / je0;
     for (const auto & row : cc.b_esdf) {
       double px = bandedDot(row, ctrl, 0);
       double py = bandedDot(row, ctrl, 1);
@@ -517,7 +533,6 @@ static void computeGradient(
             esdf_gx, esdf_gy, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy,
             wx, wy, gd_x, gd_y);
         } else {
-          // 无梯度场时的回退: 中心差分距离场 (格元单位)
           gd_x = 0.5 * static_cast<double>(
             esdfDistanceAt(
               esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
@@ -533,11 +548,11 @@ static void computeGradient(
               esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
               esdf_oy, wx, wy - esdf_res, esdf_max));
         }
-        double fac = -2.0 * w_esdf *
-          (esdf_safe_dist - static_cast<double>(dist));
+        double violation = esdf_safe_dist - static_cast<double>(dist);
         for (int k = 0; k < row.count; ++k) {
           accum(
-            row.start + k, fac * gd_x * row.val[k], fac * gd_y * row.val[k]);
+            row.start + k, fac * violation * gd_x * row.val[k],
+            fac * violation * gd_y * row.val[k]);
         }
       }
     }
@@ -551,66 +566,80 @@ static std::vector<double> gradientDescent(
   const float * esdf_dist, const float * esdf_gx, const float * esdf_gy,
   int esdf_w, int esdf_h, double esdf_res, double esdf_ox, double esdf_oy,
   double esdf_max, double esdf_safe_dist, double w_esdf,
+  double js0, double jd0, double je0,
   int max_iters, double corridor_hw, bool & converged, int & iters_out)
 {
   std::vector<double> x = init_params;
   const int N = static_cast<int>(x.size());
   if (N == 0) {converged = true; iters_out = 0; return x;}
 
-  double alpha{1e-3};
-  constexpr double gtol = 1e-8;
-  constexpr int patience = 20;
+  constexpr double gtol = 1e-7;
+  constexpr int patience = 30;
+  const double kMaxStepCells = 2.0;   // 单次迭代最大移动距离 (格元)
+
+  std::vector<double> grad(N);
+  std::vector<double> g_prev(N);
+  std::vector<double> dir(N);
+  std::vector<double> x_try(N);
+  computeGradient(
+    x, cc, first_x, first_y, last_x, last_y,
+    w_smooth, w_dist,
+    esdf_dist, esdf_gx, esdf_gy, esdf_w, esdf_h,
+    esdf_res, esdf_ox, esdf_oy, esdf_max, esdf_safe_dist, w_esdf,
+    js0, jd0, je0, grad);
 
   double f_best = evalCost(
     x, cc, first_x, first_y, last_x, last_y,
     w_smooth, w_dist, esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy,
-    esdf_max, esdf_safe_dist, w_esdf);
-  int no_improve{};
+    esdf_max, esdf_safe_dist, w_esdf, js0, jd0, je0);
 
-  std::vector<double> grad(N);
-  std::vector<double> x_try(N);
-
-  int iter{};
-  for (; iter < max_iters; ++iter) {
-    computeGradient(
-      x, cc, first_x, first_y, last_x, last_y,
-      w_smooth, w_dist,
-      esdf_dist, esdf_gx, esdf_gy, esdf_w, esdf_h,
-      esdf_res, esdf_ox, esdf_oy, esdf_max, esdf_safe_dist, w_esdf, grad);
-
-    double g_norm{};
-    for (int i = 0; i < N; ++i) {
-      g_norm += grad[static_cast<size_t>(i)] * grad[static_cast<size_t>(i)];
-    }
-    g_norm = std::sqrt(g_norm);
-    if (g_norm < gtol) {break;}
-
-    alpha = std::min(alpha * 2.0, 0.1);
-    bool found{};
-    for (int ls = 0; ls < 15; ++ls) {
+  auto evalClamped = [&](const std::vector<double> & xt, double & fout) {
+      std::vector<double> xc = xt;
       for (int i = 0; i < N; ++i) {
-        x_try[static_cast<size_t>(i)] =
-          x[static_cast<size_t>(i)] - alpha * grad[static_cast<size_t>(i)];
-      }
-      for (int i = 0; i < N; ++i) {
-        // 紧邻固定起点/终点的控制点收紧走廊, 防止终点附近过度弯曲。
-        const int ctrl_j = i / 2 + 1;  // 控制点索引 (1..M-2)
+        const int ctrl_j = i / 2 + 1;
         double corr = corridor_hw;
         if (ctrl_j == 1 || ctrl_j == cc.M - 2) {
           corr = std::min(corr, 0.5);
         }
-        // 走廊约束: 限制在初始位置 ± corridor_hw 范围内
-        x_try[static_cast<size_t>(i)] = std::clamp(
-          x_try[static_cast<size_t>(i)],
+        xc[static_cast<size_t>(i)] = std::clamp(
+          xc[static_cast<size_t>(i)],
           init_params[static_cast<size_t>(i)] - corr,
           init_params[static_cast<size_t>(i)] + corr);
       }
-      double f_try = evalCost(
-        x_try, cc, first_x, first_y, last_x, last_y,
+      fout = evalCost(
+        xc, cc, first_x, first_y, last_x, last_y,
         w_smooth, w_dist, esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
-        esdf_oy, esdf_max, esdf_safe_dist, w_esdf);
+        esdf_oy, esdf_max, esdf_safe_dist, w_esdf, js0, jd0, je0);
+      return xc;
+    };
+
+  // 初始搜索方向: 负梯度 (归一化)
+  double g_norm = std::sqrt(
+    std::inner_product(grad.begin(), grad.end(), grad.begin(), 0.0));
+  for (int i = 0; i < N; ++i) {
+    dir[static_cast<size_t>(i)] =
+      (g_norm > 1e-12) ? -grad[static_cast<size_t>(i)] / g_norm : 0.0;
+  }
+  g_prev = grad;
+
+  int no_improve{};
+  int iter{};
+  for (; iter < max_iters; ++iter) {
+    g_norm = std::sqrt(
+      std::inner_product(grad.begin(), grad.end(), grad.begin(), 0.0));
+    if (g_norm < gtol) {break;}
+
+    double alpha = kMaxStepCells;
+    bool found{};
+    for (int ls = 0; ls < 30; ++ls) {
+      for (int i = 0; i < N; ++i) {
+        x_try[static_cast<size_t>(i)] =
+          x[static_cast<size_t>(i)] + alpha * dir[static_cast<size_t>(i)];
+      }
+      double f_try{};
+      auto xc = evalClamped(x_try, f_try);
       if (f_try < f_best) {
-        x = x_try;
+        x = xc;
         f_best = f_try;
         found = true;
         no_improve = 0;
@@ -621,7 +650,61 @@ static std::vector<double> gradientDescent(
     if (!found) {
       no_improve++;
       if (no_improve >= patience) {break;}
+      // 卡住时重置为最速下降方向, 避免死循环
+      for (int i = 0; i < N; ++i) {
+        dir[static_cast<size_t>(i)] = -grad[static_cast<size_t>(i)];
+      }
+      double dn = std::sqrt(std::inner_product(dir.begin(), dir.end(), dir.begin(), 0.0));
+      if (dn > 1e-12) {
+        for (int i = 0; i < N; ++i) {
+          dir[static_cast<size_t>(i)] /= dn;
+        }
+      }
+      continue;
     }
+
+    // 新梯度
+    std::vector<double> g_new(N);
+    computeGradient(
+      x, cc, first_x, first_y, last_x, last_y,
+      w_smooth, w_dist,
+      esdf_dist, esdf_gx, esdf_gy, esdf_w, esdf_h,
+      esdf_res, esdf_ox, esdf_oy, esdf_max, esdf_safe_dist, w_esdf,
+      js0, jd0, je0, g_new);
+
+    // Polak-Ribiere beta (带非负截断/重启), 然后归一化方向
+    double denom = std::inner_product(grad.begin(), grad.end(), grad.begin(), 0.0);
+    double beta = 0.0;
+    if (denom > 1e-12) {
+      double numer = 0.0;
+      for (int i = 0; i < N; ++i) {
+        numer += g_new[static_cast<size_t>(i)] *
+          (g_new[static_cast<size_t>(i)] - grad[static_cast<size_t>(i)]);
+      }
+      beta = std::max(0.0, numer / denom);
+    }
+    grad = g_new;
+    for (int i = 0; i < N; ++i) {
+      dir[static_cast<size_t>(i)] = -grad[static_cast<size_t>(i)] + beta *
+        dir[static_cast<size_t>(i)];
+    }
+    double dn = std::sqrt(std::inner_product(dir.begin(), dir.end(), dir.begin(), 0.0));
+    if (dn > 1e-12) {
+      for (int i = 0; i < N; ++i) {
+        dir[static_cast<size_t>(i)] /= dn;
+      }
+    } else {
+      for (int i = 0; i < N; ++i) {
+        dir[static_cast<size_t>(i)] = -grad[static_cast<size_t>(i)];
+      }
+      dn = std::sqrt(std::inner_product(dir.begin(), dir.end(), dir.begin(), 0.0));
+      if (dn > 1e-12) {
+        for (int i = 0; i < N; ++i) {
+          dir[static_cast<size_t>(i)] /= dn;
+        }
+      }
+    }
+    (void)g_prev;
   }
   iters_out = iter;
   converged = true;
@@ -862,15 +945,29 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
     int iters_out{};
     const auto cc = buildCostCache(
       state_.knots, M, state_.original_points, state_.parameters);
+    // 归一化标度: 各代价项除以其初始值, 使权重无量纲且与路径长度/格网无关
+    double js0{};
+    double jd0{};
+    double je0{};
+    evalTerms(
+      params, cc, fx, fy, lx, ly,
+      state_.esdf_distance, state_.esdf_w, state_.esdf_h,
+      state_.esdf_resolution, state_.esdf_origin_x, state_.esdf_origin_y,
+      state_.esdf_max_distance, config_.esdf_safe_distance,
+      js0, jd0, je0);
+    if (js0 < 1e-12) {js0 = 1.0;}
+    if (jd0 < 1e-12) {jd0 = 1.0;}
+    if (je0 < 1e-12) {je0 = 1.0;}
     auto opt = gradientDescent(
       params, cc,
       fx, fy, lx, ly,
-      config_.smoothness_weight, 1.0,  // J_dist 权重固定为 1.0
+      config_.smoothness_weight, config_.distance_weight,
       state_.esdf_distance, state_.esdf_gradient_x, state_.esdf_gradient_y,
       state_.esdf_w, state_.esdf_h,
       state_.esdf_resolution, state_.esdf_origin_x, state_.esdf_origin_y,
       state_.esdf_max_distance,
       config_.esdf_safe_distance, config_.esdf_weight,
+      js0, jd0, je0,
       config_.max_iterations, config_.corridor_halfwidth, converged, iters_out);
     result.iterations = iters_out;
 
@@ -895,6 +992,58 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
   // ── 第3步: 采样输出路径 ──
   auto path = sample(num_samples);
+
+  // ── 第4步: 采样点障碍物投射 (与第2步的控制点投射互补) ──
+  // 控制点投影只保证控制点不落入障碍格元, 采样曲线仍可能擦边切角。
+  // 先把落在障碍格元内的采样点投射到最近空闲格元; 再按 ≤0.5 格步长
+  // 检查相邻采样点之间的线段, 把仍穿过障碍的加密点也投射出去。
+  // 这样输出路径可通过 planner 的碰撞检查, 不再轻易回退到线性折线。
+  if (state_.costmap_data != nullptr) {
+    for (auto & p : path) {
+      projectPointToFree(
+        state_.costmap_data, state_.costmap_w, state_.costmap_h,
+        p.first, p.second);
+    }
+
+    // 对投影产生的长线段统一按 ≤0.5 格加密, 落入障碍的加密点一并投射,
+    // 保证相邻输出点间距足够小且均位于空闲格元, 下游碰撞检查不再回退。
+    constexpr double kRefineStepCells = 0.5;
+    for (int pass = 0; pass < 8; ++pass) {
+      bool projected_any = false;
+      bool has_long = false;
+      std::vector<std::pair<double, double>> refined;
+      refined.reserve(path.size() * 2);
+      for (size_t i = 0; i < path.size(); ++i) {
+        refined.push_back(path[i]);
+        if (i + 1 >= path.size()) {break;}
+        const double x0 = path[i].first;
+        const double y0 = path[i].second;
+        const double x1 = path[i + 1].first;
+        const double y1 = path[i + 1].second;
+        const double len = std::hypot(x1 - x0, y1 - y0);
+        const int steps = std::max(
+          1, static_cast<int>(std::ceil(len / kRefineStepCells)));
+        if (steps > 1) {has_long = true;}
+        for (int s = 1; s < steps; ++s) {
+          const double t = static_cast<double>(s) / steps;
+          auto pt = std::make_pair(
+            x0 + t * (x1 - x0), y0 + t * (y1 - y0));
+          if (inObstacle(
+              state_.costmap_data, state_.costmap_w, state_.costmap_h,
+              pt.first, pt.second))
+          {
+            projectPointToFree(
+              state_.costmap_data, state_.costmap_w, state_.costmap_h,
+              pt.first, pt.second);
+            projected_any = true;
+          }
+          refined.push_back(pt);
+        }
+      }
+      path = std::move(refined);
+      if (!projected_any && !has_long) {break;}
+    }
+  }
 
   result.smoothed_path = std::move(path);
   result.curvature_profile.resize(num_samples);

@@ -131,8 +131,8 @@ namespace jps_planner {
         double t = static_cast<double>(i) / static_cast<double>(samples);
         double wx = x0 + (t * (x1 - x0));
         double wy = y0 + (t * (y1 - y0));
-        if (!isWorldPointAllowed(
-                costmap, wx, wy, allow_unknown, cost_threshold)) {
+        if (!isWorldPointAllowed(costmap, wx, wy, allow_unknown,
+                                 cost_threshold)) {
           return false;
         }
       }
@@ -149,8 +149,8 @@ namespace jps_planner {
 
       for (size_t i = 0; i < plan.poses.size(); ++i) {
         const auto& point = plan.poses[i].pose.position;
-        if (!isWorldPointAllowed(
-                costmap, point.x, point.y, allow_unknown, cost_threshold)) {
+        if (!isWorldPointAllowed(costmap, point.x, point.y, allow_unknown,
+                                 cost_threshold)) {
           return false;
         }
 
@@ -228,15 +228,34 @@ namespace jps_planner {
         node, name_ + ".esdf_safe_distance", rclcpp::ParameterValue(0.6));
     nav2_util::declare_parameter_if_not_declared(
         node, name_ + ".corridor_halfwidth", rclcpp::ParameterValue(8.0));
+    // ── B-spline 优化权重 (归一化代价: 各分量除以其初始值) ──
+    // smoothness_weight: 曲率能量代价权重, 越大拐弯越圆滑
+    // distance_weight:   偏离原始 JPS 航点的代价权重, 越大越贴原路径
+    // max_control_points: B-spline 控制点数, 越小近似越强、拐弯越明显
+    nav2_util::declare_parameter_if_not_declared(
+        node, name_ + ".smoothness_weight", rclcpp::ParameterValue(0.1));
+    nav2_util::declare_parameter_if_not_declared(
+        node, name_ + ".distance_weight", rclcpp::ParameterValue(1.0));
+    nav2_util::declare_parameter_if_not_declared(
+        node, name_ + ".max_control_points", rclcpp::ParameterValue(200));
+    nav2_util::declare_parameter_if_not_declared(
+        node, name_ + ".max_iterations", rclcpp::ParameterValue(200));
     // B-spline 平滑路径碰撞判定阈值 (253 严格 / 254 宽松)
     nav2_util::declare_parameter_if_not_declared(
-        node, name_ + ".collision_cost_threshold",
-        rclcpp::ParameterValue(253));
+        node, name_ + ".collision_cost_threshold", rclcpp::ParameterValue(253));
     node->get_parameter(name_ + ".enable_esdf", enable_esdf_);
     node->get_parameter(name_ + ".esdf_weight", esdf_weight_);
     node->get_parameter(name_ + ".esdf_safe_distance", esdf_safe_distance_);
     node->get_parameter(name_ + ".corridor_halfwidth", corridor_halfwidth_);
     bspline_config_.corridor_halfwidth = corridor_halfwidth_;
+    node->get_parameter(name_ + ".smoothness_weight",
+                        bspline_config_.smoothness_weight);
+    node->get_parameter(name_ + ".distance_weight",
+                        bspline_config_.distance_weight);
+    node->get_parameter(name_ + ".max_control_points",
+                        bspline_config_.max_control_points);
+    node->get_parameter(name_ + ".max_iterations",
+                        bspline_config_.max_iterations);
     node->get_parameter(name_ + ".collision_cost_threshold",
                         collision_cost_threshold_);
 
@@ -245,10 +264,13 @@ namespace jps_planner {
         "JPSPlanner configured: w_traversal=%.2f w_euc=%.2f "
         "w_heuristic=%.2f allow_unknown=%d enable_bspline=%d enable_esdf=%d "
         "esdf_safe_distance=%.2f corridor_halfwidth=%.1f "
-        "collision_threshold=%d",
+        "collision_threshold=%d smoothness_w=%.2f distance_w=%.2f "
+        "max_ctrl_pts=%d max_iter=%d",
         config_.w_traversal_cost, config_.w_euc_cost, config_.w_heuristic_cost,
         config_.allow_unknown, enable_bspline_, enable_esdf_,
-        esdf_safe_distance_, corridor_halfwidth_, collision_cost_threshold_);
+        esdf_safe_distance_, corridor_halfwidth_, collision_cost_threshold_,
+        bspline_config_.smoothness_weight, bspline_config_.distance_weight,
+        bspline_config_.max_control_points, bspline_config_.max_iterations);
 
     // 初始化共享内存写入端 — 将规划结果推送给 Pangolin UI 渲染
     shm_ready_ = shm_writer_.init("guga_shm", guga_ui::UiSlotId::PATH);
@@ -364,9 +386,9 @@ namespace jps_planner {
     }
 
     // 贴障碍的对角段改写为正交移动, 避免 B-spline 平滑切角产生锯齿/回退
-    map_path = detourCornerHuggingDiagonals(
-        map_path, state.costmap_data, state.size_x, state.size_y,
-        config_.allow_unknown);
+    map_path = detourCornerHuggingDiagonals(map_path, state.costmap_data,
+                                            state.size_x, state.size_y,
+                                            config_.allow_unknown);
 
     RCLCPP_INFO(logger_, "JPSPlanner: path found with %zu waypoints",
                 map_path.size());
@@ -381,14 +403,13 @@ namespace jps_planner {
     // 7 阶 B-spline 在稀疏跳点间容易过冲切角 (尤其对角贴障碍段),
     // 所以先按 ≤2 格步长在地图坐标补密, 再进入插值。
     if (enable_bspline_) {
-      auto spline_path = densifyMapPath(
-          map_path, BSPLINE_DENSIFY_STEP_CELLS, MIN_BSPLINE_WAYPOINTS);
+      auto spline_path = densifyMapPath(map_path, BSPLINE_DENSIFY_STEP_CELLS,
+                                        MIN_BSPLINE_WAYPOINTS);
       if (spline_path.size() > map_path.size()) {
-        RCLCPP_INFO(
-            logger_,
-            "JPSPlanner: densified path from %zu to %zu waypoints for "
-            "B-spline",
-            map_path.size(), spline_path.size());
+        RCLCPP_INFO(logger_,
+                    "JPSPlanner: densified path from %zu to %zu waypoints for "
+                    "B-spline",
+                    map_path.size(), spline_path.size());
       }
 
       if (spline_path.size() >= MIN_BSPLINE_WAYPOINTS) {
