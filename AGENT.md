@@ -282,24 +282,54 @@ ros2 run guga_ui_pangolin guga_ui
 
 ### 活跃分支
 
-- `feature_serial` — 串口通信重构 (`communication_OLD` → `serial_driver`)
+- `main` — 当前主线，已合入 `feature_TES`（启动即小陀螺等）
+- `feature_serial` — 串口通信重构（历史分支，已合入主线的功能无需重复开发）
 
-### 正在进行的开发
+### 当前主线：TES（小陀螺）——导航启动即自旋
 
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| `serial_driver` | 代码完成，待实车测试 | 已拆分为 SerialDriverMain + RosToSerialBridge/SerialToRosBridge + SerialDriverNode |
-| `guga_ui_common` | 代码完成 | 共享内存通信库，待模块集成 |
-| `guga_ui_pangolin` | 代码完成 | Pangolin UI 进程，待编译验证 |
-| `hik_driver` | 早期开发 | 海康相机新版驱动 |
+哨兵常态小陀螺：**导航栈一启动底盘即自旋**，路径跟随与自旋解耦（不依赖决策节点）。
 
-### 待模块接入 ShmWriter
+```
+simple_decision（always_tes=true → 恒发 chassis_mode=1 + cmd_spin=spin_speed）
+      ↓
+nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
+  ├─ 发布 base_footprint → base_footprint_nonrotating tf（odom 对齐的非旋转系）
+  ├─ 把 nonrotating 系 cmd_vel 旋转补偿回 base_footprint 系
+  └─ littleTES 下输出 angular.z = 路径wz + spin_speed
+```
 
-以下模块需要在现有 publish 调用旁添加 `shm_writer_.write()` 调用（不影响现有逻辑）：
+**调转速的位置**（两处通常同步改）：
+- 决策层转速：`src/guga_decision/simple_decision/config/simple_decision.yaml` → `spin_speed`（默认 6.28 rad/s）
+- 启动兜底转速：`src/guga_bringup/launch/core/navigation_launch.py` → `init_spin_speed`（2d_mppi/jps_mpc=6.28，jps_pid=0.0）
 
-1. `serial_driver_node.cpp` — `publishRefereeData()` + `decodeYaw()` 处
-2. `simple_decision.cpp` — `executeAction()` 处
-3. `point_lio` / `laserMapping.cpp` — `publish_odometry()` 处
+**Profile 机制**（`simulation.sh` + `navigation_launch.py`）：
+- `2d_mppi` / `jps_mpc`：走 `base_footprint_nonrotating`，`initial_chassis_mode=1` 启动即小陀螺
+- `jps_pid`：costmap 仍用旋转的 `base_footprint`，**不能自旋**（launch 显式 `initial_chassis_mode=0`；如需自旋先把它切到 nonrotating 系）
+- `simulation.sh` 的 `planner:=/controller:=` 会自动映射 `navigation_profile`（controller=mppi→2d_mppi、mpc→jps_mpc、pid→jps_pid）
+
+**关键约定**：
+- **ChassisMode 枚举统一 0/1/2**（`simple_decision` 为源头）：0=CHASSIS_FOLLOWED、1=LITTLE_TES、2=GO_HOME；消费者 `nonrotating_vel_transform`、`pb_omni_pid_pursuit_controller` 已对齐，改枚举要三方同步
+- **spin 外推**：`nonrotating_vel_transform::estimateRobotBaseAngle()` 用 `spin_speed` 外推底盘 yaw，弥补 odometry（~10Hz）低频导致的旋转补偿跳变（解决小陀螺下 cmd_vel 持续飘）
+- **MPPI `model_dt` 必须 = 1/`controller_frequency`**（检查容差 1e-6，否则 configure 抛异常）；当前 30Hz → `model_dt: 0.033333333`，改频率必须同步改
+
+### 近期完成（已提交到 main）
+
+| 事项 | 说明 |
+|------|------|
+| 启动即小陀螺 | nonrotating_vel_transform `initial_chassis_mode`/`init_spin_speed` 默认 littleTES；simple_decision `always_tes` + `cmd_spin` 发布 |
+| ChassisMode 对齐 | 决策层 0/1/2 与两个消费者统一 |
+| simulation.sh 修复 | `planner/controller` → `navigation_profile` 映射；nav-only 二次调用不再丢参数 |
+| liblayers.so 冲突 | pb_nav2_plugins 库改名 `pb_nav2_layers`（与系统同名库冲突导致 costmap 加载失败）；**重建该包注意清 `build/install` 残留旧 `liblayers.so`** |
+| MPPI 测试入 CI | `scripts/pre-commit/run_mppi_tests.sh`（12 个 gtest 套件）；`--allow-overriding` 条件化兼容旧 colcon |
+| 参数调整 | `robot_radius` 0.25/0.35（缩小 footprint）；全局重规划 1→2Hz（BT `RateController`） |
+| PCD/栅格地图对齐工具 | `scripts/align_pcd_gridmap.py`（FFT 互相关 + IOU 精修，输出推荐 origin；**IOU>0.5 才可信**——当前 rmuc_2025 两张图内容不匹配，建议 `simulation.sh map` 重新建图） |
+
+### 待办 / 已知隐患
+
+- **实车联调**：`serial_driver`（BR 17B 协议）、TES 转速手感（yaml/launch 调）
+- 小陀螺时 goal checker 的 yaw 检查可能永不满足（终点不停），需处理为只查位置
+- `jps_pid` 不自旋（设计如此，见上）
+- 共享内存 UI（guga_ui_old）待模块接入 ShmWriter
 
 ---
 
@@ -314,6 +344,9 @@ ros2 run guga_ui_pangolin guga_ui
 | `src/guga_bringup/launch/simulation_launch.py` | 仿真启动入口 |
 | `src/guga_bringup/config/` | Nav2 参数 (reality/simulation) |
 | `src/guga_driver/serial_driver/include/serial_driver/serial_driver_main.hpp` | 串口协议底层 API |
+| `src/guga_controller/nonrotating_vel_transform/` | TES 速度变换（旋转补偿 + 自旋叠加 + spin 外推） |
+| `scripts/pre-commit/run_mppi_tests.sh` | MPPI 控制器测试入口（12 个 gtest 套件） |
+| `scripts/align_pcd_gridmap.py` | PCD 与栅格地图对齐工具（估算 origin 修正量） |
 | `src/guga_ui_old/guga_ui_common/include/guga_ui_common/ui_types.hpp` | UI 共享内存数据结构 |
 | `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_writer.hpp` | 共享内存写入端 |
 | `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_reader.hpp` | 共享内存读取端 |

@@ -525,6 +525,109 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
   EXPECT_TRUE(state_.terrain_cloud_elev->points.empty());
 }
 
+// 车顶上方超过安全间隙的点（天花板）不参与地面估计，防止 elev 被抬高后
+// 地面点高度差变负、天花板点高度差落入障碍区间（窄隧道场景）
+TEST_F(AlgorithmTest, EstimateGround_CeilingPoint_ExcludedFromElevation) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  config_.ceiling_clearance = 0.2;
+  state_.terrain_cloud->clear();
+  // 天花板点：相对车高 0.26m（模拟 260mm 顶隙的隧道），位于车辆正上方
+  state_.terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
+
+  terrain_analysis::algorithm::estimateGround(config_, state_);
+
+  size_t center = TerrainGrid::planarVoxelIndex(
+      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  EXPECT_TRUE(state_.planar_point_elev[center].empty());
+}
+
+// 车顶下方/间隙内的点仍正常参与地面估计
+TEST_F(AlgorithmTest, EstimateGround_BelowCeilingClearance_Participates) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  config_.ceiling_clearance = 0.2;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back({0.0F, 0.0F, -0.1F, 0.0F});
+
+  terrain_analysis::algorithm::estimateGround(config_, state_);
+
+  size_t center = TerrainGrid::planarVoxelIndex(
+      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
+      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  EXPECT_EQ(state_.planar_point_elev[center].size(), 1U);
+}
+
+// 车顶上方达到安全间隙的点（天花板/横梁）不作为障碍输出：顶隙足够，
+// 车辆可从下方通过
+TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0);  // 地面高度 0
+  state_.planar_voxel_dy_obs.fill(0);
+  for (auto& e : state_.planar_point_elev) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};  // 满足 min_block_point_num
+  }
+  config_.min_block_point_num = 5;
+  config_.vehicle_height = 1.0;  // 旧逻辑下 0.26 < 1.0 会被输出为障碍
+  config_.ceiling_clearance = 0.2;
+  config_.min_relative_z = -10.0;
+  config_.max_relative_z = 10.0;
+  config_.consider_drop = false;
+  config_.clear_dy_obs = false;
+
+  // 天花板点：相对车高 0.26m，高于 ceiling_clearance(0.2)
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 0.26F;
+  pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  terrain_analysis::algorithm::computeHeightMap(config_, state_);
+  EXPECT_TRUE(state_.terrain_cloud_elev->points.empty());
+}
+
+// 车顶上方安全间隙内的点仍然是障碍（低矮横梁/门楣不应漏检）
+TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
+  state_.vehicle_x = 0;
+  state_.vehicle_y = 0;
+  state_.vehicle_z = 0;
+  state_.terrain_cloud_elev->clear();
+  state_.planar_voxel_elev.fill(0);
+  state_.planar_voxel_dy_obs.fill(0);
+  for (auto& e : state_.planar_point_elev) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
+  config_.min_block_point_num = 5;
+  config_.vehicle_height = 1.0;
+  config_.ceiling_clearance = 0.2;
+  config_.min_relative_z = -10.0;
+  config_.max_relative_z = 10.0;
+  config_.consider_drop = false;
+  config_.clear_dy_obs = false;
+
+  // 低矮障碍点：相对车高 0.1m，低于 ceiling_clearance(0.2)
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 0.1F;
+  pt.intensity = 0;
+  state_.terrain_cloud->clear();
+  state_.terrain_cloud->push_back(pt);
+
+  terrain_analysis::algorithm::computeHeightMap(config_, state_);
+  ASSERT_EQ(state_.terrain_cloud_elev->points.size(), 1U);
+  // height_above_ground = 0.1 - 0 = 0.1，写入 intensity
+  EXPECT_NEAR(state_.terrain_cloud_elev->points[0].intensity, 0.1F, 1e-6);
+}
+
 // ── keepVoxelPoint boundary tests (via updateVoxels) ──
 
 namespace {

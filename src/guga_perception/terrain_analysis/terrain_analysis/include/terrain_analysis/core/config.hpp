@@ -58,6 +58,10 @@ struct TerrainConfig {
   int min_block_point_num = 10;
   /** @brief 高度小于该值的障碍点才会输出。 */
   double vehicle_height = 1.5;
+  /** @brief 车顶上方安全间隙：相对车高达到该值的点（天花板/横梁）不作为
+   *  障碍输出，也不参与地面高度估计。需小于实测隧道顶隙（如 260mm →
+   *  0.2），否则低矮隧道仍会被判为不可通过。 */
+  double ceiling_clearance = 0.3;
 
   // 体素更新和点云范围
   /** @brief 触发体素重建的累计更新点数阈值。 */

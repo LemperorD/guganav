@@ -44,6 +44,7 @@ TerrainAnalysis::TerrainAnalysis(rclcpp::Node* node) : node_(node) {
   declareAndGet(*node_, "noDataBlockSkipNum", config_.no_data_block_skip_num);
   declareAndGet(*node_, "minBlockPointNum", config_.min_block_point_num);
   declareAndGet(*node_, "vehicleHeight", config_.vehicle_height);
+  declareAndGet(*node_, "ceilingClearance", config_.ceiling_clearance);
   declareAndGet(*node_, "voxelPointUpdateThre",
                 config_.voxel_point_update_thre);
   declareAndGet(*node_, "voxelTimeUpdateThre", config_.voxel_time_update_thre);

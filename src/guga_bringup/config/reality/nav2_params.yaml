@@ -124,6 +124,7 @@ terrain_analysis:
     noDataBlockSkipNum: 0
     minBlockPointNum: 10
     vehicleHeight: 0.5                  # 小于车辆高度的点才会进行处理
+    ceilingClearance: 0.2               # 车顶上方安全间隙(m)：相对车高达到该值的点(天花板/横梁)不算障碍且不参与地面估计；需 < 实测隧道顶隙(260mm→0.2)，开阔地保守可调回 0.3
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 1.0
     minRelZ: -1.5                       # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理

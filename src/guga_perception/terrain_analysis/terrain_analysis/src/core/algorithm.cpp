@@ -452,6 +452,12 @@ namespace terrain_analysis::algorithm {
           || relative_z >= config.max_relative_z) {
         continue;
       }
+      // 车顶上方超过安全间隙的点（天花板/横梁）不参与地面估计：
+      // 窄隧道里这类点占比大，混入分位数会抬高 elev，导致真实地面点
+      // 高度差变为负值丢失、天花板点高度差落入障碍区间。
+      if (relative_z >= config.ceiling_clearance) {
+        continue;
+      }
       size_t base = TerrainGrid::planarVoxelIndex(row, col);
       static constexpr int PLANAR_VOXEL_WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
       for (int delta_row = -1; delta_row <= 1; delta_row++) {
@@ -575,6 +581,11 @@ namespace terrain_analysis::algorithm {
       double relative_z = point.z - vehicle_z;
       if (relative_z <= config.min_relative_z
           || relative_z >= config.max_relative_z) {
+        continue;
+      }
+      // 车顶上方达到安全间隙的点（天花板/横梁）不输出为障碍：
+      // 只要顶隙 >= ceiling_clearance，车辆即可从下方通过（隧道场景）。
+      if (relative_z >= config.ceiling_clearance) {
         continue;
       }
       int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
