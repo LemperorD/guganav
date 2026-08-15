@@ -1,5 +1,4 @@
 #include "serial_driver/serial_driver_main.hpp"
-
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
@@ -379,10 +378,10 @@ namespace serial_driver {
 
     // 裁判系统帧 → referee_frame_buffer_
     if (cmd == COMMAND_CODE_REFEREE) {
-      if (len == referee_frame_buffer_.size()) {
+      if (len == REFEREE_PAYLOAD_SIZE) {
         const std::lock_guard<std::mutex> lock(frame_mutex_);
         std::memcpy(referee_frame_buffer_.data(), pl,
-                    referee_frame_buffer_.size());
+                    REFEREE_PAYLOAD_SIZE);
         referee_frame_ready_ = true;
       } else {
         std::cout << termcolor::YELLOW
@@ -395,13 +394,13 @@ namespace serial_driver {
 
     // 运动控制帧 → frame_buffer_
     if (cmd == COMMAND_CODE_MOTION) {
-      if (len <= frame_buffer_.size()) {
+      if (len <= MOTION_PAYLOAD_SIZE) {
         const std::lock_guard<std::mutex> lock(frame_mutex_);
         std::memcpy(frame_buffer_.data(), pl, len);
       } else {
         std::cout << termcolor::YELLOW
                   << "Motion frame too long: " << static_cast<int>(len)
-                  << " (buffer " << frame_buffer_.size() << ")"
+                  << " (buffer " << MOTION_PAYLOAD_SIZE << ")"
                   << termcolor::RESET << '\n';
       }
       return;

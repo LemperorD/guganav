@@ -20,7 +20,7 @@
 #include <string>
 
 #include "example_interfaces/msg/float32.hpp"
-#include "std_msgs/msg/u_int8.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "message_filters/subscriber.h"
 #include "message_filters/sync_policies/approximate_time.h"
@@ -28,15 +28,13 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/u_int8.hpp"
+#include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <geometry_msgs/msg/transform_stamped.hpp>
-#include <visualization_msgs/msg/marker.hpp>
+#include "tf2_ros/transform_listener.h"
+#include "visualization_msgs/msg/marker.hpp"
 
-
-typedef enum
-{
+typedef enum {
   chassisFollowed = 1,
   littleTES,
   goHome,
@@ -48,6 +46,11 @@ class FakeVelTransform : public rclcpp::Node
 {
 public:
   explicit FakeVelTransform(const rclcpp::NodeOptions & options);
+
+  static double selectVelocityYawDiff(
+    uint8_t chassis_mode, double chassis_followed_yaw, double robot_base_angle);
+  static geometry_msgs::msg::Twist rotateVelocity(
+    const geometry_msgs::msg::Twist & twist, double yaw_diff);
 
 private:
   void syncCallback(
@@ -97,12 +100,12 @@ private:
   double vis_scale_{1.0};
   std::string chassis_mode_topic_;
   float spin_speed_;
-  uint8_t chassis_mode_=1;
-  double chassis_followed_yaw_=0.0;
+  uint8_t chassis_mode_ = 1;
+  double chassis_followed_yaw_ = 0.0;
 
   std::mutex cmd_vel_mutex_;
   geometry_msgs::msg::Twist::SharedPtr latest_cmd_vel_;
-  double current_robot_base_angle_;
+  double current_robot_base_angle_{0.0};
   rclcpp::Time last_controller_activate_time_;
 };
 

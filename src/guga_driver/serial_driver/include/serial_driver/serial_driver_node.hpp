@@ -32,8 +32,8 @@ namespace serial_driver {
    * 职责：
    *  - 从参数服务器读取串口配置（port_name, baud_rate 等）。
    *  - 持有并管理 SerialDriverMain 实例的生命周期。
-   *  - 创建 4 路 RosMcuBridge 桥接通道（/cmd_vel, /serial/Yaw,
-   * /serial/TES_speed, /serial/EnemyPos）。
+   *  - 创建 4 路桥接通道（/cmd_vel, /serial/Yaw, /serial/TES_speed,
+   * /serial/EnemyPos），分别使用 RosToSerialBridge 和 SerialToRosBridge。
    *  - 定时发布裁判系统数据（RobotStatus, GameStatus, RfidStatus）。
    *  - 广播 gimbal_yaw_vision tf（由 odom→base_footprint 推导）。
    *  - 提供 DWA 滑动窗口滤波和速度坐标系变换工具方法。
@@ -55,11 +55,11 @@ namespace serial_driver {
     /** @brief 声明并从参数服务器加载所有运行参数。 */
     void onConfigure();
 
-    // ---- 编解码（供 RosMcuBridge 回调使用） ----
+    // ---- 编解码（供桥接器回调使用） ----
     /**
-     * @brief 将 Twist 消息编码为 26 字节运动帧 payload。
+     * @brief 将 Twist 消息编码为 17 字节运动帧 payload。
      * @param msg 输入速度指令。
-     * @return 26 字节 payload，按值返回避免堆分配和悬垂指针。
+     * @return 17 字节 payload，按值返回避免堆分配和悬垂指针。
      */
     MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg) const;
 
@@ -69,13 +69,6 @@ namespace serial_driver {
      * @return 包含 yaw 角度差（弧度）的 Float32 消息。
      */
     std_msgs::msg::Float32 decodeYaw(const uint8_t* payload);
-
-    /**
-     * @brief 从运动帧 payload 解码 TES 线速度。
-     * @param payload 运动帧 payload 指针。
-     * @return 包含角速度 z 的 Twist 消息。
-     */
-    static geometry_msgs::msg::Twist decodeTESspeed(const uint8_t* payload);
 
     /**
      * @brief 从运动帧 payload 解码敌方位置坐标。
@@ -138,10 +131,10 @@ namespace serial_driver {
 
     // 速度变换
     double vel_trans_scale_{40.0};
-    double angle_init_{};
+    // double angle_init_{};
 
-    // 底盘模式
-    uint8_t chassis_mode_{1};  // 默认 chassisFollowed
+    // // 底盘模式
+    // uint8_t chassis_mode_{1};  // 默认 chassisFollowed
 
     // 雷达连接参数
     std::string lidar_ip_{"192.168.1.2"};
@@ -151,11 +144,11 @@ namespace serial_driver {
     std::shared_ptr<SerialDriverMain> serial_driver_main_;
 
     // 四路消息桥接器
-    std::shared_ptr<RosMcuBridge<geometry_msgs::msg::Twist>> bridge_twist_pc_;
-    std::shared_ptr<RosMcuBridge<std_msgs::msg::Float32>> bridge_yaw_mcu_;
-    std::shared_ptr<RosMcuBridge<geometry_msgs::msg::Twist>>
-        bridge_tes_speed_mcu_;
-    std::shared_ptr<RosMcuBridge<geometry_msgs::msg::Point>>
+    std::shared_ptr<RosToSerialBridge<geometry_msgs::msg::Twist>>
+        bridge_twist_pc_;
+    std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>>
+        bridge_yaw_mcu_;
+    std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>>
         bridge_enemy_pos_mcu_;
 
     // 定时器
@@ -175,8 +168,6 @@ namespace serial_driver {
     rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr
         rfid_status_pub_;
 
-    // 底盘模式订阅
-    rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr chassis_mode_sub_;
   };
 
 }  // namespace serial_driver

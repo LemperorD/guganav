@@ -16,8 +16,8 @@ SerialDriverNode
   ROS 编解码、topic、timer、TF
     |
     v
-RosMcuBridge<T>
-  ROS message <-> MotionPayload
+RosToSerialBridge<T> / SerialToRosBridge<T>
+  ROS message <-> MotionPayload (单向，分别处理 PC→MCU 和 MCU→PC)
     |
     v
 SerialDriverMain
@@ -147,7 +147,7 @@ ros2 topic echo /referee/robot_status
 - 三个 MCU 到 ROS bridge 使用独立线程轮询同一运动帧快照，不能保证三个
   topic 总是来自同一次发布周期。
 - 运动帧没有 new-frame 标志，MCU 停止发送后仍会重复发布最后一帧。
-- `RosMcuBridge` 接收线程以 `rclcpp::ok()` 为退出条件，独立卸载 component
+- `SerialToRosBridge` 接收线程以 `rclcpp::ok()` 为退出条件，独立卸载 component
   时需要进一步验证析构行为。
 - MCU yaw 的角度单位需要实机确认；当前代码在速度坐标变换前执行度到弧度转换。
 - 当前包只有 lint 配置，尚无协议单元测试、PTY 集成测试或 fake transport 测试。
