@@ -30,11 +30,17 @@ echo "=== Clean previous coverage data ===" | tee -a "$RESULT_FILE"
 find build/terrain_analysis -name "*.gcda" -delete 2>/dev/null
 
 echo "=== Build terrain packages with coverage flags ===" | tee -a "$RESULT_FILE"
+# --allow-overriding 仅在新版 colcon 支持时添加（旧版如 ros:humble-ros-base
+# 容器的 colcon-core 0.9.x 不认识该参数，直接传会报 unrecognized arguments）
+ALLOW_OVERRIDE_ARGS=()
+if colcon build --help 2>/dev/null | grep -q -- "--allow-overriding"; then
+  ALLOW_OVERRIDE_ARGS=(--allow-overriding terrain_analysis)
+fi
 colcon build \
   --base-paths "$TERRAIN_ROOT" \
   --symlink-install \
   --parallel-workers 1 \
-  --allow-overriding terrain_analysis \
+  "${ALLOW_OVERRIDE_ARGS[@]}" \
   --packages-select terrain_analysis terrain_analysis_ext \
   --event-handlers console_direct+ \
   --cmake-clean-cache \
