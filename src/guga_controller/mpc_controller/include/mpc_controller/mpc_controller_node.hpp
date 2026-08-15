@@ -1,13 +1,13 @@
 #ifndef MPC_CONTROLLER_NODE_HPP_
 #define MPC_CONTROLLER_NODE_HPP_
 
-// #define BACKWARD_DEBUG_GUGUGAGA
+// #define PREDICTED_PLAN_DEBUG
 // #define SOLVE_TIME_DEBUG
-// #define PREDICT_INPUT_DEBUG
-// #define WRITE_FILE_DEBUG
+#define REFERENCE_DEBUG
+// #define LOCAL_PLAN_LENGTH_DEBUG
+// #define PREDICT_INPUT
 
 #include <iostream>
-#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -21,17 +21,12 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_util/node_utils.hpp"
 
-#include "guga_common/backward.hpp"
-#include "guga_common/common_libs.hpp"
-
 #include "mpc_controller/mpc_wrapper.hpp"
+#include "mpc_controller/backward.hpp"
 
-#ifdef BACKWARD_DEBUG_GUGUGAGA
 namespace backward{
-  // I'll see u on the dark side of the moon.
   backward::SignalHandling sh;
 }
-#endif
 
 namespace mpc_controller
 {
@@ -120,14 +115,7 @@ private:
   // 局部规划路径长度
   double local_plan_length_{2.0};
 
-  double last_yaw_{0.0};
-
   inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(const geometry_msgs::msg::PoseStamped & pose) const;
-
-#ifdef SOLVE_TIME_DEBUG
-  std::chrono::time_point<std::chrono::high_resolution_clock> solve_start_time_;
-  std::chrono::time_point<std::chrono::high_resolution_clock> solve_end_time_;
-#endif
 
 #ifdef PREDICT_INPUT
 private: // 尝试使用控制预测序列计算局部规划路径长度
@@ -143,11 +131,12 @@ private: // 尝试使用控制预测序列计算局部规划路径长度
 inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose)
 {
   StateBound state;
+  state << pose.pose.position.x, pose.pose.position.y;
 
   const auto & q = pose.pose.orientation;
   const double siny = 2.0 * (q.w * q.z + q.x * q.y);
   const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  state << pose.pose.position.x, pose.pose.position.y, std::atan2(siny, cosy);
+  state << std::atan2(siny, cosy);
 
   return state;
 }
@@ -197,6 +186,12 @@ inline const nav_msgs::msg::Path StateHorizon2Path(const nav_msgs::msg::Path& gl
     auto pose = State2Point(state_horizon.col(i));
     pose.header = global_plan.header;
     path.poses.push_back(pose);
+#ifdef PREDICTED_PLAN_DEBUG
+    std::cout << "\033[1;33mPredicted point " << i << ": "
+              << "x: " << pose.pose.position.x << ", "
+              << "y: " << pose.pose.position.y << ", "
+              << "theta: " << pose.pose.orientation.z << "\033[0m" << std::endl;
+#endif
   }
   path.header.frame_id = global_plan.header.frame_id;
   return path;

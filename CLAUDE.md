@@ -73,7 +73,7 @@ guganav/
 │   │
 │   ├── guga_controller/       # [控制层]
 │   │   ├── pb_omni_pid_pursuit_controller/ # 全向 PID 追迹控制器 ★模式B范例
-│   │   └── fake_vel_transform/  # 速度变换适配
+│   │   └── gimbal_cmd_vel_adapter/  # 速度变换适配
 │   │
 │   ├── guga_planner/          # [规划层]
 │   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up, intensity_voxel)
@@ -286,7 +286,7 @@ ros2 run guga_ui_pangolin guga_ui
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| `serial_driver` | 代码完成，待实车测试 | 已拆分为 SerialDriverMain + RosMcuBridge + SerialDriverNode |
+| `serial_driver` | 代码完成，待实车测试 | 已拆分为 SerialDriverMain + RosToSerialBridge/SerialToRosBridge + SerialDriverNode |
 | `guga_ui_common` | 代码完成 | 共享内存通信库，待模块集成 |
 | `guga_ui_pangolin` | 代码完成 | Pangolin UI 进程，待编译验证 |
 | `hik_driver` | 早期开发 | 海康相机新版驱动 |

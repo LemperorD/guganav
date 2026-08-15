@@ -1,13 +1,5 @@
 #include "mpc_controller/mpc_controller_node.hpp"
 
-#include <cmath>
-#include <fstream>
-
-#ifdef WRITE_FILE_DEBUG
-static std::ofstream g_debug_file;
-static int g_frame_count = 0;
-#endif
-
 namespace mpc_controller
 {
 
@@ -74,10 +66,6 @@ void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 
 geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
 {
-#ifdef SOLVE_TIME_DEBUG
-  solve_start_time_ = std::chrono::high_resolution_clock::now();
-#endif
-
   std::lock_guard<std::mutex> lock(mutex_);
   (void)goal_checker;
   (void)velocity;
@@ -85,10 +73,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
   geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
   StateBound x0 = Point2State(global_pose);
-  double current_yaw = x0[2];
-  x0[2] = unwrap_angle(current_yaw, last_yaw_);
   mpc_wrapper_->setInitialState(x0);
-  last_yaw_ = x0[2];
 
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header = global_pose.header;
@@ -96,13 +81,22 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   cmd_vel.twist.linear.y = 0.0;
   cmd_vel.twist.angular.z = 0.0;
 
-  if (global_plan_.poses.empty()) { return cmd_vel; } // 没有全局路径, 返回零速度
+  if (global_plan_.poses.empty()) { return cmd_vel; }
 
   // 计算局部路径并写入参考轨迹
   auto local_plan = getLocalPlan(global_pose);
   local_plan_pub_->publish(local_plan);
   auto ref_traj = getReferenceHorizon(local_plan);
   TerminalRef end_ref = ref_traj.col(kHorizonSteps - 1).head<3>();
+
+#ifdef REFERENCE_DEBUG
+  std::cout << "\033[1;33mReference trajectory: \033[0m" << std::endl;
+  for (int i = 0; i < ref_traj.cols(); ++i) {
+    std::cout << "\033[1;33mPoint " << i << ": x=" << ref_traj(0, i) << ", y=" << ref_traj(1, i) << ", theta=" << ref_traj(2, i) << "\033[0m" << std::endl;
+  }
+  std::cout << "\033[1;34mTerminal reference: x=" << end_ref(0) << ", y=" << end_ref(1) << ", theta=" << end_ref(2) << "\033[0m" << std::endl;
+#endif
+
   mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
 
   // 求解MPC并获取预测状态轨迹
@@ -110,8 +104,14 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   if (predicted_states.size() != 0) {
     auto predicted_plan = StateHorizon2Path(global_plan_, predicted_states);
     predicted_plan_pub_->publish(predicted_plan);
+#ifdef PREDICTED_PLAN_DEBUG
+    std::cout << "\033[1;32mPredicted plan published,"
+              << "size: " << predicted_plan.poses.size() << ", "
+              << "frame: " << predicted_plan.header.frame_id
+              << "\033[0m" << std::endl;
+#endif
   } else {
-    std::cout << RED << "Predicted states are empty" << RESET << std::endl;
+    std::cout << "\033[1;31mPredicted states are empty\033[0m" << std::endl;
   }
   
   // 求解
@@ -119,75 +119,28 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 
 #ifdef SOLVE_TIME_DEBUG
   double solve_time = mpc_wrapper_->solve_time();
-  std::cout << BLUE << "MPC solve time: " << solve_time*1000 << " ms" << RESET << std::endl;
+  std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
 #endif
 
-  cmd_vel.twist.linear.x = u_opt[0];
-  cmd_vel.twist.linear.y = u_opt[1];
-  cmd_vel.twist.angular.z = u_opt[2];
+  // cmd_vel.twist.linear.x = u_opt[0];
+  // cmd_vel.twist.linear.y = u_opt[1];
+  // cmd_vel.twist.angular.z = u_opt[2];
 
-#ifdef WRITE_FILE_DEBUG
-  // 打开日志文件 (首次调用时)
-  if (!g_debug_file.is_open()) {
-    g_debug_file.open(
-      "/home/ld/guganav/src/guga_controller/mpc_controller/tmp/"
-      "mpc_debug_log.txt",
-      std::ios::out | std::ios::trunc);
-  }
+  double yaw = tf2::getYaw(global_pose.pose.orientation);
 
-  if (g_debug_file.is_open()) {
-    // --- 帧头 ---
-    g_debug_file << "FRAME " << g_frame_count++ << "\n";
+  double vx_map = u_opt[0];
+  double vy_map = u_opt[1];
 
-    // 初始状态 x0
-    g_debug_file << "X0 " << x0(0) << " " << x0(1) << " " << x0(2) << "\n";
+  double cos_yaw = std::cos(yaw);
+  double sin_yaw = std::sin(yaw);
 
-    // 局部规划路径
-    g_debug_file << "LOCAL_PLAN " << local_plan.poses.size() << "\n";
-    for (const auto &p : local_plan.poses) {
-      double theta = tf2::getYaw(p.pose.orientation);
-      g_debug_file << "LP " << p.pose.position.x << " "
-                   << p.pose.position.y << " " << theta << "\n";
-    }
+  double vx_body =  cos_yaw * vx_map + sin_yaw * vy_map;
+  double vy_body = -sin_yaw * vx_map + cos_yaw * vy_map;
 
-    // 参考轨迹 (kHorizonSteps 个点, 每个 6 维)
-    g_debug_file << "REF_TRAJ " << kHorizonSteps << "\n";
-    for (int i = 0; i < kHorizonSteps; ++i) {
-      g_debug_file << "RT " << ref_traj(0, i) << " " << ref_traj(1, i)
-                   << " " << ref_traj(2, i) << " " << ref_traj(3, i)
-                   << " " << ref_traj(4, i) << " " << ref_traj(5, i) << "\n";
-    }
 
-    // 终端参考
-    g_debug_file << "END_REF " << end_ref(0) << " " << end_ref(1) << " " << end_ref(2) << "\n";
-
-    // 预测状态 (solve 后的结果: kHorizonSteps+1 个点, 每个 3 维)
-    auto ps = mpc_wrapper_->predictedStates();
-    g_debug_file << "PRED_STATES " << ps.cols() << "\n";
-    for (int i = 0; i < ps.cols(); ++i) {
-      g_debug_file << "PS " << ps(0, i) << " " << ps(1, i) << " "
-                   << ps(2, i) << "\n";
-    }
-
-    // 控制输出 (chassis坐标系)
-    g_debug_file << "U_OPT " << u_opt[0] << " " << u_opt[1] << " " << u_opt[2] << "\n";
-
-    // 求解时间
-    g_debug_file << "SOLVE_TIME " << mpc_wrapper_->solve_time() << "\n";
-    g_debug_file << "END_FRAME\n";
-    g_debug_file.flush();
-  }
-#endif
-
-#ifdef SOLVE_TIME_DEBUG
-  solve_end_time_ = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double, std::milli> solve_duration = solve_end_time_ - solve_start_time_;
-  #ifdef WRITE_FILE_DEBUG
-    std::cout << CYAN_LIGHT << BOLD << "Total compute time (have write_file_debug): " << solve_duration.count() << " ms" << RESET << std::endl;
-  #else
-    std::cout << CYAN_LIGHT << BOLD << "Total compute time: " << solve_duration.count() << " ms" << RESET << std::endl;
-  #endif
-#endif
+  cmd_vel.twist.linear.x = vx_body;
+  cmd_vel.twist.linear.y = vy_body;
+  cmd_vel.twist.angular.z = -u_opt[2];
 
   return cmd_vel;
 }
@@ -244,11 +197,9 @@ RefHorizon MpcControllerNode::getReferenceHorizon(const nav_msgs::msg::Path & lo
 
   const double total_len = arc_len.back();
 
-  // 2. 沿路径均匀采样 N 个参考点, stage 0 对应最近的参考, stage N-1 对应最远的参考
+  // 2. 沿路径均匀采样 N 个参考点
+  //    stage 0 对应最近的参考, stage N-1 对应最远的参考
   const double step = total_len / kHorizonSteps;
-
-  double prev_theta = 0.0;     // 上一个参考点的角度, 用于 unwrap
-  bool   first_theta = true;   // 首个有效角度标记
 
   for (int s = 0; s < kHorizonSteps; ++s) {
     double target = step * (s + 1);  // s 越大参考点越远
@@ -279,22 +230,7 @@ RefHorizon MpcControllerNode::getReferenceHorizon(const nav_msgs::msg::Path & lo
       // θ_ref: 路径切线方向
       double dx = local_plan.poses[idx].pose.position.x - local_plan.poses[idx-1].pose.position.x;
       double dy = local_plan.poses[idx].pose.position.y - local_plan.poses[idx-1].pose.position.y;
-      double raw_theta = std::atan2(dy, dx);
-
-      // 对角度做 unwrap, 避免跨越 ±π 时产生 2π 跳变
-      if (first_theta) {
-        ref(2, s) = raw_theta;
-        prev_theta = raw_theta;
-        first_theta = false;
-      } else {
-        // 将 raw_theta 调整到与 prev_theta 相差不超过 π 的范围内
-        double dtheta = raw_theta - prev_theta;
-        // 归一化 dtheta 到 (-π, π]
-        while (dtheta >  M_PI) dtheta -= 2.0 * M_PI;
-        while (dtheta <= -M_PI) dtheta += 2.0 * M_PI;
-        ref(2, s) = prev_theta + dtheta;
-        prev_theta = ref(2, s);
-      }
+      ref(2, s) = std::atan2(dy, dx);
     }
 
     // 控制参考量设为零 (只惩罚控制努力, 不预设速度方向)
@@ -408,6 +344,14 @@ inline geometry_msgs::msg::PoseStamped MpcControllerNode::transformPoseToGlobal(
   }
   return transformed_pose;
 }
+
+// geometry_msgs::msg::Twist MpcControllerNode::transformVelocity( const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff) {
+//   geometry_msgs::msg::Twist out;
+//   out.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
+//   out.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
+//   out.angular.z = twist->angular.z;
+//   return out;
+// }
 
 #ifdef PREDICT_INPUT
 void MpcControllerNode::predictInputThreadFunction()

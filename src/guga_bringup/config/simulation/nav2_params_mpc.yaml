@@ -159,17 +159,6 @@ terrain_analysis_ext:
     ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0
 
-fake_vel_transform:
-  ros__parameters:
-    use_sim_time: True
-    odom_topic: "odometry"
-    robot_base_frame: "gimbal_yaw"
-    fake_robot_base_frame: "gimbal_yaw_fake"
-    input_cmd_vel_topic: "cmd_vel_nav2_result"
-    output_cmd_vel_topic: "cmd_vel"
-    cmd_spin_topic: "cmd_spin"
-    init_spin_speed: 3.14
-
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: True
@@ -341,7 +330,7 @@ bt_navigator:
 controller_server:
   ros__parameters:
     use_sim_time: True
-    odom_topic: odometry # odom -> gimbal_yaw
+    odom_topic: odometry
     controller_frequency: 60.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -371,12 +360,12 @@ controller_server:
         qx_e: 500.0
         qy_e: 500.0
         qtheta_e: 200.0
-        vx_min: -2.0
-        vx_max: 2.0
-        vy_min: -2.0
-        vy_max: 2.0
-        omega_min: -3.0
-        omega_max: 3.0
+        vx_min: -0.5
+        vx_max: 0.5
+        vy_min: -0.5
+        vy_max: 0.5
+        omega_min: -2.0
+        omega_max: 2.0
       local_plan_length: 2.0
 
 local_costmap:

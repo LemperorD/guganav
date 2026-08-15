@@ -6,7 +6,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVar
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, Node
-from launch_ros.descriptions import ComposableNode, ParameterFile
+from launch_ros.descriptions import ComposableNode, ParameterFile, ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
@@ -23,6 +23,7 @@ def generate_launch_description():
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    navigation_profile = LaunchConfiguration("navigation_profile")
 
     lifecycle_nodes = [
         "controller_server",
@@ -55,6 +56,10 @@ def generate_launch_description():
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace", default_value="", description="Top-level namespace"
+    )
+
+    declare_navigation_profile_cmd = DeclareLaunchArgument(
+        "navigation_profile", default_value="jps_pid", description="Navigation stack profile"
     )
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -111,7 +116,7 @@ def generate_launch_description():
     )
 
     start_terrain_analysis_ext_cmd = Node(
-        package="terrain_analysis",
+        package="terrain_analysis_ext",
         executable="terrainAnalysisExt",
         name="terrain_analysis_ext",
         output="screen",
@@ -138,16 +143,6 @@ def generate_launch_description():
                 package="sensor_scan_generation",
                 executable="sensor_scan_generation_node",
                 name="sensor_scan_generation",
-                output="screen",
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=["--ros-args", "--log-level", log_level],
-            ),
-            Node(
-                package="fake_vel_transform",
-                executable="fake_vel_transform_node",
-                name="fake_vel_transform",
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
@@ -204,9 +199,6 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),  # remap output
-                ],
             ),
             Node(
                 package="nav2_waypoint_follower",
@@ -229,8 +221,41 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel_nav2_result"),  # remap output
                 ],
+            ),
+            Node(
+                package="fake_vel_transform",
+                executable="fake_vel_transform_node",
+                name="fake_vel_transform",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    {
+                        "use_sim_time": use_sim_time,
+                        "robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw' or 'base_footprint'",
+                        ]),
+                        "fake_robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw_fake' or 'base_footprint_fake'",
+                        ]),
+                        "chassis_frame": "chassis",
+                        "odom_topic": "odometry",
+                        "local_plan_topic": "local_plan",
+                        "input_cmd_vel_topic": "cmd_vel_smoothed",
+                        "output_cmd_vel_topic": "cmd_vel",
+                        "output_in_chassis_frame": ParameterValue(
+                            PythonExpression([
+                                "'", use_sim_time, "'.lower() == 'true' and '",
+                                navigation_profile, "' == 'jps_mpc'",
+                            ]),
+                            value_type=bool,
+                        ),
+                        "cmd_spin_topic": "cmd_spin",
+                        "chassis_mode_topic": "chassis_mode",
+                    }
+                ],
+                arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
                 package="nav2_lifecycle_manager",
@@ -266,14 +291,6 @@ def generate_launch_description():
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
-                package="fake_vel_transform",
-                plugin="fake_vel_transform::FakeVelTransform",
-                name="fake_vel_transform",
-                parameters=[configured_params],
-                extra_arguments=[{'use_intra_process_comms': True}],
-
-            ),
-            ComposableNode(
                 package="nav2_controller",
                 plugin="nav2_controller::ControllerServer",
                 name="controller_server",
@@ -299,9 +316,6 @@ def generate_launch_description():
                 plugin="behavior_server::BehaviorServer",
                 name="behavior_server",
                 parameters=[configured_params],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),  # remap output
-                ],
             ),
             ComposableNode(
                 package="nav2_bt_navigator",
@@ -322,7 +336,36 @@ def generate_launch_description():
                 parameters=[configured_params],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel_nav2_result"),  # remap output
+                ],
+            ),
+            ComposableNode(
+                package="fake_vel_transform",
+                plugin="fake_vel_transform::FakeVelTransform",
+                name="fake_vel_transform",
+                parameters=[
+                    {
+                        "use_sim_time": use_sim_time,
+                        "robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw' or 'base_footprint'",
+                        ]),
+                        "fake_robot_base_frame": PythonExpression([
+                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw_fake' or 'base_footprint_fake'",
+                        ]),
+                        "chassis_frame": "chassis",
+                        "odom_topic": "odometry",
+                        "local_plan_topic": "local_plan",
+                        "input_cmd_vel_topic": "cmd_vel_smoothed",
+                        "output_cmd_vel_topic": "cmd_vel",
+                        "output_in_chassis_frame": ParameterValue(
+                            PythonExpression([
+                                "'", use_sim_time, "'.lower() == 'true' and '",
+                                navigation_profile, "' == 'jps_mpc'",
+                            ]),
+                            value_type=bool,
+                        ),
+                        "cmd_spin_topic": "cmd_spin",
+                        "chassis_mode_topic": "chassis_mode",
+                    }
                 ],
             ),
             ComposableNode(
@@ -349,6 +392,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_navigation_profile_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

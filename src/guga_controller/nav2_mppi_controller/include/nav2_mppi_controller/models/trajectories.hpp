@@ -1,0 +1,52 @@
+// Copyright (c) 2022 Samsung Research America, @artofnothingness Alexey Budyakov
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef NAV2_MPPI_CONTROLLER__MODELS__TRAJECTORIES_HPP_
+#define NAV2_MPPI_CONTROLLER__MODELS__TRAJECTORIES_HPP_
+
+#include <xtensor/xtensor.hpp>
+#include <xtensor/xview.hpp>
+
+namespace mppi::models
+{
+
+/**
+ * @class mppi::models::Trajectories
+ * @brief 批量候选位姿轨迹
+ */
+struct Trajectories
+{
+  // 各候选轨迹在预测时域内的横轴坐标。
+  xt::xtensor<float, 2> x;
+  // 各候选轨迹在预测时域内的纵轴坐标。
+  xt::xtensor<float, 2> y;
+  // 各候选轨迹在预测时域内的航向角。
+  xt::xtensor<float, 2> yaws;
+
+  /**
+    * @brief 按采样规模和预测步数重新分配并清零轨迹张量
+    * @param batch_size: 候选轨迹数量
+    * @param time_steps: 每条轨迹的预测时间步数
+    */
+  void reset(unsigned int batch_size, unsigned int time_steps)
+  {
+    x = xt::zeros<float>({batch_size, time_steps});
+    y = xt::zeros<float>({batch_size, time_steps});
+    yaws = xt::zeros<float>({batch_size, time_steps});
+  }
+};
+
+}  // namespace mppi::models
+
+#endif  // NAV2_MPPI_CONTROLLER__MODELS__TRAJECTORIES_HPP_

@@ -59,9 +59,10 @@ void ChassisController::update()
     result_vel.linear = target_vel_.linear;
     result_vel.angular.z = chassis_pid_.Update(-cur_yaw_, DT);
   } else {
+    // geometry_msgs/Twist cmd_vel follows Nav2's robot_base_frame convention:
+    // linear velocity is already expressed in the chassis/base frame.
     result_vel.angular.z = target_vel_.angular.z;
-    result_vel.linear.x =  target_vel_.linear.x * std::cos(-cur_yaw_) + target_vel_.linear.y * std::sin(-cur_yaw_);
-    result_vel.linear.y = -target_vel_.linear.x * std::sin(-cur_yaw_) + target_vel_.linear.y * std::cos(-cur_yaw_);
+    result_vel.linear = target_vel_.linear;
   }
   // publish CMD
   chassis_actuator_->set(result_vel);

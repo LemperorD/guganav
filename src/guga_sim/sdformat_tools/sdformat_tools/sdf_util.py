@@ -1,5 +1,7 @@
 import os
 
+from ament_index_python.packages import get_packages_with_prefixes
+
 MODEL_URI_PREFIX = 'model://'
 
 sdf_paths = []
@@ -28,3 +30,26 @@ def parse_model_uri(uri):
     if model_dir_path == '':
         return ''
     return model_dir_path + tmp_uri[pos:]
+
+
+def model_uri_to_urdf_uri(uri):
+    """Resolve a Gazebo model URI to a relocatable URI understood by URDF."""
+    model_path = parse_model_uri(uri)
+    if model_path == '':
+        return ''
+
+    model_path = os.path.abspath(model_path)
+    for package_name, prefix in get_packages_with_prefixes().items():
+        package_share = os.path.abspath(
+            os.path.join(prefix, 'share', package_name)
+        )
+        try:
+            if os.path.commonpath((model_path, package_share)) != package_share:
+                continue
+        except ValueError:
+            continue
+
+        relative_path = os.path.relpath(model_path, package_share)
+        return 'package://{}/{}'.format(package_name, relative_path)
+
+    return 'file://' + model_path

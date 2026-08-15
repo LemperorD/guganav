@@ -7,6 +7,8 @@
   <maintainer email="zhenpeng.ge@qq.com">Zhenpeng Ge</maintainer>
   <license>Apache License 2.0</license>
 
+  <exec_depend>ament_index_python</exec_depend>
+
   <!-- These test dependencies are optional
   Their purpose is to make sure that the code passes the linters -->
   <test_depend>ament_copyright</test_depend>
