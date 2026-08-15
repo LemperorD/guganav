@@ -1,8 +1,15 @@
 # Model Predictive Path Integral Controller
 
-![](media/demo.gif)
-
 ## Overview
+
+> **本地集成说明（guganav）**：本包为 Nav2 官方 MPPI 控制器（上游代码，无本地算法改动）。
+> 哨兵 TES（小陀螺）场景下的坐标系适配在包外完成：
+> - 速度输出基于 `base_footprint_nonrotating` 坐标系，该 tf 由
+>   `nonrotating_vel_transform` 包发布（`base_footprint → base_footprint_nonrotating`），
+>   底盘自旋时控制器仍能稳定跟踪路径。
+> - TES 自旋速度叠加（`cmd_spin` + `chassis_mode`）由 `nonrotating_vel_transform`
+>   在输出 `cmd_vel` 前完成，本控制器不做自旋相关处理。
+> - 其余参数与官方保持一致，可直接参考下方 Configuration 与 Nav2 官方文档。
 
 This is a predictive controller (local trajectory planner) that implements the [Model Predictive Path Integral (MPPI)](https://ieeexplore.ieee.org/document/7487277) algorithm to track a path with adaptive collision avoidance. It contains plugin-based critic functions to impact the behavior of the algorithm. It was created by [Aleksei Budyakov](https://www.linkedin.com/in/aleksei-budyakov-334889224/) and adapted & developed for Nav2 by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/).
 
@@ -250,7 +257,6 @@ controller_server:
         consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 1.0
-      PathAlignCritic:
       PathAlignCritic:
         enabled: true
         cost_power: 1

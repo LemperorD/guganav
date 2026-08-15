@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -35,6 +36,8 @@ namespace simple_decision {
       int hp_survival_enter = 120;
       int hp_survival_exit = 300;
       int ammo_min = 0;
+      bool always_tes = false;  // 测试默认关闭启动即小陀螺，保住原决策逻辑用例
+      double spin_speed = 6.28;
     };
 
     DecisionSimpleTest() {
@@ -56,6 +59,8 @@ namespace simple_decision {
                                      sys.hp_survival_enter);
       opts.append_parameter_override("hp_survival_exit", sys.hp_survival_exit);
       opts.append_parameter_override("ammo_min", sys.ammo_min);
+      opts.append_parameter_override("always_tes", sys.always_tes);
+      opts.append_parameter_override("spin_speed", sys.spin_speed);
 
       node_ = std::make_shared<DecisionSimple>(opts);
       helper_ = std::make_shared<rclcpp::Node>("test_helper");
@@ -76,6 +81,12 @@ namespace simple_decision {
           [this](const std_msgs::msg::UInt8::SharedPtr m) {
             chassis_modes_.push_back(m->data);
           });
+      cmd_spin_sub_ =
+          helper_->create_subscription<example_interfaces::msg::Float32>(
+              "cmd_spin", rclcpp::QoS(10),
+              [this](const example_interfaces::msg::Float32::SharedPtr m) {
+                cmd_spins_.push_back(m->data);
+              });
       goal_pose_sub_ =
           helper_->create_subscription<geometry_msgs::msg::PoseStamped>(
               "goal_pose", rclcpp::SensorDataQoS(),
@@ -104,6 +115,7 @@ namespace simple_decision {
              && armor_pub_->get_subscription_count() > 0
              && target_pub_->get_subscription_count() > 0
              && chassis_mode_sub_->get_publisher_count() > 0
+             && cmd_spin_sub_->get_publisher_count() > 0
              && goal_pose_sub_->get_publisher_count() > 0
              && debug_attack_sub_->get_publisher_count() > 0;
     }
@@ -194,6 +206,7 @@ namespace simple_decision {
       chassis_modes_.clear();
       goal_poses_.clear();
       debug_attack_poses_.clear();
+      cmd_spins_.clear();
     }
 
     void callHandleGateLog(Readiness& r) {
@@ -213,6 +226,7 @@ namespace simple_decision {
       armor_pub_.reset();
       target_pub_.reset();
       chassis_mode_sub_.reset();
+      cmd_spin_sub_.reset();
       goal_pose_sub_.reset();
       debug_attack_sub_.reset();
       helper_.reset();
@@ -255,10 +269,13 @@ namespace simple_decision {
         goal_pose_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr
         debug_attack_sub_;
+    rclcpp::Subscription<example_interfaces::msg::Float32>::SharedPtr
+        cmd_spin_sub_;
 
     std::vector<uint8_t> chassis_modes_;
     std::vector<geometry_msgs::msg::PoseStamped> goal_poses_;
     std::vector<geometry_msgs::msg::PoseStamped> debug_attack_poses_;
+    std::vector<float> cmd_spins_;
   };
 
   // ------ Gate --------------------------------------------------------
@@ -484,6 +501,59 @@ namespace simple_decision {
   TEST_F(DecisionSimpleTest, GetRobotPoseMap_NoTf_ReturnsNullopt) {
     auto result = callGetRobotPoseMap();
     EXPECT_FALSE(result.has_value());
+  }
+
+  // ------ 启动即小陀螺 (always_tes) ------------------------------------
+
+  // always_tes=true：决策就绪后恒发 LITTLE_TES，并同步下发 cmd_spin(spin_speed)
+  TEST_F(DecisionSimpleTest, AlwaysTes_ForcesLittleTesAndCmdSpin) {
+    destroySystem();
+    createSystem({false, 0.0, 2.0, 2.0, 120, 300, 0, true, 6.28});
+    clearReceived();
+
+    sendRobotStatus(500, 120);
+    sendGameStatus(guga_interfaces::msg::GameStatus::RUNNING);
+
+    ASSERT_TRUE(waitForChassisMode(ChassisMode::LITTLE_TES, 2000ms));
+    bool got_spin = false;
+    for (const auto v : cmd_spins_) {
+      if (std::abs(v - 6.28f) < 1e-3f) {
+        got_spin = true;
+        break;
+      }
+    }
+    EXPECT_TRUE(got_spin) << "cmd_spin 应同步下发 spin_speed";
+  }
+
+  // always_tes=true 时受击与否不影响，始终 LITTLE_TES
+  TEST_F(DecisionSimpleTest, AlwaysTes_AttackedStillLittleTes) {
+    destroySystem();
+    createSystem({false, 0.0, 2.0, 2.0, 120, 300, 0, true, 3.0});
+    clearReceived();
+
+    sendRobotStatus(500, 120);
+    sendGameStatus(guga_interfaces::msg::GameStatus::RUNNING);
+    ASSERT_TRUE(waitForChassisMode(ChassisMode::LITTLE_TES, 2000ms));
+    clearReceived();
+
+    sendRobotStatus(400, 120, true);  // 受击
+    spinFor(300ms);
+    ASSERT_FALSE(chassis_modes_.empty());
+    for (const auto m : chassis_modes_) {
+      EXPECT_EQ(m, static_cast<uint8_t>(ChassisMode::LITTLE_TES));
+    }
+  }
+
+  // always_tes=false：默认态发 CHASSIS_FOLLOWED，且不发 cmd_spin
+  TEST_F(DecisionSimpleTest, AlwaysTesOff_DefaultFollowsAndNoCmdSpin) {
+    destroySystem();
+    createSystem({false, 0.0, 2.0, 2.0, 120, 300, 0, false, 6.28});
+    clearReceived();
+
+    sendRobotStatus(500, 120);
+    sendGameStatus(guga_interfaces::msg::GameStatus::RUNNING);
+    ASSERT_TRUE(waitForChassisMode(ChassisMode::CHASSIS_FOLLOWED, 2000ms));
+    EXPECT_TRUE(cmd_spins_.empty());
   }
 
 }  // namespace simple_decision

@@ -5,9 +5,9 @@ namespace pb_omni_pid_pursuit_controller {
   namespace {
 
     TEST(ChassisModeTest, EnumValues) {
-      EXPECT_EQ(static_cast<uint8_t>(ChassisMode::CHASSIS_FOLLOWED), 1);
-      EXPECT_EQ(static_cast<uint8_t>(ChassisMode::LITTLE_TES), 2);
-      EXPECT_EQ(static_cast<uint8_t>(ChassisMode::GO_HOME), 3);
+      EXPECT_EQ(static_cast<uint8_t>(ChassisMode::CHASSIS_FOLLOWED), 0);
+      EXPECT_EQ(static_cast<uint8_t>(ChassisMode::LITTLE_TES), 1);
+      EXPECT_EQ(static_cast<uint8_t>(ChassisMode::GO_HOME), 2);
     }
 
     TEST(ControllerConfigTest, DefaultValues) {

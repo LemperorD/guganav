@@ -7,7 +7,7 @@
  * 使用方式（在 Pangolin UI 进程中）：
  *
  *   1. 构造 ShmReader reader;
- *   2. 调用 reader.open("guga_ui_shm");
+ *   2. 调用 reader.open("guga_shm");
  *   3. 每帧渲染前调用 reader.checkFresh(slot_id) 判断数据是否更新
  *   4. 调用 reader.read(slot_id, &ui_struct) 读取最新数据
  *

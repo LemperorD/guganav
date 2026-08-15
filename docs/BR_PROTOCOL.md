@@ -56,12 +56,12 @@
 
 | CMD | 名称 | 方向 | Payload 长度 |
 |-----|------|------|:---:|
-| `0xCD` | 运动控制帧 | PC ↔ MCU 双向 | 26 字节 |
+| `0xCD` | 运动控制帧 | PC ↔ MCU 双向 | 17 字节 |
 | `0xD1` | 裁判系统帧 | MCU → PC | 13 字节 |
 
 ---
 
-## 4. 运动控制帧 (`0xCD`) — 26 字节
+## 4. 运动控制帧 (`0xCD`) — 17 字节
 
 ### 4.1 PC → MCU（上位机下发）
 
@@ -70,33 +70,25 @@
 ```
 Offset  Size  字段           类型        说明
 ────────────────────────────────────────────────────────
-[0]     1     chassis_mode   uint8_t     底盘模式
-[1-4]   4     angle_init     float LE    初始角度
-[5]     1     flag           uint8_t     标志位（固定 1）
-[6-9]   4     vx_Y           float LE    底盘系 x 线速度 × vel_trans_scale
-[10-13] 4     vy_Y           float LE    底盘系 y 线速度 × vel_trans_scale
-[14-17] 4     vx             float LE    云台系 x 线速度 × vel_trans_scale
-[18-21] 4     vy             float LE    云台系 y 线速度 × vel_trans_scale
-[22-25] 4     -wz            float LE    角速度 z 取反
+[0]     4     vx             float LE    云台系 x 线速度 × vel_trans_scale
+[4]     4     vy             float LE    云台系 y 线速度 × vel_trans_scale
+[8]     4     wz             float LE    角速度 z（字段名 WZ_NEG）
+[12-16] 5     reserved       —           保留（0 填充）
 ```
 
-`chassis_mode` 取值统一为 `1=CHASSIS_FOLLOWED`、`2=LITTLE_TES`、
-`3=GO_HOME`。模式 2 下目标自旋速度已经包含在 `wz` 字段中；MCU 只执行该
-`wz`，不得因 `chassis_mode=2` 再额外叠加内部固定角速度。
-
-**注意**: 速度值经过 `vel_trans_scale_`（默认 40.0）线性缩放，由 `float` 转 `uint8_t[4]` 小端序写入。
-`vx_Y` / `vy_Y` 经过 `yaw_diff` 从云台系旋转变换到底盘系。
+- `vx` / `vy` 为云台系线速度，经 `vel_trans_scale_`（默认 40.0）线性缩放后以 `float` 小端序写入。
+- `wz` 为角速度 z，**不缩放**，直接写入（字段名 `WZ_NEG` 对应协议中"角速度 z 取反"的旧语义，当前实现未取反，联调时以电控约定为准）。
+- 当前 `encodeTwist` 不做云台→底盘旋转变换；如需按 yaw 差旋转，参考节点内 `transformVelocityToChassis()`。
 
 ### 4.2 MCU → PC（下位机上传）
 
-下位机通过同一 26 字节缓冲区回传多种数据，上位机按需读取不同字节段：
+下位机通过同一 17 字节缓冲区回传数据，上位机按不同字节段解析：
 
 | 方法 | 话题 | 读取范围 | 类型 | 含义 |
 |------|------|---------|------|------|
-| `decodeYaw` | `/serial/Yaw` | `[7-10]` | float LE | 云台 yaw 角度差 |
-| `decodeTESspeed` | `/serial/TES_speed` | `[3-6]` | float LE | TES 角速度 z |
-| `decodeEnemyPos` | `/serial/EnemyPos` | `[11-12]` | int16_t LE | 敌方 x 坐标 |
-| | | `[13-14]` | int16_t LE | 敌方 y 坐标 |
+| `decodeYaw` | `/serial/Yaw` | `[0-3]` | float LE | 云台 yaw 角度差（弧度） |
+| `decodeEnemyPos` | `/serial/EnemyPos` | `[4-7]` | float LE | 敌方 x 坐标 |
+| | | `[8-11]` | float LE | 敌方 y 坐标 |
 
 ---
 
@@ -162,11 +154,18 @@ ROS2 话题                   RosToSerialBridge/SerialToRosBridge        串口�
 ──────────                      ────────────                        ──────
 /cmd_vel         ──encodeTwist──▶ bridge_twist_pc_     ──sendDataFrame──▶ 0xCD → MCU
 /serial/Yaw      ◀─decodeYaw────  bridge_yaw_mcu_      ◀─receiveDataFrameSnapshot─ 0xCD ← MCU
-/serial/TES_speed◀─decodeTESspeed bridge_tes_speed_mcu_◀─receiveDataFrameSnapshot─ 0xCD ← MCU
 /serial/EnemyPos ◀─decodeEnemyPos bridge_enemy_pos_mcu_◀─receiveDataFrameSnapshot─ 0xCD ← MCU
 /referee/*  ×3   ◀─publishRefereeData (timer 20ms)     ◀─takeRefereeFrameSnapshot 0xD1 ← MCU
-/chassis_mode    ──subscription──▶ chassis_mode_ 成员变量                   (本地)
 ```
+
+当前实现共 3 路桥接通道（/cmd_vel、/serial/Yaw、/serial/EnemyPos）。旧版的
+`/serial/TES_speed` 桥与 `/chassis_mode` 订阅在 HEAD 重构中被移除，如需恢复可参考
+`NoFake_TES_bias` 分支或 git 历史。
+
+### tf 广播
+
+`publishTransformGimbalVision()`（30ms 定时器）：查询 `odom→base_footprint` 变换，
+取其 yaw 角 θ 后发布 `base_footprint → gimbal_yaw_vision` 的纯旋转 tf（旋转角 -θ）。
 
 ---
 

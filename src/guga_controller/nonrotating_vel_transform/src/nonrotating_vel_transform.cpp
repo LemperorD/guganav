@@ -14,24 +14,25 @@
 
 // #define ODEMETRY_DEBUG
 
-#include "fake_vel_transform/fake_vel_transform.hpp"
+#include "nonrotating_vel_transform/nonrotating_vel_transform.hpp"
 
 #include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
-namespace fake_vel_transform
+namespace nonrotating_vel_transform
 {
 
 constexpr double EPSILON = 1e-5;
 constexpr double CONTROLLER_TIMEOUT = 0.5;
 
-FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
-: Node("fake_vel_transform", options)
+NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & options)
+: Node("nonrotating_vel_transform", options)
 {
-  RCLCPP_INFO(get_logger(), "Start FakeVelTransform!");
+  RCLCPP_INFO(get_logger(), "Start NonrotatingVelTransform!");
 
-  this->declare_parameter<std::string>("robot_base_frame", "gimbal_link");
-  this->declare_parameter<std::string>("fake_robot_base_frame", "gimbal_link_fake");
+  this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
+  this->declare_parameter<std::string>(
+    "nonrotating_robot_base_frame", "base_footprint_nonrotating");
   this->declare_parameter<std::string>("chassis_frame", "chassis");
   this->declare_parameter<std::string>("odom_topic", "odom");
   this->declare_parameter<std::string>("local_plan_topic", "local_plan");
@@ -42,11 +43,14 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("vis_frame_id", "base_link");
   this->declare_parameter<double>("vis_scale", 1.0);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
-  this->declare_parameter<float>("init_spin_speed", 0.0);
+  // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
+  // 之后由 chassis_mode 话题（如 simple_decision）覆盖
+  this->declare_parameter<int>("initial_chassis_mode", 1);
+  this->declare_parameter<float>("init_spin_speed", 6.28);
   this->declare_parameter<bool>("output_in_chassis_frame", false);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
-  this->get_parameter("fake_robot_base_frame", fake_robot_base_frame_);
+  this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
   this->get_parameter("chassis_frame", chassis_frame_);
   this->get_parameter("odom_topic", odom_topic_);
   this->get_parameter("local_plan_topic", local_plan_topic_);
@@ -58,6 +62,10 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
   this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
+  // initial_chassis_mode：启动时默认小陀螺（launch 中按 navigation_profile 区分）
+  int initial_chassis_mode{1};
+  this->get_parameter("initial_chassis_mode", initial_chassis_mode);
+  chassis_mode_ = static_cast<uint8_t>(initial_chassis_mode);
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -69,21 +77,22 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   vis_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(vis_cmd_vel_topic_, 10);
 
   cmd_spin_sub_ = this->create_subscription<example_interfaces::msg::Float32>(
-    cmd_spin_topic_, 1, std::bind(&FakeVelTransform::cmdSpinCallback, this, std::placeholders::_1));
+    cmd_spin_topic_, 1,
+    std::bind(&NonrotatingVelTransform::cmdSpinCallback, this, std::placeholders::_1));
   cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
     input_cmd_vel_topic_, 10,
-    std::bind(&FakeVelTransform::cmdVelCallback, this, std::placeholders::_1));
+    std::bind(&NonrotatingVelTransform::cmdVelCallback, this, std::placeholders::_1));
 
   chassis_mode_sub_ = this->create_subscription<std_msgs::msg::UInt8>(
     chassis_mode_topic_, 1,
-    std::bind(&FakeVelTransform::chassisModeCallback, this, std::placeholders::_1));
+    std::bind(&NonrotatingVelTransform::chassisModeCallback, this, std::placeholders::_1));
 
   odom_sub_filter_.subscribe(this, odom_topic_);
   local_plan_sub_filter_.subscribe(this, local_plan_topic_);
   odom_sub_filter_.registerCallback(
-    std::bind(&FakeVelTransform::odometryCallback, this, std::placeholders::_1));
+    std::bind(&NonrotatingVelTransform::odometryCallback, this, std::placeholders::_1));
   local_plan_sub_filter_.registerCallback(
-    std::bind(&FakeVelTransform::localPlanCallback, this, std::placeholders::_1));
+    std::bind(&NonrotatingVelTransform::localPlanCallback, this, std::placeholders::_1));
 
   // In Navigation2 Humble release, the velocity is published by the controller without timestamped.
   // We consider the velocity is published at the same time as local_plan.
@@ -91,27 +100,28 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(100), odom_sub_filter_, local_plan_sub_filter_);
   sync_->registerCallback(
-    std::bind(&FakeVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
+    std::bind(
+      &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
 
   tf_sub_timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(50), std::bind(&FakeVelTransform::updateGimbalYaw, this));
+    std::chrono::milliseconds(50), std::bind(&NonrotatingVelTransform::updateGimbalYaw, this));
 
-  // 50Hz Timer to send transform from `robot_base_frame` to `fake_robot_base_frame`
+  // 50Hz Timer to send transform from `robot_base_frame` to `nonrotating_robot_base_frame`
   tf_pub_timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(20), std::bind(&FakeVelTransform::publishTransform, this));
+    std::chrono::milliseconds(20), std::bind(&NonrotatingVelTransform::publishTransform, this));
 }
 
-void FakeVelTransform::chassisModeCallback(const std_msgs::msg::UInt8::SharedPtr msg)
+void NonrotatingVelTransform::chassisModeCallback(const std_msgs::msg::UInt8::SharedPtr msg)
 {
   chassis_mode_ = msg->data;
 }
 
-void FakeVelTransform::cmdSpinCallback(const example_interfaces::msg::Float32::SharedPtr msg)
+void NonrotatingVelTransform::cmdSpinCallback(const example_interfaces::msg::Float32::SharedPtr msg)
 {
   spin_speed_ = msg->data;
 }
 
-void FakeVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr & msg)
+void NonrotatingVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr & msg)
 {
   // NOTE: Haven't synced with local_plan
   if ((rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
@@ -123,7 +133,7 @@ void FakeVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstShar
   }
 }
 
-void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
+void NonrotatingVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
   std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
   const bool is_zero_vel = std::abs(msg->linear.x) < EPSILON && std::abs(msg->linear.y) < EPSILON &&
@@ -132,7 +142,7 @@ void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr
     is_zero_vel ||
     (rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
     // Recovery behaviors do not publish a local plan, but their velocity is
-    // still expressed in fake_robot_base_frame_ and must be transformed.
+    // still expressed in nonrotating_robot_base_frame_ and must be transformed.
     const double yaw_diff =
       selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, current_robot_base_angle_);
     auto aft_tf_vel = transformVelocity(msg, yaw_diff);
@@ -143,13 +153,13 @@ void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr
   }
 }
 
-void FakeVelTransform::localPlanCallback(const nav_msgs::msg::Path::ConstSharedPtr & /*msg*/)
+void NonrotatingVelTransform::localPlanCallback(const nav_msgs::msg::Path::ConstSharedPtr & /*msg*/)
 {
   // Consider nav2_controller_server is activated when receiving local_plan
   last_controller_activate_time_ = rclcpp::Clock().now();
 }
 
-void FakeVelTransform::syncCallback(
+void NonrotatingVelTransform::syncCallback(
   const nav_msgs::msg::Odometry::ConstSharedPtr & odom_msg,
   const nav_msgs::msg::Path::ConstSharedPtr & /*local_plan_msg*/)
 {
@@ -171,7 +181,7 @@ void FakeVelTransform::syncCallback(
   visualizeVelocity(aft_tf_vel);
 }
 
-void FakeVelTransform::updateGimbalYaw()
+void NonrotatingVelTransform::updateGimbalYaw()
 {
   try {
     auto tf = tf_buffer_->lookupTransform(chassis_frame_, robot_base_frame_, tf2::TimePointZero);
@@ -190,12 +200,12 @@ void FakeVelTransform::updateGimbalYaw()
   }
 }
 
-void FakeVelTransform::publishTransform()
+void NonrotatingVelTransform::publishTransform()
 {
   geometry_msgs::msg::TransformStamped t;
   t.header.stamp = this->get_clock()->now();
   t.header.frame_id = robot_base_frame_;
-  t.child_frame_id = fake_robot_base_frame_;
+  t.child_frame_id = nonrotating_robot_base_frame_;
 
   double tf_yaw = 0.0;
   if (chassis_mode_ == chassisFollowed)
@@ -209,13 +219,13 @@ void FakeVelTransform::publishTransform()
   tf_broadcaster_->sendTransform(t);
 }
 
-double FakeVelTransform::selectVelocityYawDiff(
+double NonrotatingVelTransform::selectVelocityYawDiff(
   uint8_t chassis_mode, double chassis_followed_yaw, double robot_base_angle)
 {
   return chassis_mode == chassisFollowed ? chassis_followed_yaw : robot_base_angle;
 }
 
-geometry_msgs::msg::Twist FakeVelTransform::rotateVelocity(
+geometry_msgs::msg::Twist NonrotatingVelTransform::rotateVelocity(
   const geometry_msgs::msg::Twist & twist, double yaw_diff)
 {
   geometry_msgs::msg::Twist out = twist;
@@ -224,11 +234,11 @@ geometry_msgs::msg::Twist FakeVelTransform::rotateVelocity(
   return out;
 }
 
-geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
+geometry_msgs::msg::Twist NonrotatingVelTransform::transformVelocity(
   const geometry_msgs::msg::Twist::SharedPtr & twist, double yaw_diff)
 {
-  const double fake_to_chassis_yaw = chassis_followed_yaw_ - yaw_diff;
-  auto out = output_in_chassis_frame_ ? rotateVelocity(*twist, fake_to_chassis_yaw)
+  const double nonrotating_to_chassis_yaw = chassis_followed_yaw_ - yaw_diff;
+  auto out = output_in_chassis_frame_ ? rotateVelocity(*twist, nonrotating_to_chassis_yaw)
                                       : rotateVelocity(*twist, yaw_diff);
   if (chassis_mode_ == chassisFollowed) {
     out.angular.z = twist->angular.z;
@@ -238,7 +248,7 @@ geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
   return out;
 }
 
-void FakeVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist & vel)
+void NonrotatingVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist & vel)
 {
   auto now = this->get_clock()->now();
   double scale = vis_scale_;
@@ -309,7 +319,7 @@ void FakeVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist & vel)
   vis_marker_pub_->publish(angular_marker);
 }
 
-}  // namespace fake_vel_transform
+}  // namespace nonrotating_vel_transform
 
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(fake_vel_transform::FakeVelTransform)
+RCLCPP_COMPONENTS_REGISTER_NODE(nonrotating_vel_transform::NonrotatingVelTransform)

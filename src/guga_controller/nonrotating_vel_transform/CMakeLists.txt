@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(fake_vel_transform)
+project(nonrotating_vel_transform)
 
 ## Use C++14
 set(CMAKE_CXX_STANDARD 14)
@@ -24,11 +24,11 @@ ament_auto_find_build_dependencies()
 ###########
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/fake_vel_transform.cpp
+  src/nonrotating_vel_transform.cpp
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN fake_vel_transform::FakeVelTransform
+  PLUGIN nonrotating_vel_transform::NonrotatingVelTransform
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
@@ -46,11 +46,11 @@ if(BUILD_TESTING)
   )
   ament_lint_auto_find_test_dependencies()
 
-  ament_add_gtest(fake_vel_transform_test
-    test/fake_vel_transform_test.cpp
+  ament_add_gtest(nonrotating_vel_transform_test
+    test/nonrotating_vel_transform_test.cpp
   )
-  target_link_libraries(fake_vel_transform_test
-    fake_vel_transform
+  target_link_libraries(nonrotating_vel_transform_test
+    nonrotating_vel_transform
   )
 endif()
 

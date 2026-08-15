@@ -39,7 +39,7 @@ public:
   /**
    * @brief 初始化写入端，创建或打开共享内存。
    *
-   * @param name 共享内存名称（如 "guga_ui_shm"）。
+   * @param name 共享内存名称（如 "guga_shm"）。
    * @param slot_id 要写入的槽位 ID（UiSlotId 枚举值）。
    * @return true 成功，false 失败。
    *

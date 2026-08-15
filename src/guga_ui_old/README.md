@@ -1,6 +1,6 @@
-# guga_ui
+# guga_ui_old
 
-ui模块，大部分时候我们不需要使用rviz这种交互式的调试，所以打算使用pangolin进行一些基础的ui开发来做调试
+旧 UI 模块（`guga_ui_common` 共享内存 + `guga_ui_pangolin`），大部分时候我们不需要使用 rviz 这种交互式的调试，所以打算使用 pangolin 进行一些基础的 ui 开发来做调试
 
 # TODOLIST
 

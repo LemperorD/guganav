@@ -40,10 +40,10 @@ JPS 输出的是稀疏跳点。在开阔区域中，起点、拐点、终点可�
 
 ```yaml
 local_costmap:
-  robot_radius: 0.30
+  robot_radius: 0.25
 
 global_costmap:
-  robot_radius: 0.40
+  robot_radius: 0.35
 
 planner_server:
   ros__parameters:

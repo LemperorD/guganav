@@ -224,35 +224,36 @@ def generate_launch_description():
                 ],
             ),
             Node(
-                package="fake_vel_transform",
-                executable="fake_vel_transform_node",
-                name="fake_vel_transform",
+                package="nonrotating_vel_transform",
+                executable="nonrotating_vel_transform_node",
+                name="nonrotating_vel_transform",
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[
                     {
                         "use_sim_time": use_sim_time,
-                        "robot_base_frame": PythonExpression([
-                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw' or 'base_footprint'",
-                        ]),
-                        "fake_robot_base_frame": PythonExpression([
-                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw_fake' or 'base_footprint_fake'",
-                        ]),
+                        "robot_base_frame": "base_footprint",
+                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
                         "chassis_frame": "chassis",
                         "odom_topic": "odometry",
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
                         "output_cmd_vel_topic": "cmd_vel",
-                        "output_in_chassis_frame": ParameterValue(
-                            PythonExpression([
-                                "'", use_sim_time, "'.lower() == 'true' and '",
-                                navigation_profile, "' == 'jps_mpc'",
-                            ]),
-                            value_type=bool,
-                        ),
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
+                        # 2d_mppi / jps_mpc 走 base_footprint_nonrotating，启动即小陀螺；
+                        # jps_pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
+                        "initial_chassis_mode": PythonExpression(
+                            [
+                                "1 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0",
+                            ]
+                        ),
+                        "init_spin_speed": PythonExpression(
+                            [
+                                "6.28 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0.0",
+                            ]
+                        ),
                     }
                 ],
                 arguments=["--ros-args", "--log-level", log_level],
@@ -339,32 +340,33 @@ def generate_launch_description():
                 ],
             ),
             ComposableNode(
-                package="fake_vel_transform",
-                plugin="fake_vel_transform::FakeVelTransform",
-                name="fake_vel_transform",
+                package="nonrotating_vel_transform",
+                plugin="nonrotating_vel_transform::NonrotatingVelTransform",
+                name="nonrotating_vel_transform",
                 parameters=[
                     {
                         "use_sim_time": use_sim_time,
-                        "robot_base_frame": PythonExpression([
-                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw' or 'base_footprint'",
-                        ]),
-                        "fake_robot_base_frame": PythonExpression([
-                            "'", navigation_profile, "' == 'jps_mpc' and 'gimbal_yaw_fake' or 'base_footprint_fake'",
-                        ]),
+                        "robot_base_frame": "base_footprint",
+                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
                         "chassis_frame": "chassis",
                         "odom_topic": "odometry",
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
                         "output_cmd_vel_topic": "cmd_vel",
-                        "output_in_chassis_frame": ParameterValue(
-                            PythonExpression([
-                                "'", use_sim_time, "'.lower() == 'true' and '",
-                                navigation_profile, "' == 'jps_mpc'",
-                            ]),
-                            value_type=bool,
-                        ),
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
+                        # 2d_mppi / jps_mpc 走 base_footprint_nonrotating，启动即小陀螺；
+                        # jps_pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
+                        "initial_chassis_mode": PythonExpression(
+                            [
+                                "1 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0",
+                            ]
+                        ),
+                        "init_spin_speed": PythonExpression(
+                            [
+                                "6.28 if '", navigation_profile, "' in ('2d_mppi', 'jps_mpc') else 0.0",
+                            ]
+                        ),
                     }
                 ],
             ),

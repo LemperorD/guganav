@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef FAKE_VEL_TRANSFORM__FAKE_VEL_TRANSFORM_HPP_
-#define FAKE_VEL_TRANSFORM__FAKE_VEL_TRANSFORM_HPP_
+#ifndef NONROTATING_VEL_TRANSFORM__NONROTATING_VEL_TRANSFORM_HPP_
+#define NONROTATING_VEL_TRANSFORM__NONROTATING_VEL_TRANSFORM_HPP_
 
 #include <memory>
 #include <mutex>
@@ -34,18 +34,19 @@
 #include "tf2_ros/transform_listener.h"
 #include "visualization_msgs/msg/marker.hpp"
 
+// 与 simple_decision 的 ChassisMode 枚举对齐（0=CHASSIS_FOLLOWED, 1=LITTLE_TES, 2=GO_HOME）
 typedef enum {
-  chassisFollowed = 1,
+  chassisFollowed = 0,
   littleTES,
   goHome,
 } ChassisMode;
 
-namespace fake_vel_transform
+namespace nonrotating_vel_transform
 {
-class FakeVelTransform : public rclcpp::Node
+class NonrotatingVelTransform : public rclcpp::Node
 {
 public:
-  explicit FakeVelTransform(const rclcpp::NodeOptions & options);
+  explicit NonrotatingVelTransform(const rclcpp::NodeOptions & options);
 
   static double selectVelocityYawDiff(
     uint8_t chassis_mode, double chassis_followed_yaw, double robot_base_angle);
@@ -88,7 +89,7 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::string robot_base_frame_;
-  std::string fake_robot_base_frame_;
+  std::string nonrotating_robot_base_frame_;
   std::string chassis_frame_;
   std::string odom_topic_;
   std::string local_plan_topic_;
@@ -101,7 +102,7 @@ private:
   std::string chassis_mode_topic_;
   float spin_speed_;
   bool output_in_chassis_frame_{false};
-  uint8_t chassis_mode_ = 1;
+  uint8_t chassis_mode_{littleTES};
   double chassis_followed_yaw_ = 0.0;
 
   std::mutex cmd_vel_mutex_;
@@ -110,6 +111,6 @@ private:
   rclcpp::Time last_controller_activate_time_;
 };
 
-}  // namespace fake_vel_transform
+}  // namespace nonrotating_vel_transform
 
-#endif  // FAKE_VEL_TRANSFORM__FAKE_VEL_TRANSFORM_HPP_
+#endif  // NONROTATING_VEL_TRANSFORM__NONROTATING_VEL_TRANSFORM_HPP_
