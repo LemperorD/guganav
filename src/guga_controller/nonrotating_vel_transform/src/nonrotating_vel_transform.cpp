@@ -99,9 +99,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   // Therefore, we use ApproximateTime policy to synchronize `cmd_vel` and `odometry`.
   sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(100), odom_sub_filter_, local_plan_sub_filter_);
-  sync_->registerCallback(
-    std::bind(
-      &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
+  sync_->registerCallback(std::bind(
+    &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
 
   tf_sub_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50), std::bind(&NonrotatingVelTransform::updateGimbalYaw, this));
@@ -130,7 +129,26 @@ void NonrotatingVelTransform::odometryCallback(const nav_msgs::msg::Odometry::Co
     std::cout << "odom child frame: " << msg->child_frame_id << std::endl;
 #endif
     current_robot_base_angle_ = tf2::getYaw(msg->pose.pose.orientation);
+    last_odom_stamp_ = msg->header.stamp;
   }
+}
+
+double NonrotatingVelTransform::estimateRobotBaseAngle() const
+{
+  // littleTES/goHome：底盘 yaw 变化率 ≈ spin_speed_（路径 wz 远小于自旋）。
+  // odometry 话题受点云频率限制（约 10Hz），两次更新间用最后 yaw + spin*dt
+  // 线性外推，旋转补偿与 tf 连续不跳变（否则 cmd_vel 会飘）。
+  if (chassis_mode_ == chassisFollowed) {
+    return current_robot_base_angle_;
+  }
+  if (last_odom_stamp_.nanoseconds() == 0) {
+    return current_robot_base_angle_;
+  }
+  const double dt = (this->now() - last_odom_stamp_).seconds();
+  if (dt <= 0.0 || dt > 0.5) {
+    return current_robot_base_angle_;
+  }
+  return current_robot_base_angle_ + spin_speed_ * dt;
 }
 
 void NonrotatingVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
@@ -144,7 +162,7 @@ void NonrotatingVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::Sh
     // Recovery behaviors do not publish a local plan, but their velocity is
     // still expressed in nonrotating_robot_base_frame_ and must be transformed.
     const double yaw_diff =
-      selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, current_robot_base_angle_);
+      selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, estimateRobotBaseAngle());
     auto aft_tf_vel = transformVelocity(msg, yaw_diff);
     cmd_vel_chassis_pub_->publish(aft_tf_vel);
     visualizeVelocity(aft_tf_vel);
@@ -173,8 +191,9 @@ void NonrotatingVelTransform::syncCallback(
   }
 
   current_robot_base_angle_ = tf2::getYaw(odom_msg->pose.pose.orientation);
+  last_odom_stamp_ = odom_msg->header.stamp;
   const double yaw_diff =
-    selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, current_robot_base_angle_);
+    selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, estimateRobotBaseAngle());
 
   geometry_msgs::msg::Twist aft_tf_vel = transformVelocity(current_cmd_vel, yaw_diff);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
@@ -211,7 +230,7 @@ void NonrotatingVelTransform::publishTransform()
   if (chassis_mode_ == chassisFollowed)
     tf_yaw = -chassis_followed_yaw_;
   else
-    tf_yaw = -current_robot_base_angle_;
+    tf_yaw = -estimateRobotBaseAngle();
 
   tf2::Quaternion q;
   q.setRPY(0.0, 0.0, tf_yaw);
