@@ -9,17 +9,19 @@
 
 ### 配置位置
 
-`scripts/simulation.sh` 默认读取的是 `src/guga_bringup/config/simulation/nav2_params.yaml`。
-如果是实机或别的 launch，再看 `src/guga_bringup/config/reality/nav2_params.yaml` 和
-`src/guga_bringup/config/simulation/nav2_params_mpc.yaml`。
+仿真参数按三层文件合并（launch 侧 base → controller → planner 顺序覆盖）：
+`src/guga_bringup/config/simulation/base.yaml`（公共）+ `controller/<name>.yaml`（控制器差异）
++ `planner/<name>.yaml`（规划器差异）。实机用 `src/guga_bringup/config/reality/nav2_params.yaml`（单文件）。
 
-不同 `navigation_profile` 对应不同参数文件，planner/controller 各不相同：
+不同 planner/controller 组合对应不同参数文件，planner 各不同：
 
-| profile | 参数文件 | planner | controller |
-|---------|---------|---------|-----------|
-| `jps_pid`（默认） | `simulation/nav2_params.yaml` | `jps_planner/JPSPlanner` | `pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode` |
-| `2d_mppi` | `simulation/nav2_params_mppi.yaml` | `nav2_smac_planner/SmacPlanner2D` | `guga_source_mppi_controller::MPPIController` |
-| `jps_mpc` | `simulation/nav2_params_mpc.yaml` | `nav2_smac_planner/SmacPlannerHybrid`（JPS 已注释） | `mpc_controller::MpcControllerNode` |
+| planner 参数 | planner | 典型 controller |
+|---------|---------|-----------|
+| `planner/jps.yaml`（默认） | `jps_planner/JPSPlanner` | `pid`（`pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode`） |
+| `planner/smac2d.yaml` | `nav2_smac_planner/SmacPlanner2D` | `mppi`（`guga_source_mppi_controller::MPPIController`） |
+| `planner/smachybrid.yaml` | `nav2_smac_planner/SmacPlannerHybrid`（JPS 已注释） | `mpc`（`mpc_controller::MpcControllerNode`） |
+
+> 实车 `reality/nav2_params.yaml` 与默认仿真组合一样挂 `jps_planner/JPSPlanner`。
 
 > 实车 `reality/nav2_params.yaml` 与默认仿真 profile 一样挂 `jps_planner/JPSPlanner`。
 

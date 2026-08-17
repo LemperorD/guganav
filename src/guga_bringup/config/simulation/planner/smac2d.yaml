@@ -1,0 +1,30 @@
+# planner/smac2d.yaml — smac2d 规划器参数（planner_server + costmap plugins/esdf），覆盖前两层。
+planner_server:
+  ros__parameters:
+    use_sim_time: True
+    expected_planner_frequency: 2.0
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.125
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: false
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      terminal_checking_interval: 5000
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+
+      plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+
+      plugins: ["static_layer", "intensity_voxel_layer",  "inflation_layer"]
+

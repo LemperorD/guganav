@@ -300,12 +300,15 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 
 **调转速的位置**（两处通常同步改）：
 - 决策层转速：`src/guga_decision/simple_decision/config/simple_decision.yaml` → `spin_speed`（默认 6.28 rad/s）
-- 启动兜底转速：`src/guga_bringup/launch/core/navigation_launch.py` → `init_spin_speed`（2d_mppi/jps_mpc=6.28，jps_pid=0.0）
+- 启动兜底转速：`src/guga_bringup/launch/core/navigation_launch.py` → `init_spin_speed`（由 `controller` 推断：mppi/mpc=6.28，pid=0.0）
 
-**Profile 机制**（`simulation.sh` + `navigation_launch.py`）：
-- `2d_mppi` / `jps_mpc`：走 `base_footprint_nonrotating`，`initial_chassis_mode=1` 启动即小陀螺
-- `jps_pid`：costmap 仍用旋转的 `base_footprint`，**不能自旋**（launch 显式 `initial_chassis_mode=0`；如需自旋先把它切到 nonrotating 系）
-- `simulation.sh` 的 `planner:=/controller:=` 会自动映射 `navigation_profile`（controller=mppi→2d_mppi、mpc→jps_mpc、pid→jps_pid）
+**参数分层机制**（`simulation.sh` + `simulation_launch.py` + `navigation_launch.py`）：
+- **9 种 planner/controller 组合**（`planner:=jps|smac2d|smachybrid` × `controller:=pid|mppi|mpc`），参数由三份 yaml 在 launch 侧按 base → controller → planner 顺序叶子级覆盖合并（不再在 shell 里生成合并文件）：
+  - `config/simulation/base.yaml`（公共）+ `controller/<c>.yaml`（控制器差异 + costmap 系/调参）+ `planner/<p>.yaml`（planner_server + costmap plugins/esdf）
+  - legacy `navigation_profile:=jps_pid|2d_mppi|jps_mpc` 自动映射为 jps+pid / smac2d+mppi / smachybrid+mpc
+  - 显式 `params_file:=` 退化为单文件覆盖（reality 与临时调试用）
+- **底盘模式由 controller 推断**（无 navigation_profile 参数）：`mppi`/`mpc` → `initial_chassis_mode=1`（启动即小陀螺，走 `base_footprint_nonrotating`）；`pid` → `initial_chassis_mode=0`（costmap 用旋转的 `base_footprint`，不自旋；如需自旋先把 costmap 切到 nonrotating 系）
+- esdf_layer（costmap）跟随 `planner:=jps`（JPS 的 esdf 启发依赖），换 smac 规划器时自动去除
 
 **关键约定**：
 - **ChassisMode 枚举统一 0/1/2**（`simple_decision` 为源头）：0=CHASSIS_FOLLOWED、1=LITTLE_TES、2=GO_HOME；消费者 `nonrotating_vel_transform`、`pb_omni_pid_pursuit_controller` 已对齐，改枚举要三方同步
@@ -323,6 +326,7 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 | MPPI 测试入 CI | `scripts/pre-commit/run_mppi_tests.sh`（12 个 gtest 套件）；`--allow-overriding` 条件化兼容旧 colcon |
 | 参数调整 | `robot_radius` 0.25/0.35（缩小 footprint）；全局重规划 1→2Hz（BT `RateController`） |
 | PCD/栅格地图对齐工具 | `scripts/align_pcd_gridmap.py`（FFT 互相关 + IOU 精修，输出推荐 origin；**IOU>0.5 才可信**——当前 rmuc_2025 两张图内容不匹配，建议 `simulation.sh map` 重新建图） |
+| 参数分层重构 | 仿真参数拆为 `base.yaml` + `controller/<c>.yaml` + `planner/<p>.yaml` 三层，launch 侧叶子级合并，支持 9 种 planner/controller 组合；`navigation_profile` 删除，底盘模式由 `controller` 推断；esdf_layer 跟随 jps（顺带修复 jps+mppi 缺 esdf_layer 隐患） |
 
 ### 待办 / 已知隐患
 

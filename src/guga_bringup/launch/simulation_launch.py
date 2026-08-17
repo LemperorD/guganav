@@ -28,11 +28,18 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
     use_ui = LaunchConfiguration("use_ui")
-    navigation_profile = LaunchConfiguration("navigation_profile")
+    # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
+    # 显式 params_file:= 时退化为单文件（三份都指向它）
+    planner = LaunchConfiguration("planner")
+    controller = LaunchConfiguration("controller")
+    base_params_file = LaunchConfiguration("base_params_file")
+    controller_params_file = LaunchConfiguration("controller_params_file")
+    planner_params_file = LaunchConfiguration("planner_params_file")
 
+    # 传感器工具节点只读 base 层公共参数
     configured_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=base_params_file,
             root_key=namespace,
             param_rewrites={},
             convert_types=True,
@@ -85,42 +92,74 @@ def generate_launch_description():
         description="Use simulation (Gazebo) clock if True",
     )
 
-    declare_navigation_profile_cmd = DeclareLaunchArgument(
-        "navigation_profile",
-        default_value="jps_pid",
-        choices=["jps_pid", "2d_mppi", "jps_mpc"],
-        description=(
-            "Navigation stack profile: jps_pid (JPS + omni PID), "
-            "2d_mppi (SmacPlanner2D + MPPI), or jps_mpc (SmacPlannerHybrid + MPC)"
-        ),
+    # planner/controller 决定三个参数文件；9 种组合由 base + controller + planner
+    # 三个文件运行时合并得到，不再需要为每个组合准备独立 yaml。
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner",
+        default_value="jps",
+        choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
+    declare_controller_cmd = DeclareLaunchArgument(
+        "controller",
+        default_value="pid",
+        choices=["pid", "mppi", "mpc"],
+        description="Controller: pid (omni PID), mppi, or mpc",
     )
 
-    # Select the profile's parameter file by default. An explicit params_file
-    # launch argument still takes precedence for one-off tuning experiments.
+    # 三个文件默认值：显式 params_file 非空时三份都指向它（单文件覆盖）；
+    # 否则按 planner/controller 名字取 config/simulation 下的分层文件。
+    def sim_params_file(subdir, name):
+        return PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file, "' or '",
+                os.path.join(bringup_dir, "config", "simulation", subdir, name), "'",
+            ]
+        )
+
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
+        default_value="",
+        description="Single params file override (disables 3-file merge)",
+    )
+    declare_base_params_file_cmd = DeclareLaunchArgument(
+        "base_params_file",
+        default_value=sim_params_file("", "base.yaml"),
+        description="Common params file (merge base layer)",
+    )
+    # controller 名 → 文件：三个完整路径条件选择（值带引号嵌入表达式，
+    # 避免字符串拼接导致裸标识符）
+    declare_controller_params_file_cmd = DeclareLaunchArgument(
+        "controller_params_file",
         default_value=PythonExpression(
             [
-                "'",
-                navigation_profile,
-                "' == '2d_mppi' and '",
-                os.path.join(
-                    bringup_dir, "config", "simulation", "nav2_params_mppi.yaml"
-                ),
+                "'", params_file, "' != '' and '", params_file, "' or ('",
+                controller, "' == 'mppi' and '",
+                os.path.join(bringup_dir, "config", "simulation", "controller", "mppi.yaml"),
+                "' or '", controller, "' == 'mpc' and '",
+                os.path.join(bringup_dir, "config", "simulation", "controller", "mpc.yaml"),
                 "' or '",
-                navigation_profile,
-                "' == 'jps_mpc' and '",
-                os.path.join(
-                    bringup_dir, "config", "simulation", "nav2_params_mpc.yaml"
-                ),
-                "' or '",
-                os.path.join(
-                    bringup_dir, "config", "simulation", "nav2_params.yaml"
-                ),
-                "'",
+                os.path.join(bringup_dir, "config", "simulation", "controller", "pid.yaml"),
+                "')",
             ]
         ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
+        description="Controller-diff params file (overrides base)",
+    )
+    declare_planner_params_file_cmd = DeclareLaunchArgument(
+        "planner_params_file",
+        default_value=PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file, "' or ('",
+                planner, "' == 'smac2d' and '",
+                os.path.join(bringup_dir, "config", "simulation", "planner", "smac2d.yaml"),
+                "' or '", planner, "' == 'smachybrid' and '",
+                os.path.join(bringup_dir, "config", "simulation", "planner", "smachybrid.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "simulation", "planner", "jps.yaml"),
+                "')",
+            ]
+        ),
+        description="Planner-diff params file (overrides base/controller)",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -192,10 +231,13 @@ def generate_launch_description():
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
+            "base_params_file": base_params_file,
+            "controller_params_file": controller_params_file,
+            "planner_params_file": planner_params_file,
+            "controller": controller,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
-            "navigation_profile": navigation_profile,
         }.items(),
     )
 
@@ -214,8 +256,12 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
-    ld.add_action(declare_navigation_profile_cmd)
+    ld.add_action(declare_planner_cmd)
+    ld.add_action(declare_controller_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_base_params_file_cmd)
+    ld.add_action(declare_controller_params_file_cmd)
+    ld.add_action(declare_planner_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)

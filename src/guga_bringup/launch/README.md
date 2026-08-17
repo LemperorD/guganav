@@ -11,29 +11,39 @@
 
 ## 仿真导航组合
 
-`simulation_launch.py` 的 `navigation_profile` 默认值为 `jps_pid`：
+`simulation_launch.py` 支持 9 种 planner/controller 组合（默认 `planner:=jps controller:=pid`）：
 
-- `jps_pid`：`jps_planner/JPSPlanner` + `pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode`。
-- `2d_mppi`：`nav2_smac_planner/SmacPlanner2D` + `guga_source_mppi_controller::MPPIController`（工作区源码构建）。
-- `jps_mpc`：`nav2_smac_planner/SmacPlannerHybrid` + `mpc_controller::MpcControllerNode`（JPS 已注释）。
+| planner | controller |
+|---------|-----------|
+| `jps`（JPSPlanner） | `pid`（OmniPidPursuitControllerNode） |
+| `smac2d`（SmacPlanner2D） | `mppi`（MPPIController，工作区源码构建） |
+| `smachybrid`（SmacPlannerHybrid） | `mpc`（MpcControllerNode） |
 
 示例：
 
 ```bash
-# 交互式选择 profile（不传 navigation_profile 时）
+# 交互式选择 planner/controller（终端弹菜单）
 scripts/simulation.sh nav rmul_2025
 
 # 非交互/脚本调用时显式选择
-scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_pid
-scripts/simulation.sh nav rmul_2025 navigation_profile:=2d_mppi
-scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_mpc
+scripts/simulation.sh nav rmul_2025 planner:=jps controller:=pid
+scripts/simulation.sh nav rmul_2025 planner:=smac2d controller:=mppi
+scripts/simulation.sh nav rmul_2025 planner:=smachybrid controller:=mpc
+
+# legacy profile 仍可用（等价组合）
+scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_pid   # = jps+pid
+scripts/simulation.sh nav rmul_2025 navigation_profile:=2d_mppi   # = smac2d+mppi
+scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_mpc   # = smachybrid+mpc
 ```
 
-三套组合分别由 `config/simulation/nav2_params.yaml`、
-`config/simulation/nav2_params_mppi.yaml` 和 `config/simulation/nav2_params_mpc.yaml`
-定义。profile 会选择对应的默认参数文件；进行自定义实验时可传入
-`params_file:=/absolute/path/to/params.yaml`，显式指定的参数文件优先于 profile
-默认值。
+参数采用**三层合并**（launch 侧按 base → controller → planner 顺序覆盖）：
+
+- `config/simulation/base.yaml` — 公共参数（传感器/terrain/BT/costmap 公共键）。
+- `config/simulation/controller/<controller>.yaml` — 控制器差异（含 costmap 系与调参）。
+- `config/simulation/planner/<planner>.yaml` — 规划器差异（planner_server + costmap plugins/esdf）。
+
+自定义实验时可传入 `params_file:=/absolute/path/to/params.yaml` 退化为单文件模式
+（三份都指向该文件），显式指定优先于分层默认值。
 
 ## 核心层
 

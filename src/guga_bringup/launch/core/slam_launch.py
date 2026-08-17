@@ -3,7 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
@@ -16,6 +16,7 @@ def generate_launch_description():
     # Input parameters declaration
     namespace = LaunchConfiguration("namespace")
     params_file = LaunchConfiguration("params_file")
+    base_params_file = LaunchConfiguration("base_params_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
     use_respawn = LaunchConfiguration("use_respawn")
@@ -29,7 +30,7 @@ def generate_launch_description():
 
     configured_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=base_params_file,
             root_key=namespace,
             param_rewrites=param_substitutions,
             convert_types=True,
@@ -46,6 +47,17 @@ def generate_launch_description():
         "params_file",
         default_value=os.path.join(bringup_dir, "params", "nav2_params.yaml"),
         description="Full path to the ROS2 parameters file to use for all launched nodes",
+    )
+
+    declare_base_params_file_cmd = DeclareLaunchArgument(
+        "base_params_file",
+        default_value=PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file, "' or '",
+                os.path.join(bringup_dir, "config", "simulation", "base.yaml"), "'",
+            ]
+        ),
+        description="Common params file (base layer); falls back to params_file if set",
     )
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -169,6 +181,7 @@ def generate_launch_description():
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_respawn_cmd)
