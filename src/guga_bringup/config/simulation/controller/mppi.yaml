@@ -108,8 +108,6 @@ controller_server:
       wz_std: 1.0
       vx_max: 2.5
       vx_min: -2.5
-      ax_max: 5.0
-      ay_max: 5.0
       vy_max: 2.5
       wz_max: 6.0
 
