@@ -75,18 +75,6 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   loadGlobalMap(prior_pcd_file_);
 
-  // Downsample points and convert them into pcl::PointCloud<pcl::PointCovariance>
-  target_ = small_gicp::voxelgrid_sampling_omp<
-    pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
-    *global_map_, global_leaf_size_);
-
-  // Estimate covariances of points
-  small_gicp::estimate_covariances_omp(*target_, num_neighbors_, num_threads_);
-
-  // Create KdTree for target
-  target_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
-    target_, small_gicp::KdTreeBuilderOMP(num_threads_));
-
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     "registered_scan", 10,
     std::bind(&SmallGicpRelocalizationNode::registeredPcdCallback, this, std::placeholders::_1));
@@ -102,6 +90,12 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   transform_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50),  // 20 Hz
     std::bind(&SmallGicpRelocalizationNode::publishTransform, this));
+
+  // A component constructor runs inside the container's load_node service.
+  // Waiting for TF here blocks every component queued behind this node,
+  // including the Nav2 servers that own the costmaps.
+  map_initialization_timer_ = this->create_wall_timer(
+    std::chrono::seconds(1), std::bind(&SmallGicpRelocalizationNode::initializeGlobalMap, this));
 }
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
@@ -111,25 +105,48 @@ void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
     return;
   }
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
+}
+
+void SmallGicpRelocalizationNode::initializeGlobalMap()
+{
+  if (global_map_->empty()) {
+    RCLCPP_ERROR(this->get_logger(), "Cannot initialize an empty global map");
+    map_initialization_timer_->cancel();
+    return;
+  }
 
   // NOTE: Transform global pcd_map (based on `lidar_odom` frame) to the `odom` frame
   Eigen::Affine3d odom_to_lidar_odom;
-  while (true) {
-    try {
-      auto tf_stamped = tf_buffer_->lookupTransform(
-        base_frame_, lidar_frame_, this->now(), rclcpp::Duration::from_seconds(1.0));
-      odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-      RCLCPP_INFO_STREAM(
-        this->get_logger(), "odom_to_lidar_odom: translation = "
-                              << odom_to_lidar_odom.translation().transpose() << ", rpy = "
-                              << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
-      break;
-    } catch (tf2::TransformException & ex) {
-      RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
-      rclcpp::sleep_for(std::chrono::seconds(1));
-    }
+  try {
+    const auto tf_stamped =
+      tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
+    odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
+    return;
   }
+
+  RCLCPP_INFO_STREAM(
+    this->get_logger(), "odom_to_lidar_odom: translation = "
+                          << odom_to_lidar_odom.translation().transpose() << ", rpy = "
+                          << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
   pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
+
+  // Downsample points and convert them into pcl::PointCloud<pcl::PointCovariance>
+  target_ = small_gicp::voxelgrid_sampling_omp<
+    pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
+    *global_map_, global_leaf_size_);
+
+  // Estimate covariances of points
+  small_gicp::estimate_covariances_omp(*target_, num_neighbors_, num_threads_);
+
+  // Create KdTree for target
+  target_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
+    target_, small_gicp::KdTreeBuilderOMP(num_threads_));
+
+  global_map_ready_ = true;
+  map_initialization_timer_->cancel();
+  RCLCPP_INFO(this->get_logger(), "Global map registration target is ready");
 }
 
 void SmallGicpRelocalizationNode::registeredPcdCallback(
@@ -145,6 +162,10 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
 
 void SmallGicpRelocalizationNode::performRegistration()
 {
+  if (!global_map_ready_) {
+    return;
+  }
+
   if (accumulated_cloud_->empty()) {
     RCLCPP_WARN(this->get_logger(), "No accumulated points to process.");
     return;

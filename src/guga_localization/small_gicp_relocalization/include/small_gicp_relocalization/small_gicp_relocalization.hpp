@@ -43,6 +43,7 @@ public:
 private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void loadGlobalMap(const std::string & file_name);
+  void initializeGlobalMap();
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
@@ -67,6 +68,7 @@ private:
   rclcpp::Time last_scan_time_;
   Eigen::Isometry3d result_t_;
   Eigen::Isometry3d previous_result_t_;
+  bool global_map_ready_{false};
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr registered_scan_;
@@ -82,6 +84,7 @@ private:
 
   rclcpp::TimerBase::SharedPtr transform_timer_;
   rclcpp::TimerBase::SharedPtr register_timer_;
+  rclcpp::TimerBase::SharedPtr map_initialization_timer_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
