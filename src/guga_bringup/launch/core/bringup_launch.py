@@ -66,16 +66,29 @@ def generate_launch_description():
     planner_params_file = with_namespace_replace(planner_params_file)
     param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
 
-    # 传感器/公共节点（point_lio、terrain_analysis 等）只读 base 层参数
-    configured_params = ParameterFile(
-        RewrittenYaml(
-            source_file=base_params_file,
-            root_key=namespace,
-            param_rewrites=param_substitutions,
-            convert_types=True,
-        ),
-        allow_substs=True,
-    )
+    def rewritten_params(source):
+        return ParameterFile(
+            RewrittenYaml(
+                source_file=source,
+                root_key=namespace,
+                param_rewrites=param_substitutions,
+                convert_types=True,
+            ),
+            allow_substs=True,
+        )
+
+    # 传感器/公共节点（point_lio、terrain_analysis 等）只读 base 层参数。
+    configured_params = rewritten_params(base_params_file)
+
+    # Costmap2DROS 是 controller/planner 组件内部创建的子节点，不会继承
+    # LoadComposableNodes 发给父组件的参数。组合模式下必须把完整的
+    # base -> controller -> planner 参数链加到容器命令行，才能让
+    # local_costmap/global_costmap 子节点按名称读到各层配置。
+    container_params = [
+        configured_params,
+        rewritten_params(controller_params_file),
+        rewritten_params(planner_params_file),
+    ]
 
     stdout_linebuf_envvar = SetEnvironmentVariable(
         "RCUTILS_LOGGING_BUFFERED_STREAM", "1"
@@ -178,7 +191,7 @@ def generate_launch_description():
                 name="nav2_container",
                 package="rclcpp_components",
                 executable="component_container_isolated",
-                parameters=[configured_params, {"autostart": autostart}],
+                parameters=[*container_params, {"autostart": autostart}],
                 arguments=["--ros-args", "--log-level", log_level],
                 output="screen",
             ),

@@ -149,22 +149,26 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    # 非组合模式：独立进程运行 terrain_analysis（组件化后仍保留独立入口）
     start_terrain_analysis_cmd = Node(
         package="terrain_analysis",
-        executable="terrainAnalysis",
+        executable="terrain_analysis_exe",
         name="terrain_analysis",
         output="screen",
+        condition=IfCondition(PythonExpression(["not ", use_composition])),
         respawn=use_respawn,
         respawn_delay=2.0,
         arguments=["--ros-args", "--log-level", log_level],
         parameters=configured_params,
     )
 
+    # 非组合模式：独立进程运行 terrain_analysis_ext
     start_terrain_analysis_ext_cmd = Node(
         package="terrain_analysis_ext",
-        executable="terrainAnalysisExt",
+        executable="terrain_analysis_ext_exe",
         name="terrain_analysis_ext",
         output="screen",
+        condition=IfCondition(PythonExpression(["not ", use_composition])),
         respawn=use_respawn,
         respawn_delay=2.0,
         arguments=["--ros-args", "--log-level", log_level],
@@ -322,6 +326,20 @@ def generate_launch_description():
         condition=IfCondition(use_composition),
         target_container=container_name_full,
         composable_node_descriptions=[
+            ComposableNode(
+                package="terrain_analysis",
+                plugin="terrain_analysis::TerrainAnalysis",
+                name="terrain_analysis",
+                parameters=configured_params,
+                extra_arguments=[{'use_intra_process_comms': True}],
+            ),
+            ComposableNode(
+                package="terrain_analysis_ext",
+                plugin="terrain_analysis_ext::TerrainAnalysisExtNode",
+                name="terrain_analysis_ext",
+                parameters=configured_params,
+                extra_arguments=[{'use_intra_process_comms': True}],
+            ),
             ComposableNode(
                 package="loam_interface",
                 plugin="loam_interface::LoamInterfaceNode",
