@@ -113,8 +113,18 @@ def generate_launch_description():
         description="Common params file (merge base layer)",
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
-        "controller_params_file", default_value=default_params_file("controller/pid.yaml"),
-        description="Controller-diff params file",
+        "controller_params_file",
+        default_value=PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file, "' or ('",
+                controller, "' == 'mppi' and '",
+                os.path.join(bringup_dir, "config", "reality", "controller", "mppi.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "reality", "controller", "pid.yaml"),
+                "')",
+            ]
+        ),
+        description="Controller-diff params file (pid default, mppi available)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
         "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
