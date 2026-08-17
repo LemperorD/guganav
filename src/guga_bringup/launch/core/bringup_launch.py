@@ -8,13 +8,15 @@ from launch.actions import (
     IncludeLaunchDescription,
     SetEnvironmentVariable,
 )
-from launch.conditions import (
-    IfCondition,
-    LaunchConfigurationEquals,
-    LaunchConfigurationNotEquals,
-)
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import (
+    EqualsSubstitution as Equals,
+    IfElseSubstitution as IfElse,
+    LaunchConfiguration,
+    NotEqualsSubstitution as NotEquals,
+    PythonExpression,
+)
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import ReplaceString, RewrittenYaml
@@ -35,23 +37,39 @@ def generate_launch_description():
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
-    navigation_profile = LaunchConfiguration("navigation_profile")
+    # 导航参数三文件（base/controller/planner）与控制器选择，原样透传给 navigation_launch
+    base_params_file = LaunchConfiguration("base_params_file")
+    controller_params_file = LaunchConfiguration("controller_params_file")
+    planner_params_file = LaunchConfiguration("planner_params_file")
+    controller = LaunchConfiguration("controller")
 
-    params_file = ReplaceString(
-        condition=LaunchConfigurationEquals("namespace", ""),
-        source_file=params_file,
-        replacements={"<robot_namespace>": ("")},
-    )
-    params_file = ReplaceString(
-        condition=LaunchConfigurationNotEquals("namespace", ""),
-        source_file=params_file,
-        replacements={"<robot_namespace>": ("/", namespace)},
-    )
+    # ── <robot_namespace> 文件替换 ──
+    # nav2_common 的 ReplaceString 把输入当文件打开：simulation 分层模式下
+    # params_file 为空字符串，必须用条件跳过；替换值按 namespace 动态选择。
+    # base/controller/planner 三文件同样替换（costmap topic 含 <robot_namespace>）。
+    def with_namespace_replace(sub):
+        return ReplaceString(
+            condition=IfCondition(NotEquals(sub, "")),
+            source_file=sub,
+            replacements={
+                "<robot_namespace>": IfElse(
+                    Equals(LaunchConfiguration("namespace"), ""),
+                    "",
+                    ["/", namespace],
+                )
+            },
+        )
+
+    params_file = with_namespace_replace(params_file)
+    base_params_file = with_namespace_replace(base_params_file)
+    controller_params_file = with_namespace_replace(controller_params_file)
+    planner_params_file = with_namespace_replace(planner_params_file)
     param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
 
+    # 传感器/公共节点（point_lio、terrain_analysis 等）只读 base 层参数
     configured_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=base_params_file,
             root_key=namespace,
             param_rewrites=param_substitutions,
             convert_types=True,
@@ -69,8 +87,38 @@ def generate_launch_description():
         "namespace", default_value="", description="Top-level namespace"
     )
 
-    declare_navigation_profile_cmd = DeclareLaunchArgument(
-        "navigation_profile", default_value="jps_pid", description="Navigation stack profile"
+    declare_controller_cmd = DeclareLaunchArgument(
+        "controller",
+        default_value="pid",
+        choices=["pid", "mppi", "mpc"],
+        description="Controller profile, forwarded to navigation_launch for chassis mode",
+    )
+    # 三文件默认值：显式 params_file 非空（reality / 调试）时退化为单文件；
+    # 否则用 simulation 分层默认（simulation_launch 总会显式传入覆盖）。
+    def default_params_file(which):
+        return PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file,
+                "' or '",
+                os.path.join(bringup_dir, "config", "simulation", which),
+                "'",
+            ]
+        )
+
+    declare_base_params_file_cmd = DeclareLaunchArgument(
+        "base_params_file",
+        default_value=default_params_file("base.yaml"),
+        description="Common params file (merge base layer)",
+    )
+    declare_controller_params_file_cmd = DeclareLaunchArgument(
+        "controller_params_file",
+        default_value=default_params_file("controller/pid.yaml"),
+        description="Controller-diff params file",
+    )
+    declare_planner_params_file_cmd = DeclareLaunchArgument(
+        "planner_params_file",
+        default_value=default_params_file("planner/jps.yaml"),
+        description="Planner-diff params file",
     )
 
     declare_slam_cmd = DeclareLaunchArgument(
@@ -145,6 +193,7 @@ def generate_launch_description():
                     "autostart": autostart,
                     "use_respawn": use_respawn,
                     "params_file": params_file,
+                    "base_params_file": base_params_file,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -158,6 +207,7 @@ def generate_launch_description():
                     "use_sim_time": use_sim_time,
                     "autostart": autostart,
                     "params_file": params_file,
+                    "base_params_file": base_params_file,
                     "prior_pcd_file": prior_pcd_file,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
@@ -173,10 +223,13 @@ def generate_launch_description():
                     "use_sim_time": use_sim_time,
                     "autostart": autostart,
                     "params_file": params_file,
+                    "base_params_file": base_params_file,
+                    "controller_params_file": controller_params_file,
+                    "planner_params_file": planner_params_file,
+                    "controller": controller,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
-                    "navigation_profile": navigation_profile,
                 }.items(),
             ),
         ]
@@ -191,7 +244,10 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
-    ld.add_action(declare_navigation_profile_cmd)
+    ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_base_params_file_cmd)
+    ld.add_action(declare_controller_params_file_cmd)
+    ld.add_action(declare_planner_params_file_cmd)
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)

@@ -64,6 +64,8 @@ private:
   void chassisModeCallback(std_msgs::msg::UInt8::SharedPtr msg);
   void updateGimbalYaw();
   void publishTransform();
+  /** @brief littleTES/goHome 下用 spin 外推底盘 yaw，避免 odom 低频导致补偿跳变。 */
+  double estimateRobotBaseAngle() const;
   geometry_msgs::msg::Twist transformVelocity(
     const geometry_msgs::msg::Twist::SharedPtr & twist, double yaw_diff);
   void visualizeVelocity(const geometry_msgs::msg::Twist & vel);
@@ -108,6 +110,7 @@ private:
   std::mutex cmd_vel_mutex_;
   geometry_msgs::msg::Twist::SharedPtr latest_cmd_vel_;
   double current_robot_base_angle_{0.0};
+  rclcpp::Time last_odom_stamp_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_controller_activate_time_;
 };
 

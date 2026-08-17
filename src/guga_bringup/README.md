@@ -2,14 +2,15 @@
 
 bringup模块，存放launch、参数、rviz等文件
 
-仿真导航支持三种可选组合，通过 `navigation_profile:=jps_pid`、
-`navigation_profile:=2d_mppi` 或 `navigation_profile:=jps_mpc` 选择：
+仿真导航支持 9 种 planner/controller 组合，通过
+`planner:=jps|smac2d|smachybrid` 与 `controller:=pid|mppi|mpc` 选择
+（legacy `navigation_profile:=jps_pid|2d_mppi|jps_mpc` 仍可用）：
 
-| profile | 全局规划器 | 控制器 | 参数文件 |
-|---------|-----------|--------|---------|
-| `jps_pid` | JPS | 全向 PID | `nav2_params.yaml` |
-| `2d_mppi` | SmacPlanner2D | MPPI | `nav2_params_mppi.yaml` |
-| `jps_mpc` | SmacPlannerHybrid | MPC | `nav2_params_mpc.yaml` |
+| 组合 | 全局规划器 | 控制器 | 参数文件（三层合并） |
+|------|-----------|--------|---------------------|
+| `jps_pid`（默认） | JPS | 全向 PID | `base.yaml` + `controller/pid.yaml` + `planner/jps.yaml` |
+| `2d_mppi` | SmacPlanner2D | MPPI | `base.yaml` + `controller/mppi.yaml` + `planner/smac2d.yaml` |
+| `jps_mpc` | SmacPlannerHybrid | MPC | `base.yaml` + `controller/mpc.yaml` + `planner/smachybrid.yaml` | |
 
 `2d_mppi` 与 `jps_mpc` 使用统一的 `base_footprint_nonrotating` 参考系：
 `nonrotating_vel_transform` 发布与 `base_footprint` 共原点、朝向不旋转

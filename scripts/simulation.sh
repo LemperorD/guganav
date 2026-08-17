@@ -33,12 +33,12 @@ Controller (controller:=):
   controller:=mppi  MPPI controller
   controller:=mpc   MPC controller
 
-All 9 planner/controller combinations are supported; parameters are
-merged at runtime from the existing nav2_params*.yaml files (no new
-files are added). Default: planner:=jps controller:=pid.
+All 9 planner/controller combinations are supported. Parameters are
+merged at launch time from config/simulation/{base,controller,planner}
+layered yaml files. Default: planner:=jps controller:=pid.
 
 Legacy navigation_profile:=jps_pid|2d_mppi|jps_mpc still works and
-takes precedence over planner:=/controller:=.
+maps to the corresponding planner/controller combination.
 
 When a navigation command is run from a terminal without
 planner:=/controller:= or navigation_profile:=..., an interactive
@@ -196,93 +196,63 @@ EOF
   done
 }
 
-params_file_for_controller() {
-  case "$1" in
-    pid)
-      printf '%s/nav2_params.yaml' "$SIMULATION_PARAMS_DIR"
-      ;;
-    mppi)
-      printf '%s/nav2_params_mppi.yaml' "$SIMULATION_PARAMS_DIR"
-      ;;
-    mpc)
-      printf '%s/nav2_params_mpc.yaml' "$SIMULATION_PARAMS_DIR"
-      ;;
-  esac
-}
+# ────────────────────────────────────────────────────────────────
+# 导航参数分层（9 组合运行时合并）
+# ────────────────────────────────────────────────────────────────
+# 控制器与规划器的 9 种组合由三个参数文件在 launch 侧合并得到：
+#   config/simulation/base.yaml（公共）
+#   + config/simulation/controller/<controller>.yaml（控制器差异，覆盖 base）
+#   + config/simulation/planner/<planner>.yaml（规划器差异，覆盖前两层）
+# 本脚本只负责把用户选择（planner:=/controller:=）透传给 launch，
+# 不关心文件路径与合并细节（由 simulation_launch.py 处理）。
 
-planner_params_file_for_planner() {
-  case "$1" in
-    jps)
-      printf '%s/nav2_params.yaml' "$SIMULATION_PARAMS_DIR"
-      ;;
-    smac2d)
-      printf '%s/nav2_params_mppi.yaml' "$SIMULATION_PARAMS_DIR"
-      ;;
-    smachybrid)
-      printf '%s/nav2_params_mpc.yaml' "$SIMULATION_PARAMS_DIR"
-      ;;
-  esac
-}
-
-# Merge the chosen controller's params file (base) with the chosen
-# planner's planner_server section, and print the path of the merged
-# file. The result lives in /tmp; no repo params files are added.
-generate_merged_params() {
-  local planner=$1
-  local controller=$2
-  local base_file
-  local planner_file
-  local merged_file
-  base_file=$(params_file_for_controller "$controller")
-  planner_file=$(planner_params_file_for_planner "$planner")
-  merged_file="/tmp/guganav_nav2_params_${SIMULATION_SESSION_ID}_${planner}_${controller}.yaml"
-
-  python3 - "$base_file" "$planner_file" "$merged_file" <<'PY'
-import sys
-import yaml
-
-base_path, planner_path, out_path = sys.argv[1:4]
-with open(base_path, encoding="utf-8") as f:
-    data = yaml.safe_load(f)
-with open(planner_path, encoding="utf-8") as f:
-    planner_data = yaml.safe_load(f)
-
-data["planner_server"] = planner_data["planner_server"]
-
-with open(out_path, "w", encoding="utf-8") as f:
-    yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
-PY
-  if [ $? -ne 0 ]; then
-    echo "Failed to generate merged params file for planner:=$planner controller:=$controller" >&2
-    return 1
-  fi
-  printf '%s' "$merged_file"
-}
-
-# Fill the global nav_args array with the effective launch arguments.
-# Converts separate planner:=/controller:= choices into a runtime-merged
-# params_file:= for the launch stack.
+# 填充 nav_args 数组为透传给 simulation_launch.py 的有效参数。
+# - planner:=/controller:=/params_file:= 原样透传
+# - legacy navigation_profile:= 映射为对应的 planner/controller 组合
+#   （jps_pid → jps+pid、2d_mppi → smac2d+mppi、jps_mpc → smachybrid+mpc）
+# - 均未指定且终端交互可用时，弹出 planner/controller 选择菜单
 build_nav_args() {
   nav_args=()
-  local planner=""
-  local controller=""
   local arg
-  local merged_params
   local explicit_spec=""
+  local chosen_planner=""
+  local chosen_controller=""
 
   for arg in "$@"; do
     case "$arg" in
-      navigation_profile:=* | params_file:=*)
-        # 收集所有显式指定项（可能有多个，比如 nav-only 二次调用时
-        # params_file:= 与 navigation_profile:= 同时出现），不提前 return
-        nav_args+=("$arg")
+      navigation_profile:=*)
+        # legacy profile → 3 个代表组合
+        case "${arg#navigation_profile:=}" in
+          jps_pid)
+            nav_args+=(planner:=jps controller:=pid)
+            ;;
+          2d_mppi)
+            nav_args+=(planner:=smac2d controller:=mppi)
+            ;;
+          jps_mpc)
+            nav_args+=(planner:=smachybrid controller:=mpc)
+            ;;
+          *)
+            echo "Invalid navigation_profile: ${arg#navigation_profile:=}" >&2
+            return 1
+            ;;
+        esac
         explicit_spec=1
         ;;
       planner:=*)
-        planner=${arg#planner:=}
+        chosen_planner=${arg#planner:=}
+        nav_args+=("$arg")
+        explicit_spec=1
         ;;
       controller:=*)
-        controller=${arg#controller:=}
+        chosen_controller=${arg#controller:=}
+        nav_args+=("$arg")
+        explicit_spec=1
+        ;;
+      params_file:=*)
+        # 单文件覆盖调试
+        nav_args+=("$arg")
+        explicit_spec=1
         ;;
       *)
         nav_args+=("$arg")
@@ -290,60 +260,64 @@ build_nav_args() {
     esac
   done
 
-  # 用户已显式指定 navigation_profile:= 或 params_file:= 时，直接透传，
-  # 不再走 planner/controller 选择与合并
-  if [ -n "$explicit_spec" ]; then
-    return 0
+  # 未显式指定任何选择时：交互终端弹菜单，非交互默认 jps+pid
+  if [ -z "$explicit_spec" ]; then
+    chosen_planner=$(select_planner) || return 1
+    chosen_controller=$(select_controller) || return 1
+    nav_args+=(planner:="$chosen_planner" controller:="$chosen_controller")
   fi
 
-  if [ -n "$planner" ] && ! validate_choice planner "$planner" "$PLANNER_CHOICES"; then
-    return 1
+  # 校验合法值（显式传入时）
+  if [ -n "$chosen_planner" ]; then
+    validate_choice planner "$chosen_planner" "$PLANNER_CHOICES" || return 1
   fi
-  if [ -n "$controller" ] && ! validate_choice controller "$controller" "$CONTROLLER_CHOICES"; then
-    return 1
+  if [ -n "$chosen_controller" ]; then
+    validate_choice controller "$chosen_controller" "$CONTROLLER_CHOICES" || return 1
   fi
-
-  if [ -z "$planner" ]; then
-    planner=$(select_planner) || return 1
-  fi
-  if [ -z "$controller" ]; then
-    controller=$(select_controller) || return 1
-  fi
-
-  if ! merged_params=$(generate_merged_params "$planner" "$controller"); then
-    return 1
-  fi
-  nav_args+=("params_file:=$merged_params")
-  # controller 决定底盘模式：mppi/mpc → 启动即小陀螺，pid → 跟随。
-  # 必须显式传 navigation_profile，否则 launch 里默认 jps_pid，
-  # nonrotating_vel_transform 的 initial_chassis_mode 会被算成 0（不自旋）。
-  case "$controller" in
-    pid)
-      nav_args+=("navigation_profile:=jps_pid")
-      ;;
-    mppi)
-      nav_args+=("navigation_profile:=2d_mppi")
-      ;;
-    mpc)
-      nav_args+=("navigation_profile:=jps_mpc")
-      ;;
-  esac
 }
 
+# ────────────────────────────────────────────────────────────────
+# 仿真清理：仿真结束（Ctrl-C / 终端关闭 / EXIT trap）时自动执行
+#   1) 强杀仿真相关进程（TERM → 3s → KILL 两阶段）
+#   2) 刷新 ros2 daemon，清话题/节点缓存（解决"话题残余很久才关"）
+#   3) 清理 DDS 共享内存残留（FastDDS /dev/shm）
+# 仅用于仿真环境：第 3 步会删除当前用户的所有 FastDDS 共享内存段，
+# 若同时在跑实车/其他 DDS 程序，勿在本终端执行仿真清理。
+# ────────────────────────────────────────────────────────────────
 cleanup_simulation_processes() {
   local all_pids=()
   local pid
   local pattern
-  # 覆盖 launch、Gazebo/Ignition 服务端/客户端、RViz、以及 Gazebo 生成的机器人节点。
+
+  # 覆盖 launch、Gazebo/Ignition 服务端/客户端、RViz、以及导航/感知/UI 节点。
   local patterns=(
-    "ros2 launch rmu_gazebo_simulator bringup_sim.launch.py"
-    "ros2 launch guga_bringup simulation_launch.py"
+    "ros2 launch rmu_gazebo_simulator"
+    "ros2 launch guga_bringup"
     "ign gazebo"
     "gzserver"
     "gzclient"
     "gz sim"
     "rviz2"
     "rmua19_robot_base"
+    # 导航/感知/UI 节点（component_container 为 composition 模式容器）
+    "component_container"
+    "point_lio"
+    "small_gicp"
+    "loam_interface"
+    "sensor_scan_generation"
+    "terrain_analysis"
+    "terrain_analysis_ext"
+    "controller_server"
+    "planner_server"
+    "bt_navigator"
+    "smoother_server"
+    "behavior_server"
+    "waypoint_follower"
+    "velocity_smoother"
+    "lifecycle_manager"
+    "nonrotating_vel_transform"
+    "simple_decision"
+    "guga_ui"
   )
 
   if [ "$SIMULATION_CLEANUP_STARTED" -eq 1 ]; then
@@ -353,7 +327,7 @@ cleanup_simulation_processes() {
 
   touch "$SIMULATION_SHUTDOWN_FILE" 2>/dev/null || true
 
-  # 收集所有相关进程并去重
+  # ── 1. 收集并强杀仿真相关进程 ──
   for pattern in "${patterns[@]}"; do
     while IFS= read -r pid; do
       if [ -n "$pid" ] && [ "$pid" != "$$" ] && [ "$pid" != "${BASHPID:-$$}" ]; then
@@ -361,26 +335,38 @@ cleanup_simulation_processes() {
       fi
     done < <(pgrep -f "$pattern" 2>/dev/null || true)
   done
-  mapfile -t all_pids < <(printf "%s\n" "${all_pids[@]}" | sort -u | grep -v '^$')
+  mapfile -t all_pids < <(printf "%s
+" "${all_pids[@]}" | sort -u | grep -v '^$')
 
-  if [ "${#all_pids[@]}" -eq 0 ]; then
-    return 0
-  fi
+  if [ "${#all_pids[@]}" -gt 0 ]; then
+    # 第一阶段：优雅终止，给 Gazebo/Ignition 短暂关闭时间
+    printf "%s
+" "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
+    sleep 3
 
-  # 第一阶段：优雅终止，给 Gazebo/Ignition 短暂关闭时间
-  printf "%s\n" "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
-  sleep 3
-
-  # 第二阶段：仍有残留则强制终止，避免拖慢下次仿真启动
-  local remaining=()
-  for pid in "${all_pids[@]}"; do
-    if kill -0 "$pid" 2>/dev/null; then
-      remaining+=("$pid")
+    # 第二阶段：仍有残留则强制终止，避免拖慢下次仿真启动
+    local remaining=()
+    for pid in "${all_pids[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        remaining+=("$pid")
+      fi
+    done
+    if [ "${#remaining[@]}" -gt 0 ]; then
+      printf "%s
+" "${remaining[@]}" | xargs -r kill -KILL -- 2>/dev/null || true
     fi
-  done
-  if [ "${#remaining[@]}" -gt 0 ]; then
-    printf "%s\n" "${remaining[@]}" | xargs -r kill -KILL -- 2>/dev/null || true
   fi
+
+  # ── 2. 刷新 ros2 daemon：清话题/节点缓存 ──
+  # 节点已退出但 `ros2 topic/node list` 仍显示旧话题，是 daemon 缓存所致；
+  # stop 后下次调用会自动重启 daemon，缓存即清空。
+  if command -v ros2 >/dev/null 2>&1; then
+    ros2 daemon stop >/dev/null 2>&1 || true
+  fi
+
+  # ── 3. 清理 DDS 共享内存残留（FastDDS）──
+  # 进程被强杀后 /dev/shm 中的参与者段可能残留，影响下次仿真启动。
+  rm -f /dev/shm/fastdds_* /dev/shm/sem.fastdds_* 2>/dev/null || true
 }
 
 exit_with_launch_status() {

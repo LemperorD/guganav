@@ -22,11 +22,19 @@ rm -rf build/terrain_analysis build/terrain_analysis_ext \
   install/terrain_analysis install/terrain_analysis_ext \
   log/latest_build/terrain_analysis log/latest_build/terrain_analysis_ext
 
+# --allow-overriding 仅在新版 colcon（支持该参数）时添加；
+# 旧版 colcon（如 ros:humble-ros-base 容器的 0.9.x）不认识它，直接传会报
+# "unrecognized arguments: --allow-overriding" 导致 CI 失败
+ALLOW_OVERRIDE_ARGS=()
+if colcon build --help 2>/dev/null | grep -q -- "--allow-overriding"; then
+  ALLOW_OVERRIDE_ARGS=(--allow-overriding terrain_analysis)
+fi
+
 colcon build \
   --base-paths "$TERRAIN_ROOT" \
   --symlink-install \
   --parallel-workers 1 \
-  --allow-overriding terrain_analysis \
+  "${ALLOW_OVERRIDE_ARGS[@]}" \
   --packages-select terrain_analysis terrain_analysis_ext \
   --event-handlers console_direct+ \
   --cmake-clean-cache \
