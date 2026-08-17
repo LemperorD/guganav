@@ -33,6 +33,12 @@ def generate_launch_description():
     use_communication = LaunchConfiguration("use_communication")
     use_ui = LaunchConfiguration("use_ui")
     use_decision = LaunchConfiguration("use_decision")
+    # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
+    planner = LaunchConfiguration("planner")
+    controller = LaunchConfiguration("controller")
+    base_params_file = LaunchConfiguration("base_params_file")
+    controller_params_file = LaunchConfiguration("controller_params_file")
+    planner_params_file = LaunchConfiguration("planner_params_file")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -81,10 +87,38 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
-        default_value=os.path.join(
-            bringup_dir, "config", "reality", "nav2_params.yaml"
+        default_value="",
+        description=(
+            "Single params file override (disables 3-file merge); "
+            "default uses reality/{base,controller,planner} layered files"
         ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
+    )
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
+    declare_controller_cmd = DeclareLaunchArgument(
+        "controller", default_value="pid", choices=["pid", "mppi", "mpc"],
+        description="Controller: pid (omni PID), mppi, or mpc",
+    )
+    def default_params_file(which):
+        return PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file,
+                "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
+            ]
+        )
+    declare_base_params_file_cmd = DeclareLaunchArgument(
+        "base_params_file", default_value=default_params_file("base.yaml"),
+        description="Common params file (merge base layer)",
+    )
+    declare_controller_params_file_cmd = DeclareLaunchArgument(
+        "controller_params_file", default_value=default_params_file("controller/pid.yaml"),
+        description="Controller-diff params file",
+    )
+    declare_planner_params_file_cmd = DeclareLaunchArgument(
+        "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
+        description="Planner-diff params file",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -210,6 +244,10 @@ def generate_launch_description():
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
+            "base_params_file": base_params_file,
+            "controller_params_file": controller_params_file,
+            "planner_params_file": planner_params_file,
+            "controller": controller,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
@@ -256,6 +294,11 @@ def generate_launch_description():
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_planner_cmd)
+    ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_base_params_file_cmd)
+    ld.add_action(declare_controller_params_file_cmd)
+    ld.add_action(declare_planner_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)

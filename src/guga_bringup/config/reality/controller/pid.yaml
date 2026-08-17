@@ -1,0 +1,289 @@
+# reality/controller/pid.yaml — 实车控制器差异参数（PID + costmap 差异 + 调参）。
+controller_server:
+  ros__parameters:
+
+    use_sim_time: False
+
+    odom_topic: odometry
+
+    controller_frequency: 60.0
+
+    min_x_velocity_threshold: 0.001
+
+    min_y_velocity_threshold: 0.5
+
+    min_theta_velocity_threshold: 0.001
+
+    failure_tolerance: 0.3
+
+    progress_checker_plugins: ["progress_checker"]
+
+    goal_checker_plugins: ["general_goal_checker"]
+
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+
+    general_goal_checker:
+      stateful: True
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.15
+      yaw_goal_tolerance: 6.28
+
+    FollowPath:
+      plugin: "pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode"
+      translation_kp: 3.0
+      translation_ki: 0.1
+      translation_kd: 0.3
+      enable_rotation: true
+      rotation_kp: 2.0
+      rotation_ki: 0.01
+      rotation_kd: 0.1
+      transform_tolerance: 0.5
+      min_max_sum_error: 1.0
+      lookahead_dist: 2.0
+      use_velocity_scaled_lookahead_dist: true
+      lookahead_time: 1.0
+      min_lookahead_dist: 0.5
+      max_lookahead_dist: 1.0
+      use_interpolation: false
+      use_rotate_to_heading: false
+      use_rotate_to_heading_treshold: 0.1
+      min_approach_linear_velocity: 0.5
+      approach_velocity_scaling_dist: 1.0
+      v_linear_min: -2.5
+      v_linear_max: 2.5
+      v_angular_min: -3.0
+      v_angular_max: 3.0
+      spin_speed: 2.0                                  # LITTLE_TES 默认目标角速度 (rad/s)
+      curvature_min: 0.4                                # 低曲率阈值，低于此值不减速。
+      curvature_max: 0.7                                # 高曲率阈值，高于此值大幅减速。
+      reduction_ratio_at_high_curvature: 0.5            # 高曲率时的速度降低比例。 0.5 (即减速 50%)
+      curvature_forward_dist: 0.7                       # 前向距离，用于曲率计算
+      curvature_backward_dist: 0.3                      # 后向距离，用于曲率计算
+      max_velocity_scaling_factor_rate: 0.9             # 速度缩放因子的最大变化率
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+
+      use_sim_time: False
+
+      update_frequency: 10.0
+
+      publish_frequency: 5.0
+
+      global_frame: odom
+
+      robot_base_frame: base_footprint
+
+      rolling_window: true
+
+      width: 5
+
+      height: 5
+
+      resolution: 0.05
+
+      robot_radius: 0.2
+
+      intensity_voxel_layer:
+        plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
+        enabled: true
+        track_unknown_space: true
+        footprint_clearing_enabled: true
+        publish_voxel_map: false
+        combination_method: 1
+        mark_threshold: 0
+        origin_z: 0.0
+        unknown_threshold: 5
+        z_resolution: 0.05
+        z_voxels: 16
+        min_obstacle_height: 0.0
+        max_obstacle_height: 2.0
+        min_obstacle_intensity: 0.1
+        max_obstacle_intensity: 2.0
+        observation_sources: terrain_map
+        terrain_map:
+          data_type: PointCloud2
+          # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
+          # It doesn't need to start with '/'
+          topic: <robot_namespace>/terrain_map
+          sensor_frame: front_mid360
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+          obstacle_max_range: 5.0
+          obstacle_min_range: 0.2
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 4.0
+        inflation_radius: 0.7
+
+      always_send_full_costmap: False
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+
+      use_sim_time: False
+
+      update_frequency: 5.0
+
+      publish_frequency: 2.0
+
+      global_frame: map
+
+      robot_base_frame: base_footprint
+
+      robot_radius: 0.2
+
+      resolution: 0.05
+
+      track_unknown_space: true
+
+      intensity_voxel_layer:
+        plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
+        enabled: true
+        track_unknown_space: true
+        footprint_clearing_enabled: true
+        publish_voxel_map: false
+        combination_method: 1
+        mark_threshold: 0
+        origin_z: 0.0
+        unknown_threshold: 5
+        z_resolution: 0.05
+        z_voxels: 16
+        min_obstacle_height: 0.0
+        max_obstacle_height: 2.0
+        min_obstacle_intensity: 0.1
+        max_obstacle_intensity: 2.0
+        observation_sources: terrain_map_ext
+        terrain_map_ext:
+          data_type: PointCloud2
+          # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
+          # It doesn't need to start with '/'
+          topic: <robot_namespace>/terrain_map_ext
+          sensor_frame: front_mid360
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+          obstacle_max_range: 10.0
+          obstacle_min_range: 0.2
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 4.0
+        inflation_radius: 0.7
+
+      always_send_full_costmap: False
+
+# The yaml_filename does not need to be specified since it going to be set by defaults in launch.
+# If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
+# file & provide full path to map below. If CLI map configuration or launch default is provided, that will be used.
+
+smoother_server:
+  ros__parameters:
+
+    use_sim_time: False
+
+    smoother_plugins: ["simple_smoother"]
+
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+behavior_server:
+  ros__parameters:
+
+    use_sim_time: False
+
+    local_costmap_topic: local_costmap/costmap_raw
+
+    global_costmap_topic: global_costmap/costmap_raw
+
+    local_footprint_topic: local_costmap/published_footprint
+
+    global_footprint_topic: global_costmap/published_footprint
+
+    cycle_frequency: 10.0
+
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+
+    spin:
+      plugin: "nav2_behaviors/Spin"
+
+    backup:
+      plugin: "pb_nav2_behaviors/BackUpFreeSpace"
+
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+
+    wait:
+      plugin: "nav2_behaviors/Wait"
+
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+
+    local_frame: odom
+
+    global_frame: map
+
+    robot_base_frame: base_footprint
+
+    transform_tolerance: 0.1
+
+    simulate_ahead_time: 2.0
+
+    max_rotational_vel: 1.0
+
+    min_rotational_vel: 0.4
+
+    rotational_acc_lim: 3.2
+    # params for pb_nav2_behaviors/BackUpFreeSpace
+
+    service_name: "global_costmap/get_costmap"
+
+    max_radius: 2.0
+
+    visualize: false
+
+velocity_smoother:
+  ros__parameters:
+
+    use_sim_time: False
+
+    smoothing_frequency: 20.0
+
+    scale_velocities: False
+
+    feedback: "OPEN_LOOP"
+
+    max_velocity: [2.5, 2.5, 3.0]
+
+    min_velocity: [-2.5, -2.5, -3.0]
+
+    max_accel: [4.5, 4.5, 5.0]
+
+    max_decel: [-4.5, -4.5, -5.0]
+
+    odom_topic: "odometry"
+
+    odom_duration: 0.1
+
+    deadband_velocity: [0.0, 0.0, 0.0]
+
+    velocity_timeout: 1.0
+
