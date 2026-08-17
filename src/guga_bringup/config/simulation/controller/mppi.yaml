@@ -103,8 +103,8 @@ controller_server:
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
       model_dt: 0.033333333
       batch_size: 2000
-      vx_std: 1.0
-      vy_std: 1.0
+      vx_std: 0.5
+      vy_std: 0.5
       wz_std: 1.0
       vx_max: 2.5
       vx_min: -2.5

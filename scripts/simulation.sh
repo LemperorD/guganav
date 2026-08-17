@@ -297,10 +297,17 @@ cleanup_simulation_processes() {
     "gzserver"
     "gzclient"
     "gz sim"
+    # Gazebo launch 被强制结束时，这些子进程可能被 systemd --user
+    # 收养并继续发布 /clock、传感器和 TF，污染下一次仿真。
+    "ros_gz_bridge/parameter_bridge"
+    "robot_state_publisher"
+    "pose_bridge"
+    "rfid_bridge"
     "rviz2"
     "rmua19_robot_base"
     # 导航/感知/UI 节点（component_container 为 composition 模式容器）
     "component_container"
+    "ign_sim_pointcloud_tool"
     "point_lio"
     "small_gicp"
     "loam_interface"
@@ -335,13 +342,11 @@ cleanup_simulation_processes() {
       fi
     done < <(pgrep -f "$pattern" 2>/dev/null || true)
   done
-  mapfile -t all_pids < <(printf "%s
-" "${all_pids[@]}" | sort -u | grep -v '^$')
+  mapfile -t all_pids < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
 
   if [ "${#all_pids[@]}" -gt 0 ]; then
     # 第一阶段：优雅终止，给 Gazebo/Ignition 短暂关闭时间
-    printf "%s
-" "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
+    printf '%s\n' "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
     sleep 3
 
     # 第二阶段：仍有残留则强制终止，避免拖慢下次仿真启动
@@ -352,8 +357,7 @@ cleanup_simulation_processes() {
       fi
     done
     if [ "${#remaining[@]}" -gt 0 ]; then
-      printf "%s
-" "${remaining[@]}" | xargs -r kill -KILL -- 2>/dev/null || true
+      printf '%s\n' "${remaining[@]}" | xargs -r kill -KILL -- 2>/dev/null || true
     fi
   fi
 
@@ -366,7 +370,11 @@ cleanup_simulation_processes() {
 
   # ── 3. 清理 DDS 共享内存残留（FastDDS）──
   # 进程被强杀后 /dev/shm 中的参与者段可能残留，影响下次仿真启动。
-  rm -f /dev/shm/fastdds_* /dev/shm/sem.fastdds_* 2>/dev/null || true
+  rm -f \
+    /dev/shm/fastdds_* \
+    /dev/shm/fastrtps_* \
+    /dev/shm/sem.fastdds_* \
+    2>/dev/null || true
 }
 
 exit_with_launch_status() {
