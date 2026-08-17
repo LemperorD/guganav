@@ -45,26 +45,6 @@ planner_server:
         tolerance: 1.0e-10
         do_refinement: true
 
-global_costmap:
-  global_costmap:
-    ros__parameters:
-
-      plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
-
-      esdf_layer:
-        plugin: rog_map_layer::EsdfLayer
-        enabled: true
-        max_distance: 3.0
-        publish_esdf_grid: true
-        write_to_master: true
-        incremental_update: true
-        full_update_ratio: 0.3
-        obstacle_threshold: 254
-        enable_parallel: true
-        num_threads: 3
-        tile_size: 32
-        seam_iterations: 2
-
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -75,6 +55,26 @@ local_costmap:
         plugin: rog_map_layer::EsdfLayer
         enabled: true
         max_distance: 2.0
+        publish_esdf_grid: true
+        write_to_master: true
+        incremental_update: true
+        full_update_ratio: 0.3
+        obstacle_threshold: 254
+        enable_parallel: true
+        num_threads: 3
+        tile_size: 32
+        seam_iterations: 2
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+
+      plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+
+      esdf_layer:
+        plugin: rog_map_layer::EsdfLayer
+        enabled: true
+        max_distance: 3.0
         publish_esdf_grid: true
         write_to_master: true
         incremental_update: true
