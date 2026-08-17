@@ -102,7 +102,12 @@ def generate_launch_description():
     )
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
-        default_value="pid",
+        # 建图模式（slam:=True）默认 mppi：costmap 走 base_footprint_nonrotating，
+        # 且 navigation_launch 由 controller 推断底盘模式 → 开局即小陀螺；
+        # 比赛模式默认 pid（保守，不自旋）
+        default_value=PythonExpression(
+            ["'", slam, "' == 'True' and 'mppi' or 'pid'"]
+        ),
         choices=["pid", "mppi", "mpc"],
         description="Controller: pid (omni PID), mppi, or mpc",
     )
@@ -150,7 +155,11 @@ def generate_launch_description():
         default_value=PythonExpression(
             [
                 "'", params_file, "' != '' and '", params_file, "' or ('",
-                planner, "' == 'smac2d' and '",
+                # 建图模式（slam:=True）且 JPS 时：用 jps_slam.yaml（allow_unknown=true，
+                # 敢走未探索区域）；比赛模式保持 jps.yaml 保守配置
+                slam, "' == 'True' and '", planner, "' == 'jps' and '",
+                os.path.join(bringup_dir, "config", "simulation", "planner", "jps_slam.yaml"),
+                "' or '", planner, "' == 'smac2d' and '",
                 os.path.join(bringup_dir, "config", "simulation", "planner", "smac2d.yaml"),
                 "' or '", planner, "' == 'smachybrid' and '",
                 os.path.join(bringup_dir, "config", "simulation", "planner", "smachybrid.yaml"),

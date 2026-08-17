@@ -1,4 +1,6 @@
-# planner/jps.yaml — jps 规划器参数（planner_server + costmap plugins/esdf），覆盖前两层。
+# planner/jps_slam.yaml — 建图（slam）专用 JPS 参数
+# 与 jps.yaml 的唯一差异：allow_unknown=true（未探索区域 unknown=255 视为可通行），
+# 建图/探索时敢走未解锁地点。由 simulation_launch.py 在 slam:=True 且 planner:=jps 时选用。
 planner_server:
   ros__parameters:
     use_sim_time: True
@@ -9,7 +11,7 @@ planner_server:
       w_euc_cost: 1.0
       w_traversal_cost: 10.0
       w_heuristic_cost: 1.0
-      allow_unknown: false    # 比赛保守：unknown 不可通行；建图用 planner/jps_slam.yaml
+      allow_unknown: true
       enable_bspline: true
       enable_esdf: true
       esdf_weight: 200.0

@@ -467,6 +467,14 @@ global_costmap:
 
       resolution: 0.05
 
+      # 初始尺寸与原点：覆盖整个场地区域（含负坐标）。
+      # 有静态地图时 static layer 加载后会 matchSize 到地图尺寸，此值仅作初始范围；
+      # slam/建图模式无静态地图时依赖此范围，否则 5x5 默认导致目标 out of bounds
+      width: 100
+      height: 100
+      origin_x: -50.0
+      origin_y: -50.0
+
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
