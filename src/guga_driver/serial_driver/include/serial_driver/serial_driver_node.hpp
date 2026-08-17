@@ -85,7 +85,12 @@ namespace serial_driver {
      * base_footprint→gimbal_yaw_vision 的纯旋转 tf。
      */
     void publishTransformGimbalVision();
-
+    /**
+     * @brief 立即广播 base_footprint → gimbal_yaw TF。
+     * @param yaw_diff 云台相对底盘的 yaw 角度差（弧度）
+     */
+    void publishGimbalYawTF(double yaw_diff);  // ← 新增
+    
     // ---- 工具方法 ----
 
     /**
@@ -131,9 +136,6 @@ namespace serial_driver {
     // 速度变换
     double vel_trans_scale_{40.0};
     // double angle_init_{};
-
-    // // 底盘模式
-    // uint8_t chassis_mode_{1};  // 默认 chassisFollowed
 
     // 雷达连接参数
     std::string lidar_ip_{"192.168.1.2"};

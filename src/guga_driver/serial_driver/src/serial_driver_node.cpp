@@ -137,6 +137,7 @@ namespace serial_driver {
     msg.data =
         SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
     yaw_diff_ = static_cast<double>(msg.data);
+    publishGimbalYawTF(yaw_diff_);//新增：每次收到yaw数据立即发布 TF
     return msg;
   }
 
@@ -148,6 +149,28 @@ namespace serial_driver {
     msg.y = static_cast<double>(
         SerialDriverMain::readFloatLE(&payload[uplink_offset::ENEMY_Y]));
     return msg;
+  }
+  // ==================== 新增：发布云台 yaw TF ====================
+
+  void SerialDriverNode::publishGimbalYawTF(double yaw_diff) {
+      geometry_msgs::msg::TransformStamped gimbal_tf;
+      gimbal_tf.header.stamp = this->get_clock()->now();
+      gimbal_tf.header.frame_id = "base_footprint";
+      gimbal_tf.child_frame_id = "gimbal_yaw";
+
+      gimbal_tf.transform.translation.x = 0.0;
+      gimbal_tf.transform.translation.y = 0.0;
+      gimbal_tf.transform.translation.z = 0.0;
+
+      tf2::Quaternion q_yaw;
+      q_yaw.setRPY(0.0, 0.0, yaw_diff);
+
+      gimbal_tf.transform.rotation.x = q_yaw.x();
+      gimbal_tf.transform.rotation.y = q_yaw.y();
+      gimbal_tf.transform.rotation.z = q_yaw.z();
+      gimbal_tf.transform.rotation.w = q_yaw.w();
+
+      tf_broadcaster_->sendTransform(gimbal_tf);
   }
 
   // ==================== tf 广播 ====================

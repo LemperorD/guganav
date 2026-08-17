@@ -30,11 +30,11 @@ target_include_directories(serial_driver_main PUBLIC
 ament_target_dependencies(serial_driver_main
   rclcpp)
 # 链接系统库: 串口 和 文件系统
-add_executable(test_serial_driver
+add_executable(
   src/test.cpp
 )
 
-target_link_libraries(test_serial_driver
+target_link_libraries(
   serial_driver_main
   )
 
