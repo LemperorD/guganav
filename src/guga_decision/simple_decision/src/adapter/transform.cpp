@@ -11,7 +11,7 @@ namespace simple_decision {
     quat.z = ros_quat.z;
     quat.w = ros_quat.w;
     return quat;
-  }
+  }//四元数转换
 
   Position ConvertPoint(const geometry_msgs::msg::Point& ros_point) {
     Position position;
@@ -19,18 +19,18 @@ namespace simple_decision {
     position.y = ros_point.y;
     position.z = ros_point.z;
     return position;
-  }
+  }//点坐标转换
 
   Pose3D ConvertPose(const geometry_msgs::msg::Pose& ros_pose) {
     Pose3D pose;
     pose.position = ConvertPoint(ros_pose.position);
     pose.orientation = ConvertQuaternion(ros_pose.orientation);
     return pose;
-  }
+  }//位姿转换
 
   RobotStatus ConvertRobotStatus(RobotStatusMsg::SharedPtr msg) {
     RobotStatus robotstatus;
-    if (!msg) {
+    if (!msg) {//如果 msg 为 nullptr（空指针）
       throw std::invalid_argument(
           "ConvertRobotStatus received nullptr RobotStatus message");
     }
@@ -51,7 +51,7 @@ namespace simple_decision {
     robotstatus.is_hp_deduced = msg->is_hp_deduced;
 
     return robotstatus;
-  }
+  }//机器人状态转换（核心）
 
   GameStatus ConvertGameStatus(GameStatusMsg::SharedPtr msg) {
     if (!msg) {
@@ -61,7 +61,7 @@ namespace simple_decision {
     GameStatus gamestatus;
     gamestatus.game_progress = msg->game_progress;
     return gamestatus;
-  }
+  }//比赛状态转换
 
   Armors ConvertArmors(const ArmorsMsg::SharedPtr& ros_armorsmsg) {
     Armors armors;
@@ -74,7 +74,7 @@ namespace simple_decision {
     armors.header.stamp.sec = ros_armorsmsg->header.stamp.sec;
     armors.header.frame_id = ros_armorsmsg->header.frame_id;
 
-    armors.armors.resize(ros_armorsmsg->armors.size());
+    armors.armors.resize(ros_armorsmsg->armors.size());//调整到和 ROS 消息中的装甲板数量一样大
 
     std::transform(ros_armorsmsg->armors.begin(), ros_armorsmsg->armors.end(),
                    armors.armors.begin(), [](const auto& ros_armor) {
@@ -82,13 +82,13 @@ namespace simple_decision {
                    });
 
     return armors;
-  }
+  }//装甲板列表转换
 
   Armor ConvertArmor(const ArmorMsg& ros_armormsg) {
     Armor armor;
     armor.pose = ConvertPose(ros_armormsg.pose);
     return armor;
-  }
+  }//单个装甲板转换
 
   Target ConvertTarget(TargetMsg::SharedPtr ros_targetmsg) {
     if (!ros_targetmsg) {
@@ -104,5 +104,5 @@ namespace simple_decision {
     target.yaw = ros_targetmsg->yaw;
     target.tracking = ros_targetmsg->tracking;
     return target;
-  }
+  }//目标信息转换
 }  // namespace simple_decision

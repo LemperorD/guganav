@@ -20,10 +20,10 @@ def generate_launch_description():
     autostart = LaunchConfiguration("autostart")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
     params_file = LaunchConfiguration("params_file")
-    base_params_file = LaunchConfiguration("base_params_file"),
+    base_params_file = LaunchConfiguration("base_params_file")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
-    container_name_full = (namespace, "/", container_name)
+    container_name_full = PythonExpression(["'", namespace, "/", container_name, "'"])
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
@@ -113,19 +113,19 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
-    start_point_lio_node = Node(
-        package="point_lio",
-        executable="pointlio_mapping",
-        name="point_lio",
-        output="screen",
-        respawn=use_respawn,
-        respawn_delay=2.0,
-        parameters=[
-            configured_params,
-            {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
-        ],
-        arguments=["--ros-args", "--log-level", log_level],
-    )
+    # start_small_point_lio_node = Node(
+    #     package="small_point_lio",
+    #     executable="small_point_lio_node",
+    #     name="small_point_lio",
+    #     output="screen",
+    #     respawn=use_respawn,
+    #     respawn_delay=2.0,
+    #     parameters=[
+    #         configured_params,
+    #         {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
+    #     ],
+    #     arguments=["--ros-args", "--log-level", log_level],
+    # )
 
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(["not ", use_composition])),
@@ -162,6 +162,18 @@ def generate_launch_description():
                     {"node_names": lifecycle_nodes},
                 ],
             ),
+            Node(
+                package="small_point_lio",
+                executable="small_point_lio_node",
+                name="small_point_lio",
+                namespace="red_standard_robot1",
+                output="screen",
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params, {"prior_pcd.prior_pcd_map_path": prior_pcd_file}],
+                arguments=["--ros-args", "--log-level", log_level],
+            ),
+            
         ],
     )
 
@@ -194,6 +206,15 @@ def generate_launch_description():
                     }
                 ],
             ),
+            # 添加 small_point_lio 组件
+            ComposableNode(
+                package="small_point_lio",
+                plugin="small_point_lio::SmallPointLioNode",
+                name="small_point_lio",
+                namespace="red_standard_robot1",
+                parameters=[configured_params, {"prior_pcd.prior_pcd_map_path": prior_pcd_file}],
+                extra_arguments=[{'use_intra_process_comms': True}],
+            ),
         ],
     )
 
@@ -218,7 +239,7 @@ def generate_launch_description():
     ld.add_action(declare_log_level_cmd)
 
     # Add the actions to launch all of the localiztion nodes
-    ld.add_action(start_point_lio_node)
+    # ld.add_action(start_small_point_lio_node) 
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
 

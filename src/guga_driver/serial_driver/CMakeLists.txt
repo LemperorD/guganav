@@ -30,9 +30,7 @@ target_include_directories(serial_driver_main PUBLIC
 ament_target_dependencies(serial_driver_main
   rclcpp)
 # 链接系统库: 串口 和 文件系统
-add_executable(
-  src/test.cpp
-)
+
 
 target_link_libraries(
   serial_driver_main
@@ -53,9 +51,7 @@ ament_target_dependencies(serial_driver_node
   guga_interfaces
   guga_common
 )
-ament_target_dependencies(test_serial_driver
-geometry_msgs
-)
+
 # 注册为 rclcpp component，同时生成独立可执行文件
 rclcpp_components_register_node(serial_driver_node
   PLUGIN "serial_driver::SerialDriverNode"
@@ -66,7 +62,6 @@ rclcpp_components_register_node(serial_driver_node
 install(TARGETS
   serial_driver_main
   serial_driver_node
-  test_serial_driver
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

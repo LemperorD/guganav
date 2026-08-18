@@ -70,7 +70,7 @@ namespace simple_decision {
   struct Pose3D {
     Position position;
     Quaternion orientation;
-  };
+  };//位姿 = 位置 + 姿态
 
   struct RobotStatus {
     uint8_t robot_id = 0;
@@ -78,24 +78,24 @@ namespace simple_decision {
     uint16_t current_hp = 0;
     uint16_t maximum_hp = 0;
 
-    uint16_t shooter_barrel_cooling_value = 0;
-    uint16_t shooter_barrel_heat_limit = 0;
-    uint16_t shooter_17mm_1_barrel_heat = 0;
+    uint16_t shooter_barrel_cooling_value = 0;// 当前冷却值
+    uint16_t shooter_barrel_heat_limit = 0;// 热量上限
+    uint16_t shooter_17mm_1_barrel_heat = 0;// 17mm 枪管实际热量
 
-    Pose3D robot_pos;
+    Pose3D robot_pos;// 机器人在三维空间中的位置+朝向
 
-    uint8_t armor_id = 0;
+    uint8_t armor_id = 0;// 装甲板ID（哪个面被击中）
     uint8_t hp_deduction_reason = 0;
     uint16_t projectile_allowance_17mm = 0;
     uint16_t remaining_gold_coin = 0;
     bool is_hp_deduced = false;
 
-    static constexpr uint8_t ARMOR_HIT = 0U;
-    static constexpr uint8_t SYSTEM_OFFLINE = 1U;
-    static constexpr uint8_t OVER_SHOOT_SPEED = 2U;
-    static constexpr uint8_t OVER_HEAT = 3U;
-    static constexpr uint8_t OVER_POWER = 4U;
-    static constexpr uint8_t ARMOR_COLLISION = 5U;
+    static constexpr uint8_t ARMOR_HIT = 0U;//被敌人打中装甲板，u表示unsigned int
+    static constexpr uint8_t SYSTEM_OFFLINE = 1U;//系统离线（裁判系统故障）
+    static constexpr uint8_t OVER_SHOOT_SPEED = 2U;//射速超过限制
+    static constexpr uint8_t OVER_HEAT = 3U;//枪管过热
+    static constexpr uint8_t OVER_POWER = 4U;//电机功率超标
+    static constexpr uint8_t ARMOR_COLLISION = 5U;//装甲板碰撞（物理碰撞）
   };
 
   struct GameStatus {
@@ -131,7 +131,7 @@ namespace simple_decision {
   struct Header {
     Stamp stamp;
     std::string frame_id;
-  };
+  };//Header 是消息头，用于为数据加上时间戳和坐标系标识
 
   struct Armor {
     Pose3D pose;

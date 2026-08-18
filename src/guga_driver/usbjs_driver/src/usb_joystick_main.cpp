@@ -102,11 +102,11 @@ void UsbJoystickMain::timerCallback() {
     // 根据事件类型更新轴或按钮状态
     if (etype & JS_EVENT_AXIS) {
       // 更新轴状态
-      if (event.number >= 0 && event.number < (int)axis_state_.size())
+      if (event.number < (int)axis_state_.size())
         axis_state_[event.number] = event.value;
     } else if (etype & JS_EVENT_BUTTON) {
       // 更新按钮状态
-      if (event.number >= 0 && event.number < (int)button_state_.size())
+      if (event.number < (int)button_state_.size())
         button_state_[event.number] = event.value;
     }
   }

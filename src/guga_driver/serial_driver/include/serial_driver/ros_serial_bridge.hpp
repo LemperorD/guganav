@@ -15,7 +15,7 @@ namespace serial_driver {
   /**
    * @brief PC → MCU 单向消息桥接模板类。
    *
-   * 订阅 ROS 话题，收到消息后编码并调用串口发送回调。
+   * 订阅ROS话题，收到消息后编码并调用串口发送回调。
    * 设计思路：不持有串口对象的引用，而是通过 std::function 回调注入编码和
    * 发送逻辑，解耦 ROS 层与串口物理层。
    *
@@ -52,10 +52,11 @@ namespace serial_driver {
     }
 
     ~RosToSerialBridge() = default;
-    RosToSerialBridge(const RosToSerialBridge&) = delete;
-    RosToSerialBridge(RosToSerialBridge&&) = delete;
-    RosToSerialBridge& operator=(const RosToSerialBridge&) = delete;
-    RosToSerialBridge& operator=(const RosToSerialBridge&&) = delete;
+    
+    RosToSerialBridge(const RosToSerialBridge&) = delete;//禁用拷贝构造函数，禁止通过另一个对象拷贝创建新对象。
+    RosToSerialBridge(RosToSerialBridge&&) = delete;//禁用移动构造函数，禁止通过"移动"方式创建新对象。
+    RosToSerialBridge& operator=(const RosToSerialBridge&) = delete;//禁用拷贝赋值运算符，禁止将一个对象赋值给另一个已存在的对象。
+    RosToSerialBridge& operator=(const RosToSerialBridge&&) = delete; //禁用移动赋值运算符，禁止通过移动方式将一个对象赋值给另一个对象。
 
   private:
     rclcpp::Node* node_;
@@ -110,16 +111,16 @@ namespace serial_driver {
       });
     }
 
-    SerialToRosBridge(const SerialToRosBridge&) = delete;
-    SerialToRosBridge(SerialToRosBridge&&) = delete;
-    SerialToRosBridge& operator=(const SerialToRosBridge&) = delete;
-    SerialToRosBridge& operator=(const SerialToRosBridge&&) = delete;
-
     ~SerialToRosBridge() {
       if (recv_thread_.joinable()) {
         recv_thread_.join();
       }
     }
+
+    SerialToRosBridge(const SerialToRosBridge&) = delete;
+    SerialToRosBridge(SerialToRosBridge&&) = delete;
+    SerialToRosBridge& operator=(const SerialToRosBridge&) = delete;
+    SerialToRosBridge& operator=(const SerialToRosBridge&&) = delete;
 
   private:
     rclcpp::Node* node_;
