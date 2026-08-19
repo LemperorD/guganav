@@ -87,10 +87,13 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
-        default_value="",
+        # 默认必须指向真实文件,不能为空字符串:
+        # reality 会把 params_file 原样传给 bringup_launch,而 bringup 用它作为
+        # RewrittenYaml 的参数源;若为空 → open('') → "No such file or directory: ''"。
+        default_value=os.path.join(bringup_dir, "config", "reality", "nav2_params.yaml"),
         description=(
             "Single params file override (disables 3-file merge); "
-            "default uses reality/{base,controller,planner} layered files"
+            "default uses reality/nav2_params.yaml"
         ),
     )
     declare_planner_cmd = DeclareLaunchArgument(
@@ -187,11 +190,14 @@ def generate_launch_description():
 
     # Create our own temporary YAML files that include substitutions
 
+    # livox 节点参数直接指向 base.yaml 的绝对路径,不经过 PythonExpression
+    # 动态求值(base_params_file 在 bringup 层才被 ReplaceString 处理,此处
+    # 求值为空会触发 RewrittenYaml 打开 '' → FileNotFoundError)。
     configured_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=os.path.join(bringup_dir, "config", "reality", "base.yaml"),
             root_key=namespace,
-            param_rewrites={},
+            param_rewrites={"use_sim_time": use_sim_time},
             convert_types=True,
         ),
         allow_substs=True,
