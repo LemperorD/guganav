@@ -20,7 +20,9 @@ void MpcControllerNode::configure(
   clock_ = node->get_clock();
 
   local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+#ifdef PREDICTED_PLAN_DEBUG
   predicted_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("predicted_plan", 1);
+#endif
 
   // 初始化wrapper
   mpc_wrapper_ = std::make_shared<MpcWrapper>();
@@ -39,21 +41,27 @@ void MpcControllerNode::configure(
 void MpcControllerNode::activate()
 {
   if (local_plan_pub_) { local_plan_pub_->on_activate(); }
+#ifdef PREDICT_PLAN_DEBUG
   if (predicted_plan_pub_) { predicted_plan_pub_->on_activate(); }
+#endif
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Activated");
 }
 
 void MpcControllerNode::deactivate()
 {
   if (local_plan_pub_) { local_plan_pub_->on_deactivate(); }
+#ifdef PREDICT_PLAN_DEBUG
   if (predicted_plan_pub_) { predicted_plan_pub_->on_deactivate(); }
+#endif
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Deactivated");
 }
 
 void MpcControllerNode::cleanup()
 {
   local_plan_pub_.reset();
+#ifdef PREDICT_PLAN_DEBUG
   predicted_plan_pub_.reset();
+#endif
   costmap_ros_.reset(); tf_buffer_.reset();
   RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "Cleaned up");
 }
@@ -67,16 +75,17 @@ void MpcControllerNode::setPlan(const nav_msgs::msg::Path & path)
 geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  (void)goal_checker;
-  (void)velocity;
+  (void)goal_checker; (void)velocity;
 
   // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
   geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
   StateBound x0 = Point2State(global_pose);
+  x0[2] = unwrap_angle(x0[2], last_yaw_); // 保持角度连续性
+  last_yaw_ = x0[2];
   mpc_wrapper_->setInitialState(x0);
 
   geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header = global_pose.header;
+  cmd_vel.header = pose.header;
   cmd_vel.twist.linear.x = 0.0;
   cmd_vel.twist.linear.y = 0.0;
   cmd_vel.twist.angular.z = 0.0;
@@ -88,23 +97,14 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   local_plan_pub_->publish(local_plan);
   auto ref_traj = getReferenceHorizon(local_plan);
   TerminalRef end_ref = ref_traj.col(kHorizonSteps - 1).head<3>();
-
-#ifdef REFERENCE_DEBUG
-  std::cout << "\033[1;33mReference trajectory: \033[0m" << std::endl;
-  for (int i = 0; i < ref_traj.cols(); ++i) {
-    std::cout << "\033[1;33mPoint " << i << ": x=" << ref_traj(0, i) << ", y=" << ref_traj(1, i) << ", theta=" << ref_traj(2, i) << "\033[0m" << std::endl;
-  }
-  std::cout << "\033[1;34mTerminal reference: x=" << end_ref(0) << ", y=" << end_ref(1) << ", theta=" << end_ref(2) << "\033[0m" << std::endl;
-#endif
-
   mpc_wrapper_->setReferenceTrajectory(ref_traj, end_ref);
 
   // 求解MPC并获取预测状态轨迹
   auto predicted_states = mpc_wrapper_->predictedStates();
   if (predicted_states.size() != 0) {
+#ifdef PREDICTED_PLAN_DEBUG
     auto predicted_plan = StateHorizon2Path(global_plan_, predicted_states);
     predicted_plan_pub_->publish(predicted_plan);
-#ifdef PREDICTED_PLAN_DEBUG
     std::cout << "\033[1;32mPredicted plan published,"
               << "size: " << predicted_plan.poses.size() << ", "
               << "frame: " << predicted_plan.header.frame_id
@@ -119,12 +119,9 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
 
 #ifdef SOLVE_TIME_DEBUG
   double solve_time = mpc_wrapper_->solve_time();
-  std::cout << "\033[1;34mMPC solve time: " << solve_time << " s\033[0m" << std::endl;
+  std::cout << CYAN_LIGHT << "MPC solve time: " << solve_time << " s" << RESET << std::endl;
 #endif
 
-  // acados 模型将 u=[vx,vy,omega] 建模为 body 系速度
-  // (x_dot = vx*cos(theta) - vy*sin(theta))，Nav2 cmd_vel 也是 body 系，
-  // 因此直接输出，不做任何旋转。
   cmd_vel.twist.linear.x = u_opt[0];
   cmd_vel.twist.linear.y = u_opt[1];
   cmd_vel.twist.angular.z = u_opt[2];
@@ -331,14 +328,6 @@ inline geometry_msgs::msg::PoseStamped MpcControllerNode::transformPoseToGlobal(
   }
   return transformed_pose;
 }
-
-// geometry_msgs::msg::Twist MpcControllerNode::transformVelocity( const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff) {
-//   geometry_msgs::msg::Twist out;
-//   out.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
-//   out.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
-//   out.angular.z = twist->angular.z;
-//   return out;
-// }
 
 #ifdef PREDICT_INPUT
 void MpcControllerNode::predictInputThreadFunction()

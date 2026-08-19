@@ -1,10 +1,9 @@
 #ifndef MPC_CONTROLLER_NODE_HPP_
 #define MPC_CONTROLLER_NODE_HPP_
 
+// #define BACKWARD_DEBUG_GUGA
 // #define PREDICTED_PLAN_DEBUG
-// #define SOLVE_TIME_DEBUG
-// #define REFERENCE_DEBUG
-// #define LOCAL_PLAN_LENGTH_DEBUG
+#define SOLVE_TIME_DEBUG
 // #define PREDICT_INPUT
 
 #include <iostream>
@@ -22,115 +21,117 @@
 #include "nav2_util/node_utils.hpp"
 
 #include "mpc_controller/mpc_wrapper.hpp"
-#include "mpc_controller/backward.hpp"
 
+#include "guga_common/backward.hpp"
+#include "guga_common/common_libs.hpp"
+
+#ifdef BACKWARD_DEBUG_GUGA
 namespace backward {
+  // I‘ll see u on the dark side of the moon
   backward::SignalHandling sh;
 }
+#endif
 
 namespace mpc_controller {
 
-  class MpcControllerNode : public nav2_core::Controller {
-  public:
-    MpcControllerNode() = default;
-    ~MpcControllerNode() override = default;
+class MpcControllerNode : public nav2_core::Controller
+{
+public:
+  MpcControllerNode() = default;
+  ~MpcControllerNode() override = default;
 
-    // 禁止拷贝
-    MpcControllerNode(const MpcControllerNode&) = delete;
-    MpcControllerNode& operator=(const MpcControllerNode&) = delete;
+  // 禁止拷贝
+  MpcControllerNode(const MpcControllerNode&) = delete;
+  MpcControllerNode& operator=(const MpcControllerNode&) = delete;
 
-    void configure(
-        const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
-        std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
-        std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
+  void configure(
+      const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
+      std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+      std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
-    void activate() override;
-    void deactivate() override;
-    void cleanup() override;
+  void activate() override;
+  void deactivate() override;
+  void cleanup() override;
 
-    void setPlan(const nav_msgs::msg::Path& path) override;
+  void setPlan(const nav_msgs::msg::Path& path) override;
 
-    [[nodiscard]] geometry_msgs::msg::TwistStamped computeVelocityCommands(
-        const geometry_msgs::msg::PoseStamped& pose,
-        const geometry_msgs::msg::Twist& velocity,
-        nav2_core::GoalChecker* goal_checker) override;
+  [[nodiscard]] geometry_msgs::msg::TwistStamped computeVelocityCommands(
+      const geometry_msgs::msg::PoseStamped& pose,
+      const geometry_msgs::msg::Twist& velocity,
+      nav2_core::GoalChecker* goal_checker) override;
 
-    void setSpeedLimit(const double& speed_limit,
-                       const bool& percentage) override;
+  void setSpeedLimit(const double& speed_limit,
+                      const bool& percentage) override;
 
-  private:
-    /**
-     * @brief 从参数服务器加载配置。
-     */
-    void loadParameters();
+private:
+  /**
+   * @brief 从参数服务器加载配置。
+   */
+  void loadParameters();
 
-    /**
-     * @brief 配置MpcWrapper。
-     * @param config MpcWrapper配置结构体。
-     */
-    void ConfigMpcWrapper(MpcConfig& config);
+  /**
+   * @brief 配置MpcWrapper。
+   * @param config MpcWrapper配置结构体。
+   */
+  void ConfigMpcWrapper(MpcConfig& config);
 
-    /**
-     * @brief 获取局部规划路径
-     * @param pose 当前机器人位姿。
-     * @return 局部规划路径。
-     */
-    nav_msgs::msg::Path getLocalPlan(
-        const geometry_msgs::msg::PoseStamped& pose);
+  /**
+   * @brief 获取局部规划路径
+   * @param pose 当前机器人位姿。
+   * @return 局部规划路径。
+   */
+  nav_msgs::msg::Path getLocalPlan(
+      const geometry_msgs::msg::PoseStamped& pose);
 
-    /**
-     * @brief 生成参考轨迹
-     * @param local_plan 局部规划路径。
-     * @return 参考轨迹。
-     */
-    RefHorizon getReferenceHorizon(const nav_msgs::msg::Path& local_plan);
+  /**
+   * @brief 生成参考轨迹
+   * @param local_plan 局部规划路径。
+   * @return 参考轨迹。
+   */
+  RefHorizon getReferenceHorizon(const nav_msgs::msg::Path& local_plan);
 
-    // ROS2
-    rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-    std::string name_;
-    nav2_costmap_2d::Costmap2D* costmap_{};
-    rclcpp::Logger logger_{rclcpp::get_logger("MpcControllerNode")};
-    rclcpp::Clock::SharedPtr clock_;
+  /**
+   * @brief 将位姿从局部坐标系转换为全局坐标系。
+   * @param pose 局部坐标系下的位姿。
+   * @return 全局坐标系下的位姿。
+   */
+  inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(const geometry_msgs::msg::PoseStamped& pose) const;
 
-    // pub
-    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
-        local_plan_pub_;
-    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
-        predicted_plan_pub_;
+private: // 成员变量
+  // NAV2
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
+  std::string name_;
+  nav2_costmap_2d::Costmap2D* costmap_{};
+  rclcpp::Logger logger_{rclcpp::get_logger("MpcControllerNode")};
+  rclcpp::Clock::SharedPtr clock_;
 
-    // MPC控制器
-    std::shared_ptr<MpcWrapper> mpc_wrapper_;
+  // ROS2 pub
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;
+#ifdef PREDICTED_PLAN_DEBUG
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr predicted_plan_pub_;
+#endif
 
-    // 已存储的全局规划路径
-    nav_msgs::msg::Path global_plan_;
-
-    // 线程安全
-    std::mutex mutex_;
-
-    // 配置参数
-    MpcConfig mpc_config_;
-
-    // 局部规划路径长度
-    double local_plan_length_{2.0};
-
-    inline geometry_msgs::msg::PoseStamped transformPoseToGlobal(
-        const geometry_msgs::msg::PoseStamped& pose) const;
+  std::shared_ptr<MpcWrapper> mpc_wrapper_; // MPC求解器封装类
+  nav_msgs::msg::Path global_plan_; // 已存储的全局规划路径  
+  std::mutex mutex_; // 线程安全
+  MpcConfig mpc_config_; // 配置参数
+  double local_plan_length_{2.0}; // 局部规划路径长度
+  double last_yaw_{0.0}; // 上一帧的机器人航向角
 
 #ifdef PREDICT_INPUT
-  private:  // 尝试使用控制预测序列计算局部规划路径长度
-    InputHorizon predicted_inputs_;
-    std::thread predict_thread_;
-    void predictInputThreadFunction();
+private:  // 尝试使用控制预测序列计算局部规划路径长度
+  InputHorizon predicted_inputs_;
+  std::thread predict_thread_;
+  void predictInputThreadFunction();
 #endif
-  };
+};
 
 }  // namespace mpc_controller
 
 // Tools Functions
-inline const StateBound Point2State(
-    const geometry_msgs::msg::PoseStamped& pose) {
+inline const StateBound Point2State(const geometry_msgs::msg::PoseStamped& pose) {
   StateBound state;
 
   const auto& q = pose.pose.orientation;
