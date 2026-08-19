@@ -1,17 +1,3 @@
-// Copyright 2025 Lihan Chen
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 // #define ODEMETRY_DEBUG
 
 #include "nonrotating_vel_transform/nonrotating_vel_transform.hpp"
@@ -28,44 +14,9 @@ constexpr double CONTROLLER_TIMEOUT = 0.5;
 NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & options)
 : Node("nonrotating_vel_transform", options)
 {
-  RCLCPP_INFO(get_logger(), "Start NonrotatingVelTransform!");
+  RCLCPP_INFO(get_logger(), "Start Nonrotating Vel Transform!");
 
-  this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
-  this->declare_parameter<std::string>(
-    "nonrotating_robot_base_frame", "base_footprint_nonrotating");
-  this->declare_parameter<std::string>("chassis_frame", "chassis");
-  this->declare_parameter<std::string>("odom_topic", "odom");
-  this->declare_parameter<std::string>("local_plan_topic", "local_plan");
-  this->declare_parameter<std::string>("cmd_spin_topic", "cmd_spin");
-  this->declare_parameter<std::string>("input_cmd_vel_topic", "");
-  this->declare_parameter<std::string>("output_cmd_vel_topic", "");
-  this->declare_parameter<std::string>("vis_cmd_vel_topic", "cmd_vel_marker");
-  this->declare_parameter<std::string>("vis_frame_id", "base_link");
-  this->declare_parameter<double>("vis_scale", 1.0);
-  this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
-  // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
-  // 之后由 chassis_mode 话题（如 simple_decision）覆盖
-  this->declare_parameter<int>("initial_chassis_mode", 1);
-  this->declare_parameter<float>("init_spin_speed", 6.28);
-  this->declare_parameter<bool>("output_in_chassis_frame", false);
-
-  this->get_parameter("robot_base_frame", robot_base_frame_);
-  this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
-  this->get_parameter("chassis_frame", chassis_frame_);
-  this->get_parameter("odom_topic", odom_topic_);
-  this->get_parameter("local_plan_topic", local_plan_topic_);
-  this->get_parameter("cmd_spin_topic", cmd_spin_topic_);
-  this->get_parameter("input_cmd_vel_topic", input_cmd_vel_topic_);
-  this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
-  this->get_parameter("vis_cmd_vel_topic", vis_cmd_vel_topic_);
-  this->get_parameter("vis_scale", vis_scale_);
-  this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
-  this->get_parameter("init_spin_speed", spin_speed_);
-  this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
-  // initial_chassis_mode：启动时默认小陀螺（launch 中按 navigation_profile 区分）
-  int initial_chassis_mode{1};
-  this->get_parameter("initial_chassis_mode", initial_chassis_mode);
-  chassis_mode_ = static_cast<uint8_t>(initial_chassis_mode);
+  onConfigure(); // 配置参数
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -336,6 +287,46 @@ void NonrotatingVelTransform::visualizeVelocity(const geometry_msgs::msg::Twist 
   angular_marker.points.push_back(z_end);
 
   vis_marker_pub_->publish(angular_marker);
+}
+
+void NonrotatingVelTransform::onConfigure()
+{
+  this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
+  this->declare_parameter<std::string>(
+    "nonrotating_robot_base_frame", "base_footprint_nonrotating");
+  this->declare_parameter<std::string>("chassis_frame", "chassis");
+  this->declare_parameter<std::string>("odom_topic", "odom");
+  this->declare_parameter<std::string>("local_plan_topic", "local_plan");
+  this->declare_parameter<std::string>("cmd_spin_topic", "cmd_spin");
+  this->declare_parameter<std::string>("input_cmd_vel_topic", "");
+  this->declare_parameter<std::string>("output_cmd_vel_topic", "");
+  this->declare_parameter<std::string>("vis_cmd_vel_topic", "cmd_vel_marker");
+  this->declare_parameter<std::string>("vis_frame_id", "base_link");
+  this->declare_parameter<double>("vis_scale", 1.0);
+  this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
+  // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
+  // 之后由 chassis_mode 话题（如 simple_decision）覆盖
+  this->declare_parameter<int>("initial_chassis_mode", 1);
+  this->declare_parameter<float>("init_spin_speed", 6.28);
+  this->declare_parameter<bool>("output_in_chassis_frame", false);
+
+  this->get_parameter("robot_base_frame", robot_base_frame_);
+  this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
+  this->get_parameter("chassis_frame", chassis_frame_);
+  this->get_parameter("odom_topic", odom_topic_);
+  this->get_parameter("local_plan_topic", local_plan_topic_);
+  this->get_parameter("cmd_spin_topic", cmd_spin_topic_);
+  this->get_parameter("input_cmd_vel_topic", input_cmd_vel_topic_);
+  this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
+  this->get_parameter("vis_cmd_vel_topic", vis_cmd_vel_topic_);
+  this->get_parameter("vis_scale", vis_scale_);
+  this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
+  this->get_parameter("init_spin_speed", spin_speed_);
+  this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
+  // initial_chassis_mode：启动时默认小陀螺（launch 中按 navigation_profile 区分）
+  int initial_chassis_mode{1};
+  this->get_parameter("initial_chassis_mode", initial_chassis_mode);
+  chassis_mode_ = static_cast<uint8_t>(initial_chassis_mode);
 }
 
 }  // namespace nonrotating_vel_transform
