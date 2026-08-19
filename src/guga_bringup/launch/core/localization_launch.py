@@ -147,7 +147,11 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[
+                            configured_params, 
+                            {"prior_pcd_file": prior_pcd_file},
+                            {"use_sim_time": use_sim_time},
+                            ],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -173,7 +177,27 @@ def generate_launch_description():
                 parameters=[configured_params, {"prior_pcd.prior_pcd_map_path": prior_pcd_file}],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
-            
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='odom_to_base_footprint',
+                arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_footprint'],
+                parameters=[{"use_sim_time": use_sim_time}],   # ← 加上这行
+            ),
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='base_footprint_to_front_mid360',
+                arguments=['0', '0', '0', '0', '0', '0', 'base_footprint', 'front_mid360'],
+                parameters=[{"use_sim_time": use_sim_time}],   # ← 加上这行
+            ),
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='base_footprint_to_nonrotating',
+                arguments=['0', '0', '0', '0', '0', '0', 'base_footprint', 'base_footprint_nonrotating'],
+                parameters=[{"use_sim_time": use_sim_time}],   # ← 加上这行
+            ),
         ],
     )
 

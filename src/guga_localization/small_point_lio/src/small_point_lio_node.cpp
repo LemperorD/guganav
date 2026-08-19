@@ -24,6 +24,8 @@ namespace small_point_lio {
         bool save_pcd = declare_parameter<bool>("save_pcd");
         small_point_lio = std::make_unique<small_point_lio::SmallPointLio>(*this);
         odometry_publisher = create_publisher<nav_msgs::msg::Odometry>("/odometry", 1000);
+        // 新增：发布 registered_scan（给 small_gicp_relocalization 用）
+registered_scan_publisher = create_publisher<sensor_msgs::msg::PointCloud2>("/registered_scan", 1000);
         pointcloud_publisher = create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", 1000);
         tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
         tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
@@ -168,6 +170,10 @@ namespace small_point_lio {
                 }
                 msg.is_dense = false;
                 pointcloud_publisher->publish(msg);
+                // 新增：也发布到 registered_scan
+                if (registered_scan_publisher->get_subscription_count() > 0) {
+                    registered_scan_publisher->publish(msg);
+                }
             }
             if (save_pcd) {
                 for (const auto &point: pointcloud) {

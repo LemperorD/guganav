@@ -15,7 +15,7 @@
 // #define ODEMETRY_DEBUG
 
 #include "nonrotating_vel_transform/nonrotating_vel_transform.hpp"
-
+#include "rclcpp/time_source.hpp"
 #include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
@@ -48,6 +48,11 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   this->declare_parameter<int>("initial_chassis_mode", 1);
   this->declare_parameter<float>("init_spin_speed", 6.28);
   this->declare_parameter<bool>("output_in_chassis_frame", false);
+
+  // ========== 添加 use_sim_time 参数 ==========
+  this->declare_parameter<bool>("use_sim_time", false);
+  this->get_parameter("use_sim_time", use_sim_time_);
+  // ==========================================
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
@@ -222,7 +227,13 @@ void NonrotatingVelTransform::updateGimbalYaw()
 void NonrotatingVelTransform::publishTransform()
 {
   geometry_msgs::msg::TransformStamped t;
-  t.header.stamp = this->get_clock()->now();
+  rclcpp::Time now;
+  if (use_sim_time_) {
+    now = this->now();  // 使用仿真时间（/clock）
+  } else {
+    now = this->get_clock()->now();  // 使用系统时间
+  }
+  t.header.stamp = now;
   t.header.frame_id = robot_base_frame_;
   t.child_frame_id = nonrotating_robot_base_frame_;
 

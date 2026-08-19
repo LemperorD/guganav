@@ -54,6 +54,7 @@ public:
     const geometry_msgs::msg::Twist & twist, double yaw_diff);
 
 private:
+  bool use_sim_time_{false};
   void syncCallback(
     const nav_msgs::msg::Odometry::ConstSharedPtr & odom,
     const nav_msgs::msg::Path::ConstSharedPtr & local_plan);

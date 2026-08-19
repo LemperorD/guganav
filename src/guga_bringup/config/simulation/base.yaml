@@ -86,48 +86,51 @@ ign_sim_pointcloud_tool:
 small_point_lio:
   ros__parameters:
     # === 基础配置 ===
-    lidar_topic: "/red_standard_robot1/velodyne_points"
-    imu_topic: "/red_standard_robot1/livox/imu"
-    lidar_type: "livox_pointcloud2"
+    lidar_topic: "livox/lidar"
+    imu_topic: "livox/imu"
+    lidar_type: "custom_mid360_driver"
     lidar_frame: "front_mid360"
     save_pcd: false
 
     # === 点云滤波 ===
     point_filter_num: 1
     min_distance: 0.5
-    max_distance: 100.0
+    max_distance: 1000.0
     space_downsample: true
     space_downsample_leaf_size: 0.5
 
     # === IMU处理 ===
-    gravity: [0.0, 0.0, -9.81]
-    fix_gravity_direction: true
+    gravity: [0.0, 0.0, -9.810]
+    fix_gravity_direction: false
     check_satu: true
-    satu_acc: 30.0
+    satu_acc: 3.0
     satu_gyro: 35.0
     acc_norm: 9.81
 
     # === 地图 ===
     map_resolution: 0.5
-    init_map_size: 10
+    init_map_size: 1
 
     # === 外参 ===
     extrinsic_est_en: false
-    extrinsic_T: [0.0, 0.0, 0.0]
-    extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    extrinsic_T: [-0.011, -0.02329, 0.04412]
+    extrinsic_R: [1.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0,
+                  0.0, 0.0, 1.0]
 
     # === 卡尔曼滤波 ===
-    laser_point_cov: 0.01
-    imu_meas_acc_cov: 0.01
-    imu_meas_omg_cov: 0.01
-    velocity_cov: 20.0
-    acceleration_cov: 500.0
-    omg_cov: 1000.0
-    ba_cov: 0.0001
-    bg_cov: 0.0001
-    plane_threshold: 0.1
-    match_s: 81.0
-    match_sqaured: 81.0   # ← 添加这一行
+    # R
+    laser_point_cov: 0.01                      # 激光点的协方差
+    imu_meas_acc_cov: 0.01                     # IMU测量的加速度协方差
+    imu_meas_omg_cov: 0.01                     # IMU测量的角速度协方差
+    # Q
+    velocity_cov: 20.0                         # 速度的协方差
+    acceleration_cov: 500.0                    # 加速度的协方差
+    omg_cov: 1000.0                            # 角速度的协方差
+    ba_cov: 0.0001                             # 加速度偏置的协方差
+    bg_cov: 0.0001                             # 角速度偏置的协方差
+    plane_threshold: 0.1                       # 平面匹配阈值，越小表示越严格
+    match_sqaured: 81.0                        # 当前点是否在平面上的阈值，越小表示越严格
 
     # === 数据发布 ===
     publish_odometry_without_downsample: false
