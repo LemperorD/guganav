@@ -194,6 +194,24 @@ for arg in "$@"; do
   esac
 done
 
+# reality_launch 的 use_communication / use_rviz 默认都是 False,
+# 这里默认开启(串口通信 + RViz),除非用户显式传 use_communication:=
+# 或 use_rviz:= 覆盖。
+has_use_comm=0
+has_use_rviz=0
+for arg in "${launch_args[@]}"; do
+  case "$arg" in
+    use_communication:=*) has_use_comm=1 ;;
+    use_rviz:=*) has_use_rviz=1 ;;
+  esac
+done
+if [ "$has_use_comm" -eq 0 ]; then
+  launch_args+=(use_communication:=True)
+fi
+if [ "$has_use_rviz" -eq 0 ]; then
+  launch_args+=(use_rviz:=True)
+fi
+
 if [ "$launch_mode" = nav ] && ! is_true "$slam"; then
   ensure_reality_map_and_pcd "$world" "$map_arg" "$prior_pcd_arg"
 fi
