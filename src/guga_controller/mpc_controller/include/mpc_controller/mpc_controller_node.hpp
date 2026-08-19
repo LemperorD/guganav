@@ -118,6 +118,7 @@ private: // 成员变量
   std::mutex mutex_; // 线程安全
   MpcConfig mpc_config_; // 配置参数
   double local_plan_length_{2.0}; // 局部规划路径长度
+  double last_yaw_{0.0}; // 上一帧的机器人航向角
 
 #ifdef PREDICT_INPUT
 private:  // 尝试使用控制预测序列计算局部规划路径长度
