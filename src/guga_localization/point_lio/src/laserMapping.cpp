@@ -41,67 +41,27 @@
 
 #include "li_initialization.h"
 
-/// @brief 时间日志计数器
-int time_log_counter = 0;
+namespace laserMapping {
+  bool flg_exit = false;
 
-/// @brief 地图初始化完成标志
-bool init_map = false;
+  /** @brief 去畸变后的点云 (IMU系) */
+  PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
 
-/// @brief 第一帧标志 (初始化姿态/重力)
-bool flg_first_scan = true;
+  /** @brief 初始化阶段累积的世界系点云 */
+  PointCloudXYZI::Ptr init_feats_world(new PointCloudXYZI());
 
-// ==================== 计时变量 (用于性能分析) ====================
-double match_time = 0;   ///< 匹配时间 (近邻搜索 + 平面拟合)
-double solve_time = 0;   ///< 求解时间 (EKF 更新)
-double propag_time = 0;  ///< 传播时间 (EKF 预测)
-double update_time = 0;  ///< ICP 总时间 (匹配+传播+求解)
+  nav_msgs::msg::Path path;                       ///< 路径消息
+  nav_msgs::msg::Odometry odomAftMapped;          ///< 里程计消息
+  geometry_msgs::msg::PoseStamped msg_body_pose;  ///< 位姿消息 (用于路径)
 
-/// @brief EKF 重置标志 (rosbag 回放时需重置)
-bool flg_reset = false;
-
-/// @brief 退出标志 (Ctrl+C 触发)
-bool flg_exit = false;
-
-// ==================== 点云缓存 ====================
-
-/** @brief 去畸变后的点云 (IMU系) */
-PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
-
-/** @brief 空间降采样后的 IMU 系点云 */
-PointCloudXYZI::Ptr feats_down_body_space(new PointCloudXYZI());
-
-/** @brief 初始化阶段累积的世界系点云 */
-PointCloudXYZI::Ptr init_feats_world(new PointCloudXYZI());
-
-/** @brief 深度特征世界系点云队列 (未使用) */
-std::deque<PointCloudXYZI::Ptr> depth_feats_world;
-
-/** @brief VoxelGrid 滤波器: 曲面点降采样 */
-pcl::VoxelGrid<PointType> downSizeFilterSurf;
-
-/** @brief VoxelGrid 滤波器: 地图点降采样 */
-pcl::VoxelGrid<PointType> downSizeFilterMap;
-
-/** @brief 当前欧拉角 (roll, pitch, yaw) [rad] */
-V3D euler_cur;
-
-// ==================== 发布消息缓存 ====================
-
-nav_msgs::msg::Path path;                       ///< 路径消息
-nav_msgs::msg::Odometry odomAftMapped;          ///< 里程计消息
-geometry_msgs::msg::PoseStamped msg_body_pose;  ///< 位姿消息 (用于路径)
-
-/// @brief 先验 PCD 地图模式下的延迟建图计数器
-int sleep_time = 0;
-
-auto LOGGER = rclcpp::get_logger("laserMapping");
-
+  auto LOGGER = rclcpp::get_logger("laserMapping");
+}  // namespace laserMapping
 // ==================== 工具函数 ====================
 
 /** @brief Ctrl+C 信号处理: 设置退出标志并通知条件变量 */
 void SigHandle(int sig) {
-  flg_exit = true;
-  RCLCPP_WARN(LOGGER, "catch sig %d", sig);
+  laserMapping::flg_exit = true;
+  RCLCPP_WARN(laserMapping::LOGGER, "catch sig %d", sig);
   sig_buffer.notify_all();
 }
 
@@ -110,12 +70,13 @@ PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string& file_path) {
   auto pcd_ptr = std::make_shared<PointCloudXYZI>();
 
   if (pcl::io::loadPCDFile(file_path, *pcd_ptr) == -1) {
-    RCLCPP_ERROR(LOGGER, "Couldn't read pcd file %s", file_path.c_str());
+    RCLCPP_ERROR(laserMapping::LOGGER, "Couldn't read pcd file %s",
+                 file_path.c_str());
     return nullptr;
   }
 
-  RCLCPP_INFO(LOGGER, "Loaded %zu points from %s", pcd_ptr->size(),
-              file_path.c_str());
+  RCLCPP_INFO(laserMapping::LOGGER, "Loaded %zu points from %s",
+              pcd_ptr->size(), file_path.c_str());
   return pcd_ptr;
 }
 
@@ -250,7 +211,7 @@ void publish_init_map(
         pubLaserCloudFullRes) {
   sensor_msgs::msg::PointCloud2 laserCloudmsg;
 
-  pcl::toROSMsg(*init_feats_world, laserCloudmsg);
+  pcl::toROSMsg(*laserMapping::init_feats_world, laserCloudmsg);
 
   laserCloudmsg.header.stamp = get_ros_time(lidar_end_time);
   laserCloudmsg.header.frame_id = "camera_init";
@@ -296,11 +257,11 @@ void publish_frame_world(
 void publish_frame_body(
     const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
         pubLaserCloudFull_body) {
-  int size = feats_undistort->points.size();
+  int size = laserMapping::feats_undistort->points.size();
   PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
 
   for (int i = 0; i < size; i++) {
-    pointBodyLidarToIMU(&feats_undistort->points[i],
+    pointBodyLidarToIMU(&laserMapping::feats_undistort->points[i],
                         &laserCloudIMUBody->points[i]);
   }
 
@@ -346,44 +307,64 @@ void set_posestamp(T& out) {
 void publish_odometry(const rclcpp::Publisher<
                           nav_msgs::msg::Odometry>::SharedPtr& pubOdomAftMapped,
                       std::shared_ptr<tf2_ros::TransformBroadcaster>& tf_br) {
-  odomAftMapped.header.frame_id = "camera_init";
-  odomAftMapped.child_frame_id = "body";
+  laserMapping::odomAftMapped.header.frame_id = "camera_init";
+  laserMapping::odomAftMapped.child_frame_id = "body";
   if (publish_odometry_without_downsample) {
-    odomAftMapped.header.stamp = get_ros_time(time_current);
+    laserMapping::odomAftMapped.header.stamp = get_ros_time(time_current);
   } else {
-    odomAftMapped.header.stamp = get_ros_time(lidar_end_time);
+    laserMapping::odomAftMapped.header.stamp = get_ros_time(lidar_end_time);
   }
-  set_posestamp(odomAftMapped.pose.pose);
+  set_posestamp(laserMapping::odomAftMapped.pose.pose);
 
-  pubOdomAftMapped->publish(odomAftMapped);
+  pubOdomAftMapped->publish(laserMapping::odomAftMapped);
 
   if (tf_send_en) {
     geometry_msgs::msg::TransformStamped transform;
     transform.header.frame_id = "camera_init";
     transform.child_frame_id = "aft_mapped";
-    transform.transform.translation.x = odomAftMapped.pose.pose.position.x;
-    transform.transform.translation.y = odomAftMapped.pose.pose.position.y;
-    transform.transform.translation.z = odomAftMapped.pose.pose.position.z;
-    transform.transform.rotation.w = odomAftMapped.pose.pose.orientation.w;
-    transform.transform.rotation.x = odomAftMapped.pose.pose.orientation.x;
-    transform.transform.rotation.y = odomAftMapped.pose.pose.orientation.y;
-    transform.transform.rotation.z = odomAftMapped.pose.pose.orientation.z;
-    transform.header.stamp = odomAftMapped.header.stamp;
+    transform.transform.translation.x =
+        laserMapping::odomAftMapped.pose.pose.position.x;
+    transform.transform.translation.y =
+        laserMapping::odomAftMapped.pose.pose.position.y;
+    transform.transform.translation.z =
+        laserMapping::odomAftMapped.pose.pose.position.z;
+    transform.transform.rotation.w =
+        laserMapping::odomAftMapped.pose.pose.orientation.w;
+    transform.transform.rotation.x =
+        laserMapping::odomAftMapped.pose.pose.orientation.x;
+    transform.transform.rotation.y =
+        laserMapping::odomAftMapped.pose.pose.orientation.y;
+    transform.transform.rotation.z =
+        laserMapping::odomAftMapped.pose.pose.orientation.z;
+    transform.header.stamp = laserMapping::odomAftMapped.header.stamp;
     tf_br->sendTransform(transform);
   }
 }
 
 void publish_path(
     const rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubPath) {
-  set_posestamp(msg_body_pose.pose);
-  // msg_body_pose.header.stamp = ros::Time::now();
-  msg_body_pose.header.stamp = get_ros_time(lidar_end_time);
-  msg_body_pose.header.frame_id = "camera_init";
-  path.poses.emplace_back(msg_body_pose);
-  pubPath->publish(path);
+  set_posestamp(laserMapping::msg_body_pose.pose);
+  // laserMapping::msg_body_pose.header.stamp = ros::Time::now();
+  laserMapping::msg_body_pose.header.stamp = get_ros_time(lidar_end_time);
+  laserMapping::msg_body_pose.header.frame_id = "camera_init";
+  laserMapping::path.poses.emplace_back(laserMapping::msg_body_pose);
+  pubPath->publish(laserMapping::path);
 }
 
 int main(int argc, char** argv) {
+  int time_log_counter = 0;
+  bool init_map = false;
+  bool flg_first_scan = true;
+  double match_time = 0;
+  double solve_time = 0;
+  double propag_time = 0;
+  double update_time = 0;
+  bool flg_reset = false;
+  pcl::VoxelGrid<PointType> downSizeFilterSurf;
+  pcl::VoxelGrid<PointType> downSizeFilterMap;
+  V3D euler_cur;
+  int sleep_time = 0;
+
   rclcpp::init(argc, argv);
   auto nh = std::make_shared<rclcpp::Node>("laserMapping");
 
@@ -394,8 +375,8 @@ int main(int argc, char** argv) {
   std::cout << "lidar_type: " << lidar_type << '\n';
   ivox_ = std::make_shared<IVoxType>(ivox_options_);
 
-  path.header.stamp = get_ros_time(lidar_end_time);
-  path.header.frame_id = "camera_init";
+  laserMapping::path.header.stamp = get_ros_time(lidar_end_time);
+  laserMapping::path.header.frame_id = "camera_init";
 
   int frame_num = 0;
   double aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0,
@@ -479,14 +460,14 @@ int main(int argc, char** argv) {
   signal(SIGINT, SigHandle);
   rclcpp::Rate rate(500);
   while (rclcpp::ok()) {
-    if (flg_exit)
+    if (laserMapping::flg_exit)
       break;
     executor.spin_some();
     if (sync_packages(Measures)) {
       if (flg_reset) {
-        RCLCPP_WARN(LOGGER, "reset when rosbag play back");
+        RCLCPP_WARN(laserMapping::LOGGER, "reset when rosbag play back");
         p_imu->Reset();
-        feats_undistort.reset(new PointCloudXYZI());
+        laserMapping::feats_undistort.reset(new PointCloudXYZI());
         if (use_imu_as_input) {
           state_in = state_input();
           kf_input.change_P(P_init);
@@ -547,9 +528,9 @@ int main(int argc, char** argv) {
 
       // [Workflow 13] IMU 预处理，包括 IMU 有效性和饱和检查。
       t1 = omp_get_wtime();
-      p_imu->Process(Measures, feats_undistort);
+      p_imu->Process(Measures, laserMapping::feats_undistort);
       if (space_down_sample) {
-        downSizeFilterSurf.setInputCloud(feats_undistort);
+        downSizeFilterSurf.setInputCloud(laserMapping::feats_undistort);
         downSizeFilterSurf.filter(*feats_down_body);
         sort(feats_down_body->points.begin(), feats_down_body->points.end(),
              time_list);
@@ -582,26 +563,26 @@ int main(int argc, char** argv) {
         }
       }
       if (!init_map) {
-        feats_down_world->resize(feats_undistort->size());
-        for (int i = 0; i < (int)feats_undistort->size(); i++) {
+        feats_down_world->resize(laserMapping::feats_undistort->size());
+        for (int i = 0; i < (int)laserMapping::feats_undistort->size(); i++) {
           {
-            pointBodyToWorld(&(feats_undistort->points[i]),
+            pointBodyToWorld(&(laserMapping::feats_undistort->points[i]),
                              &(feats_down_world->points[i]));
           }
         }
         for (const auto& point : *feats_down_world) {
-          init_feats_world->points.emplace_back(point);
+          laserMapping::init_feats_world->points.emplace_back(point);
         }
 
-        if (init_feats_world->size() >= (size_t)init_map_size) {
+        if (laserMapping::init_feats_world->size() >= (size_t)init_map_size) {
           if (enable_prior_pcd) {
             auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
             ivox_->AddPoints(map_cloud->points);
           } else {
-            ivox_->AddPoints(init_feats_world->points);
+            ivox_->AddPoints(laserMapping::init_feats_world->points);
           }
           publish_init_map(pub_laser_cloud_map);
-          init_feats_world.reset(new PointCloudXYZI());
+          laserMapping::init_feats_world.reset(new PointCloudXYZI());
           init_map = true;
         } else {
           init_map = false;
@@ -737,7 +718,7 @@ int main(int argc, char** argv) {
             double t_update_start = omp_get_wtime();
 
             if (feats_down_size < 1) {
-              RCLCPP_WARN(LOGGER, "No point, skip this scan!\n");
+              RCLCPP_WARN(laserMapping::LOGGER, "No point, skip this scan!\n");
               idx += time_seq[k];
               continue;
             }
@@ -766,7 +747,8 @@ int main(int argc, char** argv) {
                          << kf_output.x_.gravity.transpose() << " "
                          << kf_output.x_.bg.transpose() << " "
                          << kf_output.x_.ba.transpose() << " "
-                         << feats_undistort->points.size() << '\n';
+                         << laserMapping::feats_undistort->points.size()
+                         << '\n';
               }
             }
 
@@ -933,7 +915,7 @@ int main(int argc, char** argv) {
             double t_update_start = omp_get_wtime();
 
             if (feats_down_size < 1) {
-              RCLCPP_WARN(LOGGER, "No point, skip this scan!\n");
+              RCLCPP_WARN(laserMapping::LOGGER, "No point, skip this scan!\n");
 
               idx += time_seq[k];
               continue;
@@ -962,7 +944,8 @@ int main(int argc, char** argv) {
                          << kf_input.x_.bg.transpose() << " "
                          << kf_input.x_.ba.transpose() << " "
                          << kf_input.x_.gravity.transpose() << " "
-                         << feats_undistort->points.size() << '\n';
+                         << laserMapping::feats_undistort->points.size()
+                         << '\n';
               }
             }
 
@@ -1084,7 +1067,8 @@ int main(int argc, char** argv) {
                            + propag_time / frame_num;
         T1[time_log_counter] = Measures.lidar_beg_time;
         s_plot[time_log_counter] = t5 - t0;
-        s_plot2[time_log_counter] = feats_undistort->points.size();
+        s_plot2[time_log_counter] =
+            laserMapping::feats_undistort->points.size();
         s_plot3[time_log_counter] = aver_time_consu;
         time_log_counter++;
         printf(
@@ -1106,7 +1090,7 @@ int main(int argc, char** argv) {
                      << kf_output.x_.gravity.transpose() << " "
                      << kf_output.x_.bg.transpose() << " "
                      << kf_output.x_.ba.transpose() << " "
-                     << feats_undistort->points.size() << '\n';
+                     << laserMapping::feats_undistort->points.size() << '\n';
           } else {
             euler_cur = SO3ToEuler(kf_input.x_.rot);
             fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
@@ -1116,7 +1100,7 @@ int main(int argc, char** argv) {
                      << kf_input.x_.bg.transpose() << " "
                      << kf_input.x_.ba.transpose() << " "
                      << kf_input.x_.gravity.transpose() << " "
-                     << feats_undistort->points.size() << '\n';
+                     << laserMapping::feats_undistort->points.size() << '\n';
           }
         }
         dump_lio_state_to_log(fp);
