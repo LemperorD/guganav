@@ -52,29 +52,41 @@ namespace small_point_lio {
                 }
                 // fix gravity direction
                 if (parameters.fix_gravity_direction) {
-                    estimator.kf.x.gravity = Eigen::Matrix<state::value_type, 3, 1>::Zero();
+                    // IMU 静止时加速度计输出为比力(specific force),方向 = 重力反方向。
+                    // 累加 200 帧求平均方向,得到 IMU 系里的"向上"方向。
+                    Eigen::Matrix<state::value_type, 3, 1> accel_avg =
+                        Eigen::Matrix<state::value_type, 3, 1>::Zero();
                     for (const auto &imu_msg: preprocess.imu_deque) {
-                        estimator.kf.x.gravity += imu_msg.linear_acceleration.cast<state::value_type>();
+                        accel_avg += imu_msg.linear_acceleration.cast<state::value_type>();
                     }
-                    state::value_type scale = -static_cast<state::value_type>(parameters.gravity.norm()) / estimator.kf.x.gravity.norm();
-                    estimator.kf.x.gravity *= scale;
-                    // 用重力方向反推初始姿态:世界系重力为 parameters.gravity(如 [0,0,-9.81]),
-                    // IMU 系测得重力为 estimator.kf.x.gravity,初始旋转 R 满足
-                    // R * g_imu = g_world。从单位阵起步的姿态若不修正,斜装雷达会
-                    // 让 odom 系保持倾斜(地图斜、移动时漂移)。
-                    const Eigen::Matrix<state::value_type, 3, 1> g_world =
-                        parameters.gravity.cast<state::value_type>().normalized();
-                    const Eigen::Matrix<state::value_type, 3, 1> g_imu =
-                        estimator.kf.x.gravity.normalized();
-                    if (g_imu.squaredNorm() > 1e-8) {
+                    const state::value_type accel_norm = accel_avg.norm();
+
+                    // 1) 初始旋转:把 IMU 系的"向上"(accel_avg 方向)旋转到世界系的"向上"
+                    //    (-parameters.gravity 方向)。R * up_imu = up_world。
+                    //    注意:不能用重力方向(向下)做 FromTwoVectors,否则方向相同 R=Identity,
+                    //    姿态初始化失效(之前的 bug)。
+                    const Eigen::Matrix<state::value_type, 3, 1> up_world =
+                        -parameters.gravity.cast<state::value_type>().normalized();
+                    if (accel_norm > 1e-8) {
+                        const Eigen::Matrix<state::value_type, 3, 1> up_imu = accel_avg / accel_norm;
                         const Eigen::Quaternion<state::value_type> q_init =
-                            Eigen::Quaternion<state::value_type>::FromTwoVectors(g_imu, g_world);
+                            Eigen::Quaternion<state::value_type>::FromTwoVectors(up_imu, up_world);
                         estimator.kf.x.rotation = q_init.toRotationMatrix();
                     }
+
+                    // 2) gravity 状态量 = 世界系重力(向下)
+                    estimator.kf.x.gravity = parameters.gravity.cast<state::value_type>();
+
+                    // 3) acceleration 状态量 = IMU 系比力(静止时 = 向上,方向 accel_avg,
+                    //    模长 9.81)。这样 predict_state 里 R*acceleration 转到世界系后
+                    //    恰好抵消 gravity:  R*up_imu*9.81 + (0,0,-9.81) = (0,0,9.81)+(0,0,-9.81)=0,
+                    //    静止不漂移。
+                    estimator.kf.x.acceleration = accel_avg
+                        * (parameters.gravity.norm() / accel_norm);
                 } else {
                     estimator.kf.x.gravity = parameters.gravity.cast<state::value_type>();
+                    estimator.kf.x.acceleration = -estimator.kf.x.gravity;
                 }
-                estimator.kf.x.acceleration = -estimator.kf.x.gravity;
                 // init time
                 if (preprocess.point_deque.empty()) {
                     time_current = preprocess.imu_deque.back().timestamp;

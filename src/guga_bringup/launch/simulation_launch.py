@@ -102,12 +102,9 @@ def generate_launch_description():
     )
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
-        # 建图模式（slam:=True）默认 mppi：costmap 走 base_footprint_nonrotating，
-        # 且 navigation_launch 由 controller 推断底盘模式 → 开局即小陀螺；
-        # 比赛模式默认 pid（保守，不自旋）
-        default_value=PythonExpression(
-            ["'", slam, "' == 'True' and 'mppi' or 'pid'"]
-        ),
+        # 建图模式和比赛模式默认都使用 pid，避免启动时进入小陀螺；
+        # 如需 MPPI/小陀螺，显式传入 controller:=mppi。
+        default_value="pid",
         choices=["pid", "mppi", "mpc"],
         description="Controller: pid (omni PID), mppi, or mpc",
     )

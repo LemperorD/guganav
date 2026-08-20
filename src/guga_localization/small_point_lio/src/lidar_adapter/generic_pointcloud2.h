@@ -13,6 +13,7 @@
 #pragma once
 
 #include "base_lidar.h"
+#include <cmath>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
@@ -26,10 +27,15 @@ namespace small_point_lio {
 
     public:
         inline void setup_subscription(rclcpp::Node *node, const std::string &topic, std::function<void(const std::vector<common::Point> &)> callback) override {
+            // Simulation PointCloud2 may contain a synthetic `time` field added by
+            // ign_sim_pointcloud_tool. Treat scans as frame-synchronous unless
+            // valid per-point timing is explicitly enabled.
+            node->declare_parameter<bool>("use_point_time", false);
+            const bool use_point_time = node->get_parameter("use_point_time").as_bool();
             subscription = node->create_subscription<sensor_msgs::msg::PointCloud2>(
                     topic,
                     rclcpp::SensorDataQoS(),
-                    [callback, this](const sensor_msgs::msg::PointCloud2 &msg) {
+                    [callback, this, use_point_time](const sensor_msgs::msg::PointCloud2 &msg) {
                         sensor_msgs::PointCloud2ConstIterator<float> out_x(msg, "x");
                         sensor_msgs::PointCloud2ConstIterator<float> out_y(msg, "y");
                         sensor_msgs::PointCloud2ConstIterator<float> out_z(msg, "z");
@@ -53,7 +59,7 @@ namespace small_point_lio {
                             if (field.name == "time") { has_time_field = true; break; }
                         }
                         std::unique_ptr<sensor_msgs::PointCloud2ConstIterator<float>> out_time;
-                        if (has_time_field) {
+                        if (use_point_time && has_time_field) {
                             out_time = std::make_unique<sensor_msgs::PointCloud2ConstIterator<float>>(
                                 msg, "time");
                             // 先扫一遍求 time 最大值(避免依赖 0.1 硬编码)
@@ -71,7 +77,19 @@ namespace small_point_lio {
                         for (size_t i = 0; i < size; ++i) {
                             common::Point new_point;
                             new_point.position << *out_x, *out_y, *out_z;
-                            if (has_time_field && out_time) {
+                            // Gazebo/bridge clouds may contain NaN/Inf returns.
+                            // Letting them through bypasses the squared-distance
+                            // checks and can leave isolated ghost points in ivox.
+                            if (!std::isfinite(new_point.position.x()) ||
+                                !std::isfinite(new_point.position.y()) ||
+                                !std::isfinite(new_point.position.z())) {
+                                ++out_x;
+                                ++out_y;
+                                ++out_z;
+                                if (use_point_time && has_time_field && out_time) { ++(*out_time); }
+                                continue;
+                            }
+                            if (use_point_time && has_time_field && out_time) {
                                 new_point.timestamp = frame_time
                                     + static_cast<double>(**out_time) * scale;
                             } else {
@@ -81,7 +99,7 @@ namespace small_point_lio {
                             ++out_x;
                             ++out_y;
                             ++out_z;
-                            if (has_time_field && out_time) { ++(*out_time); }
+                            if (use_point_time && has_time_field && out_time) { ++(*out_time); }
                         }
                         callback(pointcloud);
                     });

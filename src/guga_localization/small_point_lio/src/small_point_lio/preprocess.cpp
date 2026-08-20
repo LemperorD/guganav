@@ -25,6 +25,16 @@ namespace small_point_lio {
         filtered_points.reserve(pointcloud.size());
         for (size_t i = 0; i < pointcloud.size(); i++) {
             const auto &point = pointcloud[i];
+            const float dist = point.position.squaredNorm();
+            // Apply the same validity/range filter to both the dense published
+            // scan and the downsampled points used by the estimator. Previously
+            // dense_points bypassed min_distance, so self returns appeared in
+            // registered_scan and were then treated as terrain obstacles.
+            if (!std::isfinite(dist) ||
+                dist < parameters->min_distance_squared ||
+                dist > parameters->max_distance_squared) {
+                continue;
+            }
             if (point.timestamp >= last_timestamp_dense_point) {
                 dense_points.push_back(point);
             }
@@ -32,10 +42,6 @@ namespace small_point_lio {
                 continue;
             }
             if (point.timestamp < last_timestamp_lidar) {
-                continue;
-            }
-            float dist = point.position.squaredNorm();
-            if (dist < parameters->min_distance_squared || dist > parameters->max_distance_squared) {
                 continue;
             }
             filtered_points.push_back(point);

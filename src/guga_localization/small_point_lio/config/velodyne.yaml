@@ -1,11 +1,12 @@
 /**:
     ros__parameters:
-        # 仿真配置:仿真雷达经 ign_sim_pointcloud_tool 发布 /velodyne_points
-        # (sensor_msgs/PointCloud2),对应 small 的 livox_pointcloud2 适配器。
+        # 仿真配置:直接使用 ros_gz_bridge 发布的原始 /livox/lidar
+        # (sensor_msgs/PointCloud2)，避免转换器生成的人工 ring/time 破坏运动估计。
         # 实车用 config/mid360.yaml(livox CustomMsg)。
-        lidar_topic: velodyne_points              # 仿真点云话题(PointCloud2)
+        lidar_topic: livox/lidar                  # 仿真原始点云话题(PointCloud2)
         imu_topic: livox/imu                      # IMU话题名
         lidar_type: generic_pointcloud2           # 通用 PointCloud2(仿真无 livox tag/timestamp 字段)
+        use_point_time: false                      # 仿真转换器的 time 为人工生成值，按帧头时间处理整帧
         lidar_frame: front_mid360                 # 与仓库 static_tf_publisher 对齐
         base_frame: base_footprint                # 仓库机器人根坐标系(无 base_link)
         save_pcd: false                           # 仿真建图出 2D 栅格图,不另存 PCD
@@ -21,7 +22,7 @@
         gravity: [0.0, 0.0, -9.810]                # 重力
         fix_gravity_direction: true                # 收集前200个IMU修正重力方向
         check_satu: true                           # IMU饱和检查
-        satu_acc: 3.0                              # 加速度饱和阈值
+        satu_acc: 30.0                             # 加速度饱和阈值(gz 输出 m/s^2,静止≈9.81;3.0 会把静止加速度当饱和丢弃,导致姿态失约束)
         satu_gyro: 35.0                            # 角速度饱和阈值
         acc_norm: 9.81                             # IMU加速度模长(gz 输出 m/s^2,静止≈9.81;small 内部按 g 期望,故配 9.81 使 scale=1)
 
