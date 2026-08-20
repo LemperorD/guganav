@@ -15,7 +15,6 @@
 #include "nav2_util/node_utils.hpp"
 #include "nav2_util/robot_utils.hpp"
 #include "nav_msgs/msg/path.hpp"
-#include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rog_map_layer/esdf_layer.hpp"
 #include "rog_map_layer/esdf_map.hpp"
@@ -694,4 +693,5 @@ namespace jps_planner {
 
 }  // namespace jps_planner
 
+#include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(jps_planner::JPSPlanner, nav2_core::GlobalPlanner)

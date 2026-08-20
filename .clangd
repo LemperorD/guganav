@@ -3,8 +3,10 @@ CompileFlags:
   Add:
     - -xc++
     - -std=gnu++20
-    - -I/usr/include/c++/11
-    - -I/usr/include/x86_64-linux-gnu/c++/11
+    - --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/11
+    - -I/home/rog/guganav/.cache/clangd-include  # 内含 omp.h(系统 GCC 头目录 clangd 找不到);
+    # 若 .cache 被清空,重新执行:
+    #   mkdir -p .cache/clangd-include && cp /usr/lib/gcc/x86_64-linux-gnu/11/include/omp.h .cache/clangd-include/
 
 Index:
   Background: Build
@@ -18,7 +20,6 @@ Diagnostics:
     Add:
       - "*"
     Remove:
-      - misc-include-cleaner
       - bugprone-easily-swappable-parameters
       - cppcoreguidelines-owning-memory
       - cppcoreguidelines-pro-bounds-pointer-arithmetic
