@@ -73,7 +73,7 @@ enum E_jump {
 /**
  * @brief 按 curvature (时间偏移) 升序排序 (切帧使用)
  */
-const bool time_list_cut_frame(PointType & x, PointType & y);
+const bool time_list_cut_frame(PointType& x, PointType& y);
 
 // ==================== 点特征数据结构 ====================
 
@@ -88,8 +88,7 @@ const bool time_list_cut_frame(PointType & x, PointType & y);
  * - edj[2]: 前后方向的跳变边缘类型
  * - ftype: 该点最终特征类型
  */
-struct orgtype
-{
+struct orgtype {
   double range;      ///< 到雷达原点的距离
   double dista;      ///< 到前后点连线的垂直距离
   double angle[2];   ///< 与前后邻点的夹角 cos值
@@ -97,8 +96,7 @@ struct orgtype
   E_jump edj[2];     ///< 前后跳变类型
   Feature ftype;     ///< 最终特征类型
 
-  orgtype()
-  {
+  orgtype() {
     range = 0;
     edj[Prev] = Nr_nor;
     edj[Next] = Nr_nor;
@@ -109,49 +107,45 @@ struct orgtype
 
 // ==================== 各雷达原生点结构 (PCL注册) ====================
 
-namespace velodyne_ros
-{
-struct EIGEN_ALIGN16 Point
-{
-  PCL_ADD_POINT4D;       ///< x, y, z
-  float intensity;       ///< 反射强度
-  float time;            ///< 时间戳 (相对扫描周期)
-  uint16_t ring;         ///< 激光线号 (0-15)
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
+namespace velodyne_ros {
+  struct EIGEN_ALIGN16 Point {
+    PCL_ADD_POINT4D;  ///< x, y, z
+    float intensity;  ///< 反射强度
+    float time;       ///< 时间戳 (相对扫描周期)
+    uint16_t ring;    ///< 激光线号 (0-15)
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  };
 }  // namespace velodyne_ros
 POINT_CLOUD_REGISTER_POINT_STRUCT(
-  velodyne_ros::Point, (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
-                         float, time, time)(std::uint16_t, ring, ring))
+    velodyne_ros::Point,
+    (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
+        float, time, time)(std::uint16_t, ring, ring))
 
-namespace hesai_ros
-{
-struct EIGEN_ALIGN16 Point
-{
-  PCL_ADD_POINT4D;
-  float intensity;
-  double timestamp;      ///< 绝对时间戳 (GPS时间)
-  uint16_t ring;
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
+namespace hesai_ros {
+  struct EIGEN_ALIGN16 Point {
+    PCL_ADD_POINT4D;
+    float intensity;
+    double timestamp;  ///< 绝对时间戳 (GPS时间)
+    uint16_t ring;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  };
 }  // namespace hesai_ros
 POINT_CLOUD_REGISTER_POINT_STRUCT(
-  hesai_ros::Point, (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
-                      double, timestamp, timestamp)(std::uint16_t, ring, ring))
+    hesai_ros::Point,
+    (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
+        double, timestamp, timestamp)(std::uint16_t, ring, ring))
 
-namespace ouster_ros
-{
-struct EIGEN_ALIGN16 Point
-{
-  PCL_ADD_POINT4D;
-  float intensity;
-  uint32_t t;            ///< 纳秒时间戳
-  uint16_t reflectivity; ///< 反射率
-  uint8_t ring;          ///< 激光线号
-  uint16_t ambient;      ///< 环境光
-  uint32_t range;        ///< 原始距离测量 (mm)
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
+namespace ouster_ros {
+  struct EIGEN_ALIGN16 Point {
+    PCL_ADD_POINT4D;
+    float intensity;
+    uint32_t t;             ///< 纳秒时间戳
+    uint16_t reflectivity;  ///< 反射率
+    uint8_t ring;           ///< 激光线号
+    uint16_t ambient;       ///< 环境光
+    uint32_t range;         ///< 原始距离测量 (mm)
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  };
 }  // namespace ouster_ros
 
 // clang-format off
@@ -184,8 +178,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
  * - oust64_handler: 处理 Ouster 数字雷达
  * - hesai_handler: 处理禾赛机械扫描
  */
-class Preprocess
-{
+class Preprocess {
 public:
   Preprocess();
   ~Preprocess();
@@ -199,59 +192,60 @@ public:
    * @param scan_count 已接收帧数 (前5帧不切分)
    */
   void process_cut_frame_livox(
-    const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg,
-    deque<PointCloudXYZI::Ptr> & pcl_out, deque<double> & time_lidar,
-    const int required_frame_num, int scan_count);
+      const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
+      deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
+      const int required_frame_num, int scan_count);
 
   /**
    * @brief 标准雷达切帧处理 (Velodyne/Ouster/Hesai)
    * @see process_cut_frame_livox
    */
   void process_cut_frame_pcl2(
-    const sensor_msgs::msg::PointCloud2::SharedPtr & msg,
-    deque<PointCloudXYZI::Ptr> & pcl_out, deque<double> & time_lidar,
-    const int required_frame_num, int scan_count);
+      const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+      deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
+      const int required_frame_num, int scan_count);
 
   /** @brief Livox 雷达标准处理 (输入 Livox CustomMsg) */
-  void process(
-    const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg, PointCloudXYZI::Ptr & pcl_out);
+  void process(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
+               PointCloudXYZI::Ptr& pcl_out);
 
   /** @brief 标准雷达处理 (输入 ROS2 PointCloud2) */
-  void process(const sensor_msgs::msg::PointCloud2::SharedPtr & msg, PointCloudXYZI::Ptr & pcl_out);
+  void process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+               PointCloudXYZI::Ptr& pcl_out);
 
   /** @brief 设置预处理参数 */
   void set(bool feat_en, int lid_type, double bld, int pfilt_num);
 
   // ==================== 公有成员变量 ====================
 
-  PointCloudXYZI pl_full;     ///< 完整点云 (未滤波)
-  PointCloudXYZI pl_corn;     ///< 角点/边缘点
-  PointCloudXYZI pl_surf;     ///< 平面点 (最终输出)
-  PointCloudXYZI pl_buff[128]; ///< 按线号缓存的原始点 (最多128线)
-  vector<orgtype> typess[128]; ///< 按线号存储的特征类型
+  PointCloudXYZI pl_full;       ///< 完整点云 (未滤波)
+  PointCloudXYZI pl_corn;       ///< 角点/边缘点
+  PointCloudXYZI pl_surf;       ///< 平面点 (最终输出)
+  PointCloudXYZI pl_buff[128];  ///< 按线号缓存的原始点 (最多128线)
+  vector<orgtype> typess[128];  ///< 按线号存储的特征类型
 
-  float time_unit_scale;      ///< 时间单位缩放因子
-  int lidar_type;             ///< 雷达类型 (LID_TYPE 枚举)
-  int point_filter_num;       ///< 降采样间隔 (每 N 点取 1)
-  int N_SCANS;                ///< 扫描线数
-  int SCAN_RATE;              ///< 扫描频率 (Hz)
-  int time_unit;              ///< 时间戳单位 (TIME_UNIT 枚举)
-  double blind;               ///< 盲区距离 (米, 此距离内的点被过滤)
-  double det_range;           ///< 最大检测距离 (米)
-  bool given_offset_time;     ///< 是否有硬件提供的时间戳
+  float time_unit_scale;   ///< 时间单位缩放因子
+  int lidar_type;          ///< 雷达类型 (LID_TYPE 枚举)
+  int point_filter_num;    ///< 降采样间隔 (每 N 点取 1)
+  int N_SCANS;             ///< 扫描线数
+  int SCAN_RATE;           ///< 扫描频率 (Hz)
+  int time_unit;           ///< 时间戳单位 (TIME_UNIT 枚举)
+  double blind;            ///< 盲区距离 (米, 此距离内的点被过滤)
+  double det_range;        ///< 最大检测距离 (米)
+  bool given_offset_time;  ///< 是否有硬件提供的时间戳
 
 private:
   /** @brief Livox Avia/Horizon/Mid-360 点云处理 (非重复扫描格式) */
-  void avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg);
+  void avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
 
   /** @brief Ouster OS1-64 点云处理 */
-  void oust64_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
+  void oust64_handler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
 
   /** @brief Velodyne VLP-16 点云处理 (含时间戳估算) */
-  void velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
+  void velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
 
   /** @brief 禾赛 XT32 点云处理 */
-  void hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
+  void hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
 
   /**
    * @brief 特征分类主函数: 区分平面点/边缘点/细小物体
@@ -262,7 +256,7 @@ private:
    * @param pl 输入点云
    * @param types 输入/输出特征类型数组
    */
-  void give_feature(PointCloudXYZI & pl, vector<orgtype> & types);
+  void give_feature(PointCloudXYZI& pl, vector<orgtype>& types);
 
   /**
    * @brief 判断一组连续点是否构成平面
@@ -279,18 +273,16 @@ private:
    * @param[out] curr_direct 输出平面方向向量 (首→末)
    * @return 1=平面, 0=非平面, 2=盲区
    */
-  int plane_judge(
-    const PointCloudXYZI & pl, vector<orgtype> & types, uint i_cur, uint & i_nex,
-    Eigen::Vector3d & curr_direct);
+  int plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types, uint i_cur,
+                  uint& i_nex, Eigen::Vector3d& curr_direct);
 
   /**
    * @brief 小型平面的二次判定 (精化平面边界)
    *
    * 补充 plane_judge 的遗漏: 跳变边缘附近的短平面段
    */
-  bool small_plane(
-    const PointCloudXYZI & pl, vector<orgtype> & types, uint i_cur, uint & i_nex,
-    Eigen::Vector3d & curr_direct);
+  bool small_plane(const PointCloudXYZI& pl, vector<orgtype>& types, uint i_cur,
+                   uint& i_nex, Eigen::Vector3d& curr_direct);
 
   /**
    * @brief 跳变边缘真伪判定
@@ -300,21 +292,22 @@ private:
    *
    * @param nor_dir 判断方向 (Prev/Next)
    */
-  bool edge_jump_judge(const PointCloudXYZI & pl, vector<orgtype> & types, uint i, Surround nor_dir);
+  bool edge_jump_judge(const PointCloudXYZI& pl, vector<orgtype>& types, uint i,
+                       Surround nor_dir);
 
   // ==================== 特征提取参数 (经验值) ====================
-  int group_size;            ///< 点组大小 (8)
-  double disA, disB;         ///< 距离容限: disA*range + disB
-  double inf_bound;          ///< 无穷远边界 (>此值视为盲区?)
-  double limit_maxmid;       ///< AVIA: dis_max/dis_mid 上限
-  double limit_midmin;       ///< AVIA: dis_mid/dis_min 上限
-  double limit_maxmin;       ///< 机械雷达: dis_max/dis_min 上限
-  double p2l_ratio;          ///< 投影宽度/长度比值上限
-  double jump_up_limit;      ///< 跳变角度上限 (cos 170°)
-  double jump_down_limit;    ///< 跳变角度下限 (cos 8°)
-  double cos160;             ///< 160° cos(160°)
-  double edgea, edgeb;       ///< 跳变边缘判定参数
-  double smallp_intersect;   ///< 小平面的前后夹角阈值 cos(172.5°)
-  double smallp_ratio;       ///< 小平面距离比阈值
-  double vx, vy, vz;         ///< 当前方向向量缓存 (plane_judge 中使用)
+  int group_size;           ///< 点组大小 (8)
+  double disA, disB;        ///< 距离容限: disA*range + disB
+  double inf_bound;         ///< 无穷远边界 (>此值视为盲区?)
+  double limit_maxmid;      ///< AVIA: dis_max/dis_mid 上限
+  double limit_midmin;      ///< AVIA: dis_mid/dis_min 上限
+  double limit_maxmin;      ///< 机械雷达: dis_max/dis_min 上限
+  double p2l_ratio;         ///< 投影宽度/长度比值上限
+  double jump_up_limit;     ///< 跳变角度上限 (cos 170°)
+  double jump_down_limit;   ///< 跳变角度下限 (cos 8°)
+  double cos160;            ///< 160° cos(160°)
+  double edgea, edgeb;      ///< 跳变边缘判定参数
+  double smallp_intersect;  ///< 小平面的前后夹角阈值 cos(172.5°)
+  double smallp_ratio;      ///< 小平面距离比阈值
+  double vx, vy, vz;        ///< 当前方向向量缓存 (plane_judge 中使用)
 };

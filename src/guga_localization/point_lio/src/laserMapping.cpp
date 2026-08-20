@@ -36,21 +36,10 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
-#include <nav_msgs/msg/odometry.hpp>
-#include <nav_msgs/msg/path.hpp>
+#include "nav_msgs/msg/odometry.hpp"
+#include "nav_msgs/msg/path.hpp"
 
 #include "li_initialization.h"
-
-using namespace std;
-
-/// @brief 发布帧周期 (仅含义注释)
-#define PUBFRAME_PERIOD (20)
-
-/// @brief 运动检测阈值 (m)
-const float MOV_THRESHOLD = 1.5f;
-
-/// @brief ROS2 包根目录 (由 CMakeLists 中 add_definitions 传入)
-string root_dir = ROOT_DIR;
 
 /// @brief 时间日志计数器
 int time_log_counter = 0;
@@ -226,7 +215,7 @@ void MapIncremental() {
   int cur_pts = feats_down_world->size();
   points_to_add.reserve(cur_pts);
 
-  for (size_t i = 0; i < cur_pts; ++i) {
+  for (int i = 0; i < cur_pts; ++i) {
     /* decide if need add to map */
     PointType& point_world = feats_down_world->points[i];
     if (!Nearest_Points[i].empty()) {
@@ -237,9 +226,8 @@ void MapIncremental() {
            + 0.5)
           * filter_size_map_min;
       bool need_add = true;
-      for (int readd_i = 0; readd_i < points_near.size(); readd_i++) {
-        Eigen::Vector3f dis_2_center = points_near[readd_i].getVector3fMap()
-                                       - center;
+      for (const auto x : points_near) {
+        Eigen::Vector3f dis_2_center = x.getVector3fMap() - center;
         if (fabs(dis_2_center.x()) < 0.5 * filter_size_map_min
             && fabs(dis_2_center.y()) < 0.5 * filter_size_map_min
             && fabs(dis_2_center.z()) < 0.5 * filter_size_map_min) {
@@ -260,8 +248,6 @@ void MapIncremental() {
 void publish_init_map(
     const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
         pubLaserCloudFullRes) {
-  int size_init_map = init_feats_world->size();
-
   sensor_msgs::msg::PointCloud2 laserCloudmsg;
 
   pcl::toROSMsg(*init_feats_world, laserCloudmsg);
@@ -393,47 +379,10 @@ void publish_path(
   // msg_body_pose.header.stamp = ros::Time::now();
   msg_body_pose.header.stamp = get_ros_time(lidar_end_time);
   msg_body_pose.header.frame_id = "camera_init";
-  static int jjj = 0;
-  jjj++;
-  // if (jjj % 2 == 0) // if path is too large, the rvis will crash
-  {
-    path.poses.emplace_back(msg_body_pose);
-    pubPath->publish(path);
-  }
+  path.poses.emplace_back(msg_body_pose);
+  pubPath->publish(path);
 }
 
-// ==================== 主入口 ====================
-
-/**
- * @brief Point-LIO laserMapping 节点主函数
- *
- * 执行流程 (高层面):
- *
- * **初始化阶段**:
- *   1. 解析 YAML 参数 → Preprocess/ImuProcess配置
- *   2. 创建 iVox 地图实例
- *   3. 设置降采样滤波器分辨率
- *   4. 设置 LiDAR→IMU 外参
- *   5. 初始化 EKF: 状态转移函数/雅可比/量测模型
- *   6. 初始化协方差矩阵 (P, Q)
- *   7. 创建 ROS2 订阅/发布
- *
- * **主循环** (500Hz):
- *   1. executor.spin_some() — 处理回调, 积累数据到 buffer
- *   2. sync_packages() — 时间同步, 组装 MeasureGroup
- *   3. 首帧初始化 (重力/姿态/时间对齐)
- *   4. p_imu->Process() — IMU 初始化/去畸变
- *   5. 体素降采样 (VoxelGrid filter)
- *   6. 时间压缩 (time_compressing)
- *   7. 地图初始化 (init_map: 累积 init_map_size 点后首次建图)
- *   8. EKF 逐点迭代 (Predict + Update):
- *      - IMU 状态传播 (预测)
- *      - 点面残差计算 + 迭代更新 (量测)
- *      - IMU 伪量测更新 (output 模式)
- *   9. 地图增量更新 (MapIncremental)
- *   10. 发布里程计/路径/点云/TF
- *   11. 性能日志输出
- */
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto nh = std::make_shared<rclcpp::Node>("laserMapping");
@@ -448,23 +397,19 @@ int main(int argc, char** argv) {
   path.header.stamp = get_ros_time(lidar_end_time);
   path.header.frame_id = "camera_init";
 
-  /*** variables definition for counting ***/
   int frame_num = 0;
   double aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0,
-         aver_time_incre = 0, aver_time_solve = 0, aver_time_propag = 0;
+         aver_time_solve = 0, aver_time_propag = 0;
 
-  // 初始化: 所有点默认标记为有效曲面点 (后续在量测模型中动态筛选)
   memset(point_selected_surf, true, sizeof(point_selected_surf));
   downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min,
                                  filter_size_surf_min);
   downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min,
                                 filter_size_map_min);
 
-  // 从 YAML 参数设置 LiDAR→IMU 外参
   Lidar_T_wrt_IMU << VEC_FROM_ARRAY(extrinT);
   Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
 
-  // 如果启用在线外参估计，设置 EKF 状态中的外参初值
   if (extrinsic_est_en) {
     if (!use_imu_as_input) {
       kf_output.x_.offset_R_L_I = Lidar_R_wrt_IMU;
@@ -478,14 +423,10 @@ int main(int argc, char** argv) {
   p_imu->lidar_type = p_pre->lidar_type = lidar_type;
   p_imu->imu_en = imu_en;
 
-  // ---- EKF 初始化: 绑定状态转移函数、雅可比、量测模型 ----
-  // input 模式: 2个量测模型 (激光点面 + IMU 伪量测)
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
-  // output 模式: 3个量测模型 (激光点面 + IMU 伪量测 + IMU 伪量测协方差更新)
   kf_output.init_dyn_share_modified_3h(get_f_output, df_dx_output,
                                        h_model_output, h_model_IMU_output);
 
-  // 初始化输入/输出模式的协方差矩阵
   Eigen::Matrix<double, 24, 24> P_init;
   reset_cov(P_init);
   kf_input.change_P(P_init);
@@ -493,22 +434,17 @@ int main(int argc, char** argv) {
   reset_cov_output(P_init_output);
   kf_output.change_P(P_init_output);
 
-  // 构造过程噪声协方差矩阵
   Eigen::Matrix<double, 24, 24> Q_input = process_noise_cov_input();
   Eigen::Matrix<double, 30, 30> Q_output = process_noise_cov_output();
 
-  /*** debug record ***/
-  FILE* fp;
-  string pos_log_dir = root_dir + "/Log/pos_log.txt";
-  fp = fopen(pos_log_dir.c_str(), "w");
+  std::string pos_log_dir = std::string(ROOT_DIR) + "/Log/pos_log.txt";
+
+  FILE* fp = fopen(pos_log_dir.c_str(), "w");
   open_file();
 
-  /*** ROS subscribe initialization ***/
-  // 根据雷达类型创建对应的点云订阅
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl_pc;
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr
       sub_pcl_livox;
-  // ---- 订阅: LiDAR 点云 (Livox 或标准格式) + IMU ----
   if (p_pre->lidar_type == AVIA) {
     sub_pcl_livox = nh->create_subscription<livox_ros_driver2::msg::CustomMsg>(
         lid_topic, rclcpp::SensorDataQoS(),
@@ -525,7 +461,6 @@ int main(int argc, char** argv) {
   auto sub_imu = nh->create_subscription<sensor_msgs::msg::Imu>(
       imu_topic, rclcpp::SensorDataQoS(), imu_cbk);
 
-  // ---- 发布: 里程计、路径、点云、TF ----
   auto pub_laser_cloud_full_res =
       nh->create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered",
                                                           20);
@@ -541,25 +476,21 @@ int main(int argc, char** argv) {
   auto pub_path = nh->create_publisher<nav_msgs::msg::Path>("path", 20);
   auto tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(nh);
 
-  //------------------------------------------------------------------------------------------------------
   signal(SIGINT, SigHandle);
-  rclcpp::Rate rate(500);  // 主循环 500Hz (高于 LiDAR 帧率，保证数据及时处理)
+  rclcpp::Rate rate(500);
   while (rclcpp::ok()) {
     if (flg_exit)
       break;
-    executor.spin_some();           // 处理订阅回调 (非阻塞)
-    if (sync_packages(Measures)) {  // 等待一组完整的 LiDAR+IMU 数据
-      // ==================== EKF 状态重置 (rosbag 回放) ====================
+    executor.spin_some();
+    if (sync_packages(Measures)) {
       if (flg_reset) {
         RCLCPP_WARN(LOGGER, "reset when rosbag play back");
         p_imu->Reset();
         feats_undistort.reset(new PointCloudXYZI());
         if (use_imu_as_input) {
-          // state_in = kf_input.get_x();
           state_in = state_input();
           kf_input.change_P(P_init);
         } else {
-          // state_out = kf_output.get_x();
           state_out = state_output();
           kf_output.change_P(P_init_output);
         }
@@ -573,7 +504,6 @@ int main(int argc, char** argv) {
         }
       }
 
-      // ==================== 第一帧初始化 ====================
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
         flg_first_scan = false;
@@ -583,12 +513,10 @@ int main(int argc, char** argv) {
         }
         time_current = 0.0;
         if (imu_en) {
-          // 初始化重力向量: 从 YAML 参数 (世界坐标系下 [0, 0, -9.81])
           kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
           kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
 
           {
-            // 时间对齐: 跳过在首帧 LiDAR 之前的 IMU 数据
             while (Measures.lidar_beg_time
                    > get_time_sec(imu_next.header.stamp)) {
               imu_deque.pop_front();
@@ -600,92 +528,76 @@ int main(int argc, char** argv) {
             }
           }
         } else {
-          kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);   // _init);
-          kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);  //_init);
-          kf_output.x_.acc << VEC_FROM_ARRAY(gravity);      //_init);
+          kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
+          kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
+          kf_output.x_.acc << VEC_FROM_ARRAY(gravity);
           kf_output.x_.acc *= -1;
           p_imu->imu_need_init_ = false;
-          // p_imu->after_imu_init_ = true;
         }
         G_m_s2 = std::sqrt(gravity[0] * gravity[0] + gravity[1] * gravity[1]
                            + gravity[2] * gravity[2]);
       }
 
-      // ---- 计时变量 (性能分析) ----
-      double t0, t1, t2, t3, t4, t5, match_start, solve_start;
+      double t0, t1, t3, t5, solve_start;
       match_time = 0;
       solve_time = 0;
       propag_time = 0;
       update_time = 0;
       t0 = omp_get_wtime();
 
-      // ==================== 步骤2-3: IMU 处理 + 降采样 + 时间压缩
-      // ====================
-      /*** downsample the feature points in a scan ***/
+      // [Workflow 13] IMU 预处理，包括 IMU 有效性和饱和检查。
       t1 = omp_get_wtime();
-      p_imu->Process(
-          Measures, feats_undistort);  // IMU 初始化/去畸变 (当前仅复制原始点云)
+      p_imu->Process(Measures, feats_undistort);
       if (space_down_sample) {
         downSizeFilterSurf.setInputCloud(feats_undistort);
-        downSizeFilterSurf.filter(*feats_down_body);  // VoxelGrid 降采样
+        downSizeFilterSurf.filter(*feats_down_body);
         sort(feats_down_body->points.begin(), feats_down_body->points.end(),
-             time_list);  // 按时间排序
+             time_list);
       } else {
         feats_down_body = Measures.lidar;
         sort(feats_down_body->points.begin(), feats_down_body->points.end(),
              time_list);
       }
       {
-        time_seq = time_compressing<int>(feats_down_body);  // 按时间戳分组
+        time_seq = time_compressing<int>(feats_down_body);
         feats_down_size = feats_down_body->points.size();
       }
 
-      // ==================== 步骤4: IMU 初始化完成后的重力对齐
-      // ====================
       if (!p_imu->after_imu_init_) {
         if (!p_imu->imu_need_init_) {
           V3D tmp_gravity;
           if (imu_en) {
-            // 从平均加速度估计重力方向: -mean_acc / |mean_acc| * G
             tmp_gravity = -p_imu->mean_acc / p_imu->mean_acc.norm() * G_m_s2;
           } else {
             tmp_gravity << VEC_FROM_ARRAY(gravity_init);
             p_imu->after_imu_init_ = true;
           }
-          // 计算初始姿态: 使估计重力与先验重力对齐
           M3D rot_init;
           p_imu->Set_init(tmp_gravity, rot_init);
           kf_input.x_.rot = rot_init;
           kf_output.x_.rot = rot_init;
-          // output 模式下的初始加速度估计
           kf_output.x_.acc = -rot_init.transpose() * kf_output.x_.gravity;
         } else {
           continue;
         }
       }
-      /*** 步骤5: 地图初始化 (累积足够的首帧点后建图) ***/
       if (!init_map) {
         feats_down_world->resize(feats_undistort->size());
-        // 将首帧点云变换到世界坐标系
-        for (int i = 0; i < feats_undistort->size(); i++) {
+        for (int i = 0; i < (int)feats_undistort->size(); i++) {
           {
             pointBodyToWorld(&(feats_undistort->points[i]),
                              &(feats_down_world->points[i]));
           }
         }
-        // 累积初始化点云
         for (const auto& point : *feats_down_world) {
           init_feats_world->points.emplace_back(point);
         }
 
-        // 达到 init_map_size 后，初始化地图
-        if (init_feats_world->size() >= init_map_size) {
+        if (init_feats_world->size() >= (size_t)init_map_size) {
           if (enable_prior_pcd) {
-            // 先验地图模式: 加载预建 PCD 地图作为初始局部地图
             auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
             ivox_->AddPoints(map_cloud->points);
           } else {
-            // 常规模式: 用累积的首帧点初始化地图
             ivox_->AddPoints(init_feats_world->points);
           }
           publish_init_map(pub_laser_cloud_map);
@@ -697,61 +609,37 @@ int main(int argc, char** argv) {
         continue;
       }
 
-      // ==================== 步骤6: ICP+KF 准备 / 量测数据预计算
-      // ====================
-      /*** ICP and Kalman filter update ***/
       normvec->resize(feats_down_size);
       feats_down_world->resize(feats_down_size);
 
       Nearest_Points.resize(feats_down_size);
 
-      t2 = omp_get_wtime();
+      crossmat_list.reserve(feats_down_size);
+      pbody_list.reserve(feats_down_size);
 
-      /*** 预计算反对称矩阵和 body 系坐标 ***/
-      crossmat_list.reserve(feats_down_size);  // 反对称矩阵缓存
-      pbody_list.reserve(feats_down_size);     // IMU系下的坐标缓存
-
+      // [Workflow 3] 将 LiDAR 点变换到 IMU 坐标系并准备量测量。
       for (size_t i = 0; i < feats_down_body->size(); i++) {
         V3D point_this(feats_down_body->points[i].x,
                        feats_down_body->points[i].y,
                        feats_down_body->points[i].z);
         pbody_list[i] = point_this;
-        if (!extrinsic_est_en)
-        // {
-        //     if (!use_imu_as_input)
-        //     {
-        //         point_this = kf_output.x_.offset_R_L_I * point_this +
-        //         kf_output.x_.offset_T_L_I;
-        //     }
-        //     else
-        //     {
-        //         point_this = kf_input.x_.offset_R_L_I * point_this +
-        //         kf_input.x_.offset_T_L_I;
-        //     }
-        // }
-        // else
-        {
+        if (!extrinsic_est_en) {
           point_this = Lidar_R_wrt_IMU * point_this + Lidar_T_wrt_IMU;
           M3D point_crossmat;
           point_crossmat << SKEW_SYM_MATRX(point_this);
           crossmat_list[i] = point_crossmat;
         }
       }
-      // ==================== 步骤7: 迭代卡尔曼滤波 (逐点 EKF Predict + Update)
-      // ====================
 
+      // [Workflow 2] LiDAR 点输入分支。
       if (!use_imu_as_input) {
-        // ===== IMU-as-output 模式: 逐点量测更新 =====
-        bool imu_upda_cov = false;
         effct_feat_num = 0;
-        /**** point by point update ****/
         if (!time_seq.empty()) {
           double pcl_beg_time = Measures.lidar_beg_time;
-          idx = -1;  // 重置组偏移索引
-          for (k = 0; k < time_seq.size(); k++) {
+          idx = -1;
+          for (k = 0; k < (int)time_seq.size(); k++) {
             PointType& point_body = feats_down_body->points[idx + time_seq[k]];
 
-            // 当前处理时间: 帧起始时间 + 当前点偏移时间
             time_current = point_body.curvature / 1000.0 + pcl_beg_time;
 
             if (is_first_frame) {
@@ -770,10 +658,10 @@ int main(int argc, char** argv) {
                     imu_last.linear_acceleration.z;
               }
               is_first_frame = false;
-              imu_upda_cov = true;
               time_update_last = time_current;
               time_predict_last_const = time_current;
             }
+            // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
             if (imu_en && !imu_deque.empty()) {
               bool last_imu = get_time_sec(imu_next.header.stamp)
                               == get_time_sec(imu_deque.front()->header.stamp);
@@ -795,19 +683,16 @@ int main(int argc, char** argv) {
               bool imu_comes = time_current
                                > get_time_sec(imu_next.header.stamp);
               while (imu_comes) {
-                imu_upda_cov = true;
                 angvel_avr << imu_next.angular_velocity.x,
                     imu_next.angular_velocity.y, imu_next.angular_velocity.z;
                 acc_avr << imu_next.linear_acceleration.x,
                     imu_next.linear_acceleration.y,
                     imu_next.linear_acceleration.z;
 
-                /*** covariance update ***/
                 double dt = get_time_sec(imu_next.header.stamp)
                             - time_predict_last_const;
                 kf_output.predict(dt, Q_output, input_in, true, false);
-                time_predict_last_const = get_time_sec(
-                    imu_next.header.stamp);  // big problem
+                time_predict_last_const = get_time_sec(imu_next.header.stamp);
 
                 {
                   double dt_cov = get_time_sec(imu_next.header.stamp)
@@ -856,15 +741,18 @@ int main(int argc, char** argv) {
               idx += time_seq[k];
               continue;
             }
+            // [Workflow 4] 判断是否存在有效平面对应。
+            // [Workflow 5] 残差、雅可比和量测协方差在 EKF 更新函数内计算。
+            // [Workflow 6] 状态更新在 EKF 更新函数内完成。
+            // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
             if (!kf_output.update_iterated_dyn_share_modified()) {
+              // [Workflow 9] 无有效平面对应时跳过当前点更新。
               idx = idx + time_seq[k];
               continue;
             }
             solve_start = omp_get_wtime();
 
             if (publish_odometry_without_downsample) {
-              /******* Publish odometry *******/
-
               publish_odometry(pub_odom_aft_mapped, tf_broadcaster);
               if (runtime_pos_log) {
                 euler_cur = SO3ToEuler(kf_output.x_.rot);
@@ -882,6 +770,7 @@ int main(int argc, char** argv) {
               }
             }
 
+            // [Workflow 8] 将更新后的点变换到世界系。
             for (int j = 0; j < time_seq[k]; j++) {
               PointType& point_body_j = feats_down_body->points[idx + j + 1];
               PointType& point_world_j = feats_down_world->points[idx + j + 1];
@@ -892,25 +781,21 @@ int main(int argc, char** argv) {
 
             update_time += omp_get_wtime() - t_update_start;
             idx += time_seq[k];
-            // std::cout << "pbp output effect feat num:" << effct_feat_num <<
-            // '\n';
           }
         } else {
+          // [Workflow 12] 当前时间段没有 LiDAR 点，仅处理 IMU 测量。
           if (!imu_deque.empty()) {
             imu_last = imu_next;
             imu_next = *(imu_deque.front());
 
-            while (
-                get_time_sec(imu_next.header.stamp) > time_current
-                && ((get_time_sec(imu_next.header.stamp)
-                     < Measures.lidar_beg_time + lidar_time_inte))) {  // >= ?
+            while (get_time_sec(imu_next.header.stamp) > time_current
+                   && ((get_time_sec(imu_next.header.stamp)
+                        < Measures.lidar_beg_time + lidar_time_inte))) {
               if (is_first_frame) {
                 {
                   {
                     while (get_time_sec(imu_next.header.stamp)
                            < Measures.lidar_beg_time + lidar_time_inte) {
-                      // meas.imu.emplace_back(imu_deque.front()); should add to
-                      // initialization
                       imu_deque.pop_front();
                       if (imu_deque.empty())
                         break;
@@ -927,7 +812,6 @@ int main(int argc, char** argv) {
                     imu_last.linear_acceleration.y,
                     imu_last.linear_acceleration.z;
 
-                imu_upda_cov = true;
                 time_update_last = time_current;
                 time_predict_last_const = time_current;
 
@@ -953,7 +837,9 @@ int main(int argc, char** argv) {
                 acc_avr << imu_next.linear_acceleration.x,
                     imu_next.linear_acceleration.y,
                     imu_next.linear_acceleration.z;
-                // acc_avr_norm = acc_avr * G_m_s2 / acc_norm;
+                // [Workflow 14] IMU 残差、雅可比和量测协方差在该函数内计算。
+                // [Workflow 15] IMU 状态更新在该函数内完成。
+                // [Workflow 16] IMU 协方差更新在该函数内完成。
                 kf_output.update_iterated_dyn_share_IMU();
                 imu_deque.pop_front();
                 if (imu_deque.empty())
@@ -971,12 +857,12 @@ int main(int argc, char** argv) {
           }
         }
       } else {
-        bool imu_prop_cov = false;
+        // [Workflow 11] IMU-as-input 分支。
         effct_feat_num = 0;
         if (!time_seq.empty()) {
           double pcl_beg_time = Measures.lidar_beg_time;
           idx = -1;
-          for (k = 0; k < time_seq.size(); k++) {
+          for (k = 0; k < (int)time_seq.size(); k++) {
             PointType& point_body = feats_down_body->points[idx + time_seq[k]];
             time_current = point_body.curvature / 1000.0 + pcl_beg_time;
             if (is_first_frame) {
@@ -987,7 +873,6 @@ int main(int argc, char** argv) {
                 imu_last = imu_next;
                 imu_next = *(imu_deque.front());
               }
-              imu_prop_cov = true;
 
               is_first_frame = false;
               t_last = time_current;
@@ -1002,9 +887,7 @@ int main(int argc, char** argv) {
               }
             }
 
-            while (time_current > get_time_sec(
-                       imu_next.header.stamp))  // && !imu_deque.empty())
-            {
+            while (time_current > get_time_sec(imu_next.header.stamp)) {
               imu_deque.pop_front();
 
               input_in.gyro << imu_last.angular_velocity.x,
@@ -1019,18 +902,15 @@ int main(int argc, char** argv) {
                               - time_update_last;
               if (dt_cov > 0.0) {
                 kf_input.predict(dt_cov, Q_input, input_in, false, true);
-                time_update_last = get_time_sec(
-                    imu_last.header.stamp);  // time_current;
+                time_update_last = get_time_sec(imu_last.header.stamp);
               }
               kf_input.predict(dt, Q_input, input_in, true, false);
               t_last = get_time_sec(imu_last.header.stamp);
-              imu_prop_cov = true;
 
               if (imu_deque.empty())
                 break;
               imu_last = imu_next;
               imu_next = *(imu_deque.front());
-              // imu_upda_cov = true;
             }
             if (flg_reset) {
               break;
@@ -1058,7 +938,12 @@ int main(int argc, char** argv) {
               idx += time_seq[k];
               continue;
             }
+            // [Workflow 4] 判断是否存在有效平面对应。
+            // [Workflow 5] 残差、雅可比和量测协方差在 EKF 更新函数内计算。
+            // [Workflow 6] 状态更新在 EKF 更新函数内完成。
+            // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
             if (!kf_input.update_iterated_dyn_share_modified()) {
+              // [Workflow 9] 无有效平面对应时跳过当前点更新。
               idx = idx + time_seq[k];
               continue;
             }
@@ -1066,8 +951,6 @@ int main(int argc, char** argv) {
             solve_start = omp_get_wtime();
 
             if (publish_odometry_without_downsample) {
-              /******* Publish odometry *******/
-
               publish_odometry(pub_odom_aft_mapped, tf_broadcaster);
               if (runtime_pos_log) {
                 euler_cur = SO3ToEuler(kf_input.x_.rot);
@@ -1083,6 +966,7 @@ int main(int argc, char** argv) {
               }
             }
 
+            // [Workflow 8] 将更新后的点变换到世界系。
             for (int j = 0; j < time_seq[k]; j++) {
               PointType& point_body_j = feats_down_body->points[idx + j + 1];
               PointType& point_world_j = feats_down_world->points[idx + j + 1];
@@ -1094,13 +978,13 @@ int main(int argc, char** argv) {
             idx = idx + time_seq[k];
           }
         } else {
+          // [Workflow 17] IMU-as-input 模式下的其他 IMU 处理分支。
           if (!imu_deque.empty()) {
             imu_last = imu_next;
             imu_next = *(imu_deque.front());
-            while (
-                get_time_sec(imu_next.header.stamp) > time_current
-                && ((get_time_sec(imu_next.header.stamp)
-                     < Measures.lidar_beg_time + lidar_time_inte))) {  // >= ?
+            while (get_time_sec(imu_next.header.stamp) > time_current
+                   && ((get_time_sec(imu_next.header.stamp)
+                        < Measures.lidar_beg_time + lidar_time_inte))) {
               if (is_first_frame) {
                 {
                   {
@@ -1116,7 +1000,6 @@ int main(int argc, char** argv) {
 
                   break;
                 }
-                imu_prop_cov = true;
 
                 t_last = time_current;
                 time_update_last = time_current;
@@ -1132,15 +1015,10 @@ int main(int argc, char** argv) {
               time_current = get_time_sec(imu_next.header.stamp);
 
               if (!is_first_frame) {
-                double dt = time_current - t_last;
-
                 double dt_cov = time_current - time_update_last;
                 if (dt_cov > 0.0) {
-                  // kf_input.predict(dt_cov, Q_input, input_in, false, true);
-                  time_update_last = get_time_sec(
-                      imu_next.header.stamp);  // time_current;
+                  time_update_last = get_time_sec(imu_next.header.stamp);
                 }
-                // kf_input.predict(dt, Q_input, input_in, true, false);
 
                 t_last = get_time_sec(imu_next.header.stamp);
 
@@ -1166,19 +1044,11 @@ int main(int argc, char** argv) {
           }
         }
       }
-      // M3D rot_cur_lidar;
-      // {
-      //     rot_cur_lidar = state.rot_end;
-      // }
-      // euler_cur = RotMtoEuler(rot_cur_lidar);
-      // geoQuat = tf::createQuaternionMsgFromRollPitchYaw
-      //                     (euler_cur(0), euler_cur(1), euler_cur(2));
-      /******* Publish odometry downsample *******/
+      // [Workflow 18] 发布当前状态、协方差对应的里程计和传感器结果。
       if (!publish_odometry_without_downsample) {
         publish_odometry(pub_odom_aft_mapped, tf_broadcaster);
       }
 
-      /*** add the feature points to map ***/
       t3 = omp_get_wtime();
       if (feats_down_size > 4) {
         if (enable_prior_pcd) {
@@ -1191,7 +1061,6 @@ int main(int argc, char** argv) {
         }
       }
       t5 = omp_get_wtime();
-      /******* Publish points *******/
       if (path_en)
         publish_path(pub_path);
       if (scan_pub_en || pcd_save_en)
@@ -1199,7 +1068,6 @@ int main(int argc, char** argv) {
       if (scan_pub_en && scan_body_pub_en)
         publish_frame_body(pub_laser_cloud_full_res_body);
 
-      /*** Debug variables Logging ***/
       if (runtime_pos_log) {
         frame_num++;
         aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num
@@ -1256,9 +1124,6 @@ int main(int argc, char** argv) {
     }
     rate.sleep();
   }
-  //--------------------------save map-----------------------------------
-  // 1. make sure you have enough memories
-  // 2. noted that pcd save will influence the real-time performances
   if (!pcl_wait_save->empty() && pcd_save_en) {
     auto t = std::chrono::system_clock::to_time_t(
         std::chrono::system_clock::now());

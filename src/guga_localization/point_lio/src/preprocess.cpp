@@ -22,7 +22,9 @@
 /**
  * @brief 按 curvature 升序排序 (切帧模式下时间戳单调递增)
  */
-const bool time_list_cut_frame(PointType & x, PointType & y) { return (x.curvature < y.curvature); }
+const bool time_list_cut_frame(PointType& x, PointType& y) {
+  return (x.curvature < y.curvature);
+}
 
 /**
  * @brief 构造函数: 初始化经验参数
@@ -38,20 +40,20 @@ const bool time_list_cut_frame(PointType & x, PointType & y) { return (x.curvatu
  * - edgea/edgeb: 跳变判定参数 (距离比+绝对差)
  * - smallp_intersect/ratio: 小平面判定阈值
  */
-Preprocess::Preprocess() : lidar_type(AVIA), blind(0.01), point_filter_num(1), det_range(1000)
-{
+Preprocess::Preprocess()
+    : lidar_type(AVIA), point_filter_num(1), blind(0.01), det_range(1000) {
   inf_bound = 10;
-  N_SCANS = 6;        // Livox 默认 6 线 (实际由 YAML 覆盖)
-  SCAN_RATE = 10;     // 默认 10Hz
-  group_size = 8;     // 每组 8 个点
+  N_SCANS = 6;     // Livox 默认 6 线 (实际由 YAML 覆盖)
+  SCAN_RATE = 10;  // 默认 10Hz
+  group_size = 8;  // 每组 8 个点
   disA = 0.01;
-  disA = 0.1;   // 注意: 覆盖了上面的 disA, 实际值 0.1
+  disA = 0.1;  // 注意: 覆盖了上面的 disA, 实际值 0.1
   p2l_ratio = 225;
   limit_maxmid = 6.25;
   limit_midmin = 6.25;
   limit_maxmin = 3.24;
-  jump_up_limit = 170.0;     // 度 (后续转 cos)
-  jump_down_limit = 8.0;     // 度 (后续转 cos)
+  jump_up_limit = 170.0;  // 度 (后续转 cos)
+  jump_down_limit = 8.0;  // 度 (后续转 cos)
   cos160 = 160.0;
   edgea = 2;
   edgeb = 0.1;
@@ -60,16 +62,16 @@ Preprocess::Preprocess() : lidar_type(AVIA), blind(0.01), point_filter_num(1), d
   given_offset_time = false;
 
   // 度 → cos 值转换
-  jump_up_limit = cos(jump_up_limit / 180 * M_PI);      // cos(170°)
-  jump_down_limit = cos(jump_down_limit / 180 * M_PI);  // cos(8°)
-  cos160 = cos(cos160 / 180 * M_PI);                    // cos(160°)
-  smallp_intersect = cos(smallp_intersect / 180 * M_PI);// cos(172.5°)
+  jump_up_limit = cos(jump_up_limit / 180 * M_PI);        // cos(170°)
+  jump_down_limit = cos(jump_down_limit / 180 * M_PI);    // cos(8°)
+  cos160 = cos(cos160 / 180 * M_PI);                      // cos(160°)
+  smallp_intersect = cos(smallp_intersect / 180 * M_PI);  // cos(172.5°)
 }
 
-Preprocess::~Preprocess() {}
+Preprocess::~Preprocess() {
+}
 
-void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num)
-{
+void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num) {
   lidar_type = lid_type;
   blind = bld;
   point_filter_num = pfilt_num;
@@ -78,22 +80,21 @@ void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num)
 // ==================== 公共处理接口 ====================
 
 void Preprocess::process(
-  const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg, PointCloudXYZI::Ptr & pcl_out)
-{
-  avia_handler(msg);      // 调用 Livox 专用处理器
-  *pcl_out = pl_surf;      // 输出曲面点 (当前未提取角点)
+    const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
+    PointCloudXYZI::Ptr& pcl_out) {
+  avia_handler(msg);   // 调用 Livox 专用处理器
+  *pcl_out = pl_surf;  // 输出曲面点 (当前未提取角点)
 }
 
-void Preprocess::process(
-  const sensor_msgs::msg::PointCloud2::SharedPtr & msg, PointCloudXYZI::Ptr & pcl_out)
-{
+void Preprocess::process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+                         PointCloudXYZI::Ptr& pcl_out) {
   // 根据 time_unit 设置时间缩放因子
   switch (time_unit) {
     case SEC:
-      time_unit_scale = 1.e3f;   // 秒 → 毫秒
+      time_unit_scale = 1.e3f;  // 秒 → 毫秒
       break;
     case MS:
-      time_unit_scale = 1.f;     // 毫秒 → 毫秒
+      time_unit_scale = 1.f;  // 毫秒 → 毫秒
       break;
     case US:
       time_unit_scale = 1.e-3f;  // 微秒 → 毫秒
@@ -128,9 +129,9 @@ void Preprocess::process(
 }
 
 void Preprocess::process_cut_frame_livox(
-  const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg, deque<PointCloudXYZI::Ptr> & pcl_out,
-  deque<double> & time_lidar, const int required_frame_num, int scan_count)
-{
+    const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
+    deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
+    const int required_frame_num, int scan_count) {
   int plsize = msg->point_num;
   pl_surf.clear();
   pl_surf.reserve(plsize);
@@ -138,55 +139,59 @@ void Preprocess::process_cut_frame_livox(
   pl_full.resize(plsize);
   int valid_point_num = 0;
 
-  for (uint i = 1; i < plsize; i++) {
-    if (
-      (msg->points[i].line < N_SCANS) &&
-      ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00)) {
+  for (uint i = 1; i < (uint)plsize; i++) {
+    if ((msg->points[i].line < N_SCANS)
+        && ((msg->points[i].tag & 0x30) == 0x10
+            || (msg->points[i].tag & 0x30) == 0x00)) {
       valid_point_num++;
       if (valid_point_num % point_filter_num == 0) {
         pl_full[i].x = msg->points[i].x;
         pl_full[i].y = msg->points[i].y;
         pl_full[i].z = msg->points[i].z;
         pl_full[i].intensity = msg->points[i].reflectivity;
-        //use curvature as time of each laser points，unit: ms
+        // use curvature as time of each laser points，unit: ms
         pl_full[i].curvature = msg->points[i].offset_time / float(1000000);
 
-        double dist =
-          pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y + pl_full[i].z * pl_full[i].z;
-        if (dist < blind * blind || dist > det_range * det_range) continue;
+        double dist = pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y
+                      + pl_full[i].z * pl_full[i].z;
+        if (dist < blind * blind || dist > det_range * det_range)
+          continue;
 
-        if (
-          (abs(pl_full[i].x - pl_full[i - 1].x) > 1e-7) ||
-          (abs(pl_full[i].y - pl_full[i - 1].y) > 1e-7) ||
-          (abs(pl_full[i].z - pl_full[i - 1].z) > 1e-7)) {
+        if ((abs(pl_full[i].x - pl_full[i - 1].x) > 1e-7)
+            || (abs(pl_full[i].y - pl_full[i - 1].y) > 1e-7)
+            || (abs(pl_full[i].z - pl_full[i - 1].z) > 1e-7)) {
           pl_surf.push_back(pl_full[i]);
         }
       }
     }
   }
   sort(pl_surf.points.begin(), pl_surf.points.end(), time_list_cut_frame);
-  //end time of last frame，单位ms
+  // end time of last frame，单位ms
   double last_frame_end_time = rclcpp::Time(msg->header.stamp).seconds() * 1000;
   uint valid_num = 0;
   uint cut_num = 0;
   uint valid_pcl_size = pl_surf.points.size();
 
   int required_cut_num = required_frame_num;
-  if (scan_count < 5) required_cut_num = 1;
+  if (scan_count < 5)
+    required_cut_num = 1;
 
   PointCloudXYZI pcl_cut;
   for (uint i = 1; i < valid_pcl_size; i++) {
     valid_num++;
-    //Compute new opffset time of each point：ms
-    pl_surf[i].curvature += rclcpp::Time(msg->header.stamp).seconds() * 1000 - last_frame_end_time;
+    // Compute new opffset time of each point：ms
+    pl_surf[i].curvature += rclcpp::Time(msg->header.stamp).seconds() * 1000
+                            - last_frame_end_time;
     pcl_cut.push_back(pl_surf[i]);
-    if (valid_num == (int((cut_num + 1) * valid_pcl_size / required_cut_num) - 1)) {
+    if (valid_num
+        == (uint)(int((cut_num + 1) * valid_pcl_size / required_cut_num) - 1)) {
       cut_num++;
       time_lidar.push_back(last_frame_end_time);
-      PointCloudXYZI::Ptr pcl_temp(new PointCloudXYZI());  //Initialize shared_ptr
+      PointCloudXYZI::Ptr pcl_temp(
+          new PointCloudXYZI());  // Initialize shared_ptr
       *pcl_temp = pcl_cut;
       pcl_out.push_back(pcl_temp);
-      //Update frame head
+      // Update frame head
       last_frame_end_time += pl_surf[i].curvature;
       pcl_cut.clear();
       pcl_cut.reserve(valid_pcl_size * 2 / required_frame_num);
@@ -195,9 +200,9 @@ void Preprocess::process_cut_frame_livox(
 }
 #define MAX_LINE_NUM 128
 void Preprocess::process_cut_frame_pcl2(
-  const sensor_msgs::msg::PointCloud2::SharedPtr & msg, deque<PointCloudXYZI::Ptr> & pcl_out,
-  deque<double> & time_lidar, const int required_frame_num, int scan_count)
-{
+    const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+    deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
+    const int required_frame_num, int scan_count) {
   pl_surf.clear();
   pl_corn.clear();
   pl_full.clear();
@@ -210,7 +215,6 @@ void Preprocess::process_cut_frame_pcl2(
     bool is_first[MAX_LINE_NUM];
     double yaw_fp[MAX_LINE_NUM] = {0};      // yaw of first scan point
     double omega_l = 3.61;                  // scan angular velocity (deg/ms)
-    float yaw_last[MAX_LINE_NUM] = {0.0};   // yaw of last scan point
     float time_last[MAX_LINE_NUM] = {0.0};  // last offset time
 
     if (pl_orig.points[plsize - 1].time > 0) {
@@ -230,12 +234,12 @@ void Preprocess::process_cut_frame_pcl2(
       added_pt.y = pl_orig.points[i].y;
       added_pt.z = pl_orig.points[i].z;
       added_pt.intensity = pl_orig.points[i].intensity;
-      added_pt.curvature = pl_orig.points[i].time * 1000.0;  //ms
+      added_pt.curvature = pl_orig.points[i].time * 1000.0;  // ms
 
-      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z;
-      if (
-        dist < blind * blind || dist > det_range * det_range || isnan(added_pt.x) ||
-        isnan(added_pt.y) || isnan(added_pt.z))
+      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
+                    + added_pt.z * added_pt.z;
+      if (dist < blind * blind || dist > det_range * det_range
+          || isnan(added_pt.x) || isnan(added_pt.y) || isnan(added_pt.z))
         continue;
 
       if (!given_offset_time) {
@@ -246,7 +250,6 @@ void Preprocess::process_cut_frame_pcl2(
           yaw_fp[layer] = yaw_angle;
           is_first[layer] = false;
           added_pt.curvature = 0.0;
-          yaw_last[layer] = yaw_angle;
           time_last[layer] = added_pt.curvature;
           continue;
         }
@@ -256,9 +259,9 @@ void Preprocess::process_cut_frame_pcl2(
         } else {
           added_pt.curvature = (yaw_fp[layer] - yaw_angle + 360.0) / omega_l;
         }
-        if (added_pt.curvature < time_last[layer]) added_pt.curvature += 360.0 / omega_l;
+        if (added_pt.curvature < time_last[layer])
+          added_pt.curvature += 360.0 / omega_l;
 
-        yaw_last[layer] = yaw_angle;
         time_last[layer] = added_pt.curvature;
       }
 
@@ -280,12 +283,12 @@ void Preprocess::process_cut_frame_pcl2(
       added_pt.y = pl_orig.points[i].y;
       added_pt.z = pl_orig.points[i].z;
       added_pt.intensity = pl_orig.points[i].intensity;
-      added_pt.curvature = pl_orig.points[i].t / 1e6;  //ns to ms
+      added_pt.curvature = pl_orig.points[i].t / 1e6;  // ns to ms
 
-      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z;
-      if (
-        dist < blind * blind || dist > det_range * det_range || isnan(added_pt.x) ||
-        isnan(added_pt.y) || isnan(added_pt.z))
+      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
+                    + added_pt.z * added_pt.z;
+      if (dist < blind * blind || dist > det_range * det_range
+          || isnan(added_pt.x) || isnan(added_pt.y) || isnan(added_pt.z))
         continue;
 
       if (i % point_filter_num == 0 && pl_orig.points[i].ring < N_SCANS) {
@@ -306,13 +309,14 @@ void Preprocess::process_cut_frame_pcl2(
       added_pt.y = pl_orig.points[i].y;
       added_pt.z = pl_orig.points[i].z;
       added_pt.intensity = pl_orig.points[i].intensity;
-      added_pt.curvature =
-        (pl_orig.points[i].timestamp - rclcpp::Time(msg->header.stamp).seconds()) * 1000;  //s to ms
+      added_pt.curvature = (pl_orig.points[i].timestamp
+                            - rclcpp::Time(msg->header.stamp).seconds())
+                           * 1000;  // s to ms
 
-      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z;
-      if (
-        dist < blind * blind || dist > det_range * det_range || isnan(added_pt.x) ||
-        isnan(added_pt.y) || isnan(added_pt.z))
+      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
+                    + added_pt.z * added_pt.z;
+      if (dist < blind * blind || dist > det_range * det_range
+          || isnan(added_pt.x) || isnan(added_pt.y) || isnan(added_pt.z))
         continue;
 
       if (i % point_filter_num == 0 && pl_orig.points[i].ring < N_SCANS) {
@@ -326,7 +330,7 @@ void Preprocess::process_cut_frame_pcl2(
 
   sort(pl_surf.points.begin(), pl_surf.points.end(), time_list_cut_frame);
 
-  //ms
+  // ms
   double last_frame_end_time = rclcpp::Time(msg->header.stamp).seconds() * 1000;
   uint valid_num = 0;
   uint cut_num = 0;
@@ -334,15 +338,18 @@ void Preprocess::process_cut_frame_pcl2(
 
   int required_cut_num = required_frame_num;
 
-  if (scan_count < 20) required_cut_num = 1;
+  if (scan_count < 20)
+    required_cut_num = 1;
 
   PointCloudXYZI pcl_cut;
   for (uint i = 1; i < valid_pcl_size; i++) {
     valid_num++;
-    pl_surf[i].curvature += rclcpp::Time(msg->header.stamp).seconds() * 1000 - last_frame_end_time;
+    pl_surf[i].curvature += rclcpp::Time(msg->header.stamp).seconds() * 1000
+                            - last_frame_end_time;
     pcl_cut.push_back(pl_surf[i]);
 
-    if (valid_num == (int((cut_num + 1) * valid_pcl_size / required_cut_num) - 1)) {
+    if (valid_num
+        == (uint((cut_num + 1) * valid_pcl_size / required_cut_num) - 1)) {
       cut_num++;
       time_lidar.push_back(last_frame_end_time);
       PointCloudXYZI::Ptr pcl_temp(new PointCloudXYZI());
@@ -365,12 +372,11 @@ void Preprocess::process_cut_frame_pcl2(
  * - 重复点剔除: 坐标与上一点完全相同则跳过 (Livox 非重复扫描可能有重复)
  * - 时间戳: offset_time (ns) → curvature (ms)
  */
-void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg)
-{
+void Preprocess::avia_handler(
+    const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg) {
   pl_surf.clear();
   pl_corn.clear();
   pl_full.clear();
-  double t1 = omp_get_wtime();
   int plsize = msg->point_num;  // 该帧总点数
 
   pl_corn.reserve(plsize);
@@ -384,12 +390,13 @@ void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr
   }
   uint valid_num = 0;
 
-  for (uint i = 1; i < plsize; i++) {
+  for (int i = 1; i < plsize; i++) {
     // ---- 线号 + tag 过滤 ----
-    // Livox tag: bit4-5 标识回波类型 (0x10=最强回波, 0x00=首次回波, 0x20=最末回波)
-    if (
-      (msg->points[i].line < N_SCANS) &&
-      ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00)) {
+    // Livox tag: bit4-5 标识回波类型 (0x10=最强回波, 0x00=首次回波,
+    // 0x20=最末回波)
+    if ((msg->points[i].line < N_SCANS)
+        && ((msg->points[i].tag & 0x30) == 0x10
+            || (msg->points[i].tag & 0x30) == 0x00)) {
       valid_num++;
       if (valid_num % point_filter_num == 0) {
         pl_full[i].x = msg->points[i].x;
@@ -399,18 +406,19 @@ void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr
 
         // offset_time 单位为纳秒 → 转换为毫秒存入 curvature
         // (curvature 域复用为时间戳存储)
-        pl_full[i].curvature =
-          msg->points[i].offset_time / float(1000000);  // ns → ms
+        pl_full[i].curvature = msg->points[i].offset_time
+                               / float(1000000);  // ns → ms
 
         // ---- 距离过滤 (盲区 + 最大距离) ----
-        double dist =
-          pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y + pl_full[i].z * pl_full[i].z;
-        if (dist < blind * blind || dist > det_range * det_range) continue;
+        double dist = pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y
+                      + pl_full[i].z * pl_full[i].z;
+        if (dist < blind * blind || dist > det_range * det_range)
+          continue;
 
         // ---- 重复点剔除: 坐标与上一点完全相同则跳过 ----
-        if (((abs(pl_full[i].x - pl_full[i - 1].x) > 1e-7) ||
-             (abs(pl_full[i].y - pl_full[i - 1].y) > 1e-7) ||
-             (abs(pl_full[i].z - pl_full[i - 1].z) > 1e-7))) {
+        if (((abs(pl_full[i].x - pl_full[i - 1].x) > 1e-7)
+             || (abs(pl_full[i].y - pl_full[i - 1].y) > 1e-7)
+             || (abs(pl_full[i].z - pl_full[i - 1].z) > 1e-7))) {
           pl_surf.push_back(pl_full[i]);
         }
       }
@@ -424,8 +432,8 @@ void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr
  * 解析 Ouster 的 UInt32 纳秒时间戳，转换为毫秒存入 curvature。
  * 点过滤: 降采样 + 盲区/远距/NaN 过滤
  */
-void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
-{
+void Preprocess::oust64_handler(
+    const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   pl_surf.clear();
   pl_corn.clear();
   pl_full.clear();
@@ -435,17 +443,17 @@ void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::SharedPtr &
   pl_corn.reserve(plsize);
   pl_surf.reserve(plsize);
 
-  double time_stamp = rclcpp::Time(msg->header.stamp).seconds();
-  for (int i = 0; i < pl_orig.points.size(); i++) {
-    if (i % point_filter_num != 0) continue;  // 降采样
+  for (size_t i = 0; i < pl_orig.points.size(); i++) {
+    if (i % point_filter_num != 0) {
+      continue;  // 降采样
+    }
+    double range = pl_orig.points[i].x * pl_orig.points[i].x
+                   + pl_orig.points[i].y * pl_orig.points[i].y
+                   + pl_orig.points[i].z * pl_orig.points[i].z;
 
-    double range = pl_orig.points[i].x * pl_orig.points[i].x +
-                   pl_orig.points[i].y * pl_orig.points[i].y +
-                   pl_orig.points[i].z * pl_orig.points[i].z;
-
-    if (
-      range < (blind * blind) || range > det_range * det_range || isnan(pl_orig.points[i].x) ||
-      isnan(pl_orig.points[i].y) || isnan(pl_orig.points[i].z))
+    if (range < (blind * blind) || range > det_range * det_range
+        || isnan(pl_orig.points[i].x) || isnan(pl_orig.points[i].y)
+        || isnan(pl_orig.points[i].z))
       continue;  // 盲区/远距/NaN 过滤
 
     Eigen::Vector3d pt_vec;
@@ -473,8 +481,8 @@ void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::SharedPtr &
  *
  * omega_l = 旋转角速度 (度/ms) = 360° * SCAN_RATE / 1000 ≈ 3.61°/ms @ 10Hz
  */
-void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
-{
+void Preprocess::velodyne_handler(
+    const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   pl_surf.clear();
   pl_corn.clear();
   pl_full.clear();
@@ -482,11 +490,12 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr
   pcl::PointCloud<velodyne_ros::Point> pl_orig;
   pcl::fromROSMsg(*msg, pl_orig);
   int plsize = pl_orig.points.size();
-  if (plsize == 0) return;
+  if (plsize == 0)
+    return;
   pl_surf.reserve(plsize);
 
   /*** 当雷达不提供时间戳时使用的变量 ***/
-  double omega_l = 0.361 * SCAN_RATE;    // 扫描角速度 (度/ms) = 360*Hz/1000
+  double omega_l = 0.361 * SCAN_RATE;  // 扫描角速度 (度/ms) = 360*Hz/1000
   std::vector<bool> is_first(N_SCANS, true);
   std::vector<double> yaw_fp(N_SCANS, 0.0);    // 每条线的首点方位角
   std::vector<float> yaw_last(N_SCANS, 0.0);   // 每条线的末点方位角
@@ -495,7 +504,7 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr
 
   // 检查是否有点时间戳 (最后一个点的时间 > 0)
   if (pl_orig.points[plsize - 1].time > 0) {
-    given_offset_time = true;   // 使用硬件时间戳
+    given_offset_time = true;  // 使用硬件时间戳
   } else {
     given_offset_time = false;  // 用匀速旋转模型估算
   }
@@ -510,11 +519,11 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr
     added_pt.y = pl_orig.points[i].y;
     added_pt.z = pl_orig.points[i].z;
     added_pt.intensity = pl_orig.points[i].intensity;
-    added_pt.curvature = pl_orig.points[i].time * time_unit_scale;  // curvature unit: ms
+    added_pt.curvature = pl_orig.points[i].time
+                         * time_unit_scale;  // curvature unit: ms
 
-    if (
-      i % point_filter_num != 0 || std::isnan(added_pt.x) || std::isnan(added_pt.y) ||
-      std::isnan(added_pt.z))
+    if (i % point_filter_num != 0 || std::isnan(added_pt.x)
+        || std::isnan(added_pt.y) || std::isnan(added_pt.z))
       continue;
 
     if (!given_offset_time) {
@@ -541,11 +550,13 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr
       }
 
       // ---- 下面的跨周期处理被注释掉了 ----
-      // if (added_pt.curvature < time_last[layer])  added_pt.curvature+=360.0/omega_l;
+      // if (added_pt.curvature < time_last[layer])
+      // added_pt.curvature+=360.0/omega_l;
     }
 
     // 距离过滤
-    double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z;
+    double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
+                  + added_pt.z * added_pt.z;
     {
       if (dist > (blind * blind) && dist < (det_range * det_range)) {
         pl_surf.points.push_back(added_pt);
@@ -561,8 +572,8 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::SharedPtr
  * 区别: 禾赛 timestamp 字段为绝对时间 (秒)，需转换为相对偏移时间。
  * curvature = (timestamp - time_head) * time_unit_scale (ms)
  */
-void Preprocess::hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
-{
+void Preprocess::hesai_handler(
+    const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   pl_surf.clear();
   pl_corn.clear();
   pl_full.clear();
@@ -570,11 +581,12 @@ void Preprocess::hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & 
   pcl::PointCloud<hesai_ros::Point> pl_orig;
   pcl::fromROSMsg(*msg, pl_orig);
   int plsize = pl_orig.points.size();
-  if (plsize == 0) return;
+  if (plsize == 0)
+    return;
   pl_surf.reserve(plsize);
 
   /*** 当雷达不提供时间戳时使用的变量 ***/
-  double omega_l = 0.361 * SCAN_RATE;    // 扫描角速度 (度/ms)
+  double omega_l = 0.361 * SCAN_RATE;  // 扫描角速度 (度/ms)
   std::vector<bool> is_first(N_SCANS, true);
   std::vector<double> yaw_fp(N_SCANS, 0.0);    // 每条线的首点方位角
   std::vector<float> yaw_last(N_SCANS, 0.0);   // 每条线的末点方位角
@@ -582,15 +594,12 @@ void Preprocess::hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & 
   /*****************************************************************/
 
   if (pl_orig.points[plsize - 1].timestamp > 0) {
-    given_offset_time = true;   // 有硬件时间戳
+    given_offset_time = true;  // 有硬件时间戳
   } else {
     given_offset_time = false;  // 用模型估算
-    double yaw_first = atan2(pl_orig.points[0].y, pl_orig.points[0].x) * 57.29578;
-    double yaw_end = yaw_first;
     int layer_first = pl_orig.points[0].ring;
     for (uint i = plsize - 1; i > 0; i--) {
       if (pl_orig.points[i].ring == layer_first) {
-        yaw_end = atan2(pl_orig.points[i].y, pl_orig.points[i].x) * 57.29578;
         break;
       }
     }
@@ -610,7 +619,8 @@ void Preprocess::hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & 
     added_pt.intensity = pl_orig.points[i].intensity;
 
     // 相对偏移时间: (当前点绝对时间 - 首点绝对时间) * 缩放 → ms
-    added_pt.curvature = (pl_orig.points[i].timestamp - time_head) * time_unit_scale;
+    added_pt.curvature = (pl_orig.points[i].timestamp - time_head)
+                         * time_unit_scale;
 
     if (!given_offset_time) {
       // ---- 匀速旋转模型估计偏移时间 ----
@@ -634,21 +644,22 @@ void Preprocess::hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & 
       }
 
       // 跨周期处理: 如果计算的时间小于上一点的时间，补一个周期
-      if (added_pt.curvature < time_last[layer]) added_pt.curvature += 360.0 / omega_l;
+      if (added_pt.curvature < time_last[layer])
+        added_pt.curvature += 360.0 / omega_l;
 
       yaw_last[layer] = yaw_angle;
       time_last[layer] = added_pt.curvature;
     }
 
     // 降采样 + NaN过滤 + 距离过滤
-    if (
-      i % point_filter_num == 0 && !std::isnan(added_pt.x) && !std::isnan(added_pt.y) &&
-      !std::isnan(added_pt.z)) {
-      if (
-        added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z >
-          (blind * blind) &&
-        added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z <
-          (det_range * det_range)) {
+    if (i % point_filter_num == 0 && !std::isnan(added_pt.x)
+        && !std::isnan(added_pt.y) && !std::isnan(added_pt.z)) {
+      if (added_pt.x * added_pt.x + added_pt.y * added_pt.y
+                  + added_pt.z * added_pt.z
+              > (blind * blind)
+          && added_pt.x * added_pt.x + added_pt.y * added_pt.y
+                     + added_pt.z * added_pt.z
+                 < (det_range * det_range)) {
         pl_surf.points.push_back(added_pt);
       }
     }
@@ -675,8 +686,8 @@ void Preprocess::hesai_handler(const sensor_msgs::msg::PointCloud2::SharedPtr & 
  * @param pl 输入点云 (按扫描线排列)
  * @param types 输入/输出特征类型数组
  */
-void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> & types)
-{
+void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
+                              vector<orgtype>& types) {
   int plsize = pl.size();
   int plsize2;
   if (plsize == 0) {
@@ -695,24 +706,20 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> &
   Eigen::Vector3d curr_direct(Eigen::Vector3d::Zero());
   Eigen::Vector3d last_direct(Eigen::Vector3d::Zero());
 
-  uint i_nex = 0, i2;
-  uint last_i = 0;
-  uint last_i_nex = 0;
+  uint i_nex = 0;
   int last_state = 0;
   int plane_type;
 
-  for (uint i = head; i < plsize2; i++) {
+  for (int i = head; i < plsize2; i++) {
     if (types[i].range < blind) {
       continue;
     }
 
-    i2 = i;
-
     plane_type = plane_judge(pl, types, i, i_nex, curr_direct);
 
     if (plane_type == 1) {
-      for (uint j = i; j <= i_nex; j++) {
-        if (j != i && j != i_nex) {
+      for (int j = i; j <= (int)i_nex; j++) {
+        if (j != i && j != (int)i_nex) {
           types[j].ftype = Real_Plane;
         } else {
           types[j].ftype = Poss_Plane;
@@ -737,13 +744,11 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> &
       last_state = 0;
     }
 
-    last_i = i2;
-    last_i_nex = i_nex;
     last_direct = curr_direct;
   }
 
   plsize2 = plsize > 3 ? plsize - 3 : 0;
-  for (uint i = head + 3; i < plsize2; i++) {
+  for (uint i = head + 3; i < (uint)plsize2; i++) {
     if (types[i].range < blind || types[i].ftype >= Real_Plane) {
       continue;
     }
@@ -781,18 +786,18 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> &
       }
     }
 
-    types[i].intersect = vecs[Prev].dot(vecs[Next]) / vecs[Prev].norm() / vecs[Next].norm();
-    if (
-      types[i].edj[Prev] == Nr_nor && types[i].edj[Next] == Nr_zero && types[i].dista > 0.0225 &&
-      types[i].dista > 4 * types[i - 1].dista) {
+    types[i].intersect = vecs[Prev].dot(vecs[Next]) / vecs[Prev].norm()
+                         / vecs[Next].norm();
+    if (types[i].edj[Prev] == Nr_nor && types[i].edj[Next] == Nr_zero
+        && types[i].dista > 0.0225 && types[i].dista > 4 * types[i - 1].dista) {
       if (types[i].intersect > cos160) {
         if (edge_jump_judge(pl, types, i, Prev)) {
           types[i].ftype = Edge_Jump;
         }
       }
-    } else if (
-      types[i].edj[Prev] == Nr_zero && types[i].edj[Next] == Nr_nor &&
-      types[i - 1].dista > 0.0225 && types[i - 1].dista > 4 * types[i].dista) {
+    } else if (types[i].edj[Prev] == Nr_zero && types[i].edj[Next] == Nr_nor
+               && types[i - 1].dista > 0.0225
+               && types[i - 1].dista > 4 * types[i].dista) {
       if (types[i].intersect > cos160) {
         if (edge_jump_judge(pl, types, i, Next)) {
           types[i].ftype = Edge_Jump;
@@ -816,8 +821,9 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> &
 
   plsize2 = plsize - 1;
   double ratio;
-  for (uint i = head + 1; i < plsize2; i++) {
-    if (types[i].range < blind || types[i - 1].range < blind || types[i + 1].range < blind) {
+  for (uint i = head + 1; i < (uint)plsize2; i++) {
+    if (types[i].range < blind || types[i - 1].range < blind
+        || types[i + 1].range < blind) {
       continue;
     }
 
@@ -845,7 +851,7 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> &
   }
 
   int last_surface = -1;
-  for (uint j = head; j < plsize; j++) {
+  for (uint j = head; j < (uint)plsize; j++) {
     if (types[j].ftype == Poss_Plane || types[j].ftype == Real_Plane) {
       if (last_surface == -1) {
         last_surface = j;
@@ -905,14 +911,13 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> & pl, vector<orgtype> &
  * @param[out] curr_direct 平面方向单位向量
  * @return 1=平面有效, 0=非平面, 2=遇到盲区中断
  */
-int Preprocess::plane_judge(
-  const PointCloudXYZI & pl, vector<orgtype> & types, uint i_cur, uint & i_nex,
-  Eigen::Vector3d & curr_direct)
-{
+int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
+                            uint i_cur, uint& i_nex,
+                            Eigen::Vector3d& curr_direct) {
   double group_dis = disA * types[i_cur].range + disB;  // 距离容限
   group_dis = group_dis * group_dis;
 
-  double two_dis;
+  double two_dis{};
   vector<double> disarr;
   disarr.reserve(20);
 
@@ -926,7 +931,8 @@ int Preprocess::plane_judge(
   }
 
   for (;;) {
-    if ((i_cur >= pl.size()) || (i_nex >= pl.size())) break;
+    if ((i_cur >= pl.size()) || (i_nex >= pl.size()))
+      break;
 
     if (types[i_nex].range < blind) {
       curr_direct.setZero();
@@ -948,7 +954,8 @@ int Preprocess::plane_judge(
   double leng_wid = 0;
   double v1[3], v2[3];
   for (uint j = i_cur + 1; j < i_nex; j++) {
-    if ((j >= pl.size()) || (i_cur >= pl.size())) break;
+    if ((j >= pl.size()) || (i_cur >= pl.size()))
+      break;
     v1[0] = pl[j].x - pl[i_cur].x;
     v1[1] = pl[j].y - pl[i_cur].y;
     v1[2] = pl[j].z - pl[i_cur].z;
@@ -1023,9 +1030,9 @@ int Preprocess::plane_judge(
  * @param nor_dir 判断方向: Prev (前向) 或 Next (后向)
  * @return true=真边缘跳变, false=假跳变
  */
-bool Preprocess::edge_jump_judge(
-  const PointCloudXYZI & pl, vector<orgtype> & types, uint i, Surround nor_dir)
-{
+bool Preprocess::edge_jump_judge(const PointCloudXYZI& pl,
+                                 vector<orgtype>& types, uint i,
+                                 Surround nor_dir) {
   if (nor_dir == 0) {
     if (types[i - 1].range < blind || types[i - 2].range < blind) {
       return false;
