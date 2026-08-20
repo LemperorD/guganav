@@ -1,9 +1,10 @@
-small_point_lio:
+/**:
     ros__parameters:
         lidar_topic: /livox/lidar                  # 点云话题名
         imu_topic: /livox/imu                      # IMU话题名
         lidar_type: livox_custom_msg              # 雷达类型 livox_custom_msg, livox_pointcloud2, custom_mid360_driver, unilidar
-        lidar_frame: livox_frame                   # 雷达坐标系
+        lidar_frame: front_mid360                 # 雷达坐标系(与仓库 static_tf_publisher 对齐)
+        base_frame: base_footprint                 # 机器人根坐标系(仓库体系,无 base_link)
         save_pcd: true                            # 是否保存点云
 
         # 点云过滤

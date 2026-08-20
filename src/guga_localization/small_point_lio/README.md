@@ -4,7 +4,7 @@ Small Point-LIO is an advanced implementation of the [Point-LIO algorithm](https
 
 The default branch is for ROS2. If you want to run it without ros, please checkout the `main` branch.
 
-If you want to know why it so fast, please read [this](https://bbs.robomaster.com/article/813022).
+If you want to know why it is so fast, please read [this](https://bbs.robomaster.com/article/813022).
 
 <img src="./img/ACE.jpg" width="200px">
 

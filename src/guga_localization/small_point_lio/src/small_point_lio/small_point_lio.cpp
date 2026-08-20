@@ -58,6 +58,19 @@ namespace small_point_lio {
                     }
                     state::value_type scale = -static_cast<state::value_type>(parameters.gravity.norm()) / estimator.kf.x.gravity.norm();
                     estimator.kf.x.gravity *= scale;
+                    // 用重力方向反推初始姿态:世界系重力为 parameters.gravity(如 [0,0,-9.81]),
+                    // IMU 系测得重力为 estimator.kf.x.gravity,初始旋转 R 满足
+                    // R * g_imu = g_world。从单位阵起步的姿态若不修正,斜装雷达会
+                    // 让 odom 系保持倾斜(地图斜、移动时漂移)。
+                    const Eigen::Matrix<state::value_type, 3, 1> g_world =
+                        parameters.gravity.cast<state::value_type>().normalized();
+                    const Eigen::Matrix<state::value_type, 3, 1> g_imu =
+                        estimator.kf.x.gravity.normalized();
+                    if (g_imu.squaredNorm() > 1e-8) {
+                        const Eigen::Quaternion<state::value_type> q_init =
+                            Eigen::Quaternion<state::value_type>::FromTwoVectors(g_imu, g_world);
+                        estimator.kf.x.rotation = q_init.toRotationMatrix();
+                    }
                 } else {
                     estimator.kf.x.gravity = parameters.gravity.cast<state::value_type>();
                 }

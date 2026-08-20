@@ -1,0 +1,52 @@
+/**:
+    ros__parameters:
+        # 仿真配置:仿真雷达经 ign_sim_pointcloud_tool 发布 /velodyne_points
+        # (sensor_msgs/PointCloud2),对应 small 的 livox_pointcloud2 适配器。
+        # 实车用 config/mid360.yaml(livox CustomMsg)。
+        lidar_topic: velodyne_points              # 仿真点云话题(PointCloud2)
+        imu_topic: livox/imu                      # IMU话题名
+        lidar_type: generic_pointcloud2           # 通用 PointCloud2(仿真无 livox tag/timestamp 字段)
+        lidar_frame: front_mid360                 # 与仓库 static_tf_publisher 对齐
+        base_frame: base_footprint                # 仓库机器人根坐标系(无 base_link)
+        save_pcd: false                           # 仿真建图出 2D 栅格图,不另存 PCD
+
+        # 点云过滤
+        point_filter_num: 4                        # 多少个点取一个点
+        min_distance: 0.5                          # 点云半径最小值
+        max_distance: 1000.0                       # 点云半径最大值
+        space_downsample: true                     # 是否启用点云降采样
+        space_downsample_leaf_size: 0.5            # 降采样栅格大小
+
+        # IMU处理
+        gravity: [0.0, 0.0, -9.810]                # 重力
+        fix_gravity_direction: true                # 收集前200个IMU修正重力方向
+        check_satu: true                           # IMU饱和检查
+        satu_acc: 3.0                              # 加速度饱和阈值
+        satu_gyro: 35.0                            # 角速度饱和阈值
+        acc_norm: 9.81                             # IMU加速度模长(gz 输出 m/s^2,静止≈9.81;small 内部按 g 期望,故配 9.81 使 scale=1)
+
+        # 地图
+        map_resolution: 0.5                        # 地图分辨率
+        init_map_size: 10                          # 初始化地图所需点数
+
+        # 雷达与IMU相对位姿
+        extrinsic_est_en: false                    # 是否通过预测得到外参
+        extrinsic_T: [0.0, 0.0, 0.0]
+        extrinsic_R: [1.0, 0.0, 0.0,
+                      0.0, 1.0, 0.0,
+                      0.0, 0.0, 1.0]
+
+        # 滤波器参数
+        laser_point_cov: 0.01                      # 激光点协方差
+        imu_meas_acc_cov: 0.01                     # IMU加速度协方差
+        imu_meas_omg_cov: 0.01                     # IMU角速度协方差
+        velocity_cov: 20.0                         # 速度协方差
+        acceleration_cov: 500.0                    # 加速度协方差
+        omg_cov: 1000.0                            # 角速度协方差
+        ba_cov: 0.0001                             # 加速度偏置协方差
+        bg_cov: 0.0001                             # 角速度偏置协方差
+        plane_threshold: 0.1                       # 平面匹配阈值
+        match_sqaured: 81.0                        # 平面匹配距离阈值
+
+        # 数据发布
+        publish_odometry_without_downsample: false # 是否发布高频里程计
