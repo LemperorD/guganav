@@ -166,13 +166,13 @@ def generate_launch_description():
     )
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
-        # "use_rviz", default_value="True", description="Whether to start RVIZ"
-        "use_rviz", default_value="False", description="Whether to start RVIZ"
+        "use_rviz", default_value="True", description="Whether to start RVIZ"
+        # "use_rviz", default_value="False", description="Whether to start RVIZ"
     )
 
     declare_use_communication_cmd = DeclareLaunchArgument(
         "use_communication",
-        default_value="False",
+        default_value="True",
         description="Whether to start the communication node",
     )
 
