@@ -12,7 +12,6 @@
  */
 
 #pragma once
-#include <math.h>
 
 #include <cmath>
 #include <csignal>
@@ -40,7 +39,7 @@
  * 点云的 curvature 域存储该点的时间偏移 (ms)，
  * 按时间升序排列以便做时间分组处理。
  */
-const bool time_list(PointType & x, PointType & y);
+const bool time_list(PointType& x, PointType& y);
 
 /// *************IMU Process and undistortion
 /**
@@ -54,8 +53,7 @@ const bool time_list(PointType & x, PointType & y);
  * 2. 重力对齐: 计算初始姿态，使估计重力与 YAML 配置的先验重力对齐
  * 3. 点云去畸变: (预留) IMU 反向传播校正点云运动畸变
  */
-class ImuProcess
-{
+class ImuProcess {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -72,13 +70,13 @@ public:
    * @param meas 当前帧的测量组 (点云 + IMU 数据)
    * @param[out] pcl_un_ 处理后/去畸变后的点云
    */
-  void Process(const MeasureGroup & meas, PointCloudXYZI::Ptr pcl_un_);
+  void Process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_);
 
   /** @brief 设置陀螺仪协方差缩放因子 */
-  void set_gyr_cov(const V3D & scaler);
+  void set_gyr_cov(const V3D& scaler);
 
   /** @brief 设置加速度计协方差缩放因子 */
-  void set_acc_cov(const V3D & scaler);
+  void set_acc_cov(const V3D& scaler);
 
   /**
    * @brief 计算初始旋转矩阵，使估计重力与先验重力对齐
@@ -90,24 +88,26 @@ public:
    * @param tmp_gravity 估计的重力方向 (如 -mean_acc/|mean_acc|)
    * @param[out] rot 输出初始姿态旋转矩阵
    */
-  void Set_init(Eigen::Vector3d & tmp_gravity, Eigen::Matrix3d & rot);
+  void Set_init(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
 
   // ==================== 公有成员变量 ====================
 
-  MD(12, 12) state_cov = MD(12, 12)::Identity();  ///< IMU 状态协方差 (12维: 姿态/速度/位置/零偏)
-  int lidar_type;                                   ///< LiDAR 类型 (从参数复制)
+  MD(12, 12)
+  state_cov = MD(
+      12, 12)::Identity();  ///< IMU 状态协方差 (12维: 姿态/速度/位置/零偏)
+  int lidar_type;           ///< LiDAR 类型 (从参数复制)
 
-  V3D gravity_;                                     ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
-  bool imu_en;                                      ///< 是否启用 IMU
+  V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
+  bool imu_en;   ///< 是否启用 IMU
 
-  V3D mean_acc;                                     ///< 平均加速度 (累积, 用于重力估计)
-  bool imu_need_init_ = true;                       ///< 标志: 是否需要 IMU 初始化
-  bool after_imu_init_ = false;                     ///< 标志: IMU 初始化是否已完成
-  bool b_first_frame_ = true;                       ///< 标志: 是否第一帧
+  V3D mean_acc;                  ///< 平均加速度 (累积, 用于重力估计)
+  bool imu_need_init_ = true;    ///< 标志: 是否需要 IMU 初始化
+  bool after_imu_init_ = false;  ///< 标志: IMU 初始化是否已完成
+  bool b_first_frame_ = true;    ///< 标志: 是否第一帧
 
   double time_last_scan = 0.0;                      ///< 上帧扫描时间
-  V3D cov_gyr_scale = V3D(0.0001, 0.0001, 0.0001); ///< 陀螺仪协方差缩放
-  V3D cov_vel_scale = V3D(0.0001, 0.0001, 0.0001); ///< 速度协方差缩放
+  V3D cov_gyr_scale = V3D(0.0001, 0.0001, 0.0001);  ///< 陀螺仪协方差缩放
+  V3D cov_vel_scale = V3D(0.0001, 0.0001, 0.0001);  ///< 速度协方差缩放
 
 private:
   /**
@@ -119,9 +119,9 @@ private:
    * @param meas 当前帧的测量组 (包含 IMU 数据)
    * @param N 累积计数 (输入输出)
    */
-  void IMU_init(const MeasureGroup & meas, int & N);
+  void IMU_init(const MeasureGroup& meas, int& N);
 
-  V3D mean_gyr;                                     ///< 平均角速度 (用于陀螺零偏估计)
-  int init_iter_num = 1;                            ///< 初始化迭代计数 (当前累积帧数)
-  rclcpp::Logger logger;                            ///< ROS2 日志器
+  V3D mean_gyr;           ///< 平均角速度 (用于陀螺零偏估计)
+  int init_iter_num = 1;  ///< 初始化迭代计数 (当前累积帧数)
+  rclcpp::Logger logger;  ///< ROS2 日志器
 };

@@ -20,6 +20,7 @@
  * 参数由 parameters.cpp 的 readParameters() 统一设置。
  */
 
+#pragma once
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <deque>

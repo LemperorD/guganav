@@ -19,11 +19,11 @@
  * 地图管理: iVox 增量体素 (Faster-LIO)
  */
 
-#ifndef Estimator_H
-#define Estimator_H
+#pragma once
 
 #include "common_lib.h"
 #include "parameters.h"
+
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -238,5 +238,3 @@ void h_model_IMU_output(state_output& s,
  * @param po 输出: 世界坐标系下的点
  */
 void pointBodyToWorld(PointType const* const pi, PointType* const po);
-
-#endif

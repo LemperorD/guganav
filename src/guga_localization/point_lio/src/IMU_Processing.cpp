@@ -164,35 +164,31 @@ void ImuProcess::IMU_init(const MeasureGroup& meas, int& N) {
 void ImuProcess::Process(const MeasureGroup& meas,
                          PointCloudXYZI::Ptr cur_pcl_un_) {
   if (imu_en) {
-    if (meas.imu.empty())
-      return;  // 无 IMU 数据则跳过
-
-    if (imu_need_init_) {
-      {
-        // ---- IMU 初始化阶段 ----
-        IMU_init(meas, init_iter_num);
-
-        imu_need_init_ = true;
-
-        if (init_iter_num > MAX_INI_COUNT) {
-          // 初始化完成
-          RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
-          imu_need_init_ = false;
-          *cur_pcl_un_ = *(meas.lidar);  // 复制原始点云
-        }
-      }
+    if (meas.imu.empty()) {
       return;
     }
 
+    if (imu_need_init_) {
+      // ---- IMU 初始化阶段 ----
+      IMU_init(meas, init_iter_num);
+
+      if (init_iter_num > MAX_INI_COUNT) {
+        // 初始化完成
+        RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
+        imu_need_init_ = false;
+        *cur_pcl_un_ = *(meas.lidar);  // 复制原始点云
+      }
+      return;  // 初始化阶段不输出去畸变点云
+    }
+
     // ---- 初始化已完成 ----
-    if (!after_imu_init_)
-      after_imu_init_ = true;
+    if (!after_imu_init_) {
+      after_imu_init_ = true;  // 通知外部: IMU 初始化流程已走完
+    }
     *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
 
     // @todo: 实现 IMU 反向传播去畸变
     // 可利用 IMU 预积分在 curvature 时间戳上反向插值校正点坐标
-
-    return;
   } else {
     // ---- IMU 禁用: 直接使用原始点云 ----
     *cur_pcl_un_ = *(meas.lidar);
