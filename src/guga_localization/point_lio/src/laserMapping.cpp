@@ -372,10 +372,10 @@ namespace {
         std::make_shared<PointCloudXYZI>();  ///< 待保存点云
 
     // ---- 滤波协方差 / 过程噪声 ----
-    Eigen::Matrix<double, 24, 24> p_init;         ///< 初始协方差 (24维状态)
+    Eigen::Matrix<double, 24, 24> p_init;  ///< 初始协方差 (24维状态)
     Eigen::Matrix<double, 30, 30> p_init_output;  ///< 初始协方差 (30维状态)
-    Eigen::Matrix<double, 24, 24> q_input;        ///< 过程噪声 (input 模式)
-    Eigen::Matrix<double, 30, 30> q_output;       ///< 过程噪声 (output 模式)
+    Eigen::Matrix<double, 24, 24> q_input;   ///< 过程噪声 (input 模式)
+    Eigen::Matrix<double, 30, 30> q_output;  ///< 过程噪声 (output 模式)
 
     // ---- 位姿日志 ----
     std::string pos_log_dir;  ///< 位姿日志路径
@@ -405,11 +405,17 @@ namespace {
   }
 
   /** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
-   * (iVox/先验PCD) */
-  void init_map_state(
+   * (iVox/先验PCD)
+   * @return true  地图已就绪, 本帧可继续正常处理
+   *         false 初始化阶段 (本帧用于累积/建图, 调用方应跳过)
+   */
+  bool init_map_state(
       MainLoopState& state,
       const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
           pub_laser_cloud_map) {
+    if (state.init_map) {
+      return true;  // 已完成
+    }
     feats_down_world->resize(state.feats_undistort->size());
     for (int i = 0; i < (int)state.feats_undistort->size(); i++) {
       pointBodyToWorld(&(state.feats_undistort->points[i]),
@@ -429,9 +435,9 @@ namespace {
       publish_init_map(pub_laser_cloud_map, state.init_feats_world);
       state.init_feats_world.reset(new PointCloudXYZI());
       state.init_map = true;
-    } else {
-      state.init_map = false;
+      return true;
     }
+    return false;  // 仍在累积
   }
 
   void init_scan(MainLoopState& st) {
@@ -613,9 +619,8 @@ int main(int argc, char** argv) {
         continue;
       }
 
-      if (!state.init_map) {
-        init_map_state(state, pub_laser_cloud_map);
-        continue;
+      if (!init_map_state(state, pub_laser_cloud_map)) {
+        continue;  // 地图初始化中: 跳过本帧
       }
 
       normvec->resize(feats_down_size);
