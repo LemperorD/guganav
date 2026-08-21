@@ -16,6 +16,7 @@
  */
 
 #include "li_initialization.h"
+#include <ranges>
 
 // ==================== 初始化状态 ====================
 bool data_accum_finished = false;     ///< 数据累积完成
@@ -50,8 +51,8 @@ int scan_count = 0;             ///< 接收帧数
 int frame_ct = 0;               ///< 合帧计数
 int wait_num = 0;
 std::mutex m_time;
-bool lidar_pushed = false;                     ///< 雷达帧已推入
-bool imu_pushed = false;                       ///< IMU 已推入
+bool lidar_pushed = false;  ///< 雷达帧已推入 (IMU模式防重复取帧)
+bool imu_pushed = false;    ///< IMU 已推入
 std::deque<PointCloudXYZI::Ptr> lidar_buffer;  ///< 雷达帧缓冲队列
 std::deque<double> time_buffer;                ///< 雷达时间戳缓冲队列
 std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>
@@ -236,6 +237,104 @@ void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
   last_timestamp_imu = timestamp;
 }
 
+namespace {
+
+  /** @brief 取队首雷达帧; 空帧时打印丢失并返回 false */
+  bool take_lidar_frame(MeasureGroup& meas) {
+    meas.lidar = lidar_buffer.front();
+    meas.lidar_beg_time = time_buffer.front();
+
+    if (meas.lidar->points.empty()) {
+      std::cout << "lose lidar" << '\n';
+      return false;
+    }
+    return true;
+  }
+
+  /** @brief 计算帧结束时间 = 帧头时间 + 最远点时间偏移 (ms→s) */
+  void update_frame_end_time(MeasureGroup& meas) {
+    double end_time =
+        std::ranges::max(meas.lidar->points, {}, [](const auto& p) {
+          return p.curvature;  // NOLINT
+        }).curvature;          // NOLINT
+    lidar_end_time = meas.lidar_beg_time + (end_time / 1000);
+    meas.lidar_last_time = lidar_end_time;
+  }
+
+  /** @brief 弹出已消费的雷达帧 (帧本体 + 时间戳) */
+  void pop_lidar_frame() {
+    lidar_buffer.pop_front();
+    time_buffer.pop_front();
+  }
+
+  /** @brief IMU 是否已覆盖当前帧 (正常帧按真实帧尾, 丢帧按估算帧长) */
+  bool imu_covers_lidar_frame(const MeasureGroup& meas) {
+    return lose_lid
+               ? last_timestamp_imu >= meas.lidar_beg_time + lidar_time_inte
+               : last_timestamp_imu >= lidar_end_time;
+  }
+
+  /** @brief 将 [帧头, end_time] 窗口内的 IMU 弹出 imu_deque 并打包到 meas.imu
+   */
+  void collect_imu_until(double end_time, MeasureGroup& meas) {
+    if (!p_imu->imu_need_init_) {
+      return;
+    }
+    double imu_time = get_time_sec(imu_deque.front()->header.stamp);
+    imu_next = *(imu_deque.front());
+    meas.imu.shrink_to_fit();
+
+    while (imu_time < end_time) {
+      meas.imu.emplace_back(imu_deque.front());
+      imu_last = imu_next;
+      imu_deque.pop_front();
+      if (imu_deque.empty()) {
+        break;
+      }
+      imu_time = get_time_sec(imu_deque.front()->header.stamp);
+      imu_next = *(imu_deque.front());
+    }
+  }
+
+  // ==================== IMU 启用模式步骤子函数 ====================
+
+  /** @brief [步骤1] 检查雷达/IMU 队列是否都有数据 */
+  bool imu_data_ready() {
+    return !lidar_buffer.empty() && !imu_deque.empty();
+  }
+
+  /** @brief [步骤2] 取队首雷达帧 (只取一次, 防提前退出后重取) */
+  void imu_take_frame(MeasureGroup& meas) {
+    if (lidar_pushed) {
+      return;
+    }
+    lose_lid = !take_lidar_frame(meas);
+    if (!lose_lid) {
+      update_frame_end_time(meas);
+    }
+    lidar_pushed = true;
+  }
+
+  /** @brief [步骤4] 打包帧窗口内的 IMU (丢帧时按估算帧长) */
+  void collect_frame_imu(MeasureGroup& meas) {
+    if (imu_pushed) {
+      return;
+    }
+    collect_imu_until(
+        lose_lid ? meas.lidar_beg_time + lidar_time_inte : lidar_end_time,
+        meas);
+    imu_pushed = true;
+  }
+
+  /** @brief [步骤5] 弹出已消费的帧并复位标志 */
+  void imu_finish_frame() {
+    pop_lidar_frame();
+    lidar_pushed = false;
+    imu_pushed = false;
+  }
+
+}  // namespace
+
 /**
  * @brief LiDAR-IMU 数据同步核心函数
  *
@@ -261,128 +360,41 @@ void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
  * @return true 成功组装一组数据, false 数据不足继续等待
  */
 bool sync_packages(MeasureGroup& meas) {
-  {
-    // ==================== IMU 禁用模式 ====================
-    if (!imu_en) {
-      if (!lidar_buffer.empty()) {
-        if (!lidar_pushed) {
-          meas.lidar = lidar_buffer.front();
-          meas.lidar_beg_time = time_buffer.front();
-          lose_lid = false;
-
-          if (meas.lidar->points.empty()) {
-            std::cout << "lose lidar" << '\n';
-            lose_lid = true;
-          } else {
-            // 遍历点云找到最大的 curvature (最远点偏移时间)
-            double end_time = meas.lidar->points.back().curvature;
-            for (auto pt : meas.lidar->points) {
-              if (pt.curvature > end_time) {
-                end_time = pt.curvature;
-              }
-            }
-            // 帧结束时间 = 帧头时间 + 最远点偏移 (ms转s)
-            lidar_end_time = meas.lidar_beg_time + end_time / double(1000);
-            meas.lidar_last_time = lidar_end_time;
-          }
-          lidar_pushed = true;
-        }
-
-        // 弹出已处理的帧
-        time_buffer.pop_front();
-        lidar_buffer.pop_front();
-        lidar_pushed = false;
-
-        return !lose_lid;
-      }
+  // ==================== IMU 禁用模式 ====================
+  if (!imu_enabled) {
+    if (lidar_buffer.empty()) {
       return false;
     }
 
-    // ==================== IMU 启用模式 ====================
-    // 1. 检查数据是否就绪
-    if (lidar_buffer.empty() || imu_deque.empty()) {
+    // 空帧: 丢弃并报告丢失
+    if (!take_lidar_frame(meas)) {
+      pop_lidar_frame();
       return false;
     }
 
-    // 2. 取雷达帧 (如果还没取)
-    if (!lidar_pushed) {
-      lose_lid = false;
-      meas.lidar = lidar_buffer.front();
-      meas.lidar_beg_time = time_buffer.front();
-
-      if (meas.lidar->points.size() < 1) {
-        std::cout << "lose lidar" << '\n';
-        lose_lid = true;  // 空帧标记为丢失
-      } else {
-        // 计算帧结束时间 (最远点时间)
-        double end_time = meas.lidar->points.back().curvature;
-        for (auto pt : meas.lidar->points) {
-          if (pt.curvature > end_time) {
-            end_time = pt.curvature;
-          }
-        }
-        // lidar_end_time = 帧起始时间 + 扫描周期 (ms转s)
-        lidar_end_time = meas.lidar_beg_time + end_time / double(1000);
-        meas.lidar_last_time = lidar_end_time;
-      }
-      lidar_pushed = true;
-    }
-
-    // 3. 等待 IMU 数据覆盖完整帧时间区间
-    if (!lose_lid && (last_timestamp_imu < lidar_end_time)) {
-      return false;  // IMU 数据还不够多
-    }
-    if (lose_lid
-        && last_timestamp_imu < meas.lidar_beg_time + lidar_time_inte) {
-      return false;  // 丢帧时: 用 lidar_time_inte 估算帧长度
-    }
-
-    // 4. 打包 IMU 数据 (帧头→帧尾 时间范围内的 IMU)
-    if (!lose_lid && !imu_pushed) {
-      if (p_imu->imu_need_init_) {
-        double imu_time = get_time_sec(imu_deque.front()->header.stamp);
-        imu_next = *(imu_deque.front());
-        meas.imu.shrink_to_fit();
-
-        // 收集帧时间范围内的所有 IMU 数据
-        while (imu_time < lidar_end_time) {
-          meas.imu.emplace_back(imu_deque.front());
-          imu_last = imu_next;
-          imu_deque.pop_front();
-          if (imu_deque.empty())
-            break;
-          imu_time = get_time_sec(imu_deque.front()->header.stamp);
-          imu_next = *(imu_deque.front());
-        }
-      }
-      imu_pushed = true;
-    }
-
-    // 4b. 丢帧时的 IMU 打包 (使用 lidar_time_inte 估算)
-    if (lose_lid && !imu_pushed) {
-      if (p_imu->imu_need_init_) {
-        double imu_time = get_time_sec(imu_deque.front()->header.stamp);
-        meas.imu.shrink_to_fit();
-
-        imu_next = *(imu_deque.front());
-        while (imu_time < meas.lidar_beg_time + lidar_time_inte) {
-          meas.imu.emplace_back(imu_deque.front());
-          imu_last = imu_next;
-          imu_deque.pop_front();
-          if (imu_deque.empty())
-            break;
-          imu_time = get_time_sec(imu_deque.front()->header.stamp);
-          imu_next = *(imu_deque.front());
-        }
-      }
-      imu_pushed = true;
-    }
-
-    // 5. 清理: 弹出已处理的帧，重置标志
-    lidar_buffer.pop_front();
-    time_buffer.pop_front();
-    lidar_pushed = false;
-    imu_pushed = false;
+    update_frame_end_time(meas);
+    pop_lidar_frame();
     return true;
   }
+
+  // ==================== IMU 启用模式 ====================
+  // 1. 检查数据是否就绪
+  if (!imu_data_ready()) {
+    return false;
+  }
+
+  // 2. 取雷达帧 (只取一次)
+  imu_take_frame(meas);
+
+  // 3. 等待 IMU 数据覆盖完整帧时间区间
+  if (!imu_covers_lidar_frame(meas)) {
+    return false;  // IMU 数据还不够多
+  }
+
+  // 4. 打包帧窗口内 IMU (丢帧时按估算帧长)
+  collect_frame_imu(meas);
+
+  // 5. 清理: 弹出已处理的帧，重置标志
+  imu_finish_frame();
+  return true;
 }

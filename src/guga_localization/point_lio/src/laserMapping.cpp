@@ -340,20 +340,6 @@ namespace {
 }  // namespace
 
 int main(int argc, char** argv) {
-  bool init_map = false;
-  bool flg_reset = false;
-  bool flg_first_scan = true;
-  int sleep_time = 0;
-  int time_log_counter = 0;
-  double match_time = 0;
-  double solve_time = 0;
-  double propag_time = 0;
-  double update_time = 0;
-
-  pcl::VoxelGrid<PointType> downsize_filter_surf;
-  pcl::VoxelGrid<PointType> downsize_filter_map;
-  V3D euler_cur;
-
   rclcpp::init(argc, argv);
   auto nh = std::make_shared<rclcpp::Node>("laserMapping");
   rclcpp::executors::MultiThreadedExecutor executor;
@@ -364,23 +350,37 @@ int main(int argc, char** argv) {
   RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
               lidar_type);
 
-  nav_msgs::msg::Path path;  ///< 路径消息
-  path.header.stamp = get_ros_time(lidar_end_time);
-  path.header.frame_id = "camera_init";
-  nav_msgs::msg::Odometry odom_aft_mapped;        ///< 里程计消息
-  geometry_msgs::msg::PoseStamped msg_body_pose;  ///< 位姿消息 (用于路径)
-
-  ivox_ = std::make_shared<IVoxType>(ivox_options_);
-  PointCloudXYZI::Ptr feats_undistort = make_shared<PointCloudXYZI>();
-  PointCloudXYZI::Ptr init_feats_world = make_shared<PointCloudXYZI>();
-  PointCloudXYZI::Ptr pcl_wait_save = make_shared<PointCloudXYZI>();
-
+  bool init_map = false;
+  bool flg_reset = false;
+  bool flg_first_scan = true;
   int frame_num = 0;
+  int sleep_time = 0;
+  int time_log_counter = 0;
+  double match_time = 0;
+  double solve_time = 0;
+  double propag_time = 0;
+  double update_time = 0;
   double aver_time_consu = 0;
   double aver_time_icp = 0;
   double aver_time_match = 0;
   double aver_time_solve = 0;
   double aver_time_propag = 0;
+
+  pcl::VoxelGrid<PointType> downsize_filter_surf;
+  pcl::VoxelGrid<PointType> downsize_filter_map;
+  V3D euler_cur;
+
+  nav_msgs::msg::Path path;
+  path.header.stamp = get_ros_time(lidar_end_time);
+  path.header.frame_id = "camera_init";
+
+  nav_msgs::msg::Odometry odom_aft_mapped;
+  geometry_msgs::msg::PoseStamped msg_body_pose;
+
+  PointCloudXYZI::Ptr feats_undistort = make_shared<PointCloudXYZI>();
+  PointCloudXYZI::Ptr init_feats_world = make_shared<PointCloudXYZI>();
+  PointCloudXYZI::Ptr pcl_wait_save = make_shared<PointCloudXYZI>();
+  ivox_ = std::make_shared<IVoxType>(ivox_options_);
 
   point_selected_surf.set();
   downsize_filter_surf.setLeafSize(static_cast<float>(filter_size_surf_min),
@@ -405,7 +405,7 @@ int main(int argc, char** argv) {
   }
 
   p_imu->lidar_type = p_pre->lidar_type = lidar_type;
-  p_imu->imu_en = imu_en;
+  p_imu->imu_en = imu_enabled;
 
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
   kf_output.init_dyn_share_modified_3h(get_f_output, df_dx_output,
@@ -414,6 +414,7 @@ int main(int argc, char** argv) {
   Eigen::Matrix<double, 24, 24> p_init;
   reset_cov(p_init);
   kf_input.change_P(p_init);
+
   Eigen::Matrix<double, 30, 30> p_init_output;
   reset_cov_output(p_init_output);
   kf_output.change_P(p_init_output);
@@ -446,8 +447,6 @@ int main(int argc, char** argv) {
           standard_pcl_cbk(msg);
         });
   }
-  auto sub_imu = nh->create_subscription<sensor_msgs::msg::Imu>(
-      imu_topic, rclcpp::SensorDataQoS(), imu_cbk);
 
   auto pub_laser_cloud_full_res =
       nh->create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered",
@@ -464,15 +463,17 @@ int main(int argc, char** argv) {
   auto pub_path = nh->create_publisher<nav_msgs::msg::Path>("path", 20);
   auto tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(nh);
 
+  auto sub_imu = nh->create_subscription<sensor_msgs::msg::Imu>(
+      imu_topic, rclcpp::SensorDataQoS(), imu_cbk);
+
   signal(SIGINT, SigHandle);  // NOLINT
+
   rclcpp::Rate rate(500);
-  while (rclcpp::ok()) {
-    if (flg_exit) {
-      break;
-    }
+  while (rclcpp::ok() && !flg_exit) {
     executor.spin_some();
-    if (sync_packages(Measures)) {
-      if (flg_reset) {
+
+    if (sync_packages(Measures)) {  // 准备好一帧同步的 imu 雷达 group
+      if (flg_reset) {              // 需要reset
         RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
                     "reset when rosbag play back");
         p_imu->Reset();
@@ -492,15 +493,14 @@ int main(int argc, char** argv) {
         ivox_ = std::make_shared<IVoxType>(ivox_options_);
       }
 
-      if (flg_first_scan) {
+      if (flg_first_scan) {  // 首次扫描
         first_lidar_time = Measures.lidar_beg_time;
         flg_first_scan = false;
-        if (first_imu_time < 1) {
-          first_imu_time = get_time_sec(imu_next.header.stamp);
-          std::cout << "first imu time: " << first_imu_time << '\n';
-        }
+
+        std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
+                  << '\n';
         time_current = 0.0;
-        if (imu_en) {
+        if (imu_enabled) {
           kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
           kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
 
@@ -555,7 +555,7 @@ int main(int argc, char** argv) {
       if (!p_imu->after_imu_init_) {
         if (!p_imu->imu_need_init_) {
           V3D tmp_gravity;
-          if (imu_en) {
+          if (imu_enabled) {
             tmp_gravity = -p_imu->mean_acc / p_imu->mean_acc.norm() * G_m_s2;
           } else {
             tmp_gravity << VEC_FROM_ARRAY(gravity_init);
@@ -631,7 +631,7 @@ int main(int argc, char** argv) {
             time_current = (point_body.curvature / 1000.0)  // NOLINT
                            + pcl_beg_time;
             if (is_first_frame) {
-              if (imu_en) {
+              if (imu_enabled) {
                 while (time_current > get_time_sec(imu_next.header.stamp)) {
                   imu_deque.pop_front();
                   if (imu_deque.empty()) {
@@ -651,7 +651,7 @@ int main(int argc, char** argv) {
               time_predict_last_const = time_current;
             }
             // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
-            if (imu_en && !imu_deque.empty()) {
+            if (imu_enabled && !imu_deque.empty()) {
               bool last_imu = get_time_sec(imu_next.header.stamp)
                               == get_time_sec(imu_deque.front()->header.stamp);
               while (get_time_sec(imu_next.header.stamp)

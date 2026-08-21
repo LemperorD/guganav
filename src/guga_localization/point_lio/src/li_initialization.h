@@ -67,7 +67,7 @@ extern std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_deque;
 // ==================== 互斥与时序 ====================
 
 extern std::mutex m_time;
-extern bool lidar_pushed;                 ///< lidar 帧是否已推入 MeasureGroup
+extern bool lidar_pushed;                 ///< 雷达帧是否已推入 MeasureGroup (IMU模式)
 extern bool imu_pushed;                   ///< IMU 数据是否已推入 MeasureGroup
 extern double imu_first_time;             ///< 首帧 IMU 时间戳
 extern bool lose_lid;                     ///< 是否丢失了当前激光帧

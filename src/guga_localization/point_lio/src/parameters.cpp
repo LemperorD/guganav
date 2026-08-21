@@ -13,6 +13,7 @@
  */
 
 #include "parameters.h"
+#include <memory>
 
 // ==================== 帧控制标志 ====================
 bool is_first_frame = true;          ///< 首帧标志 (用于跳过第一帧的预测)
@@ -67,7 +68,7 @@ double fov_deg = 180;               ///< 默认全向 FOV
 float DET_RANGE = 450;  ///< 最大检测距离 450m
 
 // ==================== IMU 参数 ====================
-bool imu_en = true;             ///< 默认启用 IMU
+bool imu_enabled = true;        ///< 默认启用 IMU
 double imu_time_inte = 0.005;   ///< IMU 时间步长 5ms
 double laser_point_cov = 0.01;  ///< 激光点量测噪声 0.01
 double acc_norm;                ///< 加速度归一化因子
@@ -131,164 +132,127 @@ ofstream fout_imu_pbp;  ///< IMU 逐点输出文件
 
 void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
   // 初始化 Preprocess 和 ImuProcess 实例
-  p_pre.reset(new Preprocess());
-  p_imu.reset(new ImuProcess());
+  p_pre = std::make_shared<Preprocess>();
+  p_imu = std::make_shared<ImuProcess>();
   try {
     // ==================== 模式开关 ====================
     prop_at_freq_of_imu = nh->declare_parameter<bool>("prop_at_freq_of_imu",
                                                       true);
-
     use_imu_as_input = nh->declare_parameter<bool>("use_imu_as_input", false);
-
     check_satu = nh->declare_parameter<bool>("check_satu", true);
-
-    init_map_size = nh->declare_parameter<int>("init_map_size", 100);
-
+    init_map_size = (int)nh->declare_parameter<long>("init_map_size", 100);
     space_down_sample = nh->declare_parameter<bool>("space_down_sample", true);
 
     // ==================== mapping 参数 — IMU 饱和 ====================
     satu_acc = nh->declare_parameter<double>("mapping.satu_acc", 3.0);
-
     satu_gyro = nh->declare_parameter<double>("mapping.satu_gyro", 35.0);
-
     acc_norm = nh->declare_parameter<double>("mapping.acc_norm", 1.0);
 
     // ==================== mapping 参数 — 平面提取 ====================
-    plane_thr = nh->declare_parameter<float>("mapping.plane_thr", 0.05f);
-
-    p_pre->point_filter_num = nh->declare_parameter<int>("point_filter_num", 2);
+    plane_thr = (float)nh->declare_parameter<double>("mapping.plane_thr",
+                                                     0.05F);
+    p_pre->point_filter_num = (int)nh->declare_parameter<long>(
+        "point_filter_num", 2);
 
     // ==================== common 参数 — 话题名 ====================
     lid_topic = nh->declare_parameter<std::string>("common.lid_topic",
                                                    ".livox.lidar");
-
     imu_topic = nh->declare_parameter<std::string>("common.imu_topic",
                                                    ".livox.imu");
 
     // ==================== common 参数 — 合帧/切帧 ====================
     con_frame = nh->declare_parameter<bool>("common.con_frame", false);
-
-    con_frame_num = nh->declare_parameter<int>("common.con_frame_num", 1);
-
+    con_frame_num = (int)nh->declare_parameter<long>("common.con_frame_num", 1);
     cut_frame = nh->declare_parameter<bool>("common.cut_frame", false);
-
     cut_frame_time_interval = nh->declare_parameter<double>(
         "common.cut_frame_time_interval", 0.1);
-
     time_diff_lidar_to_imu = nh->declare_parameter<double>(
         "common.time_diff_lidar_to_imu", 0.0);
 
     // ==================== prior_pcd 参数 — 先验地图 ====================
     enable_prior_pcd = nh->declare_parameter<bool>("prior_pcd.enable", false);
-
     prior_pcd_map_path = nh->declare_parameter<string>(
         "prior_pcd.prior_pcd_map_path", "");
-
     init_pose = nh->declare_parameter<std::vector<double>>(
         "prior_pcd.init_pose", std::vector<double>());
 
     // ==================== 滤波参数 ====================
     filter_size_surf_min = nh->declare_parameter<double>("filter_size_surf",
                                                          0.5);
-
     filter_size_map_min = nh->declare_parameter<double>("filter_size_map", 0.5);
-
-    DET_RANGE = nh->declare_parameter<float>("mapping.det_range", 300.f);
-
+    DET_RANGE = (float)nh->declare_parameter<double>("mapping.det_range",
+                                                     300.F);
     fov_deg = nh->declare_parameter<double>("mapping.fov_degree", 180);
 
     // ==================== mapping 参数 — IMU 功能开关 ====================
-    imu_en = nh->declare_parameter<bool>("mapping.imu_en", true);
-
+    imu_enabled = nh->declare_parameter<bool>("mapping.imu_en", true);
     extrinsic_est_en = nh->declare_parameter<bool>("mapping.extrinsic_est_en",
                                                    true);
-
     imu_time_inte = nh->declare_parameter<double>("mapping.imu_time_inte",
                                                   0.005);
 
     // ==================== mapping 参数 — 噪声协方差 ====================
     laser_point_cov = nh->declare_parameter<double>("mapping.lidar_meas_cov",
                                                     0.1);
-
     acc_cov_input = nh->declare_parameter<double>("mapping.acc_cov_input", 0.1);
-
     vel_cov = nh->declare_parameter<double>("mapping.vel_cov", 20);
-
     gyr_cov_input = nh->declare_parameter<double>("mapping.gyr_cov_input", 0.1);
-
     gyr_cov_output = nh->declare_parameter<double>("mapping.gyr_cov_output",
                                                    0.1);
-
     acc_cov_output = nh->declare_parameter<double>("mapping.acc_cov_output",
                                                    0.1);
-
     b_gyr_cov = nh->declare_parameter<double>("mapping.b_gyr_cov", 0.0001);
-
     b_acc_cov = nh->declare_parameter<double>("mapping.b_acc_cov", 0.0001);
-
     imu_meas_acc_cov = nh->declare_parameter<double>("mapping.imu_meas_acc_cov",
                                                      0.1);
-
     imu_meas_omg_cov = nh->declare_parameter<double>("mapping.imu_meas_omg_cov",
                                                      0.1);
 
     // ==================== preprocess 参数 — 雷达配置 ====================
     p_pre->blind = nh->declare_parameter<double>("preprocess.blind", 1.0);
-
-    lidar_type = nh->declare_parameter<int>("preprocess.lidar_type", 1);
-
-    p_pre->N_SCANS = nh->declare_parameter<int>("preprocess.scan_line", 16);
-
-    p_pre->SCAN_RATE = nh->declare_parameter<int>("preprocess.scan_rate", 10);
-
-    p_pre->time_unit = nh->declare_parameter<int>("preprocess.timestamp_unit",
-                                                  1);
-
+    lidar_type = (int)nh->declare_parameter<long>("preprocess.lidar_type", 1);
+    p_pre->N_SCANS = (int)nh->declare_parameter<long>("preprocess.scan_line",
+                                                      16);
+    p_pre->SCAN_RATE = (int)nh->declare_parameter<long>("preprocess.scan_rate",
+                                                        10);
+    p_pre->time_unit = (int)nh->declare_parameter<long>(
+        "preprocess.timestamp_unit", 1);
     match_s = nh->declare_parameter<double>("mapping.match_s", 81);
 
     // ==================== mapping 参数 — 重力 ====================
     gravity = nh->declare_parameter<std::vector<double>>("mapping.gravity",
                                                          std::vector<double>());
-
     gravity_init = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity_init", std::vector<double>());
 
     // ==================== mapping 参数 — 外参 ====================
     extrinT = nh->declare_parameter<std::vector<double>>("mapping.extrinsic_T",
                                                          std::vector<double>());
-
     extrinR = nh->declare_parameter<std::vector<double>>("mapping.extrinsic_R",
                                                          std::vector<double>());
 
     // ==================== odometry/publish 参数 ====================
     publish_odometry_without_downsample = nh->declare_parameter<bool>(
         "odometry.publish_odometry_without_downsample", false);
-
     path_en = nh->declare_parameter<bool>("publish.path_en", true);
-
     scan_pub_en = nh->declare_parameter<bool>("publish.scan_publish_en", true);
-
     scan_body_pub_en = nh->declare_parameter<bool>(
         "publish.scan_bodyframe_pub_en", true);
-
     tf_send_en = nh->declare_parameter<bool>("publish.tf_send_en", true);
-
     runtime_pos_log = nh->declare_parameter<bool>("runtime_pos_log_enable",
                                                   false);
 
     // ==================== pcd_save 参数 ====================
     pcd_save_en = nh->declare_parameter<bool>("pcd_save.pcd_save_en", false);
-
-    pcd_save_interval = nh->declare_parameter<int>("pcd_save.interval", -1);
-
+    pcd_save_interval = (int)nh->declare_parameter<long>("pcd_save.interval",
+                                                         -1);
     lidar_time_inte = nh->declare_parameter<double>("mapping.lidar_time_inte",
                                                     0.1);
 
     // ==================== iVox 网格参数 ====================
-    ivox_options_.resolution_ = nh->declare_parameter<float>(
+    ivox_options_.resolution_ = (float)nh->declare_parameter<double>(
         "mapping.ivox_grid_resolution", 0.2);
-
-    ivox_nearby_type = nh->declare_parameter<int>("ivox_nearby_type", 18);
+    ivox_nearby_type = (int)nh->declare_parameter<long>("ivox_nearby_type", 18);
   } catch (const rclcpp::ParameterTypeException& e) {
     RCLCPP_ERROR(nh->get_logger(), "Parameter type exception: %s", e.what());
   } catch (const std::exception& e) {
@@ -301,9 +265,6 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
   } else if (ivox_nearby_type == 6) {
     ivox_options_.nearby_type_ =
         IVoxType::NearbyType::NEARBY6;  ///< 面邻域 (6个)
-  } else if (ivox_nearby_type == 18) {
-    ivox_options_.nearby_type_ =
-        IVoxType::NearbyType::NEARBY18;  ///< 面+边邻域 (18个) [推荐]
   } else if (ivox_nearby_type == 26) {
     ivox_options_.nearby_type_ =
         IVoxType::NearbyType::NEARBY26;  ///< 面+边+角邻域 (26个)

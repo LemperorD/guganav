@@ -22,6 +22,7 @@
 
 #include <../include/IKFoM/IKFoM_toolkit/esekfom/esekfom.hpp>
 #include <Eigen/Eigen>
+#include <memory>
 #include <nav_msgs/msg/odometry.hpp>
 #include <queue>
 #include <sensor_msgs/msg/imu.hpp>
@@ -135,6 +136,7 @@ extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
 // ==================== PCL/Eigen 类型别名 ====================
 using PointType =
     pcl::PointXYZINormal;  ///< 带强度+法向的点类型 (curvature 域复用存储时间戳)
+
 using PointTypeRGB = pcl::PointXYZRGB;              ///< 带颜色的点类型
 using PointCloudXYZI = pcl::PointCloud<PointType>;  ///< 常用点云类型
 using PointCloudXYZRGB = pcl::PointCloud<PointTypeRGB>;
@@ -167,14 +169,9 @@ const V3F Zero3f(0, 0, 0);         ///< 3维零向量 (float)
  * - lidar_last_time: 当前帧结束时间 (秒)
  */
 struct MeasureGroup {
-  MeasureGroup() {
-    lidar_beg_time = 0.0;
-    lidar_last_time = 0.0;
-    this->lidar.reset(new PointCloudXYZI());
-  };
-  double lidar_beg_time;      ///< 当前帧起始时间戳
-  double lidar_last_time;     ///< 当前帧最后一个点的时间戳
-  PointCloudXYZI::Ptr lidar;  ///< 降采样后的点云
+  double lidar_beg_time{0.0};   ///< 当前帧起始时间戳
+  double lidar_last_time{0.0};  ///< 当前帧最后一个点的时间戳
+  PointCloudXYZI::Ptr lidar;    ///< 降采样后的点云
   deque<sensor_msgs::msg::Imu::ConstSharedPtr>
       imu;  ///< 该帧时间范围内的IMU数据
 };
