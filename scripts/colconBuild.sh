@@ -30,9 +30,8 @@ BUILD_TYPE=Release
 # 是否重新编译MPC控制器模型
 FORCE_MODEL=false
 
-# 仅编译指定包(为空则全量编译)
-PACKAGES_SELECT=""
-
+# 先编译指定包(为空则全量编译)
+PACKAGES_SELECT="livox_ros_driver2 point_lio nav2_mppi_controller nonrotating_vel_transform"
 # 安全编译(单线程+顺序+内存限制,防止编译爆内存死机)
 SAFE_BUILD=false
 
@@ -59,14 +58,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -p | --packages)
-            PACKAGES_SELECT="$2"
+            PACKAGES_SELECT+="$2"
             shift 2
-            ;;
-        -t | --tes)
-            # point_lio 依赖 livox_ros_driver2，清空 install/ 后必须一起构建
-            PACKAGES_SELECT="livox_ros_driver2 point_lio nav2_mppi_controller nonrotating_vel_transform"
-            SAFE_BUILD=true
-            shift
             ;;
         *)
             echo "Unknown option: $1"
@@ -141,15 +134,35 @@ if [ -n "$PACKAGES_SELECT" ]; then
   BUILD_ARGS+=(--packages-select $PACKAGES_SELECT)
 fi
 
-if $SAFE_BUILD; then
-  echo "Safe build : systemd-run MemoryMax=6G, -j1, sequential executor"
-  systemd-run --user --scope \
-    -p MemoryHigh=5G \
-    -p MemoryMax=6G \
-    bash -lc "cd '$WS' && export MAKEFLAGS='-j1 -l1' && colcon build ${BUILD_ARGS[*]} --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-else
-  colcon build "${BUILD_ARGS[@]}" --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+echo "Safe build : systemd-run MemoryMax=6G, -j1, sequential executor"
+systemd-run --user --scope \
+ -p MemoryHigh=5G \
+ -p MemoryMax=6G \
+bash -lc "
+cd '$WS' && 
+export MAKEFLAGS='-j1 -l1' && 
+colcon build ${BUILD_ARGS[*]} \
+--executor sequential \
+--cmake-args \
+-DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+-DCMAKE_EXPORT_COMPILE_COMMANDS=ON\
+"
+if [$? -ne 1 ]; then
+  echo "Selected packages build failed, please check the error messages."
+  exit 1
 fi
+
+cd "$WS" || exit 1
+
+export MAKEFLAGS='-j1 -l1'
+
+colcon build \
+    --packages-ignore $PACKAGES_SELECT \
+    --executor sequential \
+    --cmake-args \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
 if [ ! -L "$WS/compile_commands.json" ]; then
   ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
   echo "已创建compile_commands.json的软链接, 请设置vscode的c_cpp_properties.json以启用代码补全和跳转功能。"
