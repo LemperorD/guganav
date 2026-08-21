@@ -23,6 +23,7 @@ Checks:          '-*,
                   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
                   -cppcoreguidelines-pro-bounds-constant-array-index,
                   -hicpp-signed-bitwise,
+                  -cppcoreguidelines-pro-type-union-access
                   '
 HeaderFilterRegex: ''
 CheckOptions:

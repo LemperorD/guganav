@@ -14,7 +14,7 @@ Options:
     -r / --release       Release编译
     -d / --debug         Debug编译
     -m / --model         强制重编译控制器模型
-    -p / --packages      仅编译指定包(空格分隔多个包名)
+    -p / --packages      仅指定安全编译的包(空格分隔多个包名)
     -t / --tes           安全编译TES相关包(内存限制+单线程,防死机)
 EOF
 }
@@ -30,10 +30,8 @@ BUILD_TYPE=Release
 # 是否重新编译MPC控制器模型
 FORCE_MODEL=false
 
-# 先编译指定包(为空则全量编译)
+# 阶段一(安全模式)编译的包; 阶段二总是全量编译, 保证 compile_commands.json 含全部包
 PACKAGES_SELECT="livox_ros_driver2 point_lio nav2_mppi_controller nonrotating_vel_transform"
-# 安全编译(单线程+顺序+内存限制,防止编译爆内存死机)
-SAFE_BUILD=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -58,8 +56,13 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -p | --packages)
-            PACKAGES_SELECT+="$2"
+            PACKAGES_SELECT="$2"
             shift 2
+            ;;
+        -t | --tes)
+            # point_lio 依赖 livox_ros_driver2，清空 install/ 后必须一起构建
+            PACKAGES_SELECT="livox_ros_driver2 point_lio nav2_mppi_controller nonrotating_vel_transform"
+            shift
             ;;
         *)
             echo "Unknown option: $1"
@@ -102,7 +105,7 @@ else
       echo "控制器模型编译失败，请检查错误信息。"
       exit 1
     fi
-  else 
+  else
     echo "控制器模型已存在，跳过编译。"
   fi
 fi
@@ -134,36 +137,25 @@ if [ -n "$PACKAGES_SELECT" ]; then
   BUILD_ARGS+=(--packages-select $PACKAGES_SELECT)
 fi
 
+# ---- 阶段一: 安全编译指定包 (内存限制+单线程, 防死机) ----
 echo "Safe build : systemd-run MemoryMax=6G, -j1, sequential executor"
-systemd-run --user --scope \
- -p MemoryHigh=5G \
- -p MemoryMax=6G \
-bash -lc "
-cd '$WS' && 
-export MAKEFLAGS='-j1 -l1' && 
-colcon build ${BUILD_ARGS[*]} \
---executor sequential \
---cmake-args \
--DCMAKE_BUILD_TYPE=$BUILD_TYPE \
--DCMAKE_EXPORT_COMPILE_COMMANDS=ON\
-"
-if [$? -ne 1 ]; then
-  echo "Selected packages build failed, please check the error messages."
+if ! systemd-run --user --scope \
+  -p MemoryHigh=5G \
+  -p MemoryMax=6G \
+  bash -lc "cd '$WS' && export MAKEFLAGS='-j1 -l1' && colcon build ${BUILD_ARGS[*]} --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"; then
+  echo "Build failed, please check the error messages."
   exit 1
 fi
 
-cd "$WS" || exit 1
-
+# ---- 阶段二: 全量编译所有包 (阶段一的包已 up-to-date 会跳过) ----
+# 目的: 让根 compile_commands.json 包含全部包的条目, clangd 才能索引所有头文件
+echo "Full build : 全量编译所有包"
 export MAKEFLAGS='-j1 -l1'
-
-colcon build \
-    --packages-ignore $PACKAGES_SELECT \
-    --executor sequential \
-    --cmake-args \
-    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-if [ ! -L "$WS/compile_commands.json" ]; then
-  ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
-  echo "已创建compile_commands.json的软链接, 请设置vscode的c_cpp_properties.json以启用代码补全和跳转功能。"
+if ! colcon build --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON; then
+  echo "Build failed, please check the error messages."
+  exit 1
 fi
+
+# 无条件刷新软链接, 保证指向本次构建生成的 compile_commands.json
+ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
+echo "已创建compile_commands.json的软链接, 请设置vscode的c_cpp_properties.json以启用代码补全和跳转功能。"
