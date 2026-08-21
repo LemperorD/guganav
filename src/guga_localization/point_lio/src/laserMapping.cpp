@@ -338,8 +338,9 @@ namespace {
     pubPath->publish(path);
   }
 
-  /** @brief 主循环状态 (标志/计数器/耗时统计) */
+  /** @brief 主循环状态 (标志/计数器/耗时统计/工作缓存) */
   struct MainLoopState {
+    // ---- 控制标志 / 计数器 / 耗时统计 ----
     bool init_map = false;        ///< 地图已初始化
     bool flg_reset = false;       ///< 请求复位 (bag 回放等)
     bool flg_first_scan = true;   ///< 首次/复位后的第一帧
@@ -355,7 +356,55 @@ namespace {
     double aver_time_match = 0;   ///< 平均匹配耗时 (s)
     double aver_time_solve = 0;   ///< 平均求解耗时 (s)
     double aver_time_propag = 0;  ///< 平均传播耗时 (s)
+
+    // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
+    pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
+    pcl::VoxelGrid<PointType> downsize_filter_map;   ///< 地图降采样
+    V3D euler_cur;                                   ///< 欧拉角 (发布用)
+    nav_msgs::msg::Path path;                        ///< 轨迹消息
+    nav_msgs::msg::Odometry odom_aft_mapped;         ///< 里程计消息
+    geometry_msgs::msg::PoseStamped msg_body_pose;   ///< 位姿消息
+    PointCloudXYZI::Ptr feats_undistort =
+        std::make_shared<PointCloudXYZI>();  ///< 去畸变特征点云
+    PointCloudXYZI::Ptr init_feats_world =
+        std::make_shared<PointCloudXYZI>();  ///< 初始化世界系点云
+    PointCloudXYZI::Ptr pcl_wait_save =
+        std::make_shared<PointCloudXYZI>();  ///< 待保存点云
+
+    // ---- 滤波协方差 / 过程噪声 ----
+    Eigen::Matrix<double, 24, 24> p_init;  ///< 初始协方差 (24维状态)
+    Eigen::Matrix<double, 30, 30> p_init_output;  ///< 初始协方差 (30维状态)
+    Eigen::Matrix<double, 24, 24> q_input;   ///< 过程噪声 (input 模式)
+    Eigen::Matrix<double, 30, 30> q_output;  ///< 过程噪声 (output 模式)
+
+    // ---- 位姿日志 ----
+    std::string pos_log_dir;  ///< 位姿日志路径
+    std::ofstream fp;         ///< 位姿日志文件
+
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
+
+  /** @brief 系统复位: 重置滤波器/里程计状态/地图 (bag 回放等场景) */
+  void reset_system(MainLoopState& st) {
+    RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
+                "reset when rosbag play back");
+    p_imu->Reset();
+    st.feats_undistort = std::make_shared<PointCloudXYZI>();
+    if (use_imu_as_input) {
+      state_in = state_input();
+      kf_input.change_P(st.p_init);
+    } else {
+      state_out = state_output();
+      kf_output.change_P(st.p_init_output);
+    }
+    st.flg_first_scan = true;
+    is_first_frame = true;
+    st.flg_reset = false;
+    st.init_map = false;
+    ivox_ = std::make_shared<IVoxType>(ivox_options_);
+  }
+
+  void init_scan(MainLoopState& st);
 
 }  // namespace
 
@@ -370,32 +419,21 @@ int main(int argc, char** argv) {
   RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
               lidar_type);
 
-  MainLoopState st;  // 主循环状态 (标志/计数器/耗时统计)
+  MainLoopState st;  // 主循环状态 (标志/计数器/耗时统计/工作缓存)
 
-  pcl::VoxelGrid<PointType> downsize_filter_surf;
-  pcl::VoxelGrid<PointType> downsize_filter_map;
-  V3D euler_cur;
-
-  nav_msgs::msg::Path path;
-  path.header.stamp = get_ros_time(lidar_end_time);
-  path.header.frame_id = "camera_init";
-
-  nav_msgs::msg::Odometry odom_aft_mapped;
-  geometry_msgs::msg::PoseStamped msg_body_pose;
-
-  PointCloudXYZI::Ptr feats_undistort = make_shared<PointCloudXYZI>();
-  PointCloudXYZI::Ptr init_feats_world = make_shared<PointCloudXYZI>();
-  PointCloudXYZI::Ptr pcl_wait_save = make_shared<PointCloudXYZI>();
   ivox_ = std::make_shared<IVoxType>(ivox_options_);
 
   point_selected_surf.set();
-  downsize_filter_surf.setLeafSize(static_cast<float>(filter_size_surf_min),
-                                   static_cast<float>(filter_size_surf_min),
-                                   static_cast<float>(filter_size_surf_min));
+  st.downsize_filter_surf.setLeafSize(static_cast<float>(filter_size_surf_min),
+                                      static_cast<float>(filter_size_surf_min),
+                                      static_cast<float>(filter_size_surf_min));
 
-  downsize_filter_map.setLeafSize(static_cast<float>(filter_size_map_min),
-                                  static_cast<float>(filter_size_map_min),
-                                  static_cast<float>(filter_size_map_min));
+  st.downsize_filter_map.setLeafSize(static_cast<float>(filter_size_map_min),
+                                     static_cast<float>(filter_size_map_min),
+                                     static_cast<float>(filter_size_map_min));
+
+  st.path.header.stamp = get_ros_time(lidar_end_time);
+  st.path.header.frame_id = "camera_init";
 
   Lidar_T_wrt_IMU = to_vec3d(extrinT);
   Lidar_R_wrt_IMU = to_mat3d(extrinR);
@@ -417,23 +455,20 @@ int main(int argc, char** argv) {
   kf_output.init_dyn_share_modified_3h(get_f_output, df_dx_output,
                                        h_model_output, h_model_IMU_output);
 
-  Eigen::Matrix<double, 24, 24> p_init;
-  reset_cov(p_init);
-  kf_input.change_P(p_init);
+  reset_cov(st.p_init);
+  kf_input.change_P(st.p_init);
 
-  Eigen::Matrix<double, 30, 30> p_init_output;
-  reset_cov_output(p_init_output);
-  kf_output.change_P(p_init_output);
+  reset_cov_output(st.p_init_output);
+  kf_output.change_P(st.p_init_output);
 
-  Eigen::Matrix<double, 24, 24> q_input = process_noise_cov_input();
-  Eigen::Matrix<double, 30, 30> q_output = process_noise_cov_output();
+  st.q_input = process_noise_cov_input();
+  st.q_output = process_noise_cov_output();
 
-  std::string pos_log_dir = std::string(ROOT_DIR) + "/Log/pos_log.txt";
-
-  std::ofstream fp(pos_log_dir);
-  if (!fp.is_open()) {
+  st.pos_log_dir = std::string(ROOT_DIR) + "/Log/pos_log.txt";
+  st.fp.open(st.pos_log_dir);
+  if (!st.fp.is_open()) {
     RCLCPP_WARN(rclcpp::get_logger("laserMapping"), "无法打开 pos_log 文件: %s",
-                pos_log_dir.c_str());
+                st.pos_log_dir.c_str());
   }
   open_file();
 
@@ -480,23 +515,7 @@ int main(int argc, char** argv) {
 
     if (sync_packages(Measures)) {  // 准备好一帧同步的 imu 雷达 group
       if (st.flg_reset) {           // 需要reset
-        RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
-                    "reset when rosbag play back");
-        p_imu->Reset();
-        feats_undistort = std::make_shared<PointCloudXYZI>();
-        if (use_imu_as_input) {
-          state_in = state_input();
-          kf_input.change_P(p_init);
-        } else {
-          state_out = state_output();
-          kf_output.change_P(p_init_output);
-        }
-        st.flg_first_scan = true;
-        is_first_frame = true;
-        st.flg_reset = false;
-        st.init_map = false;
-
-        ivox_ = std::make_shared<IVoxType>(ivox_options_);
+        reset_system(st);
       }
 
       if (st.flg_first_scan) {  // (reset后)首次扫描
@@ -544,10 +563,10 @@ int main(int argc, char** argv) {
 
       // [Workflow 13] IMU 预处理，包括 IMU 有效性和饱和检查。
       t1 = omp_get_wtime();
-      p_imu->Process(Measures, feats_undistort);
+      p_imu->Process(Measures, st.feats_undistort);
       if (space_down_sample) {
-        downsize_filter_surf.setInputCloud(feats_undistort);
-        downsize_filter_surf.filter(*feats_down_body);
+        st.downsize_filter_surf.setInputCloud(st.feats_undistort);
+        st.downsize_filter_surf.filter(*feats_down_body);
         sort(feats_down_body->points.begin(), feats_down_body->points.end(),
              time_list);
       } else {
@@ -577,24 +596,24 @@ int main(int argc, char** argv) {
         }
       }
       if (!st.init_map) {
-        feats_down_world->resize(feats_undistort->size());
-        for (int i = 0; i < (int)feats_undistort->size(); i++) {
-          pointBodyToWorld(&(feats_undistort->points[i]),
+        feats_down_world->resize(st.feats_undistort->size());
+        for (int i = 0; i < (int)st.feats_undistort->size(); i++) {
+          pointBodyToWorld(&(st.feats_undistort->points[i]),
                            &(feats_down_world->points[i]));
         }
         for (const auto& point : *feats_down_world) {
-          init_feats_world->points.emplace_back(point);
+          st.init_feats_world->points.emplace_back(point);
         }
 
-        if (init_feats_world->size() >= (size_t)init_map_size) {
+        if (st.init_feats_world->size() >= (size_t)init_map_size) {
           if (enable_prior_pcd) {
             auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
             ivox_->AddPoints(map_cloud->points);
           } else {
-            ivox_->AddPoints(init_feats_world->points);
+            ivox_->AddPoints(st.init_feats_world->points);
           }
-          publish_init_map(pub_laser_cloud_map, init_feats_world);
-          init_feats_world.reset(new PointCloudXYZI());
+          publish_init_map(pub_laser_cloud_map, st.init_feats_world);
+          st.init_feats_world.reset(new PointCloudXYZI());
           st.init_map = true;
         } else {
           st.init_map = false;
@@ -687,7 +706,7 @@ int main(int argc, char** argv) {
 
                 double dt = get_time_sec(imu_next.header.stamp)
                             - time_predict_last_const;
-                kf_output.predict(dt, q_output, input_in, true, false);
+                kf_output.predict(dt, st.q_output, input_in, true, false);
                 time_predict_last_const = get_time_sec(imu_next.header.stamp);
 
                 {
@@ -698,7 +717,8 @@ int main(int argc, char** argv) {
                     time_update_last = get_time_sec(imu_next.header.stamp);
                     double propag_imu_start = omp_get_wtime();
 
-                    kf_output.predict(dt_cov, q_output, input_in, false, true);
+                    kf_output.predict(dt_cov, st.q_output, input_in, false,
+                                      true);
 
                     st.propag_time += omp_get_wtime() - propag_imu_start;
                     double solve_imu_start = omp_get_wtime();
@@ -724,11 +744,11 @@ int main(int argc, char** argv) {
             if (!prop_at_freq_of_imu) {
               double dt_cov = time_current - time_update_last;
               if (dt_cov > 0.0) {
-                kf_output.predict(dt_cov, q_output, input_in, false, true);
+                kf_output.predict(dt_cov, st.q_output, input_in, false, true);
                 time_update_last = time_current;
               }
             }
-            kf_output.predict(dt, q_output, input_in, true, false);
+            kf_output.predict(dt, st.q_output, input_in, true, false);
             st.propag_time += omp_get_wtime() - propag_state_start;
             time_predict_last_const = time_current;
             double t_update_start = omp_get_wtime();
@@ -752,12 +772,12 @@ int main(int argc, char** argv) {
 
             if (publish_odometry_without_downsample) {
               publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
-                               odom_aft_mapped);
+                               st.odom_aft_mapped);
               if (runtime_pos_log) {
-                euler_cur = SO3ToEuler(kf_output.x_.rot);
+                st.euler_cur = SO3ToEuler(kf_output.x_.rot);
                 fout_out << setw(20)
                          << Measures.lidar_beg_time - first_lidar_time << " "
-                         << euler_cur.transpose() << " "
+                         << st.euler_cur.transpose() << " "
                          << kf_output.x_.pos.transpose() << " "
                          << kf_output.x_.vel.transpose() << " "
                          << kf_output.x_.omg.transpose() << " "
@@ -765,7 +785,7 @@ int main(int argc, char** argv) {
                          << kf_output.x_.gravity.transpose() << " "
                          << kf_output.x_.bg.transpose() << " "
                          << kf_output.x_.ba.transpose() << " "
-                         << feats_undistort->points.size() << '\n';
+                         << st.feats_undistort->points.size() << '\n';
               }
             }
 
@@ -819,10 +839,10 @@ int main(int argc, char** argv) {
               {
                 double dt_cov = time_current - time_update_last;
                 if (dt_cov > 0.0) {
-                  kf_output.predict(dt_cov, q_output, input_in, false, true);
+                  kf_output.predict(dt_cov, st.q_output, input_in, false, true);
                   time_update_last = time_current;
                 }
-                kf_output.predict(dt, q_output, input_in, true, false);
+                kf_output.predict(dt, st.q_output, input_in, true, false);
               }
 
               time_predict_last_const = time_current;
@@ -890,10 +910,10 @@ int main(int argc, char** argv) {
               double dt_cov = get_time_sec(imu_last.header.stamp)
                               - time_update_last;
               if (dt_cov > 0.0) {
-                kf_input.predict(dt_cov, q_input, input_in, false, true);
+                kf_input.predict(dt_cov, st.q_input, input_in, false, true);
                 time_update_last = get_time_sec(imu_last.header.stamp);
               }
-              kf_input.predict(dt, q_input, input_in, true, false);
+              kf_input.predict(dt, st.q_input, input_in, true, false);
               t_last = get_time_sec(imu_last.header.stamp);
 
               if (imu_deque.empty()) {
@@ -912,11 +932,11 @@ int main(int argc, char** argv) {
             if (!prop_at_freq_of_imu) {
               double dt_cov = time_current - time_update_last;
               if (dt_cov > 0.0) {
-                kf_input.predict(dt_cov, q_input, input_in, false, true);
+                kf_input.predict(dt_cov, st.q_input, input_in, false, true);
                 time_update_last = time_current;
               }
             }
-            kf_input.predict(dt, q_input, input_in, true, false);
+            kf_input.predict(dt, st.q_input, input_in, true, false);
 
             st.propag_time += omp_get_wtime() - propag_start;
 
@@ -943,18 +963,18 @@ int main(int argc, char** argv) {
 
             if (publish_odometry_without_downsample) {
               publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
-                               odom_aft_mapped);
+                               st.odom_aft_mapped);
               if (runtime_pos_log) {
-                euler_cur = SO3ToEuler(kf_input.x_.rot);
+                st.euler_cur = SO3ToEuler(kf_input.x_.rot);
                 fout_out << setw(20)
                          << Measures.lidar_beg_time - first_lidar_time << " "
-                         << euler_cur.transpose() << " "
+                         << st.euler_cur.transpose() << " "
                          << kf_input.x_.pos.transpose() << " "
                          << kf_input.x_.vel.transpose() << " "
                          << kf_input.x_.bg.transpose() << " "
                          << kf_input.x_.ba.transpose() << " "
                          << kf_input.x_.gravity.transpose() << " "
-                         << feats_undistort->points.size() << '\n';
+                         << st.feats_undistort->points.size() << '\n';
               }
             }
 
@@ -1036,7 +1056,8 @@ int main(int argc, char** argv) {
       }
       // [Workflow 18] 发布当前状态、协方差对应的里程计和传感器结果。
       if (!publish_odometry_without_downsample) {
-        publish_odometry(pub_odom_aft_mapped, tf_broadcaster, odom_aft_mapped);
+        publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
+                         st.odom_aft_mapped);
       }
 
       t2 = omp_get_wtime();
@@ -1052,13 +1073,13 @@ int main(int argc, char** argv) {
       }
       t3 = omp_get_wtime();
       if (path_en) {
-        publish_path(pub_path, path, msg_body_pose);
+        publish_path(pub_path, st.path, st.msg_body_pose);
       }
       if (scan_pub_en || pcd_save_en) {
-        publish_frame_world(pub_laser_cloud_full_res, pcl_wait_save);
+        publish_frame_world(pub_laser_cloud_full_res, st.pcl_wait_save);
       }
       if (scan_pub_en && scan_body_pub_en) {
-        publish_frame_body(pub_laser_cloud_full_res_body, feats_undistort);
+        publish_frame_body(pub_laser_cloud_full_res_body, st.feats_undistort);
       }
 
       if (runtime_pos_log) {
@@ -1080,7 +1101,8 @@ int main(int argc, char** argv) {
                               + (st.propag_time / st.frame_num);
         T1[st.time_log_counter] = Measures.lidar_beg_time;
         s_plot[st.time_log_counter] = t3 - t0;
-        s_plot2[st.time_log_counter] = (double)feats_undistort->points.size();
+        s_plot2[st.time_log_counter] =
+            (double)st.feats_undistort->points.size();
         s_plot3[st.time_log_counter] = st.aver_time_consu;
         st.time_log_counter++;
 
@@ -1095,9 +1117,9 @@ int main(int argc, char** argv) {
 
         if (!publish_odometry_without_downsample) {
           if (!use_imu_as_input) {
-            euler_cur = SO3ToEuler(kf_output.x_.rot);
+            st.euler_cur = SO3ToEuler(kf_output.x_.rot);
             fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
-                     << " " << euler_cur.transpose() << " "
+                     << " " << st.euler_cur.transpose() << " "
                      << kf_output.x_.pos.transpose() << " "
                      << kf_output.x_.vel.transpose() << " "
                      << kf_output.x_.omg.transpose() << " "
@@ -1105,25 +1127,25 @@ int main(int argc, char** argv) {
                      << kf_output.x_.gravity.transpose() << " "
                      << kf_output.x_.bg.transpose() << " "
                      << kf_output.x_.ba.transpose() << " "
-                     << feats_undistort->points.size() << '\n';
+                     << st.feats_undistort->points.size() << '\n';
           } else {
-            euler_cur = SO3ToEuler(kf_input.x_.rot);
+            st.euler_cur = SO3ToEuler(kf_input.x_.rot);
             fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
-                     << " " << euler_cur.transpose() << " "
+                     << " " << st.euler_cur.transpose() << " "
                      << kf_input.x_.pos.transpose() << " "
                      << kf_input.x_.vel.transpose() << " "
                      << kf_input.x_.bg.transpose() << " "
                      << kf_input.x_.ba.transpose() << " "
                      << kf_input.x_.gravity.transpose() << " "
-                     << feats_undistort->points.size() << '\n';
+                     << st.feats_undistort->points.size() << '\n';
           }
         }
-        dump_lio_state_to_log(fp);
+        dump_lio_state_to_log(st.fp);
       }
     }
     rate.sleep();
   }
-  if (!pcl_wait_save->empty() && pcd_save_en) {
+  if (!st.pcl_wait_save->empty() && pcd_save_en) {
     auto t = std::chrono::system_clock::to_time_t(
         std::chrono::system_clock::now());
     std::tm tm{};  // 栈上自己的 tm, 不碰静态缓冲
@@ -1135,7 +1157,7 @@ int main(int argc, char** argv) {
     string file_name = string("scans_" + str_time + ".pcd");
     string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
     pcl::PCDWriter pcd_writer;
-    pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+    pcd_writer.writeBinary(all_points_dir, *st.pcl_wait_save);
   }
 
   fout_out.close();
