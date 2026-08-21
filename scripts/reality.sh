@@ -171,12 +171,14 @@ else
   shift
 fi
 
+while true ;do
 case "$mode" in
-  n|nav|navigation) launch_mode=nav; slam_value=False ;;
-  m|map|mapping|slam) launch_mode=map; slam_value=True ;;
+  n|nav|navigation) launch_mode=nav; slam_value=False; break ;;
+  m|map|mapping|slam) launch_mode=map; slam_value=True; break ;;
   -h|--help|help) usage; exit 0 ;;
-  *) echo "Unknown reality mode: $mode" >&2; usage >&2; exit 2 ;;
+  *) echo "Unknown reality mode: $mode" >&2; usage >&2; read -r mode; continue ;;
 esac
+done
 
 world=rmul_2024
 slam=$slam_value

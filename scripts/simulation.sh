@@ -555,9 +555,11 @@ case "$mode" in
     build_nav_args "$@" || exit 2
     set -- "${nav_args[@]}"
     slam=False
+    break
     ;;
   map-only | mapping-only | slam-only)
     slam=True
+    break
     ;;
   __gazebo)
     require_workspace_setup
