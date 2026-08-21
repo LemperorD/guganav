@@ -539,6 +539,301 @@ namespace {
     }
   }
 
+  /** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
+   * @tparam ImuAsInput true = kf_input (24维, IMU-as-input) / false = kf_output
+   * (30维)
+   * @param state     主循环状态
+   * @param kf        对应滤波器 (kf_input / kf_output)
+   * @param last_time 传播时间基准 (t_last / time_predict_last_const)
+   * @param q         过程噪声 (state.q_input / state.q_output)
+   */
+  template <bool ImuAsInput, typename KF>
+  void process_frame_points(
+      MainLoopState& state, KF& kf, double& last_time, auto& q,
+      const rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr&
+          pub_odom_aft_mapped,
+      std::shared_ptr<tf2_ros::TransformBroadcaster>& tf_broadcaster) {
+    effct_feat_num = 0;
+    if (time_seq.empty()) {
+      // ---- 列2: 当前时间段没有 LiDAR 点, 仅处理 IMU ----
+      if (!imu_deque.empty()) {
+        imu_last = imu_next;
+        imu_next = *(imu_deque.front());
+
+        while (get_time_sec(imu_next.header.stamp) > time_current
+               && (get_time_sec(imu_next.header.stamp)
+                   < Measures.lidar_beg_time + lidar_time_inte)) {
+          if (is_first_frame) {
+            while (get_time_sec(imu_next.header.stamp)
+                   < Measures.lidar_beg_time + lidar_time_inte) {
+              imu_deque.pop_front();
+              if (imu_deque.empty()) {
+                break;
+              }
+              imu_last = imu_next;
+              imu_next = *(imu_deque.front());
+            }
+            if constexpr (ImuAsInput) {
+              input_in.gyro << imu_last.angular_velocity.x,
+                  imu_last.angular_velocity.y, imu_last.angular_velocity.z;
+              input_in.acc << imu_last.linear_acceleration.x,
+                  imu_last.linear_acceleration.y,
+                  imu_last.linear_acceleration.z;
+              input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+            } else {
+              angvel_avr << imu_last.angular_velocity.x,
+                  imu_last.angular_velocity.y, imu_last.angular_velocity.z;
+              acc_avr << imu_last.linear_acceleration.x,
+                  imu_last.linear_acceleration.y,
+                  imu_last.linear_acceleration.z;
+            }
+            last_time = time_current;
+            time_update_last = time_current;
+            is_first_frame = false;
+            break;
+          }
+          time_current = get_time_sec(imu_next.header.stamp);
+
+          if constexpr (ImuAsInput) {
+            // 原 B2: 仅推进 IMU 指针/填充输入 (无传播)
+            double dt_cov = time_current - time_update_last;
+            if (dt_cov > 0.0) {
+              time_update_last = get_time_sec(imu_next.header.stamp);
+            }
+            last_time = get_time_sec(imu_next.header.stamp);
+            input_in.gyro << imu_next.angular_velocity.x,
+                imu_next.angular_velocity.y, imu_next.angular_velocity.z;
+            input_in.acc << imu_next.linear_acceleration.x,
+                imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
+            input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+          } else {
+            // 原 A2: 传播 + IMU 更新
+            double dt = time_current - last_time;
+            {
+              double dt_cov = time_current - time_update_last;
+              if (dt_cov > 0.0) {
+                kf.predict(dt_cov, q, input_in, false, true);
+                time_update_last = time_current;
+              }
+              kf.predict(dt, q, input_in, true, false);
+            }
+            last_time = time_current;
+            angvel_avr << imu_next.angular_velocity.x,
+                imu_next.angular_velocity.y, imu_next.angular_velocity.z;
+            acc_avr << imu_next.linear_acceleration.x,
+                imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
+            kf.update_iterated_dyn_share_IMU();
+          }
+          imu_deque.pop_front();
+          if (imu_deque.empty()) {
+            break;
+          }
+          imu_last = imu_next;
+          imu_next = *(imu_deque.front());
+        }
+      }
+      return;
+    }
+
+    // ---- 列1: 逐时间组 (传播 → 更新 → 世界变换) ----
+    double pcl_beg_time = Measures.lidar_beg_time;
+    idx = -1;
+    for (k = 0; k < (int)time_seq.size(); k++) {
+      PointType& point_body = feats_down_body->points[idx + time_seq[k]];
+      time_current = (point_body.curvature / 1000.0)  // NOLINT
+                     + pcl_beg_time;
+      if (is_first_frame) {
+        if constexpr (ImuAsInput) {
+          while (time_current > get_time_sec(imu_next.header.stamp)) {
+            imu_deque.pop_front();
+            if (imu_deque.empty()) {
+              break;
+            }
+            imu_last = imu_next;
+            imu_next = *(imu_deque.front());
+          }
+          input_in.gyro << imu_last.angular_velocity.x,
+              imu_last.angular_velocity.y, imu_last.angular_velocity.z;
+          input_in.acc << imu_last.linear_acceleration.x,
+              imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
+          input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+        } else {
+          if (imu_enabled) {
+            while (time_current > get_time_sec(imu_next.header.stamp)) {
+              imu_deque.pop_front();
+              if (imu_deque.empty()) {
+                break;
+              }
+              imu_last = imu_next;
+              imu_next = *(imu_deque.front());
+            }
+            angvel_avr << imu_last.angular_velocity.x,
+                imu_last.angular_velocity.y, imu_last.angular_velocity.z;
+            acc_avr << imu_last.linear_acceleration.x,
+                imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
+          }
+        }
+        is_first_frame = false;
+        last_time = time_current;
+        time_update_last = time_current;
+      }
+
+      // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
+      if constexpr (ImuAsInput) {
+        while (time_current > get_time_sec(imu_next.header.stamp)) {
+          imu_deque.pop_front();
+          input_in.gyro << imu_last.angular_velocity.x,
+              imu_last.angular_velocity.y, imu_last.angular_velocity.z;
+          input_in.acc << imu_last.linear_acceleration.x,
+              imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
+          input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+          double dt = get_time_sec(imu_last.header.stamp) - last_time;
+
+          double dt_cov = get_time_sec(imu_last.header.stamp)
+                          - time_update_last;
+          if (dt_cov > 0.0) {
+            kf.predict(dt_cov, q, input_in, false, true);
+            time_update_last = get_time_sec(imu_last.header.stamp);
+          }
+          kf.predict(dt, q, input_in, true, false);
+          last_time = get_time_sec(imu_last.header.stamp);
+
+          if (imu_deque.empty()) {
+            break;
+          }
+          imu_last = imu_next;
+          imu_next = *(imu_deque.front());
+        }
+      } else {
+        if (imu_enabled && !imu_deque.empty()) {
+          bool last_imu = get_time_sec(imu_next.header.stamp)
+                          == get_time_sec(imu_deque.front()->header.stamp);
+          while (get_time_sec(imu_next.header.stamp) < last_time
+                 && !imu_deque.empty()) {
+            if (!last_imu) {
+              imu_last = imu_next;
+              imu_next = *(imu_deque.front());
+              break;
+            }
+
+            imu_deque.pop_front();
+            if (imu_deque.empty()) {
+              break;
+            }
+            imu_last = imu_next;
+            imu_next = *(imu_deque.front());
+          }
+          bool imu_comes = time_current > get_time_sec(imu_next.header.stamp);
+          while (imu_comes) {
+            angvel_avr << imu_next.angular_velocity.x,
+                imu_next.angular_velocity.y, imu_next.angular_velocity.z;
+            acc_avr << imu_next.linear_acceleration.x,
+                imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
+
+            double dt = get_time_sec(imu_next.header.stamp) - last_time;
+            kf.predict(dt, q, input_in, true, false);
+            last_time = get_time_sec(imu_next.header.stamp);
+
+            {
+              double dt_cov = get_time_sec(imu_next.header.stamp)
+                              - time_update_last;
+
+              if (dt_cov > 0.0) {
+                time_update_last = get_time_sec(imu_next.header.stamp);
+                double propag_imu_start = omp_get_wtime();
+
+                kf.predict(dt_cov, q, input_in, false, true);
+
+                state.propag_time += omp_get_wtime() - propag_imu_start;
+                double solve_imu_start = omp_get_wtime();
+                kf.update_iterated_dyn_share_IMU();
+                state.solve_time += omp_get_wtime() - solve_imu_start;
+              }
+            }
+            imu_deque.pop_front();
+            if (imu_deque.empty()) {
+              break;
+            }
+            imu_last = imu_next;
+            imu_next = *(imu_deque.front());
+            imu_comes = time_current > get_time_sec(imu_next.header.stamp);
+          }
+        }
+      }
+      if (state.flg_reset) {
+        break;
+      }
+
+      double dt = time_current - last_time;
+      double propag_state_start = omp_get_wtime();
+      if (!prop_at_freq_of_imu) {
+        double dt_cov = time_current - time_update_last;
+        if (dt_cov > 0.0) {
+          kf.predict(dt_cov, q, input_in, false, true);
+          time_update_last = time_current;
+        }
+      }
+      kf.predict(dt, q, input_in, true, false);
+      state.propag_time += omp_get_wtime() - propag_state_start;
+      last_time = time_current;
+      double t_update_start = omp_get_wtime();
+
+      if (feats_down_size < 1) {
+        RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
+                    "No point, skip this scan!\n");
+        idx += time_seq[k];
+        continue;
+      }
+      // [Workflow 4] 判断是否存在有效平面对应。
+      // [Workflow 5] 残差、雅可比和量测协方差在 EKF 更新函数内计算。
+      // [Workflow 6] 状态更新在 EKF 更新函数内完成。
+      // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
+      if (!kf.update_iterated_dyn_share_modified()) {
+        // [Workflow 9] 无有效平面对应时跳过当前点更新。
+        idx = idx + time_seq[k];
+        continue;
+      }
+      double solve_start = omp_get_wtime();
+
+      if (publish_odometry_without_downsample) {
+        publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
+                         state.odom_aft_mapped);
+        if (runtime_pos_log) {
+          state.euler_cur = SO3ToEuler(kf.x_.rot);
+          if constexpr (ImuAsInput) {
+            fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+                     << " " << state.euler_cur.transpose() << " "
+                     << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
+                     << " " << kf.x_.bg.transpose() << " "
+                     << kf.x_.ba.transpose() << " " << kf.x_.gravity.transpose()
+                     << " " << state.feats_undistort->points.size() << '\n';
+          } else {
+            fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+                     << " " << state.euler_cur.transpose() << " "
+                     << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
+                     << " " << kf.x_.omg.transpose() << " "
+                     << kf.x_.acc.transpose() << " "
+                     << kf.x_.gravity.transpose() << " " << kf.x_.bg.transpose()
+                     << " " << kf.x_.ba.transpose() << " "
+                     << state.feats_undistort->points.size() << '\n';
+          }
+        }
+      }
+
+      // [Workflow 8] 将更新后的点变换到世界系。
+      for (int j = 0; j < time_seq[k]; j++) {
+        PointType& point_body_j = feats_down_body->points[idx + j + 1];
+        PointType& point_world_j = feats_down_world->points[idx + j + 1];
+        pointBodyToWorld(&point_body_j, &point_world_j);
+      }
+
+      state.solve_time += omp_get_wtime() - solve_start;
+
+      state.update_time += omp_get_wtime() - t_update_start;
+      idx += time_seq[k];
+    }
+  }
+
   void init_scan(MainLoopState& st) {
     first_lidar_time = Measures.lidar_beg_time;
     st.flg_first_scan = false;
@@ -694,7 +989,6 @@ int main(int argc, char** argv) {
 
       double t0 = omp_get_wtime();
       double t1 = omp_get_wtime();
-      double solve_start{};
 
       // [Workflow 13] IMU 预处理，包括 IMU 有效性和饱和检查。
       p_imu->Process(Measures, state.feats_undistort);
@@ -730,417 +1024,15 @@ int main(int argc, char** argv) {
       prepare_point_measurements();
 
       // [Workflow 2] LiDAR 点输入分支。
-      if (!use_imu_as_input) {
-        effct_feat_num = 0;
-        if (!time_seq.empty()) {
-          double pcl_beg_time = Measures.lidar_beg_time;
-          idx = -1;
-          for (k = 0; k < (int)time_seq.size(); k++) {
-            PointType& point_body = feats_down_body->points[idx + time_seq[k]];
-
-            time_current = (point_body.curvature / 1000.0)  // NOLINT
-                           + pcl_beg_time;
-            if (is_first_frame) {
-              if (imu_enabled) {
-                while (time_current > get_time_sec(imu_next.header.stamp)) {
-                  imu_deque.pop_front();
-                  if (imu_deque.empty()) {
-                    break;
-                  }
-                  imu_last = imu_next;
-                  imu_next = *(imu_deque.front());
-                }
-                angvel_avr << imu_last.angular_velocity.x,
-                    imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-                acc_avr << imu_last.linear_acceleration.x,
-                    imu_last.linear_acceleration.y,
-                    imu_last.linear_acceleration.z;
-              }
-              is_first_frame = false;
-              time_update_last = time_current;
-              time_predict_last_const = time_current;
-            }
-            // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
-            if (imu_enabled && !imu_deque.empty()) {
-              bool last_imu = get_time_sec(imu_next.header.stamp)
-                              == get_time_sec(imu_deque.front()->header.stamp);
-              while (get_time_sec(imu_next.header.stamp)
-                         < time_predict_last_const
-                     && !imu_deque.empty()) {
-                if (!last_imu) {
-                  imu_last = imu_next;
-                  imu_next = *(imu_deque.front());
-                  break;
-                }
-
-                imu_deque.pop_front();
-                if (imu_deque.empty()) {
-                  break;
-                }
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              }
-              bool imu_comes = time_current
-                               > get_time_sec(imu_next.header.stamp);
-              while (imu_comes) {
-                angvel_avr << imu_next.angular_velocity.x,
-                    imu_next.angular_velocity.y, imu_next.angular_velocity.z;
-                acc_avr << imu_next.linear_acceleration.x,
-                    imu_next.linear_acceleration.y,
-                    imu_next.linear_acceleration.z;
-
-                double dt = get_time_sec(imu_next.header.stamp)
-                            - time_predict_last_const;
-                kf_output.predict(dt, state.q_output, input_in, true, false);
-                time_predict_last_const = get_time_sec(imu_next.header.stamp);
-
-                {
-                  double dt_cov = get_time_sec(imu_next.header.stamp)
-                                  - time_update_last;
-
-                  if (dt_cov > 0.0) {
-                    time_update_last = get_time_sec(imu_next.header.stamp);
-                    double propag_imu_start = omp_get_wtime();
-
-                    kf_output.predict(dt_cov, state.q_output, input_in, false,
-                                      true);
-
-                    state.propag_time += omp_get_wtime() - propag_imu_start;
-                    double solve_imu_start = omp_get_wtime();
-                    kf_output.update_iterated_dyn_share_IMU();
-                    state.solve_time += omp_get_wtime() - solve_imu_start;
-                  }
-                }
-                imu_deque.pop_front();
-                if (imu_deque.empty()) {
-                  break;
-                }
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-                imu_comes = time_current > get_time_sec(imu_next.header.stamp);
-              }
-            }
-            if (state.flg_reset) {
-              break;
-            }
-
-            double dt = time_current - time_predict_last_const;
-            double propag_state_start = omp_get_wtime();
-            if (!prop_at_freq_of_imu) {
-              double dt_cov = time_current - time_update_last;
-              if (dt_cov > 0.0) {
-                kf_output.predict(dt_cov, state.q_output, input_in, false,
-                                  true);
-                time_update_last = time_current;
-              }
-            }
-            kf_output.predict(dt, state.q_output, input_in, true, false);
-            state.propag_time += omp_get_wtime() - propag_state_start;
-            time_predict_last_const = time_current;
-            double t_update_start = omp_get_wtime();
-
-            if (feats_down_size < 1) {
-              RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
-                          "No point, skip this scan!\n");
-              idx += time_seq[k];
-              continue;
-            }
-            // [Workflow 4] 判断是否存在有效平面对应。
-            // [Workflow 5] 残差、雅可比和量测协方差在 EKF 更新函数内计算。
-            // [Workflow 6] 状态更新在 EKF 更新函数内完成。
-            // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
-            if (!kf_output.update_iterated_dyn_share_modified()) {
-              // [Workflow 9] 无有效平面对应时跳过当前点更新。
-              idx = idx + time_seq[k];
-              continue;
-            }
-            solve_start = omp_get_wtime();
-
-            if (publish_odometry_without_downsample) {
-              publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
-                               state.odom_aft_mapped);
-              if (runtime_pos_log) {
-                state.euler_cur = SO3ToEuler(kf_output.x_.rot);
-                fout_out << setw(20)
-                         << Measures.lidar_beg_time - first_lidar_time << " "
-                         << state.euler_cur.transpose() << " "
-                         << kf_output.x_.pos.transpose() << " "
-                         << kf_output.x_.vel.transpose() << " "
-                         << kf_output.x_.omg.transpose() << " "
-                         << kf_output.x_.acc.transpose() << " "
-                         << kf_output.x_.gravity.transpose() << " "
-                         << kf_output.x_.bg.transpose() << " "
-                         << kf_output.x_.ba.transpose() << " "
-                         << state.feats_undistort->points.size() << '\n';
-              }
-            }
-
-            // [Workflow 8] 将更新后的点变换到世界系。
-            for (int j = 0; j < time_seq[k]; j++) {
-              PointType& point_body_j = feats_down_body->points[idx + j + 1];
-              PointType& point_world_j = feats_down_world->points[idx + j + 1];
-              pointBodyToWorld(&point_body_j, &point_world_j);
-            }
-
-            state.solve_time += omp_get_wtime() - solve_start;
-
-            state.update_time += omp_get_wtime() - t_update_start;
-            idx += time_seq[k];
-          }
-        } else {
-          // [Workflow 12] 当前时间段没有 LiDAR 点，仅处理 IMU 测量。
-          if (!imu_deque.empty()) {
-            imu_last = imu_next;
-            imu_next = *(imu_deque.front());
-
-            while (get_time_sec(imu_next.header.stamp) > time_current
-                   && ((get_time_sec(imu_next.header.stamp)
-                        < Measures.lidar_beg_time + lidar_time_inte))) {
-              if (is_first_frame) {
-                while (get_time_sec(imu_next.header.stamp)
-                       < Measures.lidar_beg_time + lidar_time_inte) {
-                  imu_deque.pop_front();
-                  if (imu_deque.empty()) {
-                    break;
-                  }
-                  imu_last = imu_next;
-                  imu_next = *(imu_deque.front());
-                }
-                angvel_avr << imu_last.angular_velocity.x,
-                    imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-
-                acc_avr << imu_last.linear_acceleration.x,
-                    imu_last.linear_acceleration.y,
-                    imu_last.linear_acceleration.z;
-
-                time_update_last = time_current;
-                time_predict_last_const = time_current;
-
-                is_first_frame = false;
-                break;
-              }
-              time_current = get_time_sec(imu_next.header.stamp);
-
-              double dt = time_current - time_predict_last_const;
-              {
-                double dt_cov = time_current - time_update_last;
-                if (dt_cov > 0.0) {
-                  kf_output.predict(dt_cov, state.q_output, input_in, false,
-                                    true);
-                  time_update_last = time_current;
-                }
-                kf_output.predict(dt, state.q_output, input_in, true, false);
-              }
-
-              time_predict_last_const = time_current;
-
-              angvel_avr << imu_next.angular_velocity.x,
-                  imu_next.angular_velocity.y, imu_next.angular_velocity.z;
-              acc_avr << imu_next.linear_acceleration.x,
-                  imu_next.linear_acceleration.y,
-                  imu_next.linear_acceleration.z;
-              // [Workflow 14] IMU 残差、雅可比和量测协方差在该函数内计算。
-              // [Workflow 15] IMU 状态更新在该函数内完成。
-              // [Workflow 16] IMU 协方差更新在该函数内完成。
-              kf_output.update_iterated_dyn_share_IMU();
-              imu_deque.pop_front();
-              if (imu_deque.empty()) {
-                break;
-              }
-              imu_last = imu_next;
-              imu_next = *(imu_deque.front());
-            }
-          }
-        }
+      if (use_imu_as_input) {
+        process_frame_points<true>(state, kf_input, t_last, state.q_input,
+                                   pub_odom_aft_mapped, tf_broadcaster);
       } else {
-        // [Workflow 11] IMU-as-input 分支。
-        effct_feat_num = 0;
-        if (!time_seq.empty()) {
-          double pcl_beg_time = Measures.lidar_beg_time;
-          idx = -1;
-          for (k = 0; k < (int)time_seq.size(); k++) {
-            PointType& point_body = feats_down_body->points[idx + time_seq[k]];
-            time_current = (point_body.curvature / 1000.0)  // NOLINT
-                           + pcl_beg_time;
-            if (is_first_frame) {
-              while (time_current > get_time_sec(imu_next.header.stamp)) {
-                imu_deque.pop_front();
-                if (imu_deque.empty()) {
-                  break;
-                }
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              }
-
-              is_first_frame = false;
-              t_last = time_current;
-              time_update_last = time_current;
-              input_in.gyro << imu_last.angular_velocity.x,
-                  imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-              input_in.acc << imu_last.linear_acceleration.x,
-                  imu_last.linear_acceleration.y,
-                  imu_last.linear_acceleration.z;
-              input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-            }
-
-            while (time_current > get_time_sec(imu_next.header.stamp)) {
-              imu_deque.pop_front();
-
-              input_in.gyro << imu_last.angular_velocity.x,
-                  imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-              input_in.acc << imu_last.linear_acceleration.x,
-                  imu_last.linear_acceleration.y,
-                  imu_last.linear_acceleration.z;
-              input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-              double dt = get_time_sec(imu_last.header.stamp) - t_last;
-
-              double dt_cov = get_time_sec(imu_last.header.stamp)
-                              - time_update_last;
-              if (dt_cov > 0.0) {
-                kf_input.predict(dt_cov, state.q_input, input_in, false, true);
-                time_update_last = get_time_sec(imu_last.header.stamp);
-              }
-              kf_input.predict(dt, state.q_input, input_in, true, false);
-              t_last = get_time_sec(imu_last.header.stamp);
-
-              if (imu_deque.empty()) {
-                break;
-              }
-              imu_last = imu_next;
-              imu_next = *(imu_deque.front());
-            }
-            if (state.flg_reset) {
-              break;
-            }
-            double dt = time_current - t_last;
-            t_last = time_current;
-            double propag_start = omp_get_wtime();
-
-            if (!prop_at_freq_of_imu) {
-              double dt_cov = time_current - time_update_last;
-              if (dt_cov > 0.0) {
-                kf_input.predict(dt_cov, state.q_input, input_in, false, true);
-                time_update_last = time_current;
-              }
-            }
-            kf_input.predict(dt, state.q_input, input_in, true, false);
-
-            state.propag_time += omp_get_wtime() - propag_start;
-
-            double t_update_start = omp_get_wtime();
-
-            if (feats_down_size < 1) {
-              RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
-                          "No point, skip this scan!\n");
-
-              idx += time_seq[k];
-              continue;
-            }
-            // [Workflow 4] 判断是否存在有效平面对应。
-            // [Workflow 5] 残差、雅可比和量测协方差在 EKF 更新函数内计算。
-            // [Workflow 6] 状态更新在 EKF 更新函数内完成。
-            // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
-            if (!kf_input.update_iterated_dyn_share_modified()) {
-              // [Workflow 9] 无有效平面对应时跳过当前点更新。
-              idx = idx + time_seq[k];
-              continue;
-            }
-
-            solve_start = omp_get_wtime();
-
-            if (publish_odometry_without_downsample) {
-              publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
-                               state.odom_aft_mapped);
-              if (runtime_pos_log) {
-                state.euler_cur = SO3ToEuler(kf_input.x_.rot);
-                fout_out << setw(20)
-                         << Measures.lidar_beg_time - first_lidar_time << " "
-                         << state.euler_cur.transpose() << " "
-                         << kf_input.x_.pos.transpose() << " "
-                         << kf_input.x_.vel.transpose() << " "
-                         << kf_input.x_.bg.transpose() << " "
-                         << kf_input.x_.ba.transpose() << " "
-                         << kf_input.x_.gravity.transpose() << " "
-                         << state.feats_undistort->points.size() << '\n';
-              }
-            }
-
-            // [Workflow 8] 将更新后的点变换到世界系。
-            for (int j = 0; j < time_seq[k]; j++) {
-              PointType& point_body_j = feats_down_body->points[idx + j + 1];
-              PointType& point_world_j = feats_down_world->points[idx + j + 1];
-              pointBodyToWorld(&point_body_j, &point_world_j);
-            }
-            state.solve_time += omp_get_wtime() - solve_start;
-
-            state.update_time += omp_get_wtime() - t_update_start;
-            idx = idx + time_seq[k];
-          }
-        } else {
-          // [Workflow 17] IMU-as-input 模式下的其他 IMU 处理分支。
-          if (!imu_deque.empty()) {
-            imu_last = imu_next;
-            imu_next = *(imu_deque.front());
-            while (get_time_sec(imu_next.header.stamp) > time_current
-                   && ((get_time_sec(imu_next.header.stamp)
-                        < Measures.lidar_beg_time + lidar_time_inte))) {
-              if (is_first_frame) {
-                while (get_time_sec(imu_next.header.stamp)
-                       < Measures.lidar_beg_time + lidar_time_inte) {
-                  imu_deque.pop_front();
-                  if (imu_deque.empty()) {
-                    break;
-                  }
-                  imu_last = imu_next;
-                  imu_next = *(imu_deque.front());
-                }
-                t_last = time_current;
-                time_update_last = time_current;
-                input_in.gyro << imu_last.angular_velocity.x,
-                    imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-                input_in.acc << imu_last.linear_acceleration.x,
-                    imu_last.linear_acceleration.y,
-                    imu_last.linear_acceleration.z;
-                input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-
-                is_first_frame = false;
-                break;
-              }
-
-              time_current = get_time_sec(imu_next.header.stamp);
-
-              if (!is_first_frame) {
-                double dt_cov = time_current - time_update_last;
-                if (dt_cov > 0.0) {
-                  time_update_last = get_time_sec(imu_next.header.stamp);
-                }
-
-                t_last = get_time_sec(imu_next.header.stamp);
-
-                input_in.gyro << imu_next.angular_velocity.x,
-                    imu_next.angular_velocity.y, imu_next.angular_velocity.z;
-                input_in.acc << imu_next.linear_acceleration.x,
-                    imu_next.linear_acceleration.y,
-                    imu_next.linear_acceleration.z;
-                input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-                imu_deque.pop_front();
-                if (imu_deque.empty()) {
-                  break;
-                }
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              } else {
-                imu_deque.pop_front();
-                if (imu_deque.empty()) {
-                  break;
-                }
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              }
-            }
-          }
-        }
+        process_frame_points<false>(state, kf_output, time_predict_last_const,
+                                    state.q_output, pub_odom_aft_mapped,
+                                    tf_broadcaster);
       }
+
       // [Workflow 18] 发布当前状态、协方差对应的里程计和传感器结果。
       if (!publish_odometry_without_downsample) {
         publish_odometry(pub_odom_aft_mapped, tf_broadcaster,
