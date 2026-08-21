@@ -372,10 +372,10 @@ namespace {
         std::make_shared<PointCloudXYZI>();  ///< 待保存点云
 
     // ---- 滤波协方差 / 过程噪声 ----
-    Eigen::Matrix<double, 24, 24> p_init;  ///< 初始协方差 (24维状态)
+    Eigen::Matrix<double, 24, 24> p_init;         ///< 初始协方差 (24维状态)
     Eigen::Matrix<double, 30, 30> p_init_output;  ///< 初始协方差 (30维状态)
-    Eigen::Matrix<double, 24, 24> q_input;   ///< 过程噪声 (input 模式)
-    Eigen::Matrix<double, 30, 30> q_output;  ///< 过程噪声 (output 模式)
+    Eigen::Matrix<double, 24, 24> q_input;        ///< 过程噪声 (input 模式)
+    Eigen::Matrix<double, 30, 30> q_output;       ///< 过程噪声 (output 模式)
 
     // ---- 位姿日志 ----
     std::string pos_log_dir;  ///< 位姿日志路径
@@ -438,6 +438,24 @@ namespace {
       return true;
     }
     return false;  // 仍在累积
+  }
+
+  /** @brief [Workflow 3] 将 LiDAR 点变换到 IMU 坐标系并准备量测量
+   * (pbody_list / crossmat_list) */
+  void prepare_point_measurements() {
+    for (size_t i = 0; i < feats_down_body->size(); i++) {
+      V3D point_this(feats_down_body->points[i].x,   // NOLINT
+                     feats_down_body->points[i].y,   // NOLINT
+                     feats_down_body->points[i].z);  // NOLINT
+
+      pbody_list[i] = point_this;
+      if (!extrinsic_est_en) {
+        point_this = Lidar_R_wrt_IMU * point_this + Lidar_T_wrt_IMU;
+        M3D point_crossmat;
+        point_crossmat << SKEW_SYM_MATRX(point_this);
+        crossmat_list[i] = point_crossmat;
+      }
+    }
   }
 
   void init_scan(MainLoopState& st) {
@@ -630,19 +648,7 @@ int main(int argc, char** argv) {
       pbody_list.reserve(feats_down_size);
 
       // [Workflow 3] 将 LiDAR 点变换到 IMU 坐标系并准备测量。
-      for (size_t i = 0; i < feats_down_body->size(); i++) {
-        V3D point_this(feats_down_body->points[i].x,   // NOLINT
-                       feats_down_body->points[i].y,   // NOLINT
-                       feats_down_body->points[i].z);  // NOLINT
-
-        pbody_list[i] = point_this;
-        if (!extrinsic_est_en) {
-          point_this = Lidar_R_wrt_IMU * point_this + Lidar_T_wrt_IMU;
-          M3D point_crossmat;
-          point_crossmat << SKEW_SYM_MATRX(point_this);
-          crossmat_list[i] = point_crossmat;
-        }
-      }
+      prepare_point_measurements();
 
       // [Workflow 2] LiDAR 点输入分支。
       if (!use_imu_as_input) {
