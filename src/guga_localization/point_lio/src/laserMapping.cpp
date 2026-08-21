@@ -404,6 +404,36 @@ namespace {
     ivox_ = std::make_shared<IVoxType>(ivox_options_);
   }
 
+  /** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
+   * (iVox/先验PCD) */
+  void init_map_state(
+      MainLoopState& state,
+      const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
+          pub_laser_cloud_map) {
+    feats_down_world->resize(state.feats_undistort->size());
+    for (int i = 0; i < (int)state.feats_undistort->size(); i++) {
+      pointBodyToWorld(&(state.feats_undistort->points[i]),
+                       &(feats_down_world->points[i]));
+    }
+    for (const auto& point : *feats_down_world) {
+      state.init_feats_world->points.emplace_back(point);
+    }
+
+    if (state.init_feats_world->size() >= (size_t)init_map_size) {
+      if (enable_prior_pcd) {
+        auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
+        ivox_->AddPoints(map_cloud->points);
+      } else {
+        ivox_->AddPoints(state.init_feats_world->points);
+      }
+      publish_init_map(pub_laser_cloud_map, state.init_feats_world);
+      state.init_feats_world.reset(new PointCloudXYZI());
+      state.init_map = true;
+    } else {
+      state.init_map = false;
+    }
+  }
+
   void init_scan(MainLoopState& st) {
     first_lidar_time = Measures.lidar_beg_time;
     st.flg_first_scan = false;
@@ -579,59 +609,22 @@ int main(int argc, char** argv) {
       time_seq = time_compressing<int>(feats_down_body);
       feats_down_size = feats_down_body->points.size();
 
-      if (!p_imu->after_imu_init_) {
-        if (!p_imu->imu_need_init_) {
-          V3D tmp_gravity;
-          if (imu_enabled) {
-            tmp_gravity = -p_imu->mean_acc / p_imu->mean_acc.norm() * G_m_s2;
-          } else {
-            tmp_gravity = to_vec3d(gravity_init);
-            p_imu->after_imu_init_ = true;
-          }
-          M3D rot_init;
-          p_imu->Set_init(tmp_gravity, rot_init);
-          kf_input.x_.rot = rot_init;
-          kf_output.x_.rot = rot_init;
-          kf_output.x_.acc = -rot_init.transpose() * kf_output.x_.gravity;
-        } else {
-          continue;
-        }
+      if (p_imu->imu_need_init_) {
+        continue;
       }
-      if (!state.init_map) {
-        feats_down_world->resize(state.feats_undistort->size());
-        for (int i = 0; i < (int)state.feats_undistort->size(); i++) {
-          pointBodyToWorld(&(state.feats_undistort->points[i]),
-                           &(feats_down_world->points[i]));
-        }
-        for (const auto& point : *feats_down_world) {
-          state.init_feats_world->points.emplace_back(point);
-        }
 
-        if (state.init_feats_world->size() >= (size_t)init_map_size) {
-          if (enable_prior_pcd) {
-            auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
-            ivox_->AddPoints(map_cloud->points);
-          } else {
-            ivox_->AddPoints(state.init_feats_world->points);
-          }
-          publish_init_map(pub_laser_cloud_map, state.init_feats_world);
-          state.init_feats_world.reset(new PointCloudXYZI());
-          state.init_map = true;
-        } else {
-          state.init_map = false;
-        }
+      if (!state.init_map) {
+        init_map_state(state, pub_laser_cloud_map);
         continue;
       }
 
       normvec->resize(feats_down_size);
       feats_down_world->resize(feats_down_size);
-
       Nearest_Points.resize(feats_down_size);
-
       crossmat_list.reserve(feats_down_size);
       pbody_list.reserve(feats_down_size);
 
-      // [Workflow 3] 将 LiDAR 点变换到 IMU 坐标系并准备量测量。
+      // [Workflow 3] 将 LiDAR 点变换到 IMU 坐标系并准备测量。
       for (size_t i = 0; i < feats_down_body->size(); i++) {
         V3D point_this(feats_down_body->points[i].x,   // NOLINT
                        feats_down_body->points[i].y,   // NOLINT

@@ -100,6 +100,25 @@ void ImuProcess::Set_init(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot) {
   }
 }
 
+/** @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值 */
+void ImuProcess::init_state() {
+  if (after_imu_init_) {
+    return;  // 已完成
+  }
+  V3D tmp_gravity;
+  if (imu_en) {
+    tmp_gravity = -mean_acc / mean_acc.norm() * G_m_s2;
+  } else {
+    tmp_gravity = to_vec3d(gravity_init);
+  }
+  M3D rot_init;
+  Set_init(tmp_gravity, rot_init);
+  kf_input.x_.rot = rot_init;
+  kf_output.x_.rot = rot_init;
+  kf_output.x_.acc = -rot_init.transpose() * kf_output.x_.gravity;
+  after_imu_init_ = true;
+}
+
 /**
  * @brief IMU 在线初始化: 累积加速度和角速度的滑动平均
  *
@@ -173,24 +192,24 @@ void ImuProcess::Process(const MeasureGroup& meas,
       IMU_init(meas, init_iter_num);
 
       if (init_iter_num > MAX_INI_COUNT) {
-        // 初始化完成
+        // 初始化完成: 数据级累积 + 状态级初始化一步完成
         RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
         imu_need_init_ = false;
         *cur_pcl_un_ = *(meas.lidar);  // 复制原始点云
+        init_state();
       }
       return;  // 初始化阶段不输出去畸变点云
     }
 
     // ---- 初始化已完成 ----
-    if (!after_imu_init_) {
-      after_imu_init_ = true;  // 通知外部: IMU 初始化流程已走完
-    }
     *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
 
     // @todo: 实现 IMU 反向传播去畸变
     // 可利用 IMU 预积分在 curvature 时间戳上反向插值校正点坐标
   } else {
     // ---- IMU 禁用: 直接使用原始点云 ----
+    imu_need_init_ = false;  // 无累积过程, 直接进入就绪
+    init_state();            // 用配置重力 gravity_init 完成状态初始化
     *cur_pcl_un_ = *(meas.lidar);
     return;
   }

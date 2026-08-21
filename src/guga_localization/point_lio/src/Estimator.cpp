@@ -80,7 +80,6 @@ V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
 
 /** @brief 重力加速度大小 (m/s²), 默认 9.81 */
-double G_m_s2 = 9.81;
 
 // ==================== 过程噪声协方差 ====================
 

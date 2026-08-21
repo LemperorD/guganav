@@ -128,8 +128,7 @@ extern int lidar_type;  ///< LiDAR 类型: 1=AVIA 2=VELO16 3=OUST64 4=HESAIxt32
 extern int pcd_save_interval;  ///< PCD 保存间隔 (帧数)
 
 // ==================== 重力参数 ====================
-extern std::vector<double> gravity_init;  ///< 初始重力向量 (世界坐标系)
-extern std::vector<double> gravity;       ///< 当前重力向量
+extern std::vector<double> gravity;  ///< 当前重力向量
 
 // ==================== 输出开关 ====================
 extern bool runtime_pos_log;   ///< 是否输出运行时位姿日志到文件
@@ -141,7 +140,6 @@ extern bool tf_send_en;        ///< 是否发布 TF 变换
 
 // ==================== 处理器实例 ====================
 extern shared_ptr<Preprocess> p_pre;  ///< 点云预处理模块
-extern shared_ptr<ImuProcess> p_imu;  ///< IMU 处理模块
 
 // ==================== 外参 ====================
 extern std::vector<double> extrinT;    ///< LiDAR→IMU 平移外参 (3维)

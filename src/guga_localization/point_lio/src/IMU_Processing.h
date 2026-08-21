@@ -24,7 +24,6 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-#include <Eigen/Eigen>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
@@ -90,6 +89,16 @@ public:
    */
   void Set_init(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
 
+  /**
+   * @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值
+   *
+   * 数据级累积完成 (imu_need_init_ == false) 后调用:
+   * - IMU 模式: 用累积的 mean_acc 估计重力方向
+   * - 无 IMU 模式: 用配置的先验重力 gravity_init
+   * 内部通过 after_imu_init_ 保证只执行一次。
+   */
+  void init_state();
+
   // ==================== 公有成员变量 ====================
 
   MD(12, 12)
@@ -125,3 +134,8 @@ private:
   int init_iter_num = 1;  ///< 初始化迭代计数 (当前累积帧数)
   rclcpp::Logger logger;  ///< ROS2 日志器
 };
+
+extern shared_ptr<ImuProcess> p_imu;  ///< IMU 处理模块
+extern double G_m_s2;
+extern std::vector<double> gravity_init;  ///< 初始重力向量
+extern bool imu_enabled;                  ///< 默认启用 IMU

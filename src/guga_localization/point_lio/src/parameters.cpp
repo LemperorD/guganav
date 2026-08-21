@@ -16,13 +16,13 @@
 #include <memory>
 
 // ==================== 帧控制标志 ====================
-bool is_first_frame = true;   ///< 首帧标志 (用于跳过第一帧的预测)
-double lidar_end_time = 0.0;  ///< 当前帧最晚点时间戳
-double first_lidar_time = 0.0;  ///< 第一帧雷达时间 (用于相对计时)
-double time_con = 0.0;          ///< 合帧模式起始时间
+bool is_first_frame = true;          ///< 首帧标志 (用于跳过第一帧的预测)
+double lidar_end_time = 0.0;         ///< 当前帧最晚点时间戳
+double first_lidar_time = 0.0;       ///< 第一帧雷达时间 (用于相对计时)
+double time_con = 0.0;               ///< 合帧模式起始时间
 double last_timestamp_lidar = -1.0;  ///< 上帧雷达时间 (初始 -1 表示未收到数据)
-double last_timestamp_imu = -1.0;  ///< 上帧 IMU 时间 (初始 -1 表示未收到数据)
-int pcd_index = 0;                 ///< PCD 保存序号
+double last_timestamp_imu = -1.0;    ///< 上帧 IMU 时间 (初始 -1 表示未收到数据)
+int pcd_index = 0;                   ///< PCD 保存序号
 
 // ==================== iVox 地图参数 ====================
 IVoxType::Options ivox_options_;  ///< iVox 体素配置 (分辨率、近邻方式)
@@ -47,15 +47,17 @@ bool cut_frame = false;           ///< 默认: 不切帧
 bool use_imu_as_input = false;    ///< 默认: IMU-as-output (30维)
 bool space_down_sample = true;    ///< 默认: 再次空间降采样
 bool publish_odometry_without_downsample = false;  ///< 默认: 逐帧发布里程计
+bool imu_enabled = true;          ///< 默认启用 IMU
+double G_m_s2 = 9.81;             ///< 重力加速度模长
 
 // ==================== 地图初始化 ====================
 int init_map_size = 10;  ///< 初始地图最少点数
 int con_frame_num = 1;   ///< 合帧数
 
 // ==================== 匹配阈值 ====================
-double match_s = 81;  ///< 点面匹配 Mahalanobis 距离阈值
-double satu_acc;      ///< 加速度计饱和值 (从 YAML 读取)
-double satu_gyro;     ///< 陀螺仪饱和值 (从 YAML 读取)
+double match_s = 81;                   ///< 点面匹配 Mahalanobis 距离阈值
+double satu_acc;                       ///< 加速度计饱和值 (从 YAML 读取)
+double satu_gyro;                      ///< 陀螺仪饱和值 (从 YAML 读取)
 double cut_frame_time_interval = 0.1;  ///< 切帧时间间隔 (秒)
 
 // ==================== 平面提取 ====================
@@ -68,7 +70,6 @@ double fov_deg = 180;               ///< 默认全向 FOV
 float DET_RANGE = 450;  ///< 最大检测距离 450m
 
 // ==================== IMU 参数 ====================
-bool imu_enabled = true;        ///< 默认启用 IMU
 double imu_time_inte = 0.005;   ///< IMU 时间步长 5ms
 double laser_point_cov = 0.01;  ///< 激光点量测噪声 0.01
 double acc_norm;                ///< 加速度归一化因子
@@ -87,8 +88,8 @@ int lidar_type;         ///< 雷达类型 (从 YAML 读取)
 int pcd_save_interval;  ///< PCD 保存间隔
 
 // ==================== 重力 ====================
-std::vector<double> gravity_init;  ///< 初始重力向量
-std::vector<double> gravity;       ///< 当前重力向量
+std::vector<double> gravity;  ///< 当前重力向量
+std::vector<double> gravity_init;  ///< 初始重力向量 (先验)
 
 // ==================== 输出开关 ====================
 bool runtime_pos_log;          ///< 运行时位姿日志
