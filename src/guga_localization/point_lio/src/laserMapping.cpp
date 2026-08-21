@@ -797,6 +797,8 @@ int main(int argc, char** argv) {
                   imu_last = imu_next;
                   imu_next = *(imu_deque.front());
                 }
+                // 重置后首帧: 排空旧 IMU 数据后跳出, 不喂给滤波器
+                // (acc_norm 等量测参数在此分支尚未赋值, 直接做 IMU 更新会除零/NaN)
                 break;
                 angvel_avr << imu_last.angular_velocity.x,
                     imu_last.angular_velocity.y, imu_last.angular_velocity.z;
