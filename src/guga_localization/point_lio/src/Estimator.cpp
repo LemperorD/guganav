@@ -377,9 +377,8 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
               * C);  // B = [p_body]× · R_LI^T · C
 
         // H_j = [n^T | A^T | B^T | C^T]
-        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec(0), norm_vec(1),
-            norm_vec(2), VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B),
-            VEC_FROM_ARRAY(C);
+        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
+            A.transpose(), B.transpose(), C.transpose();
       } else {
         // ------ 固定外参模式: B 部分为零 ------
         M3D point_crossmat =
@@ -388,8 +387,8 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
         V3D A(point_crossmat * C);            // A = [p_imu]× · C
 
         // H_j = [n^T | A^T | 0^T | C^T]
-        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec(0), norm_vec(1),
-            norm_vec(2), VEC_FROM_ARRAY(A), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
+            A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
 
       // 残差: z_j = -n · p_world - d (点面有向距离)
@@ -483,15 +482,14 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(p_imu_crossmat * C);
         V3D B(p_crossmat * s.offset_R_L_I.transpose() * C);
-        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec(0), norm_vec(1),
-            norm_vec(2), VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B),
-            VEC_FROM_ARRAY(C);
+        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
+            A.transpose(), B.transpose(), C.transpose();
       } else {
         M3D point_crossmat = crossmat_list[idx + j + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
-        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec(0), norm_vec(1),
-            norm_vec(2), VEC_FROM_ARRAY(A), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+        ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
+            A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
       ekfom_data.z(m) = -norm_vec(0) * feats_down_world->points[idx + j + 1].x
                         - norm_vec(1) * feats_down_world->points[idx + j + 1].y

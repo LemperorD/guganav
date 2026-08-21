@@ -116,12 +116,6 @@ extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
 #define MAX_MEAS_DIM (10000)  ///< 单次量测最大维度
 
 // ==================== 常用宏 ====================
-#define VEC_FROM_ARRAY(v) v[0], v[1], v[2]  ///< 从 std::vector 提取前3个元素
-#define VEC_FROM_ARRAY_SIX(v) \
-  v[0], v[1], v[2], v[3], v[4], v[5]  ///< 从 vector 提取前6
-#define MAT_FROM_ARRAY(v)                         \
-  v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], \
-      v[8]  ///< 从 vector 提取3x3矩阵
 #define CONSTRAIN(v, min, max) \
   ((v > min) ? ((v < max) ? v : max) : min)  ///< 值限幅
 #define ARRAY_FROM_EIGEN(mat) \
@@ -147,6 +141,23 @@ using V3D = Eigen::Vector3d;                           ///< 双精度3维向量
 using M3D = Eigen::Matrix3d;                           ///< 双精度3x3矩阵
 using V3F = Eigen::Vector3f;                           ///< 单精度3维向量
 using M3F = Eigen::Matrix3f;                           ///< 单精度3x3矩阵
+
+// ==================== std::vector → Eigen 转换 ====================
+/** @brief std::vector<double> → Eigen::Vector3d (带长度校验) */
+inline V3D to_vec3d(const std::vector<double>& v) {
+  if (v.size() < 3) {
+    throw std::runtime_error("to_vec3d: 输入长度不足 3");
+  }
+  return Eigen::Map<const V3D>(v.data());
+}
+
+/** @brief std::vector<double> → Eigen::Matrix3d (带长度校验) */
+inline M3D to_mat3d(const std::vector<double>& v) {
+  if (v.size() < 9) {
+    throw std::runtime_error("to_mat3d: 输入长度不足 9");
+  }
+  return Eigen::Map<const M3D>(v.data());
+}
 
 #define MD(a, b) Matrix<double, (a), (b)>  ///< 动态大小双精度矩阵
 #define VD(a) Matrix<double, (a), 1>       ///< 动态大小双精度列向量
@@ -233,9 +244,7 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
     }
   }
   // 最后一组
-  {
-    time_seq.emplace_back(j + 1);
-  }
+  { time_seq.emplace_back(j + 1); }
   return time_seq;
 }
 

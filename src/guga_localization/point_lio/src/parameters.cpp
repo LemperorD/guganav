@@ -16,13 +16,13 @@
 #include <memory>
 
 // ==================== 帧控制标志 ====================
-bool is_first_frame = true;          ///< 首帧标志 (用于跳过第一帧的预测)
-double lidar_end_time = 0.0;         ///< 当前帧最晚点时间戳
-double first_lidar_time = 0.0;       ///< 第一帧雷达时间 (用于相对计时)
-double time_con = 0.0;               ///< 合帧模式起始时间
+bool is_first_frame = true;   ///< 首帧标志 (用于跳过第一帧的预测)
+double lidar_end_time = 0.0;  ///< 当前帧最晚点时间戳
+double first_lidar_time = 0.0;  ///< 第一帧雷达时间 (用于相对计时)
+double time_con = 0.0;          ///< 合帧模式起始时间
 double last_timestamp_lidar = -1.0;  ///< 上帧雷达时间 (初始 -1 表示未收到数据)
-double last_timestamp_imu = -1.0;    ///< 上帧 IMU 时间 (初始 -1 表示未收到数据)
-int pcd_index = 0;                   ///< PCD 保存序号
+double last_timestamp_imu = -1.0;  ///< 上帧 IMU 时间 (初始 -1 表示未收到数据)
+int pcd_index = 0;                 ///< PCD 保存序号
 
 // ==================== iVox 地图参数 ====================
 IVoxType::Options ivox_options_;  ///< iVox 体素配置 (分辨率、近邻方式)
@@ -53,9 +53,9 @@ int init_map_size = 10;  ///< 初始地图最少点数
 int con_frame_num = 1;   ///< 合帧数
 
 // ==================== 匹配阈值 ====================
-double match_s = 81;                   ///< 点面匹配 Mahalanobis 距离阈值
-double satu_acc;                       ///< 加速度计饱和值 (从 YAML 读取)
-double satu_gyro;                      ///< 陀螺仪饱和值 (从 YAML 读取)
+double match_s = 81;  ///< 点面匹配 Mahalanobis 距离阈值
+double satu_acc;      ///< 加速度计饱和值 (从 YAML 读取)
+double satu_gyro;     ///< 陀螺仪饱和值 (从 YAML 读取)
 double cut_frame_time_interval = 0.1;  ///< 切帧时间间隔 (秒)
 
 // ==================== 平面提取 ====================
@@ -117,7 +117,6 @@ std::vector<double> init_pose;  ///< 初始位姿
 
 // ==================== 帧参数 ====================
 double lidar_time_inte = 0.1;      ///< LiDAR 帧间隔 (默认 10Hz)
-double first_imu_time = 0.0;       ///< 首帧 IMU 时间戳
 int cut_frame_num = 1;             ///< 切帧数
 int orig_odom_freq = 10;           ///< 原始里程计发布频率
 double online_refine_time = 20.0;  ///< 在线精标定时间 (秒)
@@ -273,7 +272,7 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
         IVoxType::NearbyType::NEARBY18;  ///< 未知值默认 18 邻域
   }
   // 将 YAML 重力向量传递给 IMU 处理模块
-  p_imu->gravity_ << VEC_FROM_ARRAY(gravity);
+  p_imu->gravity_ = to_vec3d(gravity);
 }
 
 /**
