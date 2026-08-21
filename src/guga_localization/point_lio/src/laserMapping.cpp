@@ -458,6 +458,87 @@ namespace {
     }
   }
 
+  /** @brief 帧尾: 计时收尾 + 发布输出 + 运行时位姿/耗时日志 */
+  void publish_and_log_frame(
+      MainLoopState& state, double t0, double t1, double t2,
+      const rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr& pub_path,
+      const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
+          pub_cloud_full_res,
+      const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
+          pub_cloud_full_res_body) {
+    double t3 = omp_get_wtime();
+    if (path_en) {
+      publish_path(pub_path, state.path, state.msg_body_pose);
+    }
+    if (scan_pub_en || pcd_save_en) {
+      publish_frame_world(pub_cloud_full_res, state.pcl_wait_save);
+    }
+    if (scan_pub_en && scan_body_pub_en) {
+      publish_frame_body(pub_cloud_full_res_body, state.feats_undistort);
+    }
+
+    if (runtime_pos_log) {
+      state.frame_num++;
+      state.aver_time_consu = (state.aver_time_consu * (state.frame_num - 1)
+                               / state.frame_num)
+                              + ((t3 - t0) / state.frame_num);
+      state.aver_time_icp = (state.aver_time_icp * (state.frame_num - 1)
+                             / state.frame_num)
+                            + (state.update_time / state.frame_num);
+      state.aver_time_match = (state.aver_time_match * (state.frame_num - 1)
+                               / state.frame_num)
+                              + ((state.match_time) / state.frame_num);
+      state.aver_time_solve = (state.aver_time_solve * (state.frame_num - 1)
+                               / state.frame_num)
+                              + (state.solve_time / state.frame_num);
+      state.aver_time_propag = (state.aver_time_propag * (state.frame_num - 1)
+                                / state.frame_num)
+                               + (state.propag_time / state.frame_num);
+      T1[state.time_log_counter] = Measures.lidar_beg_time;
+      s_plot[state.time_log_counter] = t3 - t0;
+      s_plot2[state.time_log_counter] =
+          (double)state.feats_undistort->points.size();
+      s_plot3[state.time_log_counter] = state.aver_time_consu;
+      state.time_log_counter++;
+
+      std::cout << std::fixed << std::setprecision(6)
+                << "[ mapping ]: time: IMU + Map + Input Downsample: "
+                << t1 - t0 << " ave match: " << state.aver_time_match
+                << " ave solve: " << state.aver_time_solve
+                << "  ave ICP: " << t2 - t1 << "  map incre: " << t3 - t2
+                << " ave total: " << state.aver_time_consu
+                << " icp: " << state.aver_time_icp
+                << " propogate: " << state.aver_time_propag << '\n';
+
+      if (!publish_odometry_without_downsample) {
+        if (!use_imu_as_input) {
+          state.euler_cur = SO3ToEuler(kf_output.x_.rot);
+          fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+                   << " " << state.euler_cur.transpose() << " "
+                   << kf_output.x_.pos.transpose() << " "
+                   << kf_output.x_.vel.transpose() << " "
+                   << kf_output.x_.omg.transpose() << " "
+                   << kf_output.x_.acc.transpose() << " "
+                   << kf_output.x_.gravity.transpose() << " "
+                   << kf_output.x_.bg.transpose() << " "
+                   << kf_output.x_.ba.transpose() << " "
+                   << state.feats_undistort->points.size() << '\n';
+        } else {
+          state.euler_cur = SO3ToEuler(kf_input.x_.rot);
+          fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+                   << " " << state.euler_cur.transpose() << " "
+                   << kf_input.x_.pos.transpose() << " "
+                   << kf_input.x_.vel.transpose() << " "
+                   << kf_input.x_.bg.transpose() << " "
+                   << kf_input.x_.ba.transpose() << " "
+                   << kf_input.x_.gravity.transpose() << " "
+                   << state.feats_undistort->points.size() << '\n';
+        }
+      }
+      dump_lio_state_to_log(state.fp);
+    }
+  }
+
   void init_scan(MainLoopState& st) {
     first_lidar_time = Measures.lidar_beg_time;
     st.flg_first_scan = false;
@@ -613,8 +694,6 @@ int main(int argc, char** argv) {
 
       double t0 = omp_get_wtime();
       double t1 = omp_get_wtime();
-      double t2{};
-      double t3{};
       double solve_start{};
 
       // [Workflow 13] IMU 预处理，包括 IMU 有效性和饱和检查。
@@ -1068,7 +1147,7 @@ int main(int argc, char** argv) {
                          state.odom_aft_mapped);
       }
 
-      t2 = omp_get_wtime();
+      double t2 = omp_get_wtime();
       if (feats_down_size > 4) {
         if (enable_prior_pcd) {
           state.sleep_time++;
@@ -1079,78 +1158,10 @@ int main(int argc, char** argv) {
           MapIncremental();
         }
       }
-      t3 = omp_get_wtime();
-      if (path_en) {
-        publish_path(pub_path, state.path, state.msg_body_pose);
-      }
-      if (scan_pub_en || pcd_save_en) {
-        publish_frame_world(pub_laser_cloud_full_res, state.pcl_wait_save);
-      }
-      if (scan_pub_en && scan_body_pub_en) {
-        publish_frame_body(pub_laser_cloud_full_res_body,
-                           state.feats_undistort);
-      }
 
-      if (runtime_pos_log) {
-        state.frame_num++;
-        state.aver_time_consu = (state.aver_time_consu * (state.frame_num - 1)
-                                 / state.frame_num)
-                                + ((t3 - t0) / state.frame_num);
-        state.aver_time_icp = (state.aver_time_icp * (state.frame_num - 1)
-                               / state.frame_num)
-                              + (state.update_time / state.frame_num);
-        state.aver_time_match = (state.aver_time_match * (state.frame_num - 1)
-                                 / state.frame_num)
-                                + ((state.match_time) / state.frame_num);
-        state.aver_time_solve = (state.aver_time_solve * (state.frame_num - 1)
-                                 / state.frame_num)
-                                + (state.solve_time / state.frame_num);
-        state.aver_time_propag = (state.aver_time_propag * (state.frame_num - 1)
-                                  / state.frame_num)
-                                 + (state.propag_time / state.frame_num);
-        T1[state.time_log_counter] = Measures.lidar_beg_time;
-        s_plot[state.time_log_counter] = t3 - t0;
-        s_plot2[state.time_log_counter] =
-            (double)state.feats_undistort->points.size();
-        s_plot3[state.time_log_counter] = state.aver_time_consu;
-        state.time_log_counter++;
-
-        std::cout << std::fixed << std::setprecision(6)
-                  << "[ mapping ]: time: IMU + Map + Input Downsample: "
-                  << t1 - t0 << " ave match: " << state.aver_time_match
-                  << " ave solve: " << state.aver_time_solve
-                  << "  ave ICP: " << t2 - t1 << "  map incre: " << t3 - t2
-                  << " ave total: " << state.aver_time_consu
-                  << " icp: " << state.aver_time_icp
-                  << " propogate: " << state.aver_time_propag << '\n';
-
-        if (!publish_odometry_without_downsample) {
-          if (!use_imu_as_input) {
-            state.euler_cur = SO3ToEuler(kf_output.x_.rot);
-            fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
-                     << " " << state.euler_cur.transpose() << " "
-                     << kf_output.x_.pos.transpose() << " "
-                     << kf_output.x_.vel.transpose() << " "
-                     << kf_output.x_.omg.transpose() << " "
-                     << kf_output.x_.acc.transpose() << " "
-                     << kf_output.x_.gravity.transpose() << " "
-                     << kf_output.x_.bg.transpose() << " "
-                     << kf_output.x_.ba.transpose() << " "
-                     << state.feats_undistort->points.size() << '\n';
-          } else {
-            state.euler_cur = SO3ToEuler(kf_input.x_.rot);
-            fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
-                     << " " << state.euler_cur.transpose() << " "
-                     << kf_input.x_.pos.transpose() << " "
-                     << kf_input.x_.vel.transpose() << " "
-                     << kf_input.x_.bg.transpose() << " "
-                     << kf_input.x_.ba.transpose() << " "
-                     << kf_input.x_.gravity.transpose() << " "
-                     << state.feats_undistort->points.size() << '\n';
-          }
-        }
-        dump_lio_state_to_log(state.fp);
-      }
+      publish_and_log_frame(state, t0, t1, t2, pub_path,
+                            pub_laser_cloud_full_res,
+                            pub_laser_cloud_full_res_body);
     }
     rate.sleep();
   }
