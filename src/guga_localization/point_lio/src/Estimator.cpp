@@ -45,7 +45,7 @@ std::shared_ptr<IVoxType> ivox_ = nullptr;
 std::vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
 
 /** @brief 有效曲面点标记数组 */
-bool point_selected_surf[100000] = {0};
+std::bitset<100000> point_selected_surf = {0};
 
 /** @brief 反对称矩阵缓存: crossmat[i] = [p_body_i]_IMU× */
 std::vector<M3D> crossmat_list;
@@ -72,7 +72,7 @@ input_ikfom input_in;
 V3D angvel_avr, acc_avr, acc_avr_norm;
 
 /** @brief 降采样后的点数 */
-int feats_down_size = 0;
+size_t feats_down_size = 0;
 
 /** @brief LiDAR→IMU 外参 (固定外参模式, 从 YAML 读取) */
 V3D Lidar_T_wrt_IMU(Zero3d);

@@ -2,8 +2,8 @@
  * @file Estimator.h
  * @brief Point-LIO 核心状态估计器 (ESKF on Manifold)
  *
- * 本模块实现了流形上的误差状态卡尔曼滤波器 (Error-State Kalman Filter on Manifold)。
- * 包含:
+ * 本模块实现了流形上的误差状态卡尔曼滤波器 (Error-State Kalman Filter on
+ * Manifold)。 包含:
  * - 过程噪声协方差矩阵构造
  * - 连续时间系统动态模型 (状态转移函数)
  * - 状态转移雅可比矩阵
@@ -29,6 +29,7 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
+#include <bitset>
 #include <unordered_set>
 
 // ==================== 量测相关全局变量 ====================
@@ -58,7 +59,7 @@ extern std::shared_ptr<IVoxType> ivox_;
 extern std::vector<float> pointSearchSqDis;
 
 /** @brief 每个点是否被选为有效曲面点 */
-extern bool point_selected_surf[100000];
+extern std::bitset<100000> point_selected_surf;
 
 /** @brief 反对称矩阵列表: crossmat_i = [p_body_i]× */
 extern std::vector<M3D> crossmat_list;
@@ -69,14 +70,15 @@ extern int effct_feat_num;
 /** @brief 当前处理的时间分组索引 (k) */
 extern int k;
 
-/** @brief 当前处理的点偏移索引 (idx): 指向 feats_down_body 中当前组前的最后一个点 */
+/** @brief 当前处理的点偏移索引 (idx): 指向 feats_down_body
+ * 中当前组前的最后一个点 */
 extern int idx;
 
 /** @brief IMU 平均角速度、平均加速度、平均加速度范数 */
 extern V3D angvel_avr, acc_avr, acc_avr_norm;
 
 /** @brief feats_down_body 中的点数 */
-extern int feats_down_size;
+extern size_t feats_down_size;
 
 /** @brief LiDAR → IMU 外参平移 (固定外参模式) */
 extern V3D Lidar_T_wrt_IMU;
@@ -129,7 +131,7 @@ Eigen::Matrix<double, 30, 30> process_noise_cov_output();
  * @param in IMU 输入 (加速度+角速度原始测量)
  * @return 24维状态导数向量 \dot{x}
  */
-Eigen::Matrix<double, 24, 1> get_f_input(state_input &s, const input_ikfom &in);
+Eigen::Matrix<double, 24, 1> get_f_input(state_input& s, const input_ikfom& in);
 
 /**
  * @brief 连续时间状态转移函数 f(x) — IMU-as-output 模式
@@ -142,7 +144,8 @@ Eigen::Matrix<double, 24, 1> get_f_input(state_input &s, const input_ikfom &in);
  * @param in IMU 输入 (在此模式下用于量测而非驱动)
  * @return 30维状态导数向量 \dot{x}
  */
-Eigen::Matrix<double, 30, 1> get_f_output(state_output &s, const input_ikfom &in);
+Eigen::Matrix<double, 30, 1> get_f_output(state_output& s,
+                                          const input_ikfom& in);
 
 /**
  * @brief 状态转移雅可比矩阵 df/dx — IMU-as-input 模式 (24×24)
@@ -160,7 +163,8 @@ Eigen::Matrix<double, 30, 1> get_f_output(state_output &s, const input_ikfom &in
  *
  * @return 24×24 雅可比矩阵
  */
-Eigen::Matrix<double, 24, 24> df_dx_input(state_input &s, const input_ikfom &in);
+Eigen::Matrix<double, 24, 24> df_dx_input(state_input& s,
+                                          const input_ikfom& in);
 
 /**
  * @brief 状态转移雅可比矩阵 df/dx — IMU-as-output 模式 (30×30)
@@ -171,7 +175,8 @@ Eigen::Matrix<double, 24, 24> df_dx_input(state_input &s, const input_ikfom &in)
  *
  * @return 30×30 雅可比矩阵
  */
-Eigen::Matrix<double, 30, 30> df_dx_output(state_output &s, const input_ikfom &in);
+Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
+                                           const input_ikfom& in);
 
 /**
  * @brief 量测模型 h(x) — IMU-as-input 模式
@@ -195,7 +200,8 @@ Eigen::Matrix<double, 30, 30> df_dx_output(state_output &s, const input_ikfom &i
  * @param cov_R 姿态协方差 (未使用)
  * @param[out] ekfom_data 量测数据结构 (h_x, z, M_Noise, valid)
  */
-void h_model_input(state_input &s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R, esekfom::dyn_share_modified<double> &ekfom_data);
+void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+                   esekfom::dyn_share_modified<double>& ekfom_data);
 
 /**
  * @brief 量测模型 h(x) — IMU-as-output 模式
@@ -203,7 +209,9 @@ void h_model_input(state_input &s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
  * 与 input 模式相同的点面距离残差模型，
  * 但使用 kf_output 的状态进行点变换。
  */
-void h_model_output(state_output &s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R, esekfom::dyn_share_modified<double> &ekfom_data);
+void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
+                    Eigen::Matrix3d cov_R,
+                    esekfom::dyn_share_modified<double>& ekfom_data);
 
 /**
  * @brief IMU 伪量测模型 — IMU-as-output 模式专用
@@ -216,7 +224,8 @@ void h_model_output(state_output &s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_
  * @param s 当前状态
  * @param[out] ekfom_data 量测数据结构 (z_IMU, R_IMU, satu_check)
  */
-void h_model_IMU_output(state_output &s, esekfom::dyn_share_modified<double> &ekfom_data);
+void h_model_IMU_output(state_output& s,
+                        esekfom::dyn_share_modified<double>& ekfom_data);
 
 /**
  * @brief 将点从雷达/IMU 坐标系变换到世界坐标系
@@ -228,6 +237,6 @@ void h_model_IMU_output(state_output &s, esekfom::dyn_share_modified<double> &ek
  * @param pi 输入: IMU/雷达坐标系下的点
  * @param po 输出: 世界坐标系下的点
  */
-void pointBodyToWorld(PointType const * const pi, PointType * const po);
+void pointBodyToWorld(PointType const* const pi, PointType* const po);
 
 #endif
