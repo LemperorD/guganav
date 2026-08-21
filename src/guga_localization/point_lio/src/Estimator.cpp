@@ -17,6 +17,7 @@
  */
 
 #include "Estimator.h"
+#include "parameters.h"
 
 // ==================== 全局变量定义 ====================
 
@@ -39,7 +40,7 @@ std::vector<V3D> pbody_list;
 std::vector<PointVector> Nearest_Points;
 
 /** @brief iVox 增量体素局部地图 (Faster-LIO 数据结构) */
-std::shared_ptr<IVoxType> ivox_ = nullptr;
+IVoxType::Ptr ivox_ = nullptr;
 
 /** @brief 最近邻搜索距离平方 */
 std::vector<float> pointSearchSqDis(NUM_MATCH_POINTS);

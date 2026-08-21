@@ -46,6 +46,7 @@ namespace faster_lio {
     using PointVector =
         std::vector<PointType, Eigen::aligned_allocator<PointType>>;
     using DistPoint = typename NodeType::DistPoint;
+    using Ptr = std::shared_ptr<IVox<dim, node_type, PointType>>;
 
     enum class NearbyType {
       CENTER,  // center only

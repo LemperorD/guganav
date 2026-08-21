@@ -40,6 +40,7 @@
 #include "nav_msgs/msg/path.hpp"
 
 #include "li_initialization.h"
+#include "parameters.h"
 
 namespace {
   bool flg_exit = false;  // NOLINT
@@ -363,14 +364,13 @@ int main(int argc, char** argv) {
   RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
               lidar_type);
 
-  ivox_ = std::make_shared<IVoxType>(ivox_options_);
-
   nav_msgs::msg::Path path;  ///< 路径消息
   path.header.stamp = get_ros_time(lidar_end_time);
   path.header.frame_id = "camera_init";
   nav_msgs::msg::Odometry odom_aft_mapped;        ///< 里程计消息
   geometry_msgs::msg::PoseStamped msg_body_pose;  ///< 位姿消息 (用于路径)
 
+  ivox_ = std::make_shared<IVoxType>(ivox_options_);
   PointCloudXYZI::Ptr feats_undistort = make_shared<PointCloudXYZI>();
   PointCloudXYZI::Ptr init_feats_world = make_shared<PointCloudXYZI>();
   PointCloudXYZI::Ptr pcl_wait_save = make_shared<PointCloudXYZI>();
