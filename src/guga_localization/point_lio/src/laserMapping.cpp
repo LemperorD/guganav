@@ -983,7 +983,7 @@ void LaserMappingNode::initScan() {
     kf_output.x_.gravity = to_vec3d(gravity);
     kf_output.x_.acc = to_vec3d(gravity);
     kf_output.x_.acc *= -1;
-    p_imu->imu_need_init_ = false;
+    imu_.setNeedInit(false);
   }
   G_m_s2 = std::sqrt((gravity[0] * gravity[0]) + (gravity[1] * gravity[1])
                      + (gravity[2] * gravity[2]));
