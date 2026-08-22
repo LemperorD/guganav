@@ -72,9 +72,22 @@ PARAM_LIST=(
 
 # 显示当前值（逐行实时获取，带 timeout 防节点忙时挂死）
 param_value() {
-  local node=$1 param=$2
-  timeout 3 ros2 param get "$node" "$param" 2>/dev/null \
-    | tail -1 | sed 's/^.*is: //' || echo "?"
+  local node=$1
+  local param=$2
+  local output
+
+  if ! output=$(timeout 3 ros2 param get "$node" "$param" 2>/dev/null); then
+    printf '?\n'
+    return 0
+  fi
+
+  output=$(printf '%s\n' "$output" | tail -n 1 | sed 's/^.*is: //')
+
+  if [ -z "$output" ]; then
+    printf '?\n'
+  else
+    printf '%s\n' "$output"
+  fi
 }
 
 # ── 交互菜单：列出参数 → 选择 → 输入新值 → 应用 ──
@@ -123,7 +136,7 @@ interactive_menu() {
 
     echo
     echo "== MPPI 动态调参（$node，${#names[@]} 项）=="
-    echo "   (? = 获取超时或参数未声明；本循环只重取 ? 项与已更改项)"
+    echo "   (? = 获取超时或参数未声明；本循环只重取 ? 项与已更改项),  * = 上次更改失败"
     local i=1
     for p in "${names[@]}"; do
       local mark=""
