@@ -526,6 +526,7 @@ void h_model_IMU_output(state_output& s,
   // 重置饱和标记
   std::memset(ekfom_data.satu_check, false, 6);
 
+  // [Workflow 14] 计算 IMU 量测残差 r_IMU 与量测噪声 R_IMU (对应 (14)(15))。
   // 角速度残差: ω_meas - (omg + bg)
   ekfom_data.z_IMU.block<3, 1>(0, 0) = angvel_avr - s.omg - s.bg;
 
@@ -538,6 +539,8 @@ void h_model_IMU_output(state_output& s,
   ekfom_data.R_IMU << imu_meas_omg_cov, imu_meas_omg_cov, imu_meas_omg_cov,
       imu_meas_acc_cov, imu_meas_acc_cov, imu_meas_acc_cov;
 
+  // [Workflow 13] 如果无饱和度 (a_m, ω_m): 各轴测量值未接近饱和阈值时参与更新。
+  // [Workflow 17] 否则 (饱和): 饱和轴残差置零并标记 satu_check, 更新时跳过该轴。
   // ---- IMU 饱和检测与处理 ----
   if (check_satu) {
     // 陀螺仪 x 轴饱和

@@ -19,11 +19,6 @@
 #include <ranges>
 
 // ==================== 初始化状态 ====================
-bool data_accum_finished = false;     ///< 数据累积完成
-bool data_accum_start = false;        ///< 数据累积开始
-bool online_calib_finish = false;     ///< 在线标定完成
-bool refine_print = false;            ///< 精标定打印
-int frame_num_init = 0;               ///< 初始化帧数
 double time_lag_IMU_wtr_lidar = 0.0;  ///< IMU 相对 LiDAR 时间延迟
 double move_start_time = 0.0;
 double online_calib_starts_time = 0.0;

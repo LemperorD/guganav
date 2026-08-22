@@ -23,14 +23,6 @@
 /// @brief 最大缓冲区大小
 #define MAXN (720000)
 
-// ==================== 初始化状态标志 ====================
-
-extern bool data_accum_finished;  ///< 数据累积完成 (初始化用)
-extern bool data_accum_start;     ///< 数据累积开始
-extern bool online_calib_finish;  ///< 在线标定完成
-extern bool refine_print;         ///< 精标定打印标志
-extern int frame_num_init;        ///< 初始化帧计数
-
 // ==================== 时间标定参数 ====================
 
 extern double time_lag_IMU_wtr_lidar;    ///< IMU→LiDAR 时间延迟 (估计值)
