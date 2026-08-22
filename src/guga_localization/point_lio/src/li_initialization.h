@@ -18,6 +18,7 @@
 
 #include <memory>
 #include "common_lib.h"
+#include "Imu.h"
 
 #include "Estimator.h"
 
@@ -31,14 +32,9 @@ public:
 
   void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
   void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
-  void onIMU(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in);
-  bool syncPackages(MeasureGroup& meas);
+  bool syncPackages(Imu& imu, MeasureGroup& meas);
   void reset();
 
-  sensor_msgs::msg::Imu imu_last_;  ///< 上帧 IMU
-  sensor_msgs::msg::Imu imu_next;   ///< 下帧 IMU
-  std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>
-      imu_deque;  ///< IMU 数据缓冲队列
   double T1[MAXN]{};
   double s_plot[MAXN]{};
   double s_plot2[MAXN]{};
@@ -63,4 +59,5 @@ public:
   double last_timestamp_imu = -1.0;
   double time_con = 0.0;
   bool lose_lid = false;
+
 };

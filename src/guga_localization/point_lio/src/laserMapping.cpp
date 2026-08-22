@@ -55,7 +55,7 @@ int LaserMappingNode::run() {
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
 
-    if (!lidar_.syncPackages(Measures)) {
+    if (!lidar_.syncPackages(imu_, Measures)) {
       rate_.sleep();
       continue;
     }
@@ -121,7 +121,8 @@ int LaserMappingNode::run() {
 }
 
 /** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
-LaserMappingNode::LaserMappingNode() : rclcpp::Node("laserMapping") {
+LaserMappingNode::LaserMappingNode()
+    : rclcpp::Node("laserMapping") {
 }
 
 /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (原 run 前半段) */
@@ -221,7 +222,7 @@ void LaserMappingNode::initialize() {
   sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
       imu_topic, rclcpp::SensorDataQoS(),
       [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
-        lidar_.onIMU(msg);
+        imu_.onMessage(msg);
       });
 
   signal(SIGINT, SigHandle);  // NOLINT
@@ -236,7 +237,7 @@ bool LaserMappingNode::prepareFrame() {
 
   // IMU 预处理: 在线初始化 / 重力对齐 / 点云拷贝 (去畸变预留;
   // 饱和检查不在本函数, 见 [Workflow 13] IMU 量测更新处)。
-  p_imu->Process(Measures, state_.feats_undistort);
+  imu_.process(Measures, state_.feats_undistort);
 
   // ---- 降采样 + 按时间戳排序 + 分组 ----
   if (space_down_sample) {
@@ -253,7 +254,7 @@ bool LaserMappingNode::prepareFrame() {
   feats_down_size = feats_down_body->points.size();
 
   // ---- 就绪检查: IMU 初始化 / 地图初始化 ----
-  if (p_imu->imu_need_init_) {
+  if (imu_.needInit()) {
     return false;  // IMU 初始化中
   }
   if (!initMapState()) {
@@ -527,7 +528,7 @@ void LaserMappingNode::publishPath() {
 void LaserMappingNode::resetSystem() {
   RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
               "reset when rosbag play back");
-  p_imu->Reset();
+  imu_.reset();
   lidar_.reset();
   state_.feats_undistort = std::make_shared<PointCloudXYZI>();
   if (use_imu_as_input) {
@@ -673,9 +674,9 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
  */
 template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
-  auto& imu_deque = lidar_.imu_deque;
-  auto& imu_last = lidar_.imu_last_;
-  auto& imu_next = lidar_.imu_next;
+  auto& imu_deque = imu_.buffer();
+  auto& imu_last = imu_.lastMutable();
+  auto& imu_next = imu_.nextMutable();
   effct_feat_num = 0;
   if (time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
@@ -966,9 +967,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 }
 
 void LaserMappingNode::initScan() {
-  auto& imu_deque = lidar_.imu_deque;
-  auto& imu_last = lidar_.imu_last_;
-  auto& imu_next = lidar_.imu_next;
+  auto& imu_next = imu_.nextMutable();
   first_lidar_time = Measures.lidar_beg_time;
   state_.flg_first_scan = false;
   std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
@@ -978,15 +977,7 @@ void LaserMappingNode::initScan() {
   if (imu_enabled) {
     kf_input.x_.gravity = to_vec3d(gravity);
     kf_output.x_.gravity = to_vec3d(gravity);
-
-    while (Measures.lidar_beg_time > get_time_sec(imu_next.header.stamp)) {
-      imu_deque.pop_front();
-      if (imu_deque.empty()) {
-        break;
-      }
-      imu_last = imu_next;
-      imu_next = *(imu_deque.front());
-    }
+    imu_.discardBefore(Measures.lidar_beg_time);
   } else {
     kf_input.x_.gravity = to_vec3d(gravity);
     kf_output.x_.gravity = to_vec3d(gravity);

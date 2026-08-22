@@ -81,6 +81,7 @@ add_executable(pointlio_mapping
   src/preprocess.cpp
   src/Estimator.cpp
   src/IMU_Processing.cpp
+  src/Imu.cpp
 )
 
 ament_target_dependencies(pointlio_mapping

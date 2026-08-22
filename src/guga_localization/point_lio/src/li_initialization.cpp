@@ -29,24 +29,6 @@ namespace {
     lidar.time_buffer.pop_front();
   }
 
-  void collect_imu_until(Lidar& lidar, double end_time, MeasureGroup& meas) {
-    if (!p_imu->imu_need_init_ || lidar.imu_deque.empty()) {
-      return;
-    }
-
-    lidar.imu_next = *lidar.imu_deque.front();
-    meas.imu.shrink_to_fit();
-    while (!lidar.imu_deque.empty()
-           && get_time_sec(lidar.imu_deque.front()->header.stamp) < end_time) {
-      meas.imu.emplace_back(lidar.imu_deque.front());
-      lidar.imu_last_ = lidar.imu_next;
-      lidar.imu_deque.pop_front();
-      if (!lidar.imu_deque.empty()) {
-        lidar.imu_next = *lidar.imu_deque.front();
-      }
-    }
-  }
-
   void append_cut_frames(Lidar& lidar, std::deque<PointCloudXYZI::Ptr>& frames,
                          std::deque<double>& timestamps) {
     while (!frames.empty() && !timestamps.empty()) {
@@ -146,20 +128,7 @@ void Lidar::onLivoxPcl(
   }
 }
 
-void Lidar::onIMU(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
-  auto msg = std::make_shared<sensor_msgs::msg::Imu>(*msg_in);
-  msg->header.stamp = get_ros_time(get_time_sec(msg_in->header.stamp));
-  const double timestamp = get_time_sec(msg->header.stamp);
-  if (timestamp < last_timestamp_imu) {
-    RCLCPP_ERROR(rclcpp::get_logger("li_initialization"),
-                 "imu loop back, clear deque");
-    return;
-  }
-  imu_deque.emplace_back(std::move(msg));
-  last_timestamp_imu = timestamp;
-}
-
-bool Lidar::syncPackages(MeasureGroup& meas) {
+bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
   if (!imu_enabled) {
     if (lidar_buffer.empty()) {
       return false;
@@ -173,7 +142,7 @@ bool Lidar::syncPackages(MeasureGroup& meas) {
     return true;
   }
 
-  if (lidar_buffer.empty() || imu_deque.empty()) {
+  if (lidar_buffer.empty() || imu.empty()) {
     return false;
   }
 
@@ -187,12 +156,12 @@ bool Lidar::syncPackages(MeasureGroup& meas) {
 
   const double required_end = lose_lid ? meas.lidar_beg_time + lidar_time_inte
                                        : lidar_end_time;
-  if (last_timestamp_imu < required_end) {
+  if (imu.lastTimestamp() < required_end) {
     return false;
   }
 
   if (!imu_pushed) {
-    collect_imu_until(*this, required_end, meas);
+    imu.collectUntil(required_end, meas);
     imu_pushed = true;
   }
 
@@ -204,18 +173,14 @@ bool Lidar::syncPackages(MeasureGroup& meas) {
 }
 
 void Lidar::reset() {
-  imu_last_ = sensor_msgs::msg::Imu();
-  imu_next = sensor_msgs::msg::Imu();
   ptr_con->clear();
   lidar_buffer.clear();
   time_buffer.clear();
-  imu_deque.clear();
   scan_count = 0;
   frame_ct = 0;
   lidar_pushed = false;
   imu_pushed = false;
   last_timestamp_lidar = -1.0;
-  last_timestamp_imu = -1.0;
   time_con = 0.0;
   lose_lid = false;
 }

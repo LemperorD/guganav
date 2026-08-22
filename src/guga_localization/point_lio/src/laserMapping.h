@@ -65,6 +65,7 @@ public:
 
 private:
   // ==================== 成员变量 (原 main 局部) ====================
+  Imu imu_;
   Lidar lidar_;
   rclcpp::executors::MultiThreadedExecutor
       executor_;         ///< 执行器 (主循环 spin_some)
