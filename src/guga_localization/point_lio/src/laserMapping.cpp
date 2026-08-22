@@ -31,6 +31,8 @@
 
 namespace {
   bool flg_exit = false;  // NOLINT
+  std::condition_variable
+      sig_buffer;  // NOLINT< 缓冲区条件变量 (通知有数据可用)
 
   /** @brief Ctrl+C 信号处理: 设置退出标志并通知条件变量 */
   void SigHandle(int sig) {
@@ -614,11 +616,11 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
     state_.aver_time_propag = (state_.aver_time_propag * (state_.frame_num - 1)
                                / state_.frame_num)
                               + (state_.propag_time / state_.frame_num);
-    T1[state_.time_log_counter] = Measures.lidar_beg_time;
-    s_plot[state_.time_log_counter] = t3 - t0;
-    s_plot2[state_.time_log_counter] =
+    lidar_.T1[state_.time_log_counter] = Measures.lidar_beg_time;
+    lidar_.s_plot[state_.time_log_counter] = t3 - t0;
+    lidar_.s_plot2[state_.time_log_counter] =
         (double)state_.feats_undistort->points.size();
-    s_plot3[state_.time_log_counter] = state_.aver_time_consu;
+    lidar_.s_plot3[state_.time_log_counter] = state_.aver_time_consu;
     state_.time_log_counter++;
 
     std::cout << std::fixed << std::setprecision(6)

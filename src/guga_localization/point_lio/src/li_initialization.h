@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <memory>
 #include "common_lib.h"
 
 #include "Estimator.h"
@@ -23,64 +24,18 @@
 /// @brief 最大缓冲区大小
 #define MAXN (720000)
 
-// ==================== 时间标定参数 ====================
-
-extern double time_lag_IMU_wtr_lidar;    ///< IMU→LiDAR 时间延迟 (估计值)
-extern double move_start_time;           ///< 运动开始时间
-extern double online_calib_starts_time;  ///< 在线标定开始时间
-
-extern double timediff_imu_wrt_lidar;  ///< IMU→LiDAR 固有时差 (用于同步对齐)
-extern bool timediff_set_flg;          ///< 时差是否已设置
-
-// ==================== 重力 ====================
-
-extern V3D gravity_lio;  ///< LIO 估计的重力向量
-
-// ==================== 线程同步 ====================
-
-extern mutex mtx_buffer;               ///< 缓冲区互斥锁
-extern condition_variable sig_buffer;  ///< 缓冲区条件变量 (通知有数据可用)
-
-// ==================== 帧计数器 ====================
-
-extern int scan_count;  ///< 接收到的总帧数
-extern int frame_ct;    ///< 合帧计数器
-extern int wait_num;    ///< 等待次数
-
 // ==================== 数据缓冲区 ====================
-
-/// @brief 预处理后的 LiDAR 帧队列 (每个元素为一帧点云)
-extern std::deque<PointCloudXYZI::Ptr> lidar_buffer;
-
-/// @brief LiDAR 帧时间戳队列 (与 lidar_buffer 一一对应)
-extern std::deque<double> time_buffer;
 
 /// @brief IMU 数据队列 (按时间序排列)
 extern std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_deque;
-
-// ==================== 互斥与时序 ====================
-
-extern std::mutex m_time;
-extern bool lidar_pushed;      ///< 雷达帧是否已推入 MeasureGroup (IMU模式)
-extern bool imu_pushed;        ///< IMU 数据是否已推入 MeasureGroup
-extern double imu_first_time;  ///< 首帧 IMU 时间戳
-extern bool lose_lid;          ///< 是否丢失了当前激光帧
 
 // ==================== IMU 帧间数据 ====================
 
 extern sensor_msgs::msg::Imu imu_last;  ///< 上一帧 IMU (用于插值/传播)
 extern sensor_msgs::msg::Imu imu_next;  ///< 下一帧 IMU (用于插值/传播)
 
-// ==================== 合帧模式 ====================
-
-extern PointCloudXYZI::Ptr ptr_con;  ///< 合帧临时点云 (累积多帧)
-
 // ==================== 调试数据数组 ====================
 
-extern double T1[MAXN];        ///< 时序数据 (主循环记录的时间戳)
-extern double s_plot[MAXN];    ///< 总耗时 (秒)
-extern double s_plot2[MAXN];   ///< 特征点数
-extern double s_plot3[MAXN];   ///< 平均耗时 (秒)
 extern double s_plot11[MAXN];  ///< 预处理耗时 (秒)
 
 // ==================== 回调函数声明 ====================
@@ -113,7 +68,7 @@ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
  * @brief IMU 数据回调
  *
  * 处理流程:
- * 1. 时间戳校准 (timediff_imu_wrt_lidar + time_lag_IMU_wtr_lidar)
+ * 1. 时间戳校准 (timediff_imu_wrt_lidar)
  * 2. 时间戳回环检测 → 丢弃乱序数据
  * 3. 推入 imu_deque 队列
  *
@@ -140,4 +95,35 @@ void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in);
  */
 bool sync_packages(MeasureGroup& meas);
 
-// #endif
+class Lidar {
+public:
+  Lidar() = default;
+  ~Lidar() = default;
+
+  void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
+  void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
+  void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in);
+  bool sync_packages(MeasureGroup& meas);
+
+  // ==================== 线程同步 ====================
+  sensor_msgs::msg::Imu imu_last;  ///< 上帧 IMU
+  sensor_msgs::msg::Imu imu_next;  ///< 下帧 IMU
+  PointCloudXYZI::Ptr ptr_con =
+      std::make_shared<PointCloudXYZI>();  ///< 合帧累积点云
+
+  // ==================== 调试数组 ====================
+  double T1[MAXN]{};        ///< 时间戳数组
+  double s_plot[MAXN]{};    ///< 总耗时
+  double s_plot2[MAXN]{};   ///< 特征点数
+  double s_plot3[MAXN]{};   ///< 平均耗时
+  double s_plot11[MAXN]{};  ///< 预处理耗时
+
+  int scan_count = 0;         ///< 接收帧数
+  int frame_ct = 0;           ///< 合帧计数
+  bool lidar_pushed = false;  ///< 雷达帧已推入 (IMU模式防重复取帧)
+  bool imu_pushed = false;    ///< IMU 已推入
+  std::deque<PointCloudXYZI::Ptr> lidar_buffer;  ///< 雷达帧缓冲队列
+  std::deque<double> time_buffer;                ///< 雷达时间戳缓冲队列
+  std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>
+      imu_deque;  ///< IMU 数据缓冲队列
+};
