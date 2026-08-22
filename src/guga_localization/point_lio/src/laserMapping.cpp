@@ -167,8 +167,8 @@ void LaserMappingNode::initialize() {
     }
   }
 
-  p_imu->lidar_type = p_pre->lidar_type = lidar_type;
-  p_imu->imu_en = imu_enabled;
+  p_pre->lidar_type = lidar_type;
+  imu_.configure(lidar_type, imu_enabled, gravity);
 
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
   kf_output.init_dyn_share_modified_3h(get_f_output, df_dx_output,
