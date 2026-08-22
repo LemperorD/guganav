@@ -37,38 +37,76 @@ source_setup "$WS/install/setup.bash"
 
 DEFAULT_NODE="/red_standard_robot1/controller_server"
 # 常用关键参数（show 时展示）
-KEY_PARAMS=(
-  "FollowPath.PathAlignCritic.cost_weight"
-  "FollowPath.PathFollowCritic.cost_weight"
-  "FollowPath.CostCritic.cost_weight"
-  "FollowPath.ObstaclesCritic.repulsion_weight"
-  "FollowPath.vx_max"
-  "FollowPath.wz_max"
-  "FollowPath.temperature"
-  "FollowPath.gamma"
-  "FollowPath.batch_size"
-)
+echo "默认节点: $DEFAULT_NODE"
+CONTROLLER_TYPE=$(ros2 param get "$DEFAULT_NODE" "FollowPath.plugin" 2>/dev/null |
+ awk '{print tolower($4)}' )
+if [ -z "$CONTROLLER_TYPE" ]; then
+  echo "⚠️ 未获取到 FollowPath.controller 参数，可能节点未启动或参数未声明"
+  CONTROLLER_TYPE="unknown"
+fi
+if [[ "$CONTROLLER_TYPE" = *"mppi"* ]]; then
+  	echo "控制器类型:MPPI"
+  	CONTROLLER_TYPE='mppi'
+elif [[ "$CONTROLLER_TYPE" = *"mpc"* ]]; then
+	echo "控制器类型:MPC"
+	CONTROLLER_TYPE='mpc'
+elif [[ "$CONTROLLER_TYPE" = *"pid"* ]]; then
+	echo "控制器类型:PID"
+	CONTROLLER_TYPE='pid'
+else
+	echo "非法的控制器类型⚠️"
+ 	CONTROLLER_TYPE="unknown"
+	exit 1;
+fi
+read -p "按任意键继续"
+
+CONFIG_FILE="${WS}/scripts/params_list/${CONTROLLER_TYPE}_para.txt"
+KEY_PARAMS=()
+PARAM_LIST=()
+if [[ ! -f "$CONFIG_FILE" ]]; then
+	echo "ERROR:config file $CONFIG_FILE is invalid"
+	exit 1;
+fi
+
+while IFS= read -r line; do 
+   line=${line%$'\r'}
+   [[ -z "$line" ]] && continue
+   KEY_PARAMS+=("$line")
+   PARAM_LIST+=("$line")
+ done< $CONFIG_FILE
+
+# KEY_PARAMS=(
+#   "FollowPath.PathAlignCritic.cost_weight"
+#   "FollowPath.PathFollowCritic.cost_weight"
+#   "FollowPath.CostCritic.cost_weight"
+#   "FollowPath.ObstaclesCritic.repulsion_weight"
+#   "FollowPath.vx_max"
+#   "FollowPath.wz_max"
+#   "FollowPath.temperature"
+#   "FollowPath.gamma"
+#   "FollowPath.batch_size"
+# )
 
 # ── 可调参数表（显示名 | 说明）──
 # 已启用 critic 的权重（Constraint/Cost/Goal/PathAlign/PathFollow）全部可调
-PARAM_LIST=(
-  "PathAlignCritic.cost_weight|贴路径程度（大→严格贴线）"
-  "PathFollowCritic.cost_weight|路径跟随（大→死贴路径）"
-  "CostCritic.cost_weight|代价地图权重（大→怕障碍）"
-  "ConstraintCritic.cost_weight|运动约束（大→保守）"
-  "GoalCritic.cost_weight|目标引力"
-  "vx_max|最大前进速度"
-  "vy_max|最大侧向速度"
-  "wz_max|最大角速度"
-  "temperature|采样温度（大→激进/抖）"
-  "gamma|代价衰减（小→看得远）"
-  "batch_size|采样轨迹数（大→平滑但慢）"
-  "time_steps|轨迹步数"
-  "iteration_count|迭代次数"
-  "vx_std|前进噪声"
-  "vy_std|侧向噪声"
-  "wz_std|转向噪声"
-)
+# PARAM_LIST=(
+#   "PathAlignCritic.cost_weight|贴路径程度（大→严格贴线）"
+#   "PathFollowCritic.cost_weight|路径跟随（大→死贴路径）"
+#   "CostCritic.cost_weight|代价地图权重（大→怕障碍）"
+#   "ConstraintCritic.cost_weight|运动约束（大→保守）"
+#   "GoalCritic.cost_weight|目标引力"
+#   "vx_max|最大前进速度"
+#   "vy_max|最大侧向速度"
+#   "wz_max|最大角速度"
+#   "temperature|采样温度（大→激进/抖）"
+#   "gamma|代价衰减（小→看得远）"
+#   "batch_size|采样轨迹数（大→平滑但慢）"
+#   "time_steps|轨迹步数"
+#   "iteration_count|迭代次数"
+#   "vx_std|前进噪声"
+#   "vy_std|侧向噪声"
+#   "wz_std|转向噪声"
+# )
 
 # 显示当前值（逐行实时获取，带 timeout 防节点忙时挂死）
 param_value() {
@@ -76,12 +114,16 @@ param_value() {
   local param=$2
   local output
 
-  if ! output=$(timeout 3 ros2 param get "$node" "$param" 2>/dev/null); then
+  if ! output=$(ros2 param get "$node" "$param" 2>&1); then
+    echo "获取失败 [$param]:" >&2
+    echo "$output" >&2
     printf '?\n'
     return 0
   fi
 
-  output=$(printf '%s\n' "$output" | tail -n 1 | sed 's/^.*is: //')
+  output=$(printf '%s\n' "$output" |
+    tail -n 1 |
+    sed 's/^.*is: //')
 
   if [ -z "$output" ]; then
     printf '?\n'
@@ -108,7 +150,7 @@ interactive_menu() {
   echo "== 正在读取参数（${#names[@]} 项）... =="
   local i=1
   for p in "${names[@]}"; do
-    values[$p]=$(param_value "$node" "FollowPath.$p")
+    values[$p]=$(param_value "$node" "$p")
     printf "  %2d) %-38s [%s]\n" "$i" "$p" "${values[$p]:-?}"
     i=$((i+1))
   done
@@ -128,7 +170,7 @@ interactive_menu() {
       echo "== 重新获取 ${#refetch[@]} 项（? 重试 + 已更改确认）... =="
       for p in "${refetch[@]}"; do
         local newval
-        newval=$(param_value "$node" "FollowPath.$p")
+        newval=$(param_value "$node" "$p")
         values[$p]=$newval
         [ "$newval" != "?" ] && changed[$p]=0   # 取到真实值后不再重试
       done
@@ -149,7 +191,7 @@ interactive_menu() {
     read -r choice || break
     [ -z "$choice" ] && continue
     if [ "$choice" = "0" ]; then
-      echo "再见了，${USER}小弟"
+      echo "再见了，${USER}小弟🐧🐧🐧"
       break
     fi
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
@@ -158,7 +200,7 @@ interactive_menu() {
     fi
     local idx=$((choice-1))
     local param=${names[$idx]}
-    full="FollowPath.$param"
+    full="$param"
     current=${values[$param]:-?}
     printf "  %s 当前值: %s\n  新值: " "$param" "$current"
     read -r value || break
