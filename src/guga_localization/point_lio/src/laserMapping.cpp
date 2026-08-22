@@ -690,12 +690,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         if (is_first_frame) {
           while (get_time_sec(imu_next.header.stamp)
                  < Measures.lidar_beg_time + lidar_time_inte) {
-            imu_deque.pop_front();
+            imu_.popAndAdvance();
             if (imu_deque.empty()) {
               break;
             }
-            imu_last = imu_next;
-            imu_next = *(imu_deque.front());
           }
           if constexpr (ImuAsInput) {
             input_in.gyro << imu_last.angular_velocity.x,
