@@ -136,7 +136,7 @@ interactive_menu() {
     read -r choice || break
     [ -z "$choice" ] && continue
     if [ "$choice" = "0" ]; then
-      echo "再见"
+      echo "再见了，${USER}小弟"
       break
     fi
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
@@ -204,7 +204,7 @@ case "$cmd" in
       ros2 param set "$node" "$name" "$value" >/dev/null 2>&1 && count=$((count+1)) || \
         echo "  ⚠️ 设置失败: $name" >&2
     done < "$file"
-    echo "已恢复 $count 项参数（$node）"
+    echo "已恢复 $count 项参数（$node)"
     ;;
   menu | interactive | "")
     interactive_menu "${1:-$DEFAULT_NODE}"
