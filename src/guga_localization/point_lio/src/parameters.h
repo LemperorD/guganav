@@ -55,9 +55,6 @@ using IVoxType =
 extern bool is_first_frame;          ///< 首帧标志
 extern double lidar_end_time;        ///< 当前帧结束时间戳 (秒)
 extern double first_lidar_time;      ///< 首帧激光雷达时间戳
-extern double time_con;              ///< 合帧模式下的起始时间
-extern double last_timestamp_lidar;  ///< 上一帧激光雷达时间戳 (用于回环检测)
-extern double last_timestamp_imu;    ///< 上一帧 IMU 时间戳 (用于回环检测)
 extern int pcd_index;                ///< PCD 文件保存序号
 
 // ==================== iVox 地图参数 ====================

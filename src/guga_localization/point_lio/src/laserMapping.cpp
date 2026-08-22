@@ -55,7 +55,7 @@ int LaserMappingNode::run() {
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
 
-    if (!sync_packages(Measures)) {
+    if (!lidar_.syncPackages(Measures)) {
       rate_.sleep();
       continue;
     }
@@ -193,14 +193,14 @@ void LaserMappingNode::initialize() {
   if (p_pre->lidar_type == AVIA) {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
         lid_topic, rclcpp::SensorDataQoS(),
-        [](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
-          livox_pcl_cbk(msg);
+        [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
+          lidar_.onLivoxPcl(msg);
         });
   } else {
     sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
         lid_topic, rclcpp::SensorDataQoS(),
-        [](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          standard_pcl_cbk(msg);
+        [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+          lidar_.onStandardPcl(msg);
         });
   }
 
@@ -219,7 +219,10 @@ void LaserMappingNode::initialize() {
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
-      imu_topic, rclcpp::SensorDataQoS(), imu_cbk);
+      imu_topic, rclcpp::SensorDataQoS(),
+      [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
+        lidar_.onIMU(msg);
+      });
 
   signal(SIGINT, SigHandle);  // NOLINT
 }
@@ -525,6 +528,7 @@ void LaserMappingNode::resetSystem() {
   RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
               "reset when rosbag play back");
   p_imu->Reset();
+  lidar_.reset();
   state_.feats_undistort = std::make_shared<PointCloudXYZI>();
   if (use_imu_as_input) {
     state_in = state_input();
@@ -669,6 +673,9 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
  */
 template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
+  auto& imu_deque = lidar_.imu_deque;
+  auto& imu_last = lidar_.imu_last_;
+  auto& imu_next = lidar_.imu_next;
   effct_feat_num = 0;
   if (time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
@@ -959,6 +966,9 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 }
 
 void LaserMappingNode::initScan() {
+  auto& imu_deque = lidar_.imu_deque;
+  auto& imu_last = lidar_.imu_last_;
+  auto& imu_next = lidar_.imu_next;
   first_lidar_time = Measures.lidar_beg_time;
   state_.flg_first_scan = false;
   std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)

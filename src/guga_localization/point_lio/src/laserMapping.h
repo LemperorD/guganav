@@ -11,7 +11,6 @@
 #include "nav_msgs/msg/path.hpp"
 
 #include "li_initialization.h"
-#include "parameters.h"
 
 struct MainLoopState {
   // ---- 控制标志 / 计数器 / 耗时统计 ----

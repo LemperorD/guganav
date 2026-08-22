@@ -19,9 +19,6 @@
 bool is_first_frame = true;          ///< 首帧标志 (用于跳过第一帧的预测)
 double lidar_end_time = 0.0;         ///< 当前帧最晚点时间戳
 double first_lidar_time = 0.0;       ///< 第一帧雷达时间 (用于相对计时)
-double time_con = 0.0;               ///< 合帧模式起始时间
-double last_timestamp_lidar = -1.0;  ///< 上帧雷达时间 (初始 -1 表示未收到数据)
-double last_timestamp_imu = -1.0;    ///< 上帧 IMU 时间 (初始 -1 表示未收到数据)
 int pcd_index = 0;                   ///< PCD 保存序号
 
 // ==================== iVox 地图参数 ====================
