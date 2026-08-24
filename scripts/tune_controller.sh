@@ -30,7 +30,7 @@ source_setup() {
   fi
 }
 
-if [ -z "${ROS_DISTRO:-}" ]; then
+if [[ -z "${ROS_DISTRO:-}" ]]; then
   source_setup /opt/ros/humble/setup.bash
 fi
 source_setup "$WS/install/setup.bash"
@@ -38,9 +38,11 @@ source_setup "$WS/install/setup.bash"
 DEFAULT_NODE="/red_standard_robot1/controller_server"
 # 常用关键参数（show 时展示）
 echo "默认节点: $DEFAULT_NODE"
+set +e
 CONTROLLER_TYPE=$(ros2 param get "$DEFAULT_NODE" "FollowPath.plugin" 2>/dev/null |
  awk '{print tolower($4)}' )
-if [ -z "$CONTROLLER_TYPE" ]; then
+set -e
+if [[ -z "$CONTROLLER_TYPE" ]]; then
   echo "⚠️ 未获取到 FollowPath.controller 参数，可能节点未启动或参数未声明"
   CONTROLLER_TYPE="unknown"
 fi
@@ -68,7 +70,7 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 	exit 1;
 fi
 
-while IFS= read -r line; do 
+while read -r line; do 
    line=${line%$'\r'}
    [[ -z "$line" ]] && continue
    KEY_PARAMS+=("$line")
@@ -151,7 +153,8 @@ interactive_menu() {
   local i=1
   for p in "${names[@]}"; do
     values[$p]=$(param_value "$node" "$p")
-    printf "  %2d) %-38s [%s]\n" "$i" "$p" "${values[$p]:-?}"
+    p_print="${p#FollowPath.}"   # 显示时去掉前缀
+    printf "  %2d) %-38s [%s]\n" "$i" "$p_print" "${values[$p]:-?}"
     i=$((i+1))
   done
   # changed[p]=1 标记本参数刚被更改（下次循环重取确认）；取到值后清除标记
@@ -177,7 +180,7 @@ interactive_menu() {
     fi
 
     echo
-    echo "== MPPI 动态调参（$node，${#names[@]} 项）=="
+    echo "== ${CONTROLLER_TYPE} 动态调参（$node,${#names[@]} 项）=="
     echo "   (? = 获取超时或参数未声明；本循环只重取 ? 项与已更改项),  * = 上次更改失败"
     local i=1
     for p in "${names[@]}"; do
@@ -242,7 +245,7 @@ case "$cmd" in
     # tune_mppi.sh save <file> [node]
     file=$1; node=${2:-$DEFAULT_NODE}
     ros2 param dump "$node" 2>/dev/null | grep -E "FollowPath\." > "$file" || true
-    echo "已保存 MPPI 参数到 $file（$(grep -c . "$file" || echo 0) 项）"
+    echo "已保存 MPPI 参数到 $file($(grep -c . "$file" || echo 0) 项）"
     ;;
   restore)
     # tune_mppi.sh restore <file> [node]

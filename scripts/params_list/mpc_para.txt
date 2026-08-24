@@ -1,41 +1,41 @@
- /bond_disable_heartbeat_timeout
-  FollowPath.local_plan_length
-  FollowPath.mpc.omega_max
-  FollowPath.mpc.omega_min
-  FollowPath.mpc.qtheta
-  FollowPath.mpc.qtheta_e
-  FollowPath.mpc.qx
-  FollowPath.mpc.qx_e
-  FollowPath.mpc.qy
-  FollowPath.mpc.qy_e
-  FollowPath.mpc.romega
-  FollowPath.mpc.rvx
-  FollowPath.mpc.rvy
-  FollowPath.mpc.vx_max
-  FollowPath.mpc.vx_min
-  FollowPath.mpc.vy_max
-  FollowPath.mpc.vy_min
-  FollowPath.plugin
-  controller_frequency
-  controller_plugins
-  failure_tolerance
-  general_goal_checker.plugin
-  general_goal_checker.stateful
-  general_goal_checker.xy_goal_tolerance
-  general_goal_checker.yaw_goal_tolerance
-  goal_checker_plugins
-  min_theta_velocity_threshold
-  min_x_velocity_threshold
-  min_y_velocity_threshold
-  odom_topic
-  progress_checker.movement_time_allowance
-  progress_checker.plugin
-  progress_checker.required_movement_radius
-  progress_checker_plugin
-  publish_zero_velocity
-  qos_overrides./clock.subscription.depth
-  qos_overrides./clock.subscription.durability
-  qos_overrides./clock.subscription.history
-  qos_overrides./clock.subscription.reliability
-  speed_limit_topic
-  use_sim_time
+  /bond_disable_heartbeat_timeout|禁用 bond 心跳超时（true 时关闭心跳失联检测，避免误判节点死亡）
+  FollowPath.local_plan_length|局部参考路径长度（m，从全局路径最近点向前截取，越大 MPC 看得越远）
+  FollowPath.mpc.omega_max|角速度上限（rad/s，控制量约束）
+  FollowPath.mpc.omega_min|角速度下限（rad/s，控制量约束）
+  FollowPath.mpc.qtheta|航向角状态权重（大→更严格跟踪路径朝向）
+  FollowPath.mpc.qtheta_e|终端航向角权重（大→终点朝向收敛更准）
+  FollowPath.mpc.qx|x 位置状态权重（大→更贴路径）
+  FollowPath.mpc.qx_e|终端 x 位置权重（大→终点位置更准）
+  FollowPath.mpc.qy|y 位置状态权重（大→更贴路径）
+  FollowPath.mpc.qy_e|终端 y 位置权重（大→终点位置更准）
+  FollowPath.mpc.romega|角速度控制量权重（大→转向更平缓省力）
+  FollowPath.mpc.rvx|x 线速度控制量权重（大→速度变化更平缓）
+  FollowPath.mpc.rvy|y 线速度控制量权重（大→速度变化更平缓）
+  FollowPath.mpc.vx_max|x 线速度上限（m/s，控制量约束）
+  FollowPath.mpc.vx_min|x 线速度下限（m/s，负值允许后退）
+  FollowPath.mpc.vy_max|y 线速度上限（m/s，控制量约束）
+  FollowPath.mpc.vy_min|y 线速度下限（m/s，负值允许反向侧移）
+  FollowPath.plugin|控制器插件名（mpc_controller::MpcControllerNode）
+  controller_frequency|控制器运行频率（Hz）
+  controller_plugins|控制器插件列表
+  failure_tolerance|控制器连续失败容忍次数（超过则本次导航失败）
+  general_goal_checker.plugin|目标检查器插件名
+  general_goal_checker.stateful|有状态目标检查（到达后保持成功状态）
+  general_goal_checker.xy_goal_tolerance|到达目标的位置容差（m）
+  general_goal_checker.yaw_goal_tolerance|到达目标的航向容差（rad）
+  goal_checker_plugins|目标检查器插件列表
+  min_theta_velocity_threshold|角速度低于该阈值视为 0（抑制里程计噪声，rad/s）
+  min_x_velocity_threshold|x 线速度低于该阈值视为 0（抑制里程计噪声，m/s）
+  min_y_velocity_threshold|y 线速度低于该阈值视为 0（抑制里程计噪声，m/s）
+  odom_topic|里程计话题名
+  progress_checker.movement_time_allowance|无有效移动允许时长（s，超时判为卡死）
+  progress_checker.plugin|进度检查器插件名
+  progress_checker.required_movement_radius|允许时长内必须移动的最小距离（m）
+  progress_checker_plugin|进度检查器插件（单数旧写法，实际使用 progress_checker_plugins）
+  publish_zero_velocity|无有效速度指令时是否发布零速度指令
+  qos_overrides./clock.subscription.depth|/clock 话题订阅队列深度
+  qos_overrides./clock.subscription.durability|/clock 订阅持久性（TRANSIENT_LOCAL/VOLATILE）
+  qos_overrides./clock.subscription.history|/clock 订阅历史策略（KEEP_LAST/KEEP_ALL）
+  qos_overrides./clock.subscription.reliability|/clock 订阅可靠性（RELIABLE/BEST_EFFORT）
+  speed_limit_topic|外部速度限制话题名
+  use_sim_time|是否使用仿真时间（订阅 /clock）

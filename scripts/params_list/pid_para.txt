@@ -1,59 +1,59 @@
-/bond_disable_heartbeat_timeout
-  FollowPath.approach_velocity_scaling_dist
-  FollowPath.collision_sample_points
-  FollowPath.curvature_backward_dist
-  FollowPath.curvature_forward_dist
-  FollowPath.curvature_max
-  FollowPath.curvature_min
-  FollowPath.enable_rotation
-  FollowPath.lateral_error_deadband
-  FollowPath.lateral_error_gain
-  FollowPath.lookahead_dist
-  FollowPath.lookahead_time
-  FollowPath.max_lateral_velocity
-  FollowPath.max_lookahead_dist
-  FollowPath.max_robot_pose_search_dist
-  FollowPath.max_velocity_scaling_factor_rate
-  FollowPath.min_approach_linear_velocity
-  FollowPath.min_lookahead_dist
-  FollowPath.min_max_sum_error
-  FollowPath.plugin
-  FollowPath.reduction_ratio_at_high_curvature
-  FollowPath.rotation_kd
-  FollowPath.rotation_ki
-  FollowPath.rotation_kp
-  FollowPath.transform_tolerance
-  FollowPath.translation_kd
-  FollowPath.translation_ki
-  FollowPath.translation_kp
-  FollowPath.use_interpolation
-  FollowPath.use_rotate_to_heading
-  FollowPath.use_rotate_to_heading_threshold
-  FollowPath.use_velocity_scaled_lookahead_dist
-  FollowPath.v_angular_max
-  FollowPath.v_angular_min
-  FollowPath.v_linear_max
-  FollowPath.v_linear_min
-  controller_frequency
-  controller_plugins
-  failure_tolerance
-  general_goal_checker.plugin
-  general_goal_checker.stateful
-  general_goal_checker.xy_goal_tolerance
-  general_goal_checker.yaw_goal_tolerance
-  goal_checker_plugins
-  min_theta_velocity_threshold
-  min_x_velocity_threshold
-  min_y_velocity_threshold
-  odom_topic
-  progress_checker.movement_time_allowance
-  progress_checker.plugin
-  progress_checker.required_movement_radius
-  progress_checker_plugin
-  publish_zero_velocity
-  qos_overrides./clock.subscription.depth
-  qos_overrides./clock.subscription.durability
-  qos_overrides./clock.subscription.history
-  qos_overrides./clock.subscription.reliability
-  speed_limit_topic
-  use_sim_time
+  /bond_disable_heartbeat_timeout|禁用 bond 心跳超时（true 时关闭心跳失联检测，避免误判节点死亡）
+  FollowPath.approach_velocity_scaling_dist|接近终点减速距离（m，剩余路径小于该距离时线性减速）
+  FollowPath.collision_sample_points|碰撞检测沿路径采样点数（大→检测更密但更耗时）
+  FollowPath.curvature_backward_dist|曲率计算后向采样距离（m）
+  FollowPath.curvature_forward_dist|曲率计算前向采样距离（m）
+  FollowPath.curvature_max|高曲率阈值（1/m，超过则按最低降比减速）
+  FollowPath.curvature_min|低曲率阈值（1/m，低于此值不减速）
+  FollowPath.enable_rotation|启用旋转控制（false 时角速度为 0）
+  FollowPath.lateral_error_deadband|横向误差死区（m，小于该值不做横向修正）
+  FollowPath.lateral_error_gain|横向误差修正增益（大→横向纠偏更激进）
+  FollowPath.lookahead_dist|固定前视距离（m，速度缩放关闭时生效）
+  FollowPath.lookahead_time|前视时间（s，速度×该值得到前视距离）
+  FollowPath.max_lateral_velocity|最大横向修正速度（m/s）
+  FollowPath.max_lookahead_dist|速度缩放前视距离上限（m）
+  FollowPath.max_robot_pose_search_dist|全局路径最近点搜索范围（自动取代价地图半宽）
+  FollowPath.max_velocity_scaling_factor_rate|曲率减速缩放因子最大变化率（/s，大→减速响应更快）
+  FollowPath.min_approach_linear_velocity|接近终点时的保底线速度（m/s）
+  FollowPath.min_lookahead_dist|速度缩放前视距离下限（m）
+  FollowPath.min_max_sum_error|PID 积分限幅（误差累计上限）
+  FollowPath.plugin|控制器插件名（pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode）
+  FollowPath.reduction_ratio_at_high_curvature|高曲率时的速度降比（0.5=减速 50%）
+  FollowPath.rotation_kd|旋转 PID 微分增益（抑制角速度抖动）
+  FollowPath.rotation_ki|旋转 PID 积分增益（消除稳态朝向误差）
+  FollowPath.rotation_kp|旋转 PID 比例增益（大→转向更激进）
+  FollowPath.transform_tolerance|TF 变换超时（s）
+  FollowPath.translation_kd|平移 PID 微分增益（抑制速度抖动）
+  FollowPath.translation_ki|平移 PID 积分增益（消除稳态距离误差）
+  FollowPath.translation_kp|平移 PID 比例增益（大→前进更激进）
+  FollowPath.use_interpolation|是否用圆-线段交点插值 carrot 点（更平滑）
+  FollowPath.use_rotate_to_heading|到达终点附近是否原地旋转对齐目标朝向
+  FollowPath.use_rotate_to_heading_threshold|触发原地旋转的朝向误差阈值（rad）
+  FollowPath.use_velocity_scaled_lookahead_dist|是否按速度×前视时间动态计算前视距离
+  FollowPath.v_angular_max|角速度上限（rad/s）
+  FollowPath.v_angular_min|角速度下限（rad/s，负值允许反向旋转）
+  FollowPath.v_linear_max|线速度上限（m/s）
+  FollowPath.v_linear_min|线速度下限（m/s，负值允许后退）
+  controller_frequency|控制器运行频率（Hz）
+  controller_plugins|控制器插件列表
+  failure_tolerance|控制器连续失败容忍次数（超过则本次导航失败）
+  general_goal_checker.plugin|目标检查器插件名
+  general_goal_checker.stateful|有状态目标检查（到达后保持成功状态）
+  general_goal_checker.xy_goal_tolerance|到达目标的位置容差（m）
+  general_goal_checker.yaw_goal_tolerance|到达目标的航向容差（rad）
+  goal_checker_plugins|目标检查器插件列表
+  min_theta_velocity_threshold|角速度低于该阈值视为 0（抑制里程计噪声，rad/s）
+  min_x_velocity_threshold|x 线速度低于该阈值视为 0（抑制里程计噪声，m/s）
+  min_y_velocity_threshold|y 线速度低于该阈值视为 0（抑制里程计噪声，m/s）
+  odom_topic|里程计话题名
+  progress_checker.movement_time_allowance|无有效移动允许时长（s，超时判为卡死）
+  progress_checker.plugin|进度检查器插件名
+  progress_checker.required_movement_radius|允许时长内必须移动的最小距离（m）
+  progress_checker_plugin|进度检查器插件（单数旧写法，实际使用 progress_checker_plugins）
+  publish_zero_velocity|无有效速度指令时是否发布零速度指令
+  qos_overrides./clock.subscription.depth|/clock 话题订阅队列深度
+  qos_overrides./clock.subscription.durability|/clock 订阅持久性（TRANSIENT_LOCAL/VOLATILE）
+  qos_overrides./clock.subscription.history|/clock 订阅历史策略（KEEP_LAST/KEEP_ALL）
+  qos_overrides./clock.subscription.reliability|/clock 订阅可靠性（RELIABLE/BEST_EFFORT）
+  speed_limit_topic|外部速度限制话题名
+  use_sim_time|是否使用仿真时间（订阅 /clock）
