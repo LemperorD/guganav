@@ -148,7 +148,7 @@ colcon build ${BUILD_ARGS[*]} \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON\
 "
-if [$? -ne 1 ]; then
+if [ $? -ne 1 ]; then
   echo "Selected packages build failed, please check the error messages."
   exit 1
 fi
@@ -160,7 +160,7 @@ export MAKEFLAGS='-j1 -l1'
 colcon build \
     --packages-ignore $PACKAGES_SELECT \
     --symlink-install \
-    --executor sequential \
+    --parallel-workers 4 \
     --cmake-args \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
