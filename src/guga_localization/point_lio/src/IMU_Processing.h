@@ -27,15 +27,17 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
+#include "preprocess.h"
+
 // ==================== 预配置 ====================
 
 /// @brief IMU 初始化最大累积帧数
 #define MAX_INI_COUNT (100)
 
 /**
- * @brief 按 curvature (时间偏移) 排序的谓词
+ * @brief 按点时间偏移排序的谓词
  *
- * 点云的 curvature 域存储该点的时间偏移 (ms)，
+ * 点云的 PCL curvature 字段存储该点的时间偏移 (ms)，
  * 按时间升序排列以便做时间分组处理。
  */
 bool time_list(PointType& x, PointType& y);
@@ -96,21 +98,21 @@ public:
    * - 无 IMU 模式: 用配置的先验重力 gravity_init
    * 内部通过 after_imu_init_ 保证只执行一次。
    */
-  void init_state();
+  void initState();
 
   // ==================== 公有成员变量 ====================
 
   MD(12, 12)
   state_cov = MD(
       12, 12)::Identity();  ///< IMU 状态协方差 (12维: 姿态/速度/位置/零偏)
-  int lidar_type;           ///< LiDAR 类型 (从参数复制)
+  int lidar_type{AVIA};     ///< LiDAR 类型 (从参数复制)
 
   V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
-  bool imu_en;  ///< 是否启用 IMU
+  bool imu_en{true};  ///< 是否启用 IMU
 
-  V3D mean_acc;                  ///< 平均加速度 (累积, 用于重力估计)
+  V3D mean_acc{V3D::Zero()};     ///< 平均加速度 (累积, 用于重力估计)
   bool imu_need_init_ = true;    ///< 标志: 是否需要 IMU 初始化
   bool after_imu_init_ = false;  ///< 标志: IMU 初始化是否已完成
   bool b_first_frame_ = true;    ///< 标志: 是否第一帧
@@ -131,7 +133,7 @@ private:
    */
   void IMU_init(const MeasureGroup& meas, int& N);
 
-  V3D mean_gyr;           ///< 平均角速度 (用于陀螺零偏估计)
-  int init_iter_num = 1;  ///< 初始化迭代计数 (当前累积帧数)
-  rclcpp::Logger logger;  ///< ROS2 日志器
+  V3D mean_gyr{V3D::Zero()};  ///< 平均角速度 (用于陀螺零偏估计)
+  int init_iter_num = 1;      ///< 初始化迭代计数 (当前累积帧数)
+  rclcpp::Logger logger;      ///< ROS2 日志器
 };

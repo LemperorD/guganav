@@ -12,9 +12,9 @@
 #include "IMU_Processing.h"
 
 /**
- * @brief 按 curvature (时间偏移) 升序排序
+ * @brief 按点时间偏移升序排序
  *
- * curvature 域存储每个点的扫描偏移时间 (ms),
+ * PCL curvature 字段存储每个点的扫描偏移时间 (ms),
  * 排序后配合 time_compressing() 进行分组处理。
  */
 bool time_list(PointType& x, PointType& y) {
@@ -29,16 +29,7 @@ void ImuProcessor::set_acc_cov(const V3D& scaler) {
   cov_vel_scale = scaler;
 }
 
-ImuProcessor::ImuProcessor()
-    : imu_need_init_(true),
-      b_first_frame_(true),
-      logger(rclcpp::get_logger("ImuProcess")) {
-  imu_en = true;
-  init_iter_num = 1;
-  mean_acc = V3D(0, 0, 0.0);  // 平均加速度 (m/s²)
-  mean_gyr = V3D(0, 0, 0);    // 平均角速度 (rad/s)
-  after_imu_init_ = false;
-  state_cov.setIdentity();  // 12维协方差初始化为单位阵
+ImuProcessor::ImuProcessor() : logger(rclcpp::get_logger("ImuProcess")) {
 }
 
 void ImuProcessor::reset() {
@@ -99,7 +90,7 @@ void ImuProcessor::Set_init(Eigen::Vector3d& tmp_gravity,
 }
 
 /** @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值 */
-void ImuProcessor::init_state() {
+void ImuProcessor::initState() {
   if (after_imu_init_) {
     return;  // 已完成
   }
@@ -195,7 +186,7 @@ void ImuProcessor::process(const MeasureGroup& meas,
         RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
         imu_need_init_ = false;
         *cur_pcl_un_ = *(meas.lidar);  // 复制原始点云
-        init_state();
+        initState();
       }
       return;  // 初始化阶段不输出去畸变点云
     }
@@ -204,11 +195,11 @@ void ImuProcessor::process(const MeasureGroup& meas,
     *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
 
     // @todo: 实现 IMU 反向传播去畸变
-    // 可利用 IMU 预积分在 curvature 时间戳上反向插值校正点坐标
+    // 可利用 IMU 预积分在点时间偏移上反向插值校正点坐标
   } else {
     // ---- IMU 禁用: 直接使用原始点云 ----
     imu_need_init_ = false;  // 无累积过程, 直接进入就绪
-    init_state();            // 用配置重力 gravity_init 完成状态初始化
+    initState();             // 用配置重力 gravity_init 完成状态初始化
     *cur_pcl_un_ = *(meas.lidar);
     return;
   }

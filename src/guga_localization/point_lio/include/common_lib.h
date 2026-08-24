@@ -128,9 +128,9 @@ extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
   (string(string(ROOT_DIR) + "Log/" + name))  ///< 调试日志文件路径
 
 // ==================== PCL/Eigen 类型别名 ====================
-using PointType = pcl::PointXYZINormal;  ///< curvature 域复用存储点时间偏移 (ms)
+using PointType = pcl::PointXYZINormal;  ///< PCL curvature 字段存储点时间偏移 (ms)
 
-// PCL 固定字段名为 curvature；在 Point-LIO 中它承载的是点时间偏移。
+// PCL 固定字段名为 curvature；Point-LIO 通过语义化访问器将其作为时间偏移使用。
 inline float point_time_offset_ms(const PointType& point) {
   return point.curvature;
 }
@@ -224,16 +224,16 @@ T calc_dist(Eigen::Vector3d p1, PointType p2) {
 /**
  * @brief 时间压缩: 按时间戳分组点云 (用于逐组点 Kalman 更新)
  *
- * 点云的 curvature 域用于存储该点相对帧首的时间偏移 (ms)。
+ * 点云的 PCL curvature 存储字段用于保存该点相对帧首的时间偏移 (ms)。
  * 此函数根据时间偏移的单调性将点云分成多个组，
  * 返回每个组的大小序列。
  *
  * 分组逻辑:
- * - 遍历点云，当 curvature 递增时 (同组内时间递增)，累加计数
- * - 当 curvature 回跳时 (新的一组开始)，记录当前组大小并重置计数
+ * - 遍历点云，当点时间偏移递增时 (同组内时间递增)，累加计数
+ * - 当点时间偏移回跳时 (新的一组开始)，记录当前组大小并重置计数
  *
  * @tparam T 计数值类型
- * @param point_cloud 输入点云 (curvature = 时间偏移，单位 ms)
+ * @param point_cloud 输入点云 (point time offset = 时间偏移，单位 ms)
  * @return 每组包含的点数序列
  */
 template <typename T>
@@ -244,7 +244,7 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
   time_seq.reserve(points_size);
   for (int i = 0; i < points_size - 1; i++) {
     j++;
-    // 当 curvature (时间) 回跳时，开始新的分组
+    // 当点时间偏移回跳时，开始新的分组
     if (point_time_offset_ms(point_cloud->points[i + 1])
         > point_time_offset_ms(point_cloud->points[i])) {
       time_seq.emplace_back(j);

@@ -4,8 +4,6 @@
 
 namespace {
 
-float point_time_offset_ms(const PointType& point) { return point.curvature; }
-
   bool take_lidar_frame(const Lidar& lidar, MeasureGroup& meas) {
     meas.lidar = lidar.lidar_buffer.front();
     meas.lidar_beg_time = lidar.time_buffer.front();
@@ -49,7 +47,9 @@ float point_time_offset_ms(const PointType& point) { return point.curvature; }
     }
     if (lidar.frame_ct < lidar.mergeFrameCount()) {
       for (auto point : points->points) {
-        point.curvature += (timestamp - lidar.time_con) * 1000.0;
+        set_point_time_offset_ms(
+            point, point_time_offset_ms(point)
+                      + static_cast<float>((timestamp - lidar.time_con) * 1000.0));
         lidar.ptr_con->push_back(point);
       }
       ++lidar.frame_ct;

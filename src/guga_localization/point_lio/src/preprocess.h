@@ -13,7 +13,7 @@
  * 2. 盲区/远距滤波 (blind < dist < det_range)
  * 3. 降采样 (每隔 point_filter_num 取1点)
  * 4. 特征提取 — 区分平面点和边缘点 (机械式雷达)
- * 5. 时间戳提取/计算 (curvature 域存储 ms 单位偏移时间)
+ * 5. 时间戳提取/计算 (PCL curvature 字段存储 ms 单位偏移时间)
  * 6. 切帧/合帧支持 (cut_frame / con_frame)
  *
  * 编码规范遵循 **模式 A** (函数式数据流),
@@ -28,10 +28,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-using namespace std;
+#include "common_lib.h"
 
-using PointType = pcl::PointXYZINormal;
-using PointCloudXYZI = pcl::PointCloud<PointType>;
+using namespace std;
 
 // ==================== 雷达类型枚举 ====================
 
@@ -79,9 +78,9 @@ enum EJump : uint8_t {
 // ==================== 时间排序谓词 ====================
 
 /**
- * @brief 按 curvature (时间偏移) 升序排序 (切帧使用)
+ * @brief 按点时间偏移升序排序 (切帧使用)
  */
-bool time_list_cut_frame(PointType& x, PointType& y);
+bool time_list_cut_frame(const PointType& x, const PointType& y);
 
 // ==================== 点特征数据结构 ====================
 
@@ -221,16 +220,15 @@ public:
 
   // ==================== 公有成员变量 ====================
 
-  int lidar_type_{AVIA};     ///< 雷达类型 (LID_TYPE 枚举)
-  int point_filter_num_{1};  ///< 降采样间隔 (每 N 点取 1)
-  int N_SCANS_{6};           ///< 扫描线数, Livox 默认 6 线 (实际由 YAML 覆盖)
-  int SCAN_RATE_{10};        ///< 扫描频率 (Hz)
-  int time_unit_{MS};        ///< 时间戳单位 (TIME_UNIT 枚举)
-  double blind_{0.01};       ///< 盲区距离 (米, 此距离内的点被过滤)
-
 private:
-  // ==================== 特征提取参数 (经验值) ====================
-  int group_size_{8};  ///< 点组大小 (8)
+  bool given_offset_time_{false};  ///< 是否有硬件提供的时间戳
+  int group_size_{8};              ///< 点组大小 (8)
+  int lidar_type_{AVIA};           ///< 雷达类型 (LID_TYPE 枚举)
+  int point_filter_num_{1};        ///< 降采样间隔 (每 N 点取 1)
+  int n_scans_{6};           ///< 扫描线数, Livox 默认 6 线 (实际由 YAML 覆盖)
+  int scan_rate_{10};        ///< 扫描频率 (Hz)
+  int time_unit_{MS};        ///< 时间戳单位 (TIME_UNIT 枚举)
+  float time_unit_scale_{};  ///< 时间单位缩放因子
   double dis_a_{0.01};
   double dis_b_{0.1};            ///< 距离容限: disA*range + disB
   double limit_maxmid_{6.25};    ///< AVIA: dis_max/dis_mid 上限
@@ -246,11 +244,10 @@ private:
   double smallp_ratio_{1.2};        ///< 小平面距离比阈值
   double vx_{};
   double vy_{};
-  double vz_{};                    ///< 当前方向向量缓存 (plane_judge 中使用)
-  double inf_bound_{10};           ///< 无穷远边界 (>此值视为盲区?)
-  float time_unit_scale_{};        ///< 时间单位缩放因子
-  double det_range_{1000};         ///< 最大检测距离 (米)
-  bool given_offset_time_{false};  ///< 是否有硬件提供的时间戳
+  double vz_{};             ///< 当前方向向量缓存 (plane_judge 中使用)
+  double inf_bound_{10};    ///< 无穷远边界 (>此值视为盲区?)
+  double det_range_{1000};  ///< 最大检测距离 (米)
+  double blind_{0.01};      ///< 盲区距离 (米, 此距离内的点被过滤)
 
   PointCloudXYZI pl_full_;                   ///< 完整点云 (未滤波)
   PointCloudXYZI pl_corn_;                   ///< 角点/边缘点
