@@ -53,6 +53,7 @@ using IVoxType =
 
 struct MappingParams {
   bool space_down_sample{true};
+  bool propagate_at_imu_frequency{true};
   bool use_imu_as_input{false};
   bool extrinsic_estimation{true};
   bool publish_odometry_without_downsample{false};
@@ -67,6 +68,9 @@ struct MappingParams {
 };
 
 struct EstimatorParams {
+  double gravity_magnitude{9.81};
+  bool use_imu_as_input{false};
+  bool extrinsic_estimation{true};
   bool check_saturation{true};
   double saturation_acc{3.0};
   double saturation_gyro{35.0};
@@ -93,6 +97,17 @@ struct PublishParams {
   bool runtime_log_enabled{false};
   bool pcd_save_enabled{false};
   int pcd_save_interval{-1};
+};
+
+struct SensorParams {
+  std::string lidar_topic{"/livox/lidar"};
+  std::string imu_topic{"/livox/imu"};
+  std::vector<double> extrinsic_t;
+  std::vector<double> extrinsic_r;
+  double lidar_to_imu_time{0.0};
+  bool enable_prior_map{false};
+  std::string prior_map_path;
+  std::vector<double> initial_pose;
 };
 
 // ==================== 帧控制标志 ====================
@@ -181,7 +196,6 @@ extern bool scan_body_pub_en;  ///< 是否发布 IMU 坐标系下的点云
 extern bool tf_send_en;        ///< 是否发布 TF 变换
 
 // ==================== 处理器实例 ====================
-extern shared_ptr<Preprocess> p_pre;  ///< 点云预处理模块
 
 // ==================== 外参 ====================
 extern std::vector<double> extrinT;    ///< LiDAR→IMU 平移外参 (3维)

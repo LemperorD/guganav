@@ -19,6 +19,15 @@
 #include "Estimator.h"
 #include "parameters.h"
 
+namespace {
+EstimatorParams estimator_config;
+}
+
+void configureEstimatorParams(const EstimatorParams& params) {
+  estimator_config = params;
+}
+
+
 // ==================== 全局变量定义 ====================
 
 /** @brief 每个点的平面法向量和截距: (nx, ny, nz, d=截距) */
@@ -97,12 +106,14 @@ M3D Lidar_R_wrt_IMU(Eye3d);
 Eigen::Matrix<double, 24, 24> process_noise_cov_input() {
   Eigen::Matrix<double, 24, 24> cov;
   cov.setZero();
-  cov.block<3, 3>(3, 3).diagonal() << gyr_cov_input, gyr_cov_input,
-      gyr_cov_input;
-  cov.block<3, 3>(12, 12).diagonal() << acc_cov_input, acc_cov_input,
-      acc_cov_input;
-  cov.block<3, 3>(15, 15).diagonal() << b_gyr_cov, b_gyr_cov, b_gyr_cov;
-  cov.block<3, 3>(18, 18).diagonal() << b_acc_cov, b_acc_cov, b_acc_cov;
+  cov.block<3, 3>(3, 3).diagonal() << estimator_config.gyr_cov_input,
+      estimator_config.gyr_cov_input, estimator_config.gyr_cov_input;
+  cov.block<3, 3>(12, 12).diagonal() << estimator_config.acc_cov_input,
+      estimator_config.acc_cov_input, estimator_config.acc_cov_input;
+  cov.block<3, 3>(15, 15).diagonal() << estimator_config.b_gyr_cov,
+      estimator_config.b_gyr_cov, estimator_config.b_gyr_cov;
+  cov.block<3, 3>(18, 18).diagonal() << estimator_config.b_acc_cov,
+      estimator_config.b_acc_cov, estimator_config.b_acc_cov;
   return cov;
 }
 
@@ -114,13 +125,16 @@ Eigen::Matrix<double, 24, 24> process_noise_cov_input() {
 Eigen::Matrix<double, 30, 30> process_noise_cov_output() {
   Eigen::Matrix<double, 30, 30> cov;
   cov.setZero();
-  cov.block<3, 3>(12, 12).diagonal() << vel_cov, vel_cov, vel_cov;
-  cov.block<3, 3>(15, 15).diagonal() << gyr_cov_output, gyr_cov_output,
-      gyr_cov_output;
-  cov.block<3, 3>(18, 18).diagonal() << acc_cov_output, acc_cov_output,
-      acc_cov_output;
-  cov.block<3, 3>(24, 24).diagonal() << b_gyr_cov, b_gyr_cov, b_gyr_cov;
-  cov.block<3, 3>(27, 27).diagonal() << b_acc_cov, b_acc_cov, b_acc_cov;
+  cov.block<3, 3>(12, 12).diagonal() << estimator_config.vel_cov,
+      estimator_config.vel_cov, estimator_config.vel_cov;
+  cov.block<3, 3>(15, 15).diagonal() << estimator_config.gyr_cov_output,
+      estimator_config.gyr_cov_output, estimator_config.gyr_cov_output;
+  cov.block<3, 3>(18, 18).diagonal() << estimator_config.acc_cov_output,
+      estimator_config.acc_cov_output, estimator_config.acc_cov_output;
+  cov.block<3, 3>(24, 24).diagonal() << estimator_config.b_gyr_cov,
+      estimator_config.b_gyr_cov, estimator_config.b_gyr_cov;
+  cov.block<3, 3>(27, 27).diagonal() << estimator_config.b_acc_cov,
+      estimator_config.b_acc_cov, estimator_config.b_acc_cov;
   return cov;
 }
 
@@ -317,7 +331,7 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
         point_selected_surf[idx + j + 1] = false;
 
         // 用 5 个近邻拟合局部平面 (IMLS)
-        if (esti_plane(pabcd, points_near, plane_thr)) {
+        if (esti_plane(pabcd, points_near, estimator_config.plane_thr)) {
           // 点面距离
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
@@ -325,7 +339,7 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
 
           // Mahalanobis 距离检验: |p_body|² > match_s · pd2²
           // match_s 为马氏距离阈值 (典型值 81, 即 9σ)
-          if (p_norm > match_s * pd2 * pd2) {
+          if (p_norm > estimator_config.match_s * pd2 * pd2) {
             point_selected_surf[idx + j + 1] = true;
             // 存储平面系数: (nx, ny, nz) 存于 xyz, d 存于 intensity
             normvec->points[j].x = pabcd(0);
@@ -346,7 +360,7 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
   }
 
   // ---- Step 3: 构造量测雅可比矩阵 H 和残差向量 z ----
-  ekfom_data.M_Noise = laser_point_cov;  // 每个残差的噪声方差
+  ekfom_data.M_Noise = estimator_config.laser_point_cov;
   ekfom_data.h_x.resize(effect_num_k, 12);
   ekfom_data.h_x = Eigen::MatrixXd::Zero(effect_num_k, 12);
   ekfom_data.z.resize(effect_num_k);
@@ -358,7 +372,7 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
       V3D norm_vec(normvec->points[j].x, normvec->points[j].y,
                    normvec->points[j].z);
 
-      if (extrinsic_est_en) {
+      if (estimator_config.extrinsic_estimation) {
         // ------ 在线外参估计模式: 需要 B 分量 ------
         V3D p_body = pbody_list[idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
@@ -437,13 +451,13 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
         point_selected_surf[idx + j + 1] = false;
       } else {
         point_selected_surf[idx + j + 1] = false;
-        if (esti_plane(pabcd, points_near, plane_thr)) {
+        if (esti_plane(pabcd, points_near, estimator_config.plane_thr)) {
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
                            + pabcd(2) * point_world_j.z + pabcd(3));
 
           // Mahalanobis 距离检验 (注释掉的代码是自适应加权的备选方案)
-          if (p_norm > match_s * pd2 * pd2) {
+          if (p_norm > estimator_config.match_s * pd2 * pd2) {
             point_selected_surf[idx + j + 1] = true;
             normvec->points[j].x = pabcd(0);
             normvec->points[j].y = pabcd(1);
@@ -462,7 +476,7 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
   }
 
   // ---- Step 2: 构造雅可比和残差 ----
-  ekfom_data.M_Noise = laser_point_cov;
+  ekfom_data.M_Noise = estimator_config.laser_point_cov;
   ekfom_data.h_x.resize(effect_num_k, 12);
   ekfom_data.h_x = Eigen::MatrixXd::Zero(effect_num_k, 12);
   ekfom_data.z.resize(effect_num_k);
@@ -472,7 +486,7 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
     if (point_selected_surf[idx + j + 1]) {
       V3D norm_vec(normvec->points[j].x, normvec->points[j].y,
                    normvec->points[j].z);
-      if (extrinsic_est_en) {
+      if (estimator_config.extrinsic_estimation) {
         V3D p_body = pbody_list[idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
         p_crossmat << SKEW_SYM_MATRX(p_body);
@@ -532,40 +546,43 @@ void h_model_IMU_output(state_output& s,
 
   // 加速度残差: a_meas * G/acc_norm - (acc + ba)
   // 注: IMU 测量值已归一化，需要乘以 G/acc_norm 恢复
-  ekfom_data.z_IMU.block<3, 1>(3, 0) = acc_avr * G_m_s2 / acc_norm - s.acc
+  ekfom_data.z_IMU.block<3, 1>(3, 0) = acc_avr * estimator_config.gravity_magnitude
+                                         / estimator_config.acc_norm - s.acc
                                        - s.ba;
 
   // 量测噪声权重 (方差倒数)
-  ekfom_data.R_IMU << imu_meas_omg_cov, imu_meas_omg_cov, imu_meas_omg_cov,
-      imu_meas_acc_cov, imu_meas_acc_cov, imu_meas_acc_cov;
+  ekfom_data.R_IMU << estimator_config.imu_meas_omg_cov,
+      estimator_config.imu_meas_omg_cov, estimator_config.imu_meas_omg_cov,
+      estimator_config.imu_meas_acc_cov, estimator_config.imu_meas_acc_cov,
+      estimator_config.imu_meas_acc_cov;
 
   // [Workflow 13] 如果无饱和度 (a_m, ω_m): 各轴测量值未接近饱和阈值时参与更新。
   // [Workflow 17] 否则 (饱和): 饱和轴残差置零并标记 satu_check, 更新时跳过该轴。
   // ---- IMU 饱和检测与处理 ----
-  if (check_satu) {
+  if (estimator_config.check_saturation) {
     // 陀螺仪 x 轴饱和
-    if (fabs(angvel_avr(0)) >= 0.99 * satu_gyro) {
+    if (fabs(angvel_avr(0)) >= 0.99 * estimator_config.saturation_gyro) {
       ekfom_data.satu_check[0] = true;  // 标记饱和
       ekfom_data.z_IMU(0) = 0.0;        // 残差置零 (该轴无信息)
     }
-    if (fabs(angvel_avr(1)) >= 0.99 * satu_gyro) {
+    if (fabs(angvel_avr(1)) >= 0.99 * estimator_config.saturation_gyro) {
       ekfom_data.satu_check[1] = true;
       ekfom_data.z_IMU(1) = 0.0;
     }
-    if (fabs(angvel_avr(2)) >= 0.99 * satu_gyro) {
+    if (fabs(angvel_avr(2)) >= 0.99 * estimator_config.saturation_gyro) {
       ekfom_data.satu_check[2] = true;
       ekfom_data.z_IMU(2) = 0.0;
     }
     // 加速度计饱和
-    if (fabs(acc_avr(0)) >= 0.99 * satu_acc) {
+    if (fabs(acc_avr(0)) >= 0.99 * estimator_config.saturation_acc) {
       ekfom_data.satu_check[3] = true;
       ekfom_data.z_IMU(3) = 0.0;
     }
-    if (fabs(acc_avr(1)) >= 0.99 * satu_acc) {
+    if (fabs(acc_avr(1)) >= 0.99 * estimator_config.saturation_acc) {
       ekfom_data.satu_check[4] = true;
       ekfom_data.z_IMU(4) = 0.0;
     }
-    if (fabs(acc_avr(2)) >= 0.99 * satu_acc) {
+    if (fabs(acc_avr(2)) >= 0.99 * estimator_config.saturation_acc) {
       ekfom_data.satu_check[5] = true;
       ekfom_data.z_IMU(5) = 0.0;
     }
@@ -594,9 +611,9 @@ void pointBodyToWorld(PointType const* const pi, PointType* const po) {
   V3D p_body(pi->x, pi->y, pi->z);
 
   V3D p_global;
-  if (extrinsic_est_en) {
+  if (estimator_config.extrinsic_estimation) {
     // 在线外参估计: 使用 EKF 状态中的外参
-    if (!use_imu_as_input) {
+    if (!estimator_config.use_imu_as_input) {
       p_global = kf_output.x_.rot
                      * (kf_output.x_.offset_R_L_I * p_body
                         + kf_output.x_.offset_T_L_I)
@@ -609,7 +626,7 @@ void pointBodyToWorld(PointType const* const pi, PointType* const po) {
     }
   } else {
     // 固定外参: 使用 YAML 配置
-    if (!use_imu_as_input) {
+    if (!estimator_config.use_imu_as_input) {
       p_global = kf_output.x_.rot * (Lidar_R_wrt_IMU * p_body + Lidar_T_wrt_IMU)
                  + kf_output.x_.pos;
     } else {

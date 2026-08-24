@@ -98,7 +98,6 @@ bool scan_body_pub_en;         ///< IMU系点云发布
 bool tf_send_en;               ///< TF 发布
 
 // ==================== 处理器实例 ====================
-shared_ptr<Preprocess> p_pre;  ///< 点云预处理模块
 
 // ==================== 时间戳管理 ====================
 double time_update_last = 0.0;         ///< 上帧协方差更新时间

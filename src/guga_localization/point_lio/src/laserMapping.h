@@ -70,6 +70,7 @@ private:
   MappingParams mapping_params_;
   EstimatorParams estimator_params_;
   PublishParams publish_params_;
+  SensorParams sensor_params_;
   rclcpp::executors::MultiThreadedExecutor
       executor_;         ///< 执行器 (主循环 spin_some)
   MainLoopState state_;  ///< 主循环状态
