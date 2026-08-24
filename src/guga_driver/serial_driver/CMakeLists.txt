@@ -19,7 +19,6 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(guga_interfaces REQUIRED)
-find_package(guga_common REQUIRED)
 
 # ---- 串口底层库 (lib) ----
 add_library(serial_driver_main SHARED
