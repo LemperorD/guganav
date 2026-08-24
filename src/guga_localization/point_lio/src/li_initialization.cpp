@@ -77,8 +77,8 @@ void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
       && cut_frame_init) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
-    p_pre->process_cut_frame_pcl2(msg, frames, timestamps, cut_frame_num,
-                                  scan_count);
+    p_pre->processCutFramePCL2(msg, frames, timestamps, cut_frame_num,
+                               scan_count);
     append_cut_frames(*this, frames, timestamps);
   } else {
     auto points = std::make_shared<PointCloudXYZI>(20000, 1);
@@ -110,8 +110,8 @@ void Lidar::onLivoxPcl(
   if (cut_frame_init) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
-    p_pre->process_cut_frame_livox(msg, frames, timestamps, cut_frame_num,
-                                   scan_count);
+    p_pre->processCutFrameLivox(msg, frames, timestamps, cut_frame_num,
+                                scan_count);
     append_cut_frames(*this, frames, timestamps);
   } else {
     auto points = std::make_shared<PointCloudXYZI>(10000, 1);

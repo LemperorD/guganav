@@ -126,9 +126,9 @@ MeasureGroup Measures;  ///< 当前处理的测量组
 ofstream fout_out;      ///< 位姿输出文件
 ofstream fout_imu_pbp;  ///< IMU 逐点输出文件
 
-void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
+void readParameters(std::shared_ptr<rclcpp::Node>& nh,
+                    shared_ptr<Preprocess>& p_pre) {
   // 初始化 Preprocess 和 ImuProcess 实例
-  p_pre = std::make_shared<Preprocess>();
   try {
     // ==================== 模式开关 ====================
     prop_at_freq_of_imu = nh->declare_parameter<bool>("prop_at_freq_of_imu",
@@ -146,7 +146,7 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
     // ==================== mapping 参数 — 平面提取 ====================
     plane_thr = (float)nh->declare_parameter<double>("mapping.plane_thr",
                                                      0.05F);
-    p_pre->point_filter_num = (int)nh->declare_parameter<long>(
+    p_pre->point_filter_num_ = (int)nh->declare_parameter<long>(
         "point_filter_num", 2);
 
     // ==================== common 参数 — 话题名 ====================
@@ -204,13 +204,13 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
                                                      0.1);
 
     // ==================== preprocess 参数 — 雷达配置 ====================
-    p_pre->blind = nh->declare_parameter<double>("preprocess.blind", 1.0);
+    p_pre->blind_ = nh->declare_parameter<double>("preprocess.blind", 1.0);
     lidar_type = (int)nh->declare_parameter<long>("preprocess.lidar_type", 1);
-    p_pre->N_SCANS = (int)nh->declare_parameter<long>("preprocess.scan_line",
-                                                      16);
-    p_pre->SCAN_RATE = (int)nh->declare_parameter<long>("preprocess.scan_rate",
-                                                        10);
-    p_pre->time_unit = (int)nh->declare_parameter<long>(
+    p_pre->N_SCANS_ = (int)nh->declare_parameter<long>("preprocess.scan_line",
+                                                       16);
+    p_pre->SCAN_RATE_ = (int)nh->declare_parameter<long>("preprocess.scan_rate",
+                                                         10);
+    p_pre->time_unit_ = (int)nh->declare_parameter<long>(
         "preprocess.timestamp_unit", 1);
     match_s = nh->declare_parameter<double>("mapping.match_s", 81);
 

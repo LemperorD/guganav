@@ -52,10 +52,10 @@ using IVoxType =
 #endif
 
 // ==================== 帧控制标志 ====================
-extern bool is_first_frame;          ///< 首帧标志
-extern double lidar_end_time;        ///< 当前帧结束时间戳 (秒)
-extern double first_lidar_time;      ///< 首帧激光雷达时间戳
-extern int pcd_index;                ///< PCD 文件保存序号
+extern bool is_first_frame;      ///< 首帧标志
+extern double lidar_end_time;    ///< 当前帧结束时间戳 (秒)
+extern double first_lidar_time;  ///< 首帧激光雷达时间戳
+extern int pcd_index;            ///< PCD 文件保存序号
 
 // ==================== iVox 地图参数 ====================
 extern IVoxType::Options ivox_options_;  ///< iVox 体素地图配置
@@ -180,7 +180,8 @@ extern ofstream fout_imu_pbp;  ///< IMU 逐点输出文件流
  *
  * @param n ROS2 节点共享指针
  */
-void readParameters(std::shared_ptr<rclcpp::Node>& n);
+void readParameters(std::shared_ptr<rclcpp::Node>& n,
+                    shared_ptr<Preprocess>& p_pre);
 
 /** @brief 打开调试日志文件 */
 void open_file();

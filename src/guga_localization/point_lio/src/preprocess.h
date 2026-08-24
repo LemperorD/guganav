@@ -182,7 +182,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
 class Preprocess {
 public:
   Preprocess();
-  ~Preprocess();
 
   /**
    * @brief Livox 切帧处理: 将一帧非重复扫描切分为多个子帧
@@ -192,7 +191,7 @@ public:
    * @param required_frame_num 需要切分的子帧数
    * @param scan_count 已接收帧数 (前5帧不切分)
    */
-  void process_cut_frame_livox(
+  void processCutFrameLivox(
       const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
       deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
       const int required_frame_num, int scan_count);
@@ -201,10 +200,10 @@ public:
    * @brief 标准雷达切帧处理 (Velodyne/Ouster/Hesai)
    * @see process_cut_frame_livox
    */
-  void process_cut_frame_pcl2(
-      const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
-      deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
-      const int required_frame_num, int scan_count);
+  void processCutFramePCL2(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+                           deque<PointCloudXYZI::Ptr>& pcl_out,
+                           deque<double>& time_lidar,
+                           const int required_frame_num, int scan_count);
 
   /** @brief Livox 雷达标准处理 (输入 Livox CustomMsg) */
   void process(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
@@ -219,23 +218,23 @@ public:
 
   // ==================== 公有成员变量 ====================
 
-  PointCloudXYZI pl_full;       ///< 完整点云 (未滤波)
-  PointCloudXYZI pl_corn;       ///< 角点/边缘点
-  PointCloudXYZI pl_surf;       ///< 平面点 (最终输出)
-  PointCloudXYZI pl_buff[128];  ///< 按线号缓存的原始点 (最多128线)
-  vector<orgtype> typess[128];  ///< 按线号存储的特征类型
-
-  float time_unit_scale;   ///< 时间单位缩放因子
-  int lidar_type;          ///< 雷达类型 (LID_TYPE 枚举)
-  int point_filter_num;    ///< 降采样间隔 (每 N 点取 1)
-  int N_SCANS;             ///< 扫描线数
-  int SCAN_RATE;           ///< 扫描频率 (Hz)
-  int time_unit;           ///< 时间戳单位 (TIME_UNIT 枚举)
-  double blind;            ///< 盲区距离 (米, 此距离内的点被过滤)
-  double det_range;        ///< 最大检测距离 (米)
-  bool given_offset_time;  ///< 是否有硬件提供的时间戳
+  int lidar_type_;        ///< 雷达类型 (LID_TYPE 枚举)
+  int point_filter_num_;  ///< 降采样间隔 (每 N 点取 1)
+  int N_SCANS_;           ///< 扫描线数
+  int SCAN_RATE_;         ///< 扫描频率 (Hz)
+  int time_unit_;         ///< 时间戳单位 (TIME_UNIT 枚举)
+  double blind_;          ///< 盲区距离 (米, 此距离内的点被过滤)
 
 private:
+  PointCloudXYZI pl_full_;                   ///< 完整点云 (未滤波)
+  PointCloudXYZI pl_corn_;                   ///< 角点/边缘点
+  PointCloudXYZI pl_surf_;                   ///< 平面点 (最终输出)
+  std::array<PointCloudXYZI, 128> pl_buff_;  ///< 按线号缓存的原始点 (最多128线)
+
+  float time_unit_scale_;   ///< 时间单位缩放因子
+  double det_range_;        ///< 最大检测距离 (米)
+  bool given_offset_time_;  ///< 是否有硬件提供的时间戳
+
   /** @brief Livox Avia/Horizon/Mid-360 点云处理 (非重复扫描格式) */
   void avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
 

@@ -132,7 +132,8 @@ void LaserMappingNode::initialize() {
   // shared_from_this() 要求对象由 shared_ptr 管理 (main 中以 make_shared
   // 创建)。
   rclcpp::Node::SharedPtr self = this->shared_from_this();
-  readParameters(self);
+  p_pre = std::make_shared<Preprocess>();
+  readParameters(self, p_pre);
 
   RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
               lidar_type);
@@ -166,7 +167,7 @@ void LaserMappingNode::initialize() {
     }
   }
 
-  p_pre->lidar_type = lidar_type;
+  p_pre->lidar_type_ = lidar_type;
   imu_.configure(lidar_type, imu_enabled, gravity);
 
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
@@ -190,7 +191,7 @@ void LaserMappingNode::initialize() {
   }
   open_file();
 
-  if (p_pre->lidar_type == AVIA) {
+  if (p_pre->lidar_type_ == AVIA) {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
         lid_topic, rclcpp::SensorDataQoS(),
         [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
