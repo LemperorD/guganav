@@ -44,6 +44,7 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | `scripts/pre-commit/run_simple_decision_tests.sh`  | pre-commit/CI 使用的 `simple_decision` 快速测试入口。  |
 | `scripts/pre-commit/run_jps_tests.sh`              | pre-commit/CI 使用的 `jps_planner` 快速测试入口。      |
 | `scripts/pre-commit/run_mppi_tests.sh`             | pre-commit/CI 使用的 `nav2_mppi_controller` 快速测试入口。 |
+| `scripts/test/run_point_lio_smoke_test.sh`         | 构建 PointLIO 并运行 LiDAR 主链路冒烟测试。           |
 
 ## 手动覆盖率
 

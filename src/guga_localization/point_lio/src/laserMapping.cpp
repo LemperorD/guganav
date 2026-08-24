@@ -121,8 +121,7 @@ int LaserMappingNode::run() {
 }
 
 /** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
-LaserMappingNode::LaserMappingNode()
-    : rclcpp::Node("laserMapping") {
+LaserMappingNode::LaserMappingNode() : rclcpp::Node("laserMapping") {
 }
 
 /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (原 run 前半段) */
@@ -681,8 +680,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   if (time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
     if (!imu_deque.empty()) {
-      imu_last = imu_next;
-      imu_next = *(imu_deque.front());
+      imu_.advanceCursor();
 
       while (get_time_sec(imu_next.header.stamp) > time_current
              && (get_time_sec(imu_next.header.stamp)
@@ -752,12 +750,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           //   饱和轴被排除在状态/协方差更新之外。
           kf.update_iterated_dyn_share_IMU();
         }
-        imu_deque.pop_front();
+        imu_.popAndAdvance();
         if (imu_deque.empty()) {
           break;
         }
-        imu_last = imu_next;
-        imu_next = *(imu_deque.front());
       }
     }
     return;
@@ -774,12 +770,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     if (is_first_frame) {
       if constexpr (ImuAsInput) {
         while (time_current > get_time_sec(imu_next.header.stamp)) {
-          imu_deque.pop_front();
+          imu_.popAndAdvance();
           if (imu_deque.empty()) {
             break;
           }
-          imu_last = imu_next;
-          imu_next = *(imu_deque.front());
         }
         input_in.gyro << imu_last.angular_velocity.x,
             imu_last.angular_velocity.y, imu_last.angular_velocity.z;
@@ -789,12 +783,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       } else {
         if (imu_enabled) {
           while (time_current > get_time_sec(imu_next.header.stamp)) {
-            imu_deque.pop_front();
+            imu_.popAndAdvance();
             if (imu_deque.empty()) {
               break;
             }
-            imu_last = imu_next;
-            imu_next = *(imu_deque.front());
           }
           angvel_avr << imu_last.angular_velocity.x,
               imu_last.angular_velocity.y, imu_last.angular_velocity.z;
@@ -829,8 +821,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         if (imu_deque.empty()) {
           break;
         }
-        imu_last = imu_next;
-        imu_next = *(imu_deque.front());
+        imu_.advanceCursor();
       }
     } else {
       if (imu_enabled && !imu_deque.empty()) {
@@ -839,17 +830,14 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         while (get_time_sec(imu_next.header.stamp) < last_time
                && !imu_deque.empty()) {
           if (!last_imu) {
-            imu_last = imu_next;
-            imu_next = *(imu_deque.front());
+            imu_.advanceCursor();
             break;
           }
 
-          imu_deque.pop_front();
+          imu_.popAndAdvance();
           if (imu_deque.empty()) {
             break;
           }
-          imu_last = imu_next;
-          imu_next = *(imu_deque.front());
         }
         bool imu_comes = time_current > get_time_sec(imu_next.header.stamp);
         while (imu_comes) {
@@ -882,12 +870,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
               state_.solve_time += omp_get_wtime() - solve_imu_start;
             }
           }
-          imu_deque.pop_front();
+          imu_.popAndAdvance();
           if (imu_deque.empty()) {
             break;
           }
-          imu_last = imu_next;
-          imu_next = *(imu_deque.front());
           imu_comes = time_current > get_time_sec(imu_next.header.stamp);
         }
       }

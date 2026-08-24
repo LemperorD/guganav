@@ -16,9 +16,6 @@ public:
   void onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
 
   bool empty() const;
-  const sensor_msgs::msg::Imu& last() const;
-  const sensor_msgs::msg::Imu& next() const;
-  const sensor_msgs::msg::Imu::ConstSharedPtr& front() const;
   sensor_msgs::msg::Imu& lastMutable();
   sensor_msgs::msg::Imu& nextMutable();
   std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>& buffer();
@@ -26,7 +23,6 @@ public:
   void loadNextFromFront();
   void discardBefore(double timestamp);
   void advanceCursor();
-  void popFront();
   void popAndAdvance();
   void setNeedInit(bool value);
 
@@ -35,7 +31,6 @@ public:
   void reset();
 
   bool needInit() const;
-  bool stateInitialized() const;
   double lastTimestamp() const;
 
 private:

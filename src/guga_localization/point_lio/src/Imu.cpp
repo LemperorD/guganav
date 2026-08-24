@@ -29,18 +29,6 @@ bool Imu::empty() const {
   return buffer_.empty();
 }
 
-const sensor_msgs::msg::Imu& Imu::last() const {
-  return last_;
-}
-
-const sensor_msgs::msg::Imu& Imu::next() const {
-  return next_;
-}
-
-const sensor_msgs::msg::Imu::ConstSharedPtr& Imu::front() const {
-  return buffer_.front();
-}
-
 sensor_msgs::msg::Imu& Imu::lastMutable() {
   return last_;
 }
@@ -78,12 +66,6 @@ void Imu::advanceCursor() {
   if (!buffer_.empty()) {
     last_ = next_;
     next_ = *buffer_.front();
-  }
-}
-
-void Imu::popFront() {
-  if (!buffer_.empty()) {
-    buffer_.pop_front();
   }
 }
 
@@ -131,10 +113,6 @@ void Imu::reset() {
 
 bool Imu::needInit() const {
   return p_imu->imu_need_init_;
-}
-
-bool Imu::stateInitialized() const {
-  return p_imu->after_imu_init_;
 }
 
 double Imu::lastTimestamp() const {

@@ -56,7 +56,6 @@ public:
   std::deque<double> time_buffer;                ///< 雷达时间戳缓冲队列
 
   double last_timestamp_lidar = -1.0;
-  double last_timestamp_imu = -1.0;
   double time_con = 0.0;
   bool lose_lid = false;
 
