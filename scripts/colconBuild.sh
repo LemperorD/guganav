@@ -148,7 +148,7 @@ if $SAFE_BUILD; then
     -p MemoryMax=6G \
     bash -lc "cd '$WS' && export MAKEFLAGS='-j1 -l1' && colcon build ${BUILD_ARGS[*]} --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
 else
-  colcon build "${BUILD_ARGS[@]}" --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+  colcon build "${BUILD_ARGS[@]}" --symlink-install --cmake-args -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 fi
 if [ ! -L "$WS/compile_commands.json" ]; then
   ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
