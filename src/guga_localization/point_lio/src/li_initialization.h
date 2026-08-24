@@ -36,7 +36,7 @@ public:
     bool imu_enabled{true};
     bool con_frame{false};
     int con_frame_num{1};
-    bool cut_frame_init{false};
+    bool cut_frame{false};
     int cut_frame_num{1};
     double lidar_time_interval{0.1};
   };

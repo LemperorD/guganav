@@ -82,7 +82,7 @@ void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   if ((params_.preprocess.lidar_type == VELO16
        || params_.preprocess.lidar_type == OUST64
        || params_.preprocess.lidar_type == HESA_IXT32)
-      && params_.cut_frame_init) {
+      && params_.cut_frame) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
     preprocess_.processCutFramePCL2(msg, frames, timestamps,
@@ -115,7 +115,7 @@ void Lidar::onLivoxPcl(
   }
   last_timestamp_lidar = timestamp;
 
-  if (params_.cut_frame_init) {
+  if (params_.cut_frame) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
     preprocess_.processCutFrameLivox(msg, frames, timestamps,

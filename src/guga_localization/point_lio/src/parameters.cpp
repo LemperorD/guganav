@@ -112,10 +112,6 @@ std::vector<double> init_pose;  ///< 初始位姿
 
 // ==================== 帧参数 ====================
 double lidar_time_inte = 0.1;      ///< LiDAR 帧间隔 (默认 10Hz)
-int cut_frame_num = 1;             ///< 切帧数
-int orig_odom_freq = 10;           ///< 原始里程计发布频率
-double online_refine_time = 20.0;  ///< 在线精标定时间 (秒)
-bool cut_frame_init = false;       ///< 初始化切帧 (默认: 关)
 
 // ==================== 数据同步 ====================
 MeasureGroup Measures;  ///< 当前处理的测量组

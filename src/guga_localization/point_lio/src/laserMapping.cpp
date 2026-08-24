@@ -203,8 +203,12 @@ void LaserMappingNode::initialize() {
   lidar_params.imu_enabled = imu_enabled;
   lidar_params.con_frame = con_frame;
   lidar_params.con_frame_num = con_frame_num;
-  lidar_params.cut_frame_init = cut_frame_init;
-  lidar_params.cut_frame_num = cut_frame_num;
+  lidar_params.cut_frame = cut_frame;
+  if (cut_frame_time_interval > 0.0) {
+    lidar_params.cut_frame_num = std::max(
+        1, static_cast<int>(std::lround(lidar_time_inte
+                                        / cut_frame_time_interval)));
+  }
   lidar_params.lidar_time_interval = lidar_time_inte;
   lidar_.configure(lidar_params);
 
@@ -247,6 +251,8 @@ void LaserMappingNode::initialize() {
   imu_params.gravity = gravity;
   imu_params.gravity_init = gravity_init;
   imu_params.gravity_magnitude = estimator_params_.gravity_magnitude;
+  imu_params.integration_interval = imu_time_inte;
+  imu_params.timestamp_offset = sensor_params_.lidar_to_imu_time;
   imu_.configure(imu_params);
 
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);

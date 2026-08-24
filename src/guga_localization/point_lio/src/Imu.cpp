@@ -1,6 +1,7 @@
 #include "Imu.h"
 
 void Imu::configure(const Params& params) {
+  params_ = params;
   processor_->lidar_type = params.lidar_type;
   processor_->imu_en = params.enabled;
   processor_->gravity_ = to_vec3d(params.gravity);
@@ -10,7 +11,8 @@ void Imu::configure(const Params& params) {
 
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
   auto msg = std::make_shared<sensor_msgs::msg::Imu>(*msg_in);
-  msg->header.stamp = get_ros_time(get_time_sec(msg_in->header.stamp));
+  msg->header.stamp = get_ros_time(get_time_sec(msg_in->header.stamp)
+                                   + params_.timestamp_offset);
 
   const double timestamp = get_time_sec(msg->header.stamp);
   if (timestamp < last_timestamp_) {

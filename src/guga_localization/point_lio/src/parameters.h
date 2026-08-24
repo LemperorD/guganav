@@ -17,7 +17,7 @@
 #pragma once
 #include <Python.h>
 #include <ivox/ivox3d.h>
-#include <math.h>
+#include <cmath>
 #include <omp.h>
 #include <pcl/common/transforms.h>
 #include <unistd.h>
@@ -184,7 +184,7 @@ extern int lidar_type;  ///< LiDAR 类型: 1=AVIA 2=VELO16 3=OUST64 4=HESAIxt32
 extern int pcd_save_interval;  ///< PCD 保存间隔 (帧数)
 
 // ==================== 重力参数 ====================
-extern std::vector<double> gravity;  ///< 当前重力向量
+extern std::vector<double> gravity;       ///< 当前重力向量
 extern std::vector<double> gravity_init;  ///< 初始重力向量
 
 // ==================== 输出开关 ====================
@@ -205,10 +205,6 @@ extern double time_diff_lidar_to_imu;  ///< LiDAR→IMU 时间偏移 (秒)
 // ==================== 时间与帧参数 ====================
 extern double lidar_time_inte;     ///< LiDAR 帧时间间隔 (秒)
 extern double first_imu_time;      ///< 首帧 IMU 时间戳
-extern int cut_frame_num;          ///< 切帧数
-extern int orig_odom_freq;         ///< 原始里程计发布频率
-extern double online_refine_time;  ///< 在线精标定时间 (秒)
-extern bool cut_frame_init;        ///< 是否启用初始化切帧
 
 // ==================== EKF 时间戳管理 ====================
 extern double time_update_last;         ///< 上次协方差更新时间戳

@@ -19,6 +19,8 @@ public:
     std::vector<double> gravity;
     std::vector<double> gravity_init;
     double gravity_magnitude{9.81};
+    double integration_interval{0.005};
+    double timestamp_offset{0.0};  ///< corrected_time = raw_time + offset
   };
 
   void configure(const Params& params);
@@ -50,6 +52,7 @@ public:
   [[nodiscard]] double lastTimestamp() const;
 
 private:
+  Params params_;
   std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> buffer_;
   sensor_msgs::msg::Imu last_;
   sensor_msgs::msg::Imu next_;
