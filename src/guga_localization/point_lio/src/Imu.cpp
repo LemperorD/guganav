@@ -1,8 +1,5 @@
 #include "Imu.h"
 
-Imu::Imu() {
-}
-
 void Imu::configure(int lidar_type, bool enabled,
                     const std::vector<double>& gravity) {
   processor_->lidar_type = lidar_type;
@@ -28,11 +25,11 @@ bool Imu::empty() const {
   return buffer_.empty();
 }
 
-sensor_msgs::msg::Imu& Imu::lastMutable() {
+const sensor_msgs::msg::Imu& Imu::last() const {
   return last_;
 }
 
-sensor_msgs::msg::Imu& Imu::nextMutable() {
+const sensor_msgs::msg::Imu& Imu::next() const {
   return next_;
 }
 
@@ -81,6 +78,43 @@ void Imu::setNeedInit(bool value) {
   processor_->imu_need_init_ = value;
 }
 
+namespace {
+  input_ikfom makeInput(const sensor_msgs::msg::Imu& msg, double acc_scale) {
+    input_ikfom input;
+    input.gyro << msg.angular_velocity.x, msg.angular_velocity.y,
+        msg.angular_velocity.z;
+    input.acc << msg.linear_acceleration.x, msg.linear_acceleration.y,
+        msg.linear_acceleration.z;
+    input.acc *= acc_scale;
+    return input;
+  }
+
+  ImuMeasurement makeMeasurement(const sensor_msgs::msg::Imu& msg) {
+    ImuMeasurement measurement;
+    measurement.angular_velocity << msg.angular_velocity.x,
+        msg.angular_velocity.y, msg.angular_velocity.z;
+    measurement.linear_acceleration << msg.linear_acceleration.x,
+        msg.linear_acceleration.y, msg.linear_acceleration.z;
+    return measurement;
+  }
+}  // namespace
+
+input_ikfom Imu::lastInput(double acc_scale) const {
+  return makeInput(last_, acc_scale);
+}
+
+input_ikfom Imu::nextInput(double acc_scale) const {
+  return makeInput(next_, acc_scale);
+}
+
+ImuMeasurement Imu::lastMeasurement() const {
+  return makeMeasurement(last_);
+}
+
+ImuMeasurement Imu::nextMeasurement() const {
+  return makeMeasurement(next_);
+}
+
 bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
   if (!needInit() || buffer_.empty()) {
     return false;
@@ -99,11 +133,11 @@ bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
 }
 
 void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort) {
-  processor_->Process(meas, undistort);
+  processor_->process(meas, undistort);
 }
 
 void Imu::reset() {
-  processor_->Reset();
+  processor_->reset();
   buffer_.clear();
   last_ = sensor_msgs::msg::Imu();
   next_ = sensor_msgs::msg::Imu();

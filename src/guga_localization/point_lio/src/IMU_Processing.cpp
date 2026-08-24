@@ -41,10 +41,7 @@ ImuProcessor::ImuProcessor()
   state_cov.setIdentity();  // 12维协方差初始化为单位阵
 }
 
-ImuProcessor::~ImuProcessor() {
-}
-
-void ImuProcessor::Reset() {
+void ImuProcessor::reset() {
   RCLCPP_WARN(logger, "reset ImuProcess");
   mean_acc = V3D(0, 0, 0.0);
   mean_gyr = V3D(0, 0, 0);
@@ -139,7 +136,7 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   V3D cur_acc, cur_gyr;
 
   if (b_first_frame_) {
-    Reset();
+    reset();
     N = 1;
     b_first_frame_ = false;
     // 第一帧: 直接用第一组 IMU 数据初始化均值
@@ -181,7 +178,7 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
  * @param meas 当前帧测量组
  * @param[out] cur_pcl_un_ 输出点云 (当前版本为原始点云副本)
  */
-void ImuProcessor::Process(const MeasureGroup& meas,
+void ImuProcessor::process(const MeasureGroup& meas,
                            PointCloudXYZI::Ptr cur_pcl_un_) {
   if (imu_en) {
     if (meas.imu.empty()) {

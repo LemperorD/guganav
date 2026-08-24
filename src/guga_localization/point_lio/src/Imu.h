@@ -5,11 +5,13 @@
 
 #include "IMU_Processing.h"
 
+struct ImuMeasurement {
+  V3D angular_velocity;
+  V3D linear_acceleration;
+};
+
 class Imu {
 public:
-  Imu();
-  ~Imu() = default;
-
   void configure(int lidar_type, bool enabled,
                  const std::vector<double>& gravity);
 
@@ -17,16 +19,20 @@ public:
 
   [[nodiscard]] bool empty() const;
   [[nodiscard]] bool isSameStamp() const;
-  void popBuffer();
-  sensor_msgs::msg::Imu& lastMutable();
-  sensor_msgs::msg::Imu& nextMutable();
+  [[nodiscard]] const sensor_msgs::msg::Imu& last() const;
+  [[nodiscard]] const sensor_msgs::msg::Imu& next() const;
   std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>& buffer();
 
+  void popBuffer();
   void loadNextFromFront();
   void discardBefore(double timestamp);
   void advanceCursor();
   void popAndAdvance();
   void setNeedInit(bool value);
+  [[nodiscard]] input_ikfom lastInput(double acc_scale) const;
+  [[nodiscard]] input_ikfom nextInput(double acc_scale) const;
+  [[nodiscard]] ImuMeasurement lastMeasurement() const;
+  [[nodiscard]] ImuMeasurement nextMeasurement() const;
 
   bool collectUntil(double end_time, MeasureGroup& meas);
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort);

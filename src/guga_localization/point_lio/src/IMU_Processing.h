@@ -57,19 +57,18 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   ImuProcessor();
-  ~ImuProcessor();
 
   /**
    * @brief 重置 IMU 处理状态 (用于 rosbag 回放重定位)
    */
-  void Reset();
+  void reset();
 
   /**
    * @brief 处理当前帧 (IMU 初始化或点云去畸变)
    * @param meas 当前帧的测量组 (点云 + IMU 数据)
    * @param[out] pcl_un_ 处理后/去畸变后的点云
    */
-  void Process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_);
+  void process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_);
 
   /** @brief 设置陀螺仪协方差缩放因子 */
   void set_gyr_cov(const V3D& scaler);

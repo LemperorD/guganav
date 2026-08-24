@@ -673,8 +673,8 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
  */
 template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
-  auto& imu_last = imu_.lastMutable();
-  auto& imu_next = imu_.nextMutable();
+  const auto& imu_last = imu_.last();
+  const auto& imu_next = imu_.next();
   effct_feat_num = 0;
   if (time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
@@ -693,16 +693,11 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             }
           }
           if constexpr (ImuAsInput) {
-            input_in.gyro << imu_last.angular_velocity.x,
-                imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-            input_in.acc << imu_last.linear_acceleration.x,
-                imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
-            input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+            input_in = imu_.lastInput(G_m_s2 / acc_norm);
           } else {
-            angvel_avr << imu_last.angular_velocity.x,
-                imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-            acc_avr << imu_last.linear_acceleration.x,
-                imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
+            const auto measurement = imu_.lastMeasurement();
+            angvel_avr = measurement.angular_velocity;
+            acc_avr = measurement.linear_acceleration;
           }
           last_time = time_current;
           time_update_last = time_current;
@@ -718,11 +713,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             time_update_last = get_time_sec(imu_next.header.stamp);
           }
           last_time = get_time_sec(imu_next.header.stamp);
-          input_in.gyro << imu_next.angular_velocity.x,
-              imu_next.angular_velocity.y, imu_next.angular_velocity.z;
-          input_in.acc << imu_next.linear_acceleration.x,
-              imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
-          input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+          input_in = imu_.nextInput(G_m_s2 / acc_norm);
         } else {
           // [Workflow 1] 状态传播 (9)(10): 以下 kf.predict
           // 分别完成协方差传播与状态预测。 原 A2: 传播 + IMU 更新
@@ -736,10 +727,9 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             kf.predict(dt, q, input_in, true, false);
           }
           last_time = time_current;
-          angvel_avr << imu_next.angular_velocity.x,
-              imu_next.angular_velocity.y, imu_next.angular_velocity.z;
-          acc_avr << imu_next.linear_acceleration.x,
-              imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
+          const auto measurement = imu_.nextMeasurement();
+          angvel_avr = measurement.angular_velocity;
+          acc_avr = measurement.linear_acceleration;
           // [Workflow 13]-[Workflow 17] IMU 量测更新 (output 模式):
           //   [Workflow 13] 无饱和度检查 (satu_check) 在 h_model_IMU_output
           //   内完成; [Workflow 14] 残差/雅可比/量测噪声 (14)(15) 在
@@ -774,11 +764,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             break;
           }
         }
-        input_in.gyro << imu_last.angular_velocity.x,
-            imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-        input_in.acc << imu_last.linear_acceleration.x,
-            imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
-        input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+        input_in = imu_.lastInput(G_m_s2 / acc_norm);
       } else {
         if (imu_enabled) {
           while (time_current > get_time_sec(imu_next.header.stamp)) {
@@ -787,10 +773,9 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
               break;
             }
           }
-          angvel_avr << imu_last.angular_velocity.x,
-              imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-          acc_avr << imu_last.linear_acceleration.x,
-              imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
+          const auto measurement = imu_.lastMeasurement();
+          angvel_avr = measurement.angular_velocity;
+          acc_avr = measurement.linear_acceleration;
         }
       }
       is_first_frame = false;
@@ -802,18 +787,15 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     if constexpr (ImuAsInput) {
       while (time_current > get_time_sec(imu_next.header.stamp)) {
         imu_.popBuffer();
-        input_in.gyro << imu_last.angular_velocity.x,
-            imu_last.angular_velocity.y, imu_last.angular_velocity.z;
-        input_in.acc << imu_last.linear_acceleration.x,
-            imu_last.linear_acceleration.y, imu_last.linear_acceleration.z;
-        input_in.acc = input_in.acc * G_m_s2 / acc_norm;
+        input_in = imu_.lastInput(G_m_s2 / acc_norm);
         double dt = get_time_sec(imu_last.header.stamp) - last_time;
-
         double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last;
+
         if (dt_cov > 0.0) {
           kf.predict(dt_cov, q, input_in, false, true);
           time_update_last = get_time_sec(imu_last.header.stamp);
         }
+
         kf.predict(dt, q, input_in, true, false);
         last_time = get_time_sec(imu_last.header.stamp);
 
@@ -839,10 +821,9 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         }
         bool imu_comes = time_current > get_time_sec(imu_next.header.stamp);
         while (imu_comes) {
-          angvel_avr << imu_next.angular_velocity.x,
-              imu_next.angular_velocity.y, imu_next.angular_velocity.z;
-          acc_avr << imu_next.linear_acceleration.x,
-              imu_next.linear_acceleration.y, imu_next.linear_acceleration.z;
+          const auto measurement = imu_.nextMeasurement();
+          angvel_avr = measurement.angular_velocity;
+          acc_avr = measurement.linear_acceleration;
 
           double dt = get_time_sec(imu_next.header.stamp) - last_time;
           kf.predict(dt, q, input_in, true, false);
@@ -949,7 +930,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 }
 
 void LaserMappingNode::initScan() {
-  auto& imu_next = imu_.nextMutable();
+  const auto& imu_next = imu_.next();
   first_lidar_time = Measures.lidar_beg_time;
   state_.flg_first_scan = false;
   std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
