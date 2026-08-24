@@ -16,6 +16,8 @@ public:
   void onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
 
   [[nodiscard]] bool empty() const;
+  [[nodiscard]] bool isSameStamp() const;
+  void popBuffer();
   sensor_msgs::msg::Imu& lastMutable();
   sensor_msgs::msg::Imu& nextMutable();
   std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>& buffer();

@@ -117,3 +117,12 @@ bool Imu::needInit() const {
 double Imu::lastTimestamp() const {
   return last_timestamp_;
 }
+
+bool Imu::isSameStamp() const {
+  return get_time_sec(next_.header.stamp)
+         == get_time_sec(buffer_.front()->header.stamp);
+}
+
+void Imu::popBuffer() {
+  buffer_.pop_front();
+}

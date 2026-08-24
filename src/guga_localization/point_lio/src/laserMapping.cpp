@@ -673,13 +673,12 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
  */
 template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
-  auto& imu_deque = imu_.buffer();
   auto& imu_last = imu_.lastMutable();
   auto& imu_next = imu_.nextMutable();
   effct_feat_num = 0;
   if (time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
-    if (!imu_deque.empty()) {
+    if (!imu_.empty()) {
       imu_.advanceCursor();
 
       while (get_time_sec(imu_next.header.stamp) > time_current
@@ -689,7 +688,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           while (get_time_sec(imu_next.header.stamp)
                  < Measures.lidar_beg_time + lidar_time_inte) {
             imu_.popAndAdvance();
-            if (imu_deque.empty()) {
+            if (imu_.empty()) {
               break;
             }
           }
@@ -751,7 +750,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           kf.update_iterated_dyn_share_IMU();
         }
         imu_.popAndAdvance();
-        if (imu_deque.empty()) {
+        if (imu_.empty()) {
           break;
         }
       }
@@ -771,7 +770,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       if constexpr (ImuAsInput) {
         while (time_current > get_time_sec(imu_next.header.stamp)) {
           imu_.popAndAdvance();
-          if (imu_deque.empty()) {
+          if (imu_.empty()) {
             break;
           }
         }
@@ -784,7 +783,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         if (imu_enabled) {
           while (time_current > get_time_sec(imu_next.header.stamp)) {
             imu_.popAndAdvance();
-            if (imu_deque.empty()) {
+            if (imu_.empty()) {
               break;
             }
           }
@@ -802,7 +801,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
     if constexpr (ImuAsInput) {
       while (time_current > get_time_sec(imu_next.header.stamp)) {
-        imu_deque.pop_front();
+        imu_.popBuffer();
         input_in.gyro << imu_last.angular_velocity.x,
             imu_last.angular_velocity.y, imu_last.angular_velocity.z;
         input_in.acc << imu_last.linear_acceleration.x,
@@ -818,24 +817,23 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         kf.predict(dt, q, input_in, true, false);
         last_time = get_time_sec(imu_last.header.stamp);
 
-        if (imu_deque.empty()) {
+        if (imu_.empty()) {
           break;
         }
         imu_.advanceCursor();
       }
     } else {
-      if (imu_enabled && !imu_deque.empty()) {
-        bool last_imu = get_time_sec(imu_next.header.stamp)
-                        == get_time_sec(imu_deque.front()->header.stamp);
+      if (imu_enabled && !imu_.empty()) {
+        bool last_imu = imu_.isSameStamp();
         while (get_time_sec(imu_next.header.stamp) < last_time
-               && !imu_deque.empty()) {
+               && !imu_.empty()) {
           if (!last_imu) {
             imu_.advanceCursor();
             break;
           }
 
           imu_.popAndAdvance();
-          if (imu_deque.empty()) {
+          if (imu_.empty()) {
             break;
           }
         }
@@ -871,7 +869,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             }
           }
           imu_.popAndAdvance();
-          if (imu_deque.empty()) {
+          if (imu_.empty()) {
             break;
           }
           imu_comes = time_current > get_time_sec(imu_next.header.stamp);
