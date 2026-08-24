@@ -540,24 +540,26 @@ if [ -z "$mode" ]; then
 else
   shift
 fi
-
+while true ;do
 case "$mode" in
   n | nav | navigation)
     build_nav_args "$@" || exit 2
     run_complete_simulation nav "${nav_args[@]}"
-    exit 0
+    break
     ;;
   m | map | mapping | slam)
     run_complete_simulation map "$@"
-    exit 0
+    break
     ;;
   nav-only | navigation-only)
     build_nav_args "$@" || exit 2
     set -- "${nav_args[@]}"
     slam=False
+    break
     ;;
   map-only | mapping-only | slam-only)
     slam=True
+    break
     ;;
   __gazebo)
     require_workspace_setup
@@ -581,10 +583,15 @@ case "$mode" in
     ;;
   *)
     echo "Unknown simulation mode: $mode" >&2
-    usage >&2
-    exit 2
+   
+    cat >&2 <<'EOF'
+    Select simulation mode [nav[n]/map[m]]:
+EOF
+    read -r mode
+    continue
     ;;
 esac
+done
 
 world=rmul_2025
 if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then

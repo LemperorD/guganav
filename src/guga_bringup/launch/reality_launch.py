@@ -33,6 +33,12 @@ def generate_launch_description():
     use_communication = LaunchConfiguration("use_communication")
     use_ui = LaunchConfiguration("use_ui")
     use_decision = LaunchConfiguration("use_decision")
+    # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
+    planner = LaunchConfiguration("planner")
+    controller = LaunchConfiguration("controller")
+    base_params_file = LaunchConfiguration("base_params_file")
+    controller_params_file = LaunchConfiguration("controller_params_file")
+    planner_params_file = LaunchConfiguration("planner_params_file")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -81,10 +87,51 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
-        default_value=os.path.join(
-            bringup_dir, "config", "reality", "nav2_params.yaml"
+        # 默认必须指向真实文件,不能为空字符串:
+        # reality 会把 params_file 原样传给 bringup_launch,而 bringup 用它作为
+        # RewrittenYaml 的参数源;若为空 → open('') → "No such file or directory: ''"。
+        default_value=os.path.join(bringup_dir, "config", "reality", "nav2_params.yaml"),
+        description=(
+            "Single params file override (disables 3-file merge); "
+            "default uses reality/nav2_params.yaml"
         ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
+    )
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
+    declare_controller_cmd = DeclareLaunchArgument(
+        "controller", default_value="pid", choices=["pid", "mppi", "mpc"],
+        description="Controller: pid (omni PID), mppi, or mpc",
+    )
+    def default_params_file(which):
+        return PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file,
+                "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
+            ]
+        )
+    declare_base_params_file_cmd = DeclareLaunchArgument(
+        "base_params_file", default_value=default_params_file("base.yaml"),
+        description="Common params file (merge base layer)",
+    )
+    declare_controller_params_file_cmd = DeclareLaunchArgument(
+        "controller_params_file",
+        default_value=PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file, "' or ('",
+                controller, "' == 'mppi' and '",
+                os.path.join(bringup_dir, "config", "reality", "controller", "mppi.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "reality", "controller", "pid.yaml"),
+                "')",
+            ]
+        ),
+        description="Controller-diff params file (pid default, mppi available)",
+    )
+    declare_planner_params_file_cmd = DeclareLaunchArgument(
+        "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
+        description="Planner-diff params file",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -119,13 +166,13 @@ def generate_launch_description():
     )
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
-        # "use_rviz", default_value="True", description="Whether to start RVIZ"
-        "use_rviz", default_value="False", description="Whether to start RVIZ"
+        "use_rviz", default_value="True", description="Whether to start RVIZ"
+        # "use_rviz", default_value="False", description="Whether to start RVIZ"
     )
 
     declare_use_communication_cmd = DeclareLaunchArgument(
         "use_communication",
-        default_value="False",
+        default_value="True",
         description="Whether to start the communication node",
     )
 
@@ -143,11 +190,14 @@ def generate_launch_description():
 
     # Create our own temporary YAML files that include substitutions
 
+    # livox 节点参数直接指向 base.yaml 的绝对路径,不经过 PythonExpression
+    # 动态求值(base_params_file 在 bringup 层才被 ReplaceString 处理,此处
+    # 求值为空会触发 RewrittenYaml 打开 '' → FileNotFoundError)。
     configured_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=os.path.join(bringup_dir, "config", "reality", "base.yaml"),
             root_key=namespace,
-            param_rewrites={},
+            param_rewrites={"use_sim_time": use_sim_time},
             convert_types=True,
         ),
         allow_substs=True,
@@ -210,6 +260,10 @@ def generate_launch_description():
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
+            "base_params_file": base_params_file,
+            "controller_params_file": controller_params_file,
+            "planner_params_file": planner_params_file,
+            "controller": controller,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
@@ -256,6 +310,11 @@ def generate_launch_description():
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_planner_cmd)
+    ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_base_params_file_cmd)
+    ld.add_action(declare_controller_params_file_cmd)
+    ld.add_action(declare_planner_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
