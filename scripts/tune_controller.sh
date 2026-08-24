@@ -2,18 +2,18 @@
 set -euo pipefail
 
 # ────────────────────────────────────────────────────────────────
-# MPPI 动态调参工具（运行时调整，无需重启节点）
+# Controller 动态调参工具（运行时调整，无需重启节点）
 #
-# MPPI 的所有参数（critics 权重/速度限制/采样参数）注册为 Dynamic 类型，
+# Controller 的所有参数（critics 权重/速度限制/采样参数）注册为 Dynamic 类型，
 # 通过 ros2 param set 即时生效（parameters_handler 的 on_set 回调）。
 #
 # 用法：
-#   scripts/tune_mppi.sh                  # 交互菜单（列表选择参数 → 输入新值）
-#   scripts/tune_mppi.sh set <param> <value> [node]   # 命令行改单个参数
-#   scripts/tune_mppi.sh show [node]                  # 显示当前关键参数
-#   scripts/tune_mppi.sh dump [node]                  # 导出全部 MPPI 参数
-#   scripts/tune_mppi.sh save <file> [node]           # 保存当前参数到文件
-#   scripts/tune_mppi.sh restore <file> [node]        # 从文件恢复
+#   scripts/tune_controller.sh                  # 交互菜单（列表选择参数 → 输入新值）
+#   scripts/tune_controller.sh set <param> <value> [node]   # 命令行改单个参数
+#   scripts/tune_controller.sh show [node]                  # 显示当前关键参数
+#   scripts/tune_controller.sh dump [node]                  # 导出全部 Controller 参数
+#   scripts/tune_controller.sh save <file> [node]           # 保存当前参数到文件
+#   scripts/tune_controller.sh restore <file> [node]        # 从文件恢复
 #
 # 参数名省略 FollowPath. 前缀（自动补全）；节点名默认
 # /red_standard_robot1/controller_server，可传参数覆盖。
@@ -77,46 +77,13 @@ while read -r line; do
    PARAM_LIST+=("$line")
  done< $CONFIG_FILE
 
-# KEY_PARAMS=(
-#   "FollowPath.PathAlignCritic.cost_weight"
-#   "FollowPath.PathFollowCritic.cost_weight"
-#   "FollowPath.CostCritic.cost_weight"
-#   "FollowPath.ObstaclesCritic.repulsion_weight"
-#   "FollowPath.vx_max"
-#   "FollowPath.wz_max"
-#   "FollowPath.temperature"
-#   "FollowPath.gamma"
-#   "FollowPath.batch_size"
-# )
-
-# ── 可调参数表（显示名 | 说明）──
-# 已启用 critic 的权重（Constraint/Cost/Goal/PathAlign/PathFollow）全部可调
-# PARAM_LIST=(
-#   "PathAlignCritic.cost_weight|贴路径程度（大→严格贴线）"
-#   "PathFollowCritic.cost_weight|路径跟随（大→死贴路径）"
-#   "CostCritic.cost_weight|代价地图权重（大→怕障碍）"
-#   "ConstraintCritic.cost_weight|运动约束（大→保守）"
-#   "GoalCritic.cost_weight|目标引力"
-#   "vx_max|最大前进速度"
-#   "vy_max|最大侧向速度"
-#   "wz_max|最大角速度"
-#   "temperature|采样温度（大→激进/抖）"
-#   "gamma|代价衰减（小→看得远）"
-#   "batch_size|采样轨迹数（大→平滑但慢）"
-#   "time_steps|轨迹步数"
-#   "iteration_count|迭代次数"
-#   "vx_std|前进噪声"
-#   "vy_std|侧向噪声"
-#   "wz_std|转向噪声"
-# )
-
 # 显示当前值（逐行实时获取，带 timeout 防节点忙时挂死）
 param_value() {
   local node=$1
   local param=$2
   local output
 
-  if ! output=$(ros2 param get "$node" "$param" 2>&1); then
+  if ! output=$(timeout 3 ros2 param get "$node" "$param" 2>&1); then
     echo "获取失败 [$param]:" >&2
     echo "$output" >&2
     printf '?\n'
@@ -220,7 +187,7 @@ shift || true
 
 case "$cmd" in
   set)
-    # tune_mppi.sh set <param> <value> [node]
+    # tune_controller.sh set <param> <value> [node]
     param=$1; value=$2; node=${3:-$DEFAULT_NODE}
     case "$param" in
       FollowPath.*) full=$param ;;
@@ -231,7 +198,7 @@ case "$cmd" in
     ;;
   show)
     node=${1:-$DEFAULT_NODE}
-    echo "== 当前 MPPI 关键参数（$node）=="
+    echo "== 当前 ${CONTROLLER_TYPE} 关键参数（$node）=="
     for p in "${KEY_PARAMS[@]}"; do
       v=$(ros2 param get "$node" "$p" 2>/dev/null | tail -1 | sed 's/^.*is: //')
       printf "  %-45s %s\n" "$p" "${v:-<未设置>}"
@@ -242,13 +209,13 @@ case "$cmd" in
     ros2 param dump "$node" 2>/dev/null | grep -E "FollowPath\." || true
     ;;
   save)
-    # tune_mppi.sh save <file> [node]
+    # tune_controller.sh save <file> [node]
     file=$1; node=${2:-$DEFAULT_NODE}
     ros2 param dump "$node" 2>/dev/null | grep -E "FollowPath\." > "$file" || true
-    echo "已保存 MPPI 参数到 $file($(grep -c . "$file" || echo 0) 项）"
+    echo "已保存 ${CONTROLLER_TYPE} 参数到 $file($(grep -c . "$file" || echo 0) 项）"
     ;;
   restore)
-    # tune_mppi.sh restore <file> [node]
+    # tune_controller.sh restore <file> [node]
     file=$1; node=${2:-$DEFAULT_NODE}
     [ -f "$file" ] || { echo "文件不存在: $file" >&2; exit 1; }
     count=0
