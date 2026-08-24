@@ -32,6 +32,21 @@ void ImuProcessor::set_acc_cov(const V3D& scaler) {
 ImuProcessor::ImuProcessor() : logger(rclcpp::get_logger("ImuProcess")) {
 }
 
+void ImuProcessor::configure(const Params& params) {
+  imu_en = params.enabled;
+  gravity_ = params.gravity;
+  gravity_init_ = params.gravity_init;
+  gravity_magnitude_ = params.gravity_magnitude;
+}
+
+void ImuProcessor::setNeedInit(bool value) {
+  imu_need_init_ = value;
+}
+
+bool ImuProcessor::needInit() const {
+  return imu_need_init_;
+}
+
 void ImuProcessor::reset() {
   RCLCPP_WARN(logger, "reset ImuProcess");
   mean_acc = V3D(0, 0, 0.0);

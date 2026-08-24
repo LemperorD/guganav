@@ -27,7 +27,6 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include "preprocess.h"
 
 // ==================== 预配置 ====================
 
@@ -60,6 +59,15 @@ public:
 
   ImuProcessor();
 
+  struct Params {
+    bool enabled{true};
+    V3D gravity{V3D::Zero()};
+    V3D gravity_init{0.0, 0.0, -9.81};
+    double gravity_magnitude{9.81};
+  };
+
+  void configure(const Params& params);
+
   /**
    * @brief 重置 IMU 处理状态 (用于 rosbag 回放重定位)
    */
@@ -77,6 +85,8 @@ public:
 
   /** @brief 设置加速度计协方差缩放因子 */
   void set_acc_cov(const V3D& scaler);
+  void setNeedInit(bool value);
+  [[nodiscard]] bool needInit() const;
 
   /**
    * @brief 计算初始旋转矩阵，使估计重力与先验重力对齐
@@ -105,12 +115,9 @@ public:
   MD(12, 12)
   state_cov = MD(
       12, 12)::Identity();  ///< IMU 状态协方差 (12维: 姿态/速度/位置/零偏)
-  int lidar_type{AVIA};     ///< LiDAR 类型 (从参数复制)
-
   V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
-  bool imu_en{true};  ///< 是否启用 IMU
 
   V3D mean_acc{V3D::Zero()};     ///< 平均加速度 (累积, 用于重力估计)
   bool imu_need_init_ = true;    ///< 标志: 是否需要 IMU 初始化
@@ -135,5 +142,6 @@ private:
 
   V3D mean_gyr{V3D::Zero()};  ///< 平均角速度 (用于陀螺零偏估计)
   int init_iter_num = 1;      ///< 初始化迭代计数 (当前累积帧数)
+  bool imu_en{true};           ///< 是否启用 IMU
   rclcpp::Logger logger;      ///< ROS2 日志器
 };

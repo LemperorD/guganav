@@ -190,7 +190,6 @@ void LaserMappingNode::initialize() {
   }
 
   Imu::Params imu_params;
-  imu_params.lidar_type = laser_mapping_params_.lidar_type;
   imu_params.enabled = laser_mapping_params_.imu_enabled;
   imu_params.gravity = laser_mapping_params_.gravity;
   imu_params.gravity_init = laser_mapping_params_.gravity_init;

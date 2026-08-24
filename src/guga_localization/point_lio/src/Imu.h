@@ -14,7 +14,6 @@ struct ImuMeasurement {
 class Imu {
 public:
   struct Params {
-    int lidar_type{AVIA};
     bool enabled{true};
     std::vector<double> gravity;
     std::vector<double> gravity_init;

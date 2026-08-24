@@ -2,11 +2,12 @@
 
 void Imu::configure(const Params& params) {
   params_ = params;
-  processor_->lidar_type = params.lidar_type;
-  processor_->imu_en = params.enabled;
-  processor_->gravity_ = to_vec3d(params.gravity);
-  processor_->gravity_init_ = to_vec3d(params.gravity_init);
-  processor_->gravity_magnitude_ = params.gravity_magnitude;
+  ImuProcessor::Params processor_params;
+  processor_params.enabled = params.enabled;
+  processor_params.gravity = to_vec3d(params.gravity);
+  processor_params.gravity_init = to_vec3d(params.gravity_init);
+  processor_params.gravity_magnitude = params.gravity_magnitude;
+  processor_->configure(processor_params);
 }
 
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
@@ -78,7 +79,7 @@ void Imu::popAndAdvance() {
 }
 
 void Imu::setNeedInit(bool value) {
-  processor_->imu_need_init_ = value;
+  processor_->setNeedInit(value);
 }
 
 namespace {
@@ -148,7 +149,7 @@ void Imu::reset() {
 }
 
 bool Imu::needInit() const {
-  return processor_->imu_need_init_;
+  return processor_->needInit();
 }
 
 double Imu::lastTimestamp() const {
