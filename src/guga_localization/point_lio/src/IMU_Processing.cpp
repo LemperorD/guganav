@@ -21,15 +21,15 @@ const bool time_list(PointType& x, PointType& y) {
   return (x.curvature < y.curvature);
 };
 
-void ImuProcess::set_gyr_cov(const V3D& scaler) {
+void ImuProcessor::set_gyr_cov(const V3D& scaler) {
   cov_gyr_scale = scaler;
 }
 
-void ImuProcess::set_acc_cov(const V3D& scaler) {
+void ImuProcessor::set_acc_cov(const V3D& scaler) {
   cov_vel_scale = scaler;
 }
 
-ImuProcess::ImuProcess()
+ImuProcessor::ImuProcessor()
     : imu_need_init_(true),
       b_first_frame_(true),
       logger(rclcpp::get_logger("ImuProcess")) {
@@ -41,10 +41,10 @@ ImuProcess::ImuProcess()
   state_cov.setIdentity();  // 12维协方差初始化为单位阵
 }
 
-ImuProcess::~ImuProcess() {
+ImuProcessor::~ImuProcessor() {
 }
 
-void ImuProcess::Reset() {
+void ImuProcessor::Reset() {
   RCLCPP_WARN(logger, "reset ImuProcess");
   mean_acc = V3D(0, 0, 0.0);
   mean_gyr = V3D(0, 0, 0);
@@ -70,7 +70,8 @@ void ImuProcess::Reset() {
  * @param tmp_gravity 估计的重力方向 (如通过加速度均值估计)
  * @param[out] rot    输出的初始旋转矩阵 (使 rot*tmp_gravity ≈ gravity_)
  */
-void ImuProcess::Set_init(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot) {
+void ImuProcessor::Set_init(Eigen::Vector3d& tmp_gravity,
+                            Eigen::Matrix3d& rot) {
   // 构造先验重力的反对称矩阵 [g_prior]×
   M3D hat_grav;
   hat_grav << 0.0, gravity_(2), -gravity_(1), -gravity_(2), 0.0, gravity_(0),
@@ -101,7 +102,7 @@ void ImuProcess::Set_init(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot) {
 }
 
 /** @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值 */
-void ImuProcess::init_state() {
+void ImuProcessor::init_state() {
   if (after_imu_init_) {
     return;  // 已完成
   }
@@ -132,7 +133,7 @@ void ImuProcess::init_state() {
  * @param meas 当前帧测量组
  * @param N    累积计数 (输入输出, 第一次传入1)
  */
-void ImuProcess::IMU_init(const MeasureGroup& meas, int& N) {
+void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   RCLCPP_INFO(logger, "IMU Initializing: %.1f %%",
               double(N) / MAX_INI_COUNT * 100);
   V3D cur_acc, cur_gyr;
@@ -180,8 +181,8 @@ void ImuProcess::IMU_init(const MeasureGroup& meas, int& N) {
  * @param meas 当前帧测量组
  * @param[out] cur_pcl_un_ 输出点云 (当前版本为原始点云副本)
  */
-void ImuProcess::Process(const MeasureGroup& meas,
-                         PointCloudXYZI::Ptr cur_pcl_un_) {
+void ImuProcessor::Process(const MeasureGroup& meas,
+                           PointCloudXYZI::Ptr cur_pcl_un_) {
   if (imu_en) {
     if (meas.imu.empty()) {
       return;

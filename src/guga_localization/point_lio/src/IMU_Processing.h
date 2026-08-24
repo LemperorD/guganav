@@ -52,12 +52,12 @@ const bool time_list(PointType& x, PointType& y);
  * 2. 重力对齐: 计算初始姿态，使估计重力与 YAML 配置的先验重力对齐
  * 3. 点云去畸变: (预留) IMU 反向传播校正点云运动畸变
  */
-class ImuProcess {
+class ImuProcessor {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  ImuProcess();
-  ~ImuProcess();
+  ImuProcessor();
+  ~ImuProcessor();
 
   /**
    * @brief 重置 IMU 处理状态 (用于 rosbag 回放重定位)
@@ -135,7 +135,6 @@ private:
   rclcpp::Logger logger;  ///< ROS2 日志器
 };
 
-extern shared_ptr<ImuProcess> p_imu;  ///< IMU 处理模块
 extern double G_m_s2;
 extern std::vector<double> gravity_init;  ///< 初始重力向量
 extern bool imu_enabled;                  ///< 默认启用 IMU

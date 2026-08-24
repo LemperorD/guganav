@@ -5,9 +5,9 @@ Imu::Imu() {
 
 void Imu::configure(int lidar_type, bool enabled,
                     const std::vector<double>& gravity) {
-  p_imu->lidar_type = lidar_type;
-  p_imu->imu_en = enabled;
-  p_imu->gravity_ = to_vec3d(gravity);
+  processor_->lidar_type = lidar_type;
+  processor_->imu_en = enabled;
+  processor_->gravity_ = to_vec3d(gravity);
 }
 
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
@@ -16,8 +16,7 @@ void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
 
   const double timestamp = get_time_sec(msg->header.stamp);
   if (timestamp < last_timestamp_) {
-    RCLCPP_ERROR(rclcpp::get_logger("Imu"),
-                 "imu loop back, clear deque");
+    RCLCPP_ERROR(rclcpp::get_logger("Imu"), "imu loop back, clear deque");
     return;
   }
 
@@ -79,7 +78,7 @@ void Imu::popAndAdvance() {
 }
 
 void Imu::setNeedInit(bool value) {
-  p_imu->imu_need_init_ = value;
+  processor_->imu_need_init_ = value;
 }
 
 bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
@@ -89,8 +88,8 @@ bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
 
   loadNextFromFront();
   meas.imu.shrink_to_fit();
-  while (!buffer_.empty() &&
-         get_time_sec(buffer_.front()->header.stamp) < end_time) {
+  while (!buffer_.empty()
+         && get_time_sec(buffer_.front()->header.stamp) < end_time) {
     meas.imu.emplace_back(buffer_.front());
     last_ = next_;
     buffer_.pop_front();
@@ -100,11 +99,11 @@ bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
 }
 
 void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort) {
-  p_imu->Process(meas, undistort);
+  processor_->Process(meas, undistort);
 }
 
 void Imu::reset() {
-  p_imu->Reset();
+  processor_->Reset();
   buffer_.clear();
   last_ = sensor_msgs::msg::Imu();
   next_ = sensor_msgs::msg::Imu();
@@ -112,7 +111,7 @@ void Imu::reset() {
 }
 
 bool Imu::needInit() const {
-  return p_imu->imu_need_init_;
+  return processor_->imu_need_init_;
 }
 
 double Imu::lastTimestamp() const {

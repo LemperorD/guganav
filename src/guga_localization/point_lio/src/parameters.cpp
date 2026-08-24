@@ -16,10 +16,10 @@
 #include <memory>
 
 // ==================== 帧控制标志 ====================
-bool is_first_frame = true;          ///< 首帧标志 (用于跳过第一帧的预测)
-double lidar_end_time = 0.0;         ///< 当前帧最晚点时间戳
-double first_lidar_time = 0.0;       ///< 第一帧雷达时间 (用于相对计时)
-int pcd_index = 0;                   ///< PCD 保存序号
+bool is_first_frame = true;     ///< 首帧标志 (用于跳过第一帧的预测)
+double lidar_end_time = 0.0;    ///< 当前帧最晚点时间戳
+double first_lidar_time = 0.0;  ///< 第一帧雷达时间 (用于相对计时)
+int pcd_index = 0;              ///< PCD 保存序号
 
 // ==================== iVox 地图参数 ====================
 IVoxType::Options ivox_options_;  ///< iVox 体素配置 (分辨率、近邻方式)
@@ -44,8 +44,8 @@ bool cut_frame = false;           ///< 默认: 不切帧
 bool use_imu_as_input = false;    ///< 默认: IMU-as-output (30维)
 bool space_down_sample = true;    ///< 默认: 再次空间降采样
 bool publish_odometry_without_downsample = false;  ///< 默认: 逐帧发布里程计
-bool imu_enabled = true;          ///< 默认启用 IMU
-double G_m_s2 = 9.81;             ///< 重力加速度模长
+bool imu_enabled = true;                           ///< 默认启用 IMU
+double G_m_s2 = 9.81;                              ///< 重力加速度模长
 
 // ==================== 地图初始化 ====================
 int init_map_size = 10;  ///< 初始地图最少点数
@@ -85,7 +85,7 @@ int lidar_type;         ///< 雷达类型 (从 YAML 读取)
 int pcd_save_interval;  ///< PCD 保存间隔
 
 // ==================== 重力 ====================
-std::vector<double> gravity;  ///< 当前重力向量
+std::vector<double> gravity;       ///< 当前重力向量
 std::vector<double> gravity_init;  ///< 初始重力向量 (先验)
 
 // ==================== 输出开关 ====================
@@ -99,7 +99,6 @@ bool tf_send_en;               ///< TF 发布
 
 // ==================== 处理器实例 ====================
 shared_ptr<Preprocess> p_pre;  ///< 点云预处理模块
-shared_ptr<ImuProcess> p_imu;  ///< IMU 处理模块
 
 // ==================== 时间戳管理 ====================
 double time_update_last = 0.0;         ///< 上帧协方差更新时间
@@ -130,7 +129,6 @@ ofstream fout_imu_pbp;  ///< IMU 逐点输出文件
 void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
   // 初始化 Preprocess 和 ImuProcess 实例
   p_pre = std::make_shared<Preprocess>();
-  p_imu = std::make_shared<ImuProcess>();
   try {
     // ==================== 模式开关 ====================
     prop_at_freq_of_imu = nh->declare_parameter<bool>("prop_at_freq_of_imu",
@@ -269,8 +267,6 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
     ivox_options_.nearby_type_ =
         IVoxType::NearbyType::NEARBY18;  ///< 未知值默认 18 邻域
   }
-  // 将 YAML 重力向量传递给 IMU 处理模块
-  p_imu->gravity_ = to_vec3d(gravity);
 }
 
 /**
