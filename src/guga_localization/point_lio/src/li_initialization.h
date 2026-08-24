@@ -17,6 +17,7 @@
 #pragma once
 
 #include <memory>
+#include "preprocess.h"
 #include "common_lib.h"
 #include "Imu.h"
 
@@ -29,6 +30,17 @@ class Lidar {
 public:
   Lidar() = default;
   ~Lidar() = default;
+
+  struct Params {
+    PreprocessParams preprocess;
+    bool imu_enabled{true};
+    bool con_frame{false};
+    bool cut_frame_init{false};
+    int cut_frame_num{1};
+    double lidar_time_interval{0.1};
+  };
+
+  void configure(const Params& params);
 
   void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
   void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
@@ -58,5 +70,9 @@ public:
   double last_timestamp_lidar = -1.0;
   double time_con = 0.0;
   bool lose_lid = false;
+
+private:
+  Params params_;
+  Preprocess preprocess_;
 
 };

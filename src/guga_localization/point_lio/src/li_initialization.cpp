@@ -62,6 +62,11 @@ namespace {
 
 }  // namespace
 
+void Lidar::configure(const Params& params) {
+  params_ = params;
+  preprocess_.configure(params_.preprocess);
+}
+
 void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   ++scan_count;
   const double start = omp_get_wtime();
@@ -73,17 +78,19 @@ void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   }
   last_timestamp_lidar = timestamp;
 
-  if ((lidar_type == VELO16 || lidar_type == OUST64 || lidar_type == HESA_IXT32)
-      && cut_frame_init) {
+  if ((params_.preprocess.lidar_type == VELO16
+       || params_.preprocess.lidar_type == OUST64
+       || params_.preprocess.lidar_type == HESA_IXT32)
+      && params_.cut_frame_init) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
-    p_pre->processCutFramePCL2(msg, frames, timestamps, cut_frame_num,
-                               scan_count);
+    preprocess_.processCutFramePCL2(msg, frames, timestamps,
+                                    params_.cut_frame_num, scan_count);
     append_cut_frames(*this, frames, timestamps);
   } else {
     auto points = std::make_shared<PointCloudXYZI>(20000, 1);
-    p_pre->process(msg, points);
-    if (con_frame) {
+    preprocess_.process(msg, points);
+    if (params_.con_frame) {
       append_merged_frame(*this, points, timestamp);
     } else if (!points->empty()) {
       lidar_buffer.emplace_back(std::move(points));
@@ -107,16 +114,16 @@ void Lidar::onLivoxPcl(
   }
   last_timestamp_lidar = timestamp;
 
-  if (cut_frame_init) {
+  if (params_.cut_frame_init) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
-    p_pre->processCutFrameLivox(msg, frames, timestamps, cut_frame_num,
-                                scan_count);
+    preprocess_.processCutFrameLivox(msg, frames, timestamps,
+                                     params_.cut_frame_num, scan_count);
     append_cut_frames(*this, frames, timestamps);
   } else {
     auto points = std::make_shared<PointCloudXYZI>(10000, 1);
-    p_pre->process(msg, points);
-    if (con_frame) {
+    preprocess_.process(msg, points);
+    if (params_.con_frame) {
       append_merged_frame(*this, points, timestamp);
     } else if (!points->empty()) {
       lidar_buffer.emplace_back(std::move(points));
@@ -129,7 +136,7 @@ void Lidar::onLivoxPcl(
 }
 
 bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
-  if (!imu_enabled) {
+  if (!params_.imu_enabled) {
     if (lidar_buffer.empty()) {
       return false;
     }
@@ -154,7 +161,8 @@ bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
     lidar_pushed = true;
   }
 
-  const double required_end = lose_lid ? meas.lidar_beg_time + lidar_time_inte
+  const double required_end = lose_lid
+                                  ? meas.lidar_beg_time + params_.lidar_time_interval
                                        : lidar_end_time;
   if (imu.lastTimestamp() < required_end) {
     return false;

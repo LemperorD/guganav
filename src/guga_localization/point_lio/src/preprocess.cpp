@@ -54,6 +54,16 @@ void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num) {
   point_filter_num_ = pfilt_num;
 }
 
+void Preprocess::configure(const PreprocessParams& params) {
+  lidar_type_ = params.lidar_type;
+  point_filter_num_ = params.point_filter_num;
+  N_SCANS_ = params.scan_lines;
+  SCAN_RATE_ = params.scan_rate;
+  time_unit_ = params.timestamp_unit;
+  blind_ = params.blind;
+  det_range_ = params.det_range;
+}
+
 // ==================== 公共处理接口 ====================
 
 void Preprocess::process(

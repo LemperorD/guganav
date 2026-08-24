@@ -41,6 +41,16 @@ enum LidType : uint8_t { AVIA = 1, VELO16, OUST64, HESA_IXT32 };
 /** @brief 时间戳单位 (用于解析不同雷达的时间格式) */
 enum TimeUnit : uint8_t { SEC = 0, MS = 1, US = 2, NS = 3 };
 
+struct PreprocessParams {
+  int lidar_type{AVIA};
+  int point_filter_num{1};
+  int scan_lines{6};
+  int scan_rate{10};
+  int timestamp_unit{MS};
+  double blind{1.0};
+  double det_range{300.0};
+};
+
 // ==================== 特征类型枚举 (用于机械旋转式雷达) ====================
 
 /** @brief 点特征分类 */
@@ -206,6 +216,7 @@ public:
 
   /** @brief 设置预处理参数 */
   void set(bool feat_en, int lid_type, double bld, int pfilt_num);
+  void configure(const PreprocessParams& params);
 
   // ==================== 公有成员变量 ====================
 

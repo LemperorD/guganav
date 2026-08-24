@@ -135,6 +135,21 @@ void LaserMappingNode::initialize() {
   p_pre = std::make_shared<Preprocess>();
   readParameters(self, p_pre);
 
+  Lidar::Params lidar_params;
+  lidar_params.preprocess.lidar_type = lidar_type;
+  lidar_params.preprocess.point_filter_num = p_pre->point_filter_num_;
+  lidar_params.preprocess.scan_lines = p_pre->N_SCANS_;
+  lidar_params.preprocess.scan_rate = p_pre->SCAN_RATE_;
+  lidar_params.preprocess.timestamp_unit = p_pre->time_unit_;
+  lidar_params.preprocess.blind = p_pre->blind_;
+  lidar_params.preprocess.det_range = DET_RANGE;
+  lidar_params.imu_enabled = imu_enabled;
+  lidar_params.con_frame = con_frame;
+  lidar_params.cut_frame_init = cut_frame_init;
+  lidar_params.cut_frame_num = cut_frame_num;
+  lidar_params.lidar_time_interval = lidar_time_inte;
+  lidar_.configure(lidar_params);
+
   RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
               lidar_type);
 
