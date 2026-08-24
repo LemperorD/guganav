@@ -23,7 +23,7 @@
  * @brief 按 curvature 升序排序 (切帧模式下时间戳单调递增)
  */
 const bool time_list_cut_frame(PointType& x, PointType& y) {
-  return (x.curvature < y.curvature);
+  return (x.curvature < y.curvature);  // NOLINT
 }
 
 /**
@@ -40,32 +40,12 @@ const bool time_list_cut_frame(PointType& x, PointType& y) {
  * - edgea/edgeb: 跳变判定参数 (距离比+绝对差)
  * - smallp_intersect/ratio: 小平面判定阈值
  */
-Preprocess::Preprocess()
-    : lidar_type_(AVIA), point_filter_num_(1), blind_(0.01), det_range_(1000) {
-  inf_bound = 10;
-  N_SCANS_ = 6;     // Livox 默认 6 线 (实际由 YAML 覆盖)
-  SCAN_RATE_ = 10;  // 默认 10Hz
-  group_size = 8;   // 每组 8 个点
-  disA = 0.01;
-  disA = 0.1;  // 注意: 覆盖了上面的 disA, 实际值 0.1
-  p2l_ratio = 225;
-  limit_maxmid = 6.25;
-  limit_midmin = 6.25;
-  limit_maxmin = 3.24;
-  jump_up_limit = 170.0;  // 度 (后续转 cos)
-  jump_down_limit = 8.0;  // 度 (后续转 cos)
-  cos160 = 160.0;
-  edgea = 2;
-  edgeb = 0.1;
-  smallp_intersect = 172.5;
-  smallp_ratio = 1.2;
-  given_offset_time_ = false;
-
+Preprocess::Preprocess() {
   // 度 → cos 值转换
-  jump_up_limit = cos(jump_up_limit / 180 * M_PI);        // cos(170°)
-  jump_down_limit = cos(jump_down_limit / 180 * M_PI);    // cos(8°)
-  cos160 = cos(cos160 / 180 * M_PI);                      // cos(160°)
-  smallp_intersect = cos(smallp_intersect / 180 * M_PI);  // cos(172.5°)
+  jump_up_limit_ = cos(jump_up_limit_ / 180 * M_PI);        // cos(170°)
+  jump_down_limit_ = cos(jump_down_limit_ / 180 * M_PI);    // cos(8°)
+  cos160_ = cos(cos160_ / 180 * M_PI);                      // cos(160°)
+  smallp_intersect_ = cos(smallp_intersect_ / 180 * M_PI);  // cos(172.5°)
 }
 
 void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num) {
@@ -79,7 +59,7 @@ void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num) {
 void Preprocess::process(
     const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
     PointCloudXYZI::Ptr& pcl_out) {
-  avia_handler(msg);    // 调用 Livox 专用处理器
+  aviaHandler(msg);     // 调用 Livox 专用处理器
   *pcl_out = pl_surf_;  // 输出曲面点 (当前未提取角点)
 }
 
@@ -107,15 +87,15 @@ void Preprocess::process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
   // 根据雷达类型分发到对应的 handler
   switch (lidar_type_) {
     case OUST64:
-      oust64_handler(msg);
+      oust64Handler(msg);
       break;
 
     case VELO16:
-      velodyne_handler(msg);
+      velodyneHandler(msg);
       break;
 
-    case HESAIxt32:
-      hesai_handler(msg);
+    case HESA_IXT32:
+      hesaiHandler(msg);
       break;
 
     default:
@@ -129,7 +109,7 @@ void Preprocess::processCutFrameLivox(
     const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
     deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
     const int required_frame_num, int scan_count) {
-  int plsize = msg->point_num;
+  int plsize = (int)msg->point_num;
   pl_surf_.clear();
   pl_surf_.reserve(plsize);
   pl_full_.clear();
@@ -293,7 +273,7 @@ void Preprocess::processCutFramePCL2(
         pl_surf_.points.push_back(added_pt);
       }
     }
-  } else if (lidar_type_ == HESAIxt32) {
+  } else if (lidar_type_ == HESA_IXT32) {
     pcl::PointCloud<hesai_ros::Point> pl_orig;
     pcl::fromROSMsg(*msg, pl_orig);
     int plsize = pl_orig.points.size();
@@ -370,7 +350,7 @@ void Preprocess::processCutFramePCL2(
  * - 重复点剔除: 坐标与上一点完全相同则跳过 (Livox 非重复扫描可能有重复)
  * - 时间戳: offset_time (ns) → curvature (ms)
  */
-void Preprocess::avia_handler(
+void Preprocess::aviaHandler(
     const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg) {
   pl_surf_.clear();
   pl_corn_.clear();
@@ -431,7 +411,7 @@ void Preprocess::avia_handler(
  * 解析 Ouster 的 UInt32 纳秒时间戳，转换为毫秒存入 curvature。
  * 点过滤: 降采样 + 盲区/远距/NaN 过滤
  */
-void Preprocess::oust64_handler(
+void Preprocess::oust64Handler(
     const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   pl_surf_.clear();
   pl_corn_.clear();
@@ -480,7 +460,7 @@ void Preprocess::oust64_handler(
  *
  * omega_l = 旋转角速度 (度/ms) = 360° * SCAN_RATE / 1000 ≈ 3.61°/ms @ 10Hz
  */
-void Preprocess::velodyne_handler(
+void Preprocess::velodyneHandler(
     const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   pl_surf_.clear();
   pl_corn_.clear();
@@ -571,7 +551,7 @@ void Preprocess::velodyne_handler(
  * 区别: 禾赛 timestamp 字段为绝对时间 (秒)，需转换为相对偏移时间。
  * curvature = (timestamp - time_head) * time_unit_scale (ms)
  */
-void Preprocess::hesai_handler(
+void Preprocess::hesaiHandler(
     const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   pl_surf_.clear();
   pl_corn_.clear();
@@ -673,24 +653,24 @@ void Preprocess::hesai_handler(
  * 处理流程:
  * 1. 跳过盲区点
  * 2. plane_judge(): 遍历扫描线，将连续点分组判断是否为平面
- *    - 如果是平面 (plane_type=1): 端点标记 Poss_Plane, 内部点标记 Real_Plane
+ *    - 如果是平面 (plane_type=1): 端点标记 POSS_PLANE, 内部点标记 REAL_PLANE
  *    - 如果连续两个平面方向夹角 > 45°: 连接点标记为 Edge_Plane
  * 3. 跳变边缘检测 (edge_jump_judge):
  *    - Nr_180: 大角度跳变 (遮挡边界)
  *    - Nr_zero: 小角度跳变
- *    - 满足条件的跳变点标记 Edge_Jump
- * 4. 小平面精化: 角度连续 + 距离比小的短段标记为 Real_Plane
+ *    - 满足条件的跳变点标记 EDGE_JUMP
+ * 4. 小平面精化: 角度连续 + 距离比小的短段标记为 REAL_PLANE
  * 5. 降采样滤波: 平面点每隔 point_filter_num 取1点输出
  *
  * @param pl 输入点云 (按扫描线排列)
  * @param types 输入/输出特征类型数组
  */
-void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
-                              vector<orgtype>& types) {
-  int plsize = pl.size();
-  int plsize2;
+void Preprocess::giveFeature(pcl::PointCloud<PointType>& pl,
+                             vector<Orgtype>& types) {
+  size_t plsize = pl.size();
+  size_t plsize2 = 0;
   if (plsize == 0) {
-    printf("something wrong\n");
+    std::cout << "something wrong" << '\n';
     return;
   }
   uint head = 0;
@@ -700,28 +680,28 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
   }
 
   // Surf
-  plsize2 = (plsize > group_size) ? (plsize - group_size) : 0;
+  plsize2 = (plsize > group_size_) ? (plsize - group_size_) : 0;
 
   Eigen::Vector3d curr_direct(Eigen::Vector3d::Zero());
   Eigen::Vector3d last_direct(Eigen::Vector3d::Zero());
 
   uint i_nex = 0;
   int last_state = 0;
-  int plane_type;
+  int plane_type = 0;
 
   for (int i = head; i < plsize2; i++) {
     if (types[i].range < blind_) {
       continue;
     }
 
-    plane_type = plane_judge(pl, types, i, i_nex, curr_direct);
+    plane_type = planeJudge(pl, types, i, i_nex, curr_direct);
 
     if (plane_type == 1) {
       for (int j = i; j <= (int)i_nex; j++) {
         if (j != i && j != (int)i_nex) {
-          types[j].ftype = Real_Plane;
+          types[j].ftype = REAL_PLANE;
         } else {
-          types[j].ftype = Poss_Plane;
+          types[j].ftype = POSS_PLANE;
         }
       }
 
@@ -729,9 +709,9 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
       if (last_state == 1 && last_direct.norm() > 0.1) {
         double mod = last_direct.transpose() * curr_direct;
         if (mod > -0.707 && mod < 0.707) {
-          types[i].ftype = Edge_Plane;
+          types[i].ftype = EDGE_PLANE;
         } else {
-          types[i].ftype = Real_Plane;
+          types[i].ftype = REAL_PLANE;
         }
       }
 
@@ -748,7 +728,7 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
 
   plsize2 = plsize > 3 ? plsize - 3 : 0;
   for (uint i = head + 3; i < (uint)plsize2; i++) {
-    if (types[i].range < blind_ || types[i].ftype >= Real_Plane) {
+    if (types[i].range < blind_ || types[i].ftype >= REAL_PLANE) {
       continue;
     }
 
@@ -766,10 +746,10 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
       }
 
       if (types[i + m].range < blind_) {
-        if (types[i].range > inf_bound) {
-          types[i].edj[j] = Nr_inf;
+        if (types[i].range > inf_bound_) {
+          types[i].edj[j] = NR_INF;
         } else {
-          types[i].edj[j] = Nr_blind;
+          types[i].edj[j] = NR_BLIND;
         }
         continue;
       }
@@ -778,42 +758,42 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
       vecs[j] = vecs[j] - vec_a;
 
       types[i].angle[j] = vec_a.dot(vecs[j]) / vec_a.norm() / vecs[j].norm();
-      if (types[i].angle[j] < jump_up_limit) {
-        types[i].edj[j] = Nr_180;
-      } else if (types[i].angle[j] > jump_down_limit) {
-        types[i].edj[j] = Nr_zero;
+      if (types[i].angle[j] < jump_up_limit_) {
+        types[i].edj[j] = NR_180;
+      } else if (types[i].angle[j] > jump_down_limit_) {
+        types[i].edj[j] = NR_ZERO;
       }
     }
 
-    types[i].intersect = vecs[Prev].dot(vecs[Next]) / vecs[Prev].norm()
-                         / vecs[Next].norm();
-    if (types[i].edj[Prev] == Nr_nor && types[i].edj[Next] == Nr_zero
+    types[i].intersect = vecs[PREV].dot(vecs[NEXT]) / vecs[PREV].norm()
+                         / vecs[NEXT].norm();
+    if (types[i].edj[PREV] == NR_NOR && types[i].edj[NEXT] == NR_ZERO
         && types[i].dista > 0.0225 && types[i].dista > 4 * types[i - 1].dista) {
-      if (types[i].intersect > cos160) {
-        if (edge_jump_judge(pl, types, i, Prev)) {
-          types[i].ftype = Edge_Jump;
+      if (types[i].intersect > cos160_) {
+        if (edgeJumpJudge(pl, types, i, PREV)) {
+          types[i].ftype = EDGE_JUMP;
         }
       }
-    } else if (types[i].edj[Prev] == Nr_zero && types[i].edj[Next] == Nr_nor
+    } else if (types[i].edj[PREV] == NR_ZERO && types[i].edj[NEXT] == NR_NOR
                && types[i - 1].dista > 0.0225
                && types[i - 1].dista > 4 * types[i].dista) {
-      if (types[i].intersect > cos160) {
-        if (edge_jump_judge(pl, types, i, Next)) {
-          types[i].ftype = Edge_Jump;
+      if (types[i].intersect > cos160_) {
+        if (edgeJumpJudge(pl, types, i, NEXT)) {
+          types[i].ftype = EDGE_JUMP;
         }
       }
-    } else if (types[i].edj[Prev] == Nr_nor && types[i].edj[Next] == Nr_inf) {
-      if (edge_jump_judge(pl, types, i, Prev)) {
-        types[i].ftype = Edge_Jump;
+    } else if (types[i].edj[PREV] == NR_NOR && types[i].edj[NEXT] == NR_INF) {
+      if (edgeJumpJudge(pl, types, i, PREV)) {
+        types[i].ftype = EDGE_JUMP;
       }
-    } else if (types[i].edj[Prev] == Nr_inf && types[i].edj[Next] == Nr_nor) {
-      if (edge_jump_judge(pl, types, i, Next)) {
-        types[i].ftype = Edge_Jump;
+    } else if (types[i].edj[PREV] == NR_INF && types[i].edj[NEXT] == NR_NOR) {
+      if (edgeJumpJudge(pl, types, i, NEXT)) {
+        types[i].ftype = EDGE_JUMP;
       }
 
-    } else if (types[i].edj[Prev] > Nr_nor && types[i].edj[Next] > Nr_nor) {
-      if (types[i].ftype == Nor) {
-        types[i].ftype = Wire;
+    } else if (types[i].edj[PREV] > NR_NOR && types[i].edj[NEXT] > NR_NOR) {
+      if (types[i].ftype == NOR) {
+        types[i].ftype = WIRE;
       }
     }
   }
@@ -830,28 +810,28 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
       continue;
     }
 
-    if (types[i].ftype == Nor) {
+    if (types[i].ftype == NOR) {
       if (types[i - 1].dista > types[i].dista) {
         ratio = types[i - 1].dista / types[i].dista;
       } else {
         ratio = types[i].dista / types[i - 1].dista;
       }
 
-      if (types[i].intersect < smallp_intersect && ratio < smallp_ratio) {
-        if (types[i - 1].ftype == Nor) {
-          types[i - 1].ftype = Real_Plane;
+      if (types[i].intersect < smallp_intersect_ && ratio < smallp_ratio_) {
+        if (types[i - 1].ftype == NOR) {
+          types[i - 1].ftype = REAL_PLANE;
         }
-        if (types[i + 1].ftype == Nor) {
-          types[i + 1].ftype = Real_Plane;
+        if (types[i + 1].ftype == NOR) {
+          types[i + 1].ftype = REAL_PLANE;
         }
-        types[i].ftype = Real_Plane;
+        types[i].ftype = REAL_PLANE;
       }
     }
   }
 
   int last_surface = -1;
   for (uint j = head; j < (uint)plsize; j++) {
-    if (types[j].ftype == Poss_Plane || types[j].ftype == Real_Plane) {
+    if (types[j].ftype == POSS_PLANE || types[j].ftype == REAL_PLANE) {
       if (last_surface == -1) {
         last_surface = j;
       }
@@ -868,7 +848,7 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
         last_surface = -1;
       }
     } else {
-      if (types[j].ftype == Edge_Jump || types[j].ftype == Edge_Plane) {
+      if (types[j].ftype == EDGE_JUMP || types[j].ftype == EDGE_PLANE) {
         pl_corn_.push_back(pl[j]);
       }
       if (last_surface != -1) {
@@ -910,10 +890,10 @@ void Preprocess::give_feature(pcl::PointCloud<PointType>& pl,
  * @param[out] curr_direct 平面方向单位向量
  * @return 1=平面有效, 0=非平面, 2=遇到盲区中断
  */
-int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
-                            uint i_cur, uint& i_nex,
-                            Eigen::Vector3d& curr_direct) {
-  double group_dis = disA * types[i_cur].range + disB;  // 距离容限
+int Preprocess::planeJudge(const PointCloudXYZI& pl, vector<Orgtype>& types,
+                           uint i_cur, uint& i_nex,
+                           Eigen::Vector3d& curr_direct) {
+  double group_dis = dis_a_ * types[i_cur].range + dis_b_;  // 距离容限
   group_dis = group_dis * group_dis;
 
   double two_dis{};
@@ -921,7 +901,7 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
   disarr.reserve(20);
 
   // Step 1: 前向扩展，收集满足距离容限的连续点
-  for (i_nex = i_cur; i_nex < i_cur + group_size; i_nex++) {
+  for (i_nex = i_cur; i_nex < i_cur + group_size_; i_nex++) {
     if (types[i_nex].range < blind_) {
       curr_direct.setZero();
       return 2;  // 盲区中断
@@ -938,10 +918,10 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
       return 2;
     }
     // 当前点与起始点的欧氏距离平方
-    vx = pl[i_nex].x - pl[i_cur].x;
-    vy = pl[i_nex].y - pl[i_cur].y;
-    vz = pl[i_nex].z - pl[i_cur].z;
-    two_dis = vx * vx + vy * vy + vz * vz;
+    vx_ = pl[i_nex].x - pl[i_cur].x;
+    vy_ = pl[i_nex].y - pl[i_cur].y;
+    vz_ = pl[i_nex].z - pl[i_cur].z;
+    two_dis = vx_ * vx_ + vy_ * vy_ + vz_ * vz_;
     if (two_dis >= group_dis) {
       break;  // 超出距离容限，停止扩展
     }
@@ -960,9 +940,9 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
     v1[2] = pl[j].z - pl[i_cur].z;
 
     // v2 = v1 × v_direction (垂直于首末点连线方向的偏离)
-    v2[0] = v1[1] * vz - vy * v1[2];
-    v2[1] = v1[2] * vx - v1[0] * vz;
-    v2[2] = v1[0] * vy - vx * v1[1];
+    v2[0] = v1[1] * vz_ - vy_ * v1[2];
+    v2[1] = v1[2] * vx_ - v1[0] * vz_;
+    v2[2] = v1[0] * vy_ - vx_ * v1[1];
 
     double lw = v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2];
     if (lw > leng_wid) {
@@ -971,7 +951,7 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
   }
 
   // 距离平方 / 最大垂直偏离 > p2l_ratio → 非平面 (太弯曲)
-  if ((two_dis * two_dis / leng_wid) < p2l_ratio) {
+  if ((two_dis * two_dis / leng_wid) < p2l_ratio_) {
     curr_direct.setZero();
     return 0;
   }
@@ -999,21 +979,21 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
     double dismax_mid = disarr[0] / disarr[disarrsize / 2];
     double dismid_min = disarr[disarrsize / 2] / disarr[disarrsize - 2];
 
-    if (dismax_mid >= limit_maxmid || dismid_min >= limit_midmin) {
+    if (dismax_mid >= limit_maxmid_ || dismid_min >= limit_midmin_) {
       curr_direct.setZero();
       return 0;
     }
   } else {
     // 机械雷达: 检查 max/min 比值
     double dismax_min = disarr[0] / disarr[disarrsize - 2];
-    if (dismax_min >= limit_maxmin) {
+    if (dismax_min >= limit_maxmin_) {
       curr_direct.setZero();
       return 0;
     }
   }
 
   // 平面有效: 设置方向向量并归一化
-  curr_direct << vx, vy, vz;
+  curr_direct << vx_, vy_, vz_;
   curr_direct.normalize();
   return 1;
 }
@@ -1026,12 +1006,11 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types,
  * - 比较两个邻点的 dista (到前后点连线的距离)
  * - 如果大的 dista / 小的 dista < edgea 且差值 < edgeb → 真边缘
  *
- * @param nor_dir 判断方向: Prev (前向) 或 Next (后向)
+ * @param nor_dir 判断方向: PREV (前向) 或 NEXT (后向)
  * @return true=真边缘跳变, false=假跳变
  */
-bool Preprocess::edge_jump_judge(const PointCloudXYZI& pl,
-                                 vector<orgtype>& types, uint i,
-                                 Surround nor_dir) {
+bool Preprocess::edgeJumpJudge(const PointCloudXYZI& pl, vector<Orgtype>& types,
+                               uint i, Surround nor_dir) {
   if (nor_dir == 0) {
     if (types[i - 1].range < blind_ || types[i - 2].range < blind_) {
       return false;
@@ -1056,7 +1035,7 @@ bool Preprocess::edge_jump_judge(const PointCloudXYZI& pl,
   d2 = sqrt(d2);
 
   // 距离比检验 + 绝对差检验
-  if (d1 > edgea * d2 || (d1 - d2) > edgeb) {
+  if (d1 > edgea_ * d2 || (d1 - d2) > edgeb_) {
     return false;  // 不满足边缘判据
   }
 

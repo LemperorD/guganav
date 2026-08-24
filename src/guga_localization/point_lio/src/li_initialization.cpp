@@ -73,7 +73,7 @@ void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   }
   last_timestamp_lidar = timestamp;
 
-  if ((lidar_type == VELO16 || lidar_type == OUST64 || lidar_type == HESAIxt32)
+  if ((lidar_type == VELO16 || lidar_type == OUST64 || lidar_type == HESA_IXT32)
       && cut_frame_init) {
     std::deque<PointCloudXYZI::Ptr> frames;
     std::deque<double> timestamps;
