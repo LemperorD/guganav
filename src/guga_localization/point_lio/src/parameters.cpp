@@ -45,7 +45,6 @@ bool use_imu_as_input = false;    ///< 默认: IMU-as-output (30维)
 bool space_down_sample = true;    ///< 默认: 再次空间降采样
 bool publish_odometry_without_downsample = false;  ///< 默认: 逐帧发布里程计
 bool imu_enabled = true;                           ///< 默认启用 IMU
-double G_m_s2 = 9.81;                              ///< 重力加速度模长
 
 // ==================== 地图初始化 ====================
 int init_map_size = 10;  ///< 初始地图最少点数

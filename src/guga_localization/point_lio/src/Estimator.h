@@ -90,7 +90,6 @@ extern V3D Lidar_T_wrt_IMU;
 extern M3D Lidar_R_wrt_IMU;
 
 /** @brief 当地重力加速度大小 (m/s²) */
-extern double G_m_s2;
 
 /** @brief IMU 输入数据 (加速度+角速度) */
 extern input_ikfom input_in;

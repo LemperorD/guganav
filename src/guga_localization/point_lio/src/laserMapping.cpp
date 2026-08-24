@@ -202,6 +202,7 @@ void LaserMappingNode::initialize() {
   lidar_params.preprocess.det_range = mapping_params_.det_range;
   lidar_params.imu_enabled = imu_enabled;
   lidar_params.con_frame = con_frame;
+  lidar_params.con_frame_num = con_frame_num;
   lidar_params.cut_frame_init = cut_frame_init;
   lidar_params.cut_frame_num = cut_frame_num;
   lidar_params.lidar_time_interval = lidar_time_inte;

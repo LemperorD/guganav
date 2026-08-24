@@ -35,12 +35,14 @@ public:
     PreprocessParams preprocess;
     bool imu_enabled{true};
     bool con_frame{false};
+    int con_frame_num{1};
     bool cut_frame_init{false};
     int cut_frame_num{1};
     double lidar_time_interval{0.1};
   };
 
   void configure(const Params& params);
+  [[nodiscard]] int mergeFrameCount() const { return params_.con_frame_num; }
 
   void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
   void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);

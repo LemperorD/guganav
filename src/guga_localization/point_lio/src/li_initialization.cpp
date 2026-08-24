@@ -44,7 +44,7 @@ namespace {
     if (lidar.frame_ct == 0) {
       lidar.time_con = timestamp;
     }
-    if (lidar.frame_ct < 10) {
+    if (lidar.frame_ct < lidar.mergeFrameCount()) {
       for (auto point : points->points) {
         point.curvature += (timestamp - lidar.time_con) * 1000.0;
         lidar.ptr_con->push_back(point);
@@ -64,6 +64,7 @@ namespace {
 
 void Lidar::configure(const Params& params) {
   params_ = params;
+  params_.con_frame_num = std::max(1, params_.con_frame_num);
   preprocess_.configure(params_.preprocess);
 }
 
