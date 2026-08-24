@@ -110,7 +110,7 @@ int LaserMappingNode::run() {
     rate_.sleep();
   }
 
-  if (!state_.pcl_wait_save->empty() && pcd_save_en) {
+  if (!state_.pcl_wait_save->empty() && publish_params_.pcd_save_enabled) {
     savePcd();
   }
 
@@ -165,6 +165,14 @@ void LaserMappingNode::initialize() {
   estimator_params_.b_acc_cov = b_acc_cov;
   estimator_params_.imu_meas_acc_cov = imu_meas_acc_cov;
   estimator_params_.imu_meas_omg_cov = imu_meas_omg_cov;
+
+  publish_params_.path_enabled = path_en;
+  publish_params_.scan_enabled = scan_pub_en;
+  publish_params_.scan_body_enabled = scan_body_pub_en;
+  publish_params_.tf_enabled = tf_send_en;
+  publish_params_.runtime_log_enabled = runtime_pos_log;
+  publish_params_.pcd_save_enabled = pcd_save_en;
+  publish_params_.pcd_save_interval = pcd_save_interval;
 
   Lidar::Params lidar_params;
   lidar_params.preprocess.lidar_type = lidar_type;
@@ -453,7 +461,7 @@ void LaserMappingNode::publishInitMap() {
 }
 
 void LaserMappingNode::publishFrameWorld() {
-  if (scan_pub_en) {
+  if (publish_params_.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
     pcl::toROSMsg(*feats_down_world, laser_cloud_msg);
 
@@ -464,13 +472,14 @@ void LaserMappingNode::publishFrameWorld() {
     //--------------------------save map-----------------------------------
     // 1. make sure you have enough memories
     // 2. noted that pcd save will influence the real-time performances
-    if (pcd_save_en) {
+    if (publish_params_.pcd_save_enabled) {
       *state_.pcl_wait_save += *feats_down_world;
 
       static int scan_wait_num = 0;
       scan_wait_num++;
-      if (!state_.pcl_wait_save->empty() && pcd_save_interval > 0
-          && scan_wait_num >= pcd_save_interval) {
+      if (!state_.pcl_wait_save->empty()
+          && publish_params_.pcd_save_interval > 0
+          && scan_wait_num >= publish_params_.pcd_save_interval) {
         pcd_index++;
         string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_")
                               + to_string(pcd_index) + string(".pcd"));
@@ -544,7 +553,7 @@ void LaserMappingNode::publishOdometry() {
 
   pub_odom_aft_mapped_->publish(state_.odom_aft_mapped);
 
-  if (tf_send_en) {
+  if (publish_params_.tf_enabled) {
     geometry_msgs::msg::TransformStamped transform;
     transform.header.frame_id = "camera_init";
     transform.child_frame_id = "aft_mapped";
@@ -649,17 +658,17 @@ void LaserMappingNode::preparePointMeasurements() {
 /** @brief 帧尾: 计时收尾 + 发布输出 + 运行时位姿/耗时日志 */
 void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
   double t3 = omp_get_wtime();
-  if (path_en) {
+  if (publish_params_.path_enabled) {
     publishPath();
   }
-  if (scan_pub_en || pcd_save_en) {
+  if (publish_params_.scan_enabled || publish_params_.pcd_save_enabled) {
     publishFrameWorld();
   }
-  if (scan_pub_en && scan_body_pub_en) {
+  if (publish_params_.scan_enabled && publish_params_.scan_body_enabled) {
     publishFrameBody();
   }
 
-  if (runtime_pos_log) {
+  if (publish_params_.runtime_log_enabled) {
     state_.frame_num++;
     state_.aver_time_consu = (state_.aver_time_consu * (state_.frame_num - 1)
                               / state_.frame_num)
@@ -947,7 +956,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
     if (mapping_params_.publish_odometry_without_downsample) {
       publishOdometry();
-      if (runtime_pos_log) {
+      if (publish_params_.runtime_log_enabled) {
         state_.euler_cur = SO3ToEuler(kf.x_.rot);
         if constexpr (ImuAsInput) {
           fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time

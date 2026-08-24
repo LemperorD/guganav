@@ -85,6 +85,16 @@ struct EstimatorParams {
   double imu_meas_omg_cov{0.1};
 };
 
+struct PublishParams {
+  bool path_enabled{true};
+  bool scan_enabled{true};
+  bool scan_body_enabled{true};
+  bool tf_enabled{true};
+  bool runtime_log_enabled{false};
+  bool pcd_save_enabled{false};
+  int pcd_save_interval{-1};
+};
+
 // ==================== 帧控制标志 ====================
 extern bool is_first_frame;      ///< 首帧标志
 extern double lidar_end_time;    ///< 当前帧结束时间戳 (秒)

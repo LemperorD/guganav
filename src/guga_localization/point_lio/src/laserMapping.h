@@ -69,6 +69,7 @@ private:
   Lidar lidar_;
   MappingParams mapping_params_;
   EstimatorParams estimator_params_;
+  PublishParams publish_params_;
   rclcpp::executors::MultiThreadedExecutor
       executor_;         ///< 执行器 (主循环 spin_some)
   MainLoopState state_;  ///< 主循环状态
@@ -106,9 +107,9 @@ private:
   /** @brief 将完整的 LIO 状态转储到日志文件 (输出到 state_.fp) */
   void dumpLioStatetoLog();
 
-  static void pointBodyLidarToIMU(PointType const* pi, PointType* po);
+  void pointBodyLidarToIMU(PointType const* pi, PointType* po);
 
-  static void mapIncremental();
+  void mapIncremental();
 
   void publishInitMap();
 
@@ -133,7 +134,7 @@ private:
    */
   bool initMapState();
 
-  static void preparePointMeasurements();
+  void preparePointMeasurements();
 
   /** @brief 帧尾: 计时收尾 + 发布输出 + 运行时位姿/耗时日志 */
   void publishAndLogFrame(double t0, double t1, double t2);
