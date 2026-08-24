@@ -45,8 +45,7 @@ set -e
 if [[ -z "$CONTROLLER_TYPE" ]]; then
   echo "⚠️ 未获取到 FollowPath.controller 参数，可能节点未启动或参数未声明"
   CONTROLLER_TYPE="unknown"
-fi
-if [[ "$CONTROLLER_TYPE" = *"mppi"* ]]; then
+elif [[ "$CONTROLLER_TYPE" = *"mppi"* ]]; then
   	echo "控制器类型:MPPI"
   	CONTROLLER_TYPE='mppi'
 elif [[ "$CONTROLLER_TYPE" = *"mpc"* ]]; then
