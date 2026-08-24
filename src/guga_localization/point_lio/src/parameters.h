@@ -132,30 +132,6 @@ struct PointLioParams {
   LaserMappingParams laser_mapping;
 };
 
-// ==================== 帧控制标志 ====================
-extern bool is_first_frame;      ///< 首帧标志
-extern double lidar_end_time;    ///< 当前帧结束时间戳 (秒)
-extern double first_lidar_time;  ///< 首帧激光雷达时间戳
-extern int pcd_index;            ///< PCD 文件保存序号
-
-// ==================== EKF 状态 ====================
-extern state_input state_in;    ///< IMU-as-input 模式的状态
-extern state_output state_out;  ///< IMU-as-output 模式的状态
-extern double first_imu_time;      ///< 首帧 IMU 时间戳
-
-// ==================== EKF 时间戳管理 ====================
-extern double time_update_last;         ///< 上次协方差更新时间戳
-extern double time_current;             ///< 当前处理时间戳
-extern double time_predict_last_const;  ///< 上次状态预测时间戳
-extern double t_last;                   ///< input 模式的上一时间戳
-
-// ==================== 数据同步 ====================
-extern MeasureGroup Measures;  ///< 当前处理的雷达+IMU 数据组合
-
-// ==================== 调试日志 ====================
-extern ofstream fout_out;      ///< 位姿输出文件流
-extern ofstream fout_imu_pbp;  ///< IMU 逐点输出文件流
-
 // ==================== 函数声明 ====================
 
 /**
@@ -166,11 +142,7 @@ extern ofstream fout_imu_pbp;  ///< IMU 逐点输出文件流
  *
  * @param n ROS2 节点共享指针
  */
-void readParameters(std::shared_ptr<rclcpp::Node>& n,
-                    PointLioParams& params);
-
-/** @brief 打开调试日志文件 */
-void open_file();
+void readParameters(std::shared_ptr<rclcpp::Node>& n, PointLioParams& params);
 
 /**
  * @brief SO(3) → ZYX 欧拉角

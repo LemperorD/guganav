@@ -72,6 +72,17 @@ private:
   PublishParams publish_params_;
   SensorParams sensor_params_;
   LaserMappingParams laser_mapping_params_;
+  bool is_first_frame_{true};
+  double lidar_end_time_{0.0};
+  double first_lidar_time_{0.0};
+  int pcd_index_{0};
+  double time_update_last_{0.0};
+  double time_current_{0.0};
+  double time_predict_last_const_{0.0};
+  double t_last_{0.0};
+  MeasureGroup measures_;
+  std::ofstream fout_out_;
+  std::ofstream fout_imu_pbp_;
   rclcpp::executors::MultiThreadedExecutor
       executor_;         ///< 执行器 (主循环 spin_some)
   MainLoopState state_;  ///< 主循环状态

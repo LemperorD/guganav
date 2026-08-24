@@ -20,8 +20,8 @@ namespace {
         [](const auto& lhs, const auto& rhs) {
           return lhs.curvature < rhs.curvature;
         });
-    lidar_end_time = meas.lidar_beg_time + max_point->curvature / 1000.0;
-    meas.lidar_last_time = lidar_end_time;
+    meas.lidar_last_time =
+        meas.lidar_beg_time + max_point->curvature / 1000.0;
   }
 
   void pop_lidar_frame(Lidar& lidar) {
@@ -162,9 +162,9 @@ bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
     lidar_pushed = true;
   }
 
-  const double required_end = lose_lid
-                                  ? meas.lidar_beg_time + params_.lidar_time_interval
-                                       : lidar_end_time;
+  const double required_end =
+      lose_lid ? meas.lidar_beg_time + params_.lidar_time_interval
+               : meas.lidar_last_time;
   if (imu.lastTimestamp() < required_end) {
     return false;
   }

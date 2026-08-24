@@ -15,28 +15,6 @@
 #include "parameters.h"
 #include <memory>
 
-// ==================== 帧控制标志 ====================
-bool is_first_frame = true;     ///< 首帧标志 (用于跳过第一帧的预测)
-double lidar_end_time = 0.0;    ///< 当前帧最晚点时间戳
-double first_lidar_time = 0.0;  ///< 第一帧雷达时间 (用于相对计时)
-int pcd_index = 0;              ///< PCD 保存序号
-
-// ==================== EKF 状态 ====================
-state_input state_in;    ///< IMU-as-input 模式状态
-state_output state_out;  ///< IMU-as-output 模式状态
-
-// ==================== 时间戳管理 ====================
-double time_update_last = 0.0;         ///< 上帧协方差更新时间
-double time_current = 0.0;             ///< 当前处理时间
-double time_predict_last_const = 0.0;  ///< 上帧状态预测时间
-double t_last = 0.0;                   ///< input 模式的上帧时间
-// ==================== 数据同步 ====================
-MeasureGroup Measures;  ///< 当前处理的测量组
-
-// ==================== 调试日志 ====================
-ofstream fout_out;      ///< 位姿输出文件
-ofstream fout_imu_pbp;  ///< IMU 逐点输出文件
-
 void readParameters(std::shared_ptr<rclcpp::Node>& nh,
                     PointLioParams& params) {
   try {
@@ -245,16 +223,6 @@ Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3& rot) {
   }
   Eigen::Matrix<double, 3, 1> ang(x, y, z);
   return ang;
-}
-
-/** @brief 打开调试日志文件 (位姿和 IMU) */
-void open_file() {
-  fout_out.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
-  fout_imu_pbp.open(DEBUG_FILE_DIR("imu_pbp.txt"), ios::out);
-  if (fout_out && fout_imu_pbp)
-    std::cout << "~~~~" << ROOT_DIR << " file opened" << '\n';
-  else
-    std::cout << "~~~~" << ROOT_DIR << " doesn't exist" << '\n';
 }
 
 /**

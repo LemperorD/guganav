@@ -55,10 +55,11 @@ int LaserMappingNode::run() {
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
 
-    if (!lidar_.syncPackages(imu_, Measures)) {
+    if (!lidar_.syncPackages(imu_, measures_)) {
       rate_.sleep();
       continue;
     }
+    lidar_end_time_ = measures_.lidar_last_time;
 
     if (state_.flg_reset) {  // 需要reset
       resetSystem();
@@ -81,9 +82,9 @@ int LaserMappingNode::run() {
     // 亦作量测)。 LiDAR/IMU 分支在 processFramePoints 内部 ([Workflow 2] /
     // [Workflow 12])。
     if (mapping_params_.use_imu_as_input) {
-      processFramePoints<true>(kf_input, t_last, state_.q_input);
+      processFramePoints<true>(kf_input, t_last_, state_.q_input);
     } else {
-      processFramePoints<false>(kf_output, time_predict_last_const,
+      processFramePoints<false>(kf_output, time_predict_last_const_,
                                 state_.q_output);
     }
 
@@ -114,8 +115,8 @@ int LaserMappingNode::run() {
     savePcd();
   }
 
-  fout_out.close();
-  fout_imu_pbp.close();
+  fout_out_.close();
+  fout_imu_pbp_.close();
 
   return 0;
 }
@@ -173,7 +174,7 @@ void LaserMappingNode::initialize() {
       static_cast<float>(mapping_params_.filter_size_map),
       static_cast<float>(mapping_params_.filter_size_map));
 
-  state_.path.header.stamp = get_ros_time(lidar_end_time);
+  state_.path.header.stamp = get_ros_time(lidar_end_time_);
   state_.path.header.frame_id = "camera_init";
 
   Lidar_T_wrt_IMU = to_vec3d(sensor_params_.extrinsic_t);
@@ -218,7 +219,13 @@ void LaserMappingNode::initialize() {
     RCLCPP_WARN(rclcpp::get_logger("laserMapping"), "无法打开 pos_log 文件: %s",
                 state_.pos_log_dir.c_str());
   }
-  open_file();
+  fout_out_.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
+  fout_imu_pbp_.open(DEBUG_FILE_DIR("imu_pbp.txt"), ios::out);
+  if (fout_out_ && fout_imu_pbp_) {
+    std::cout << "~~~~" << ROOT_DIR << " file opened" << '\n';
+  } else {
+    std::cout << "~~~~" << ROOT_DIR << " doesn't exist" << '\n';
+  }
 
   if (laser_mapping_params_.lidar_type == AVIA) {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
@@ -266,7 +273,7 @@ bool LaserMappingNode::prepareFrame() {
 
   // IMU 预处理: 在线初始化 / 重力对齐 / 点云拷贝 (去畸变预留;
   // 饱和检查不在本函数, 见 [Workflow 13] IMU 量测更新处)。
-  imu_.process(Measures, state_.feats_undistort);
+  imu_.process(measures_, state_.feats_undistort);
 
   // ---- 降采样 + 按时间戳排序 + 分组 ----
   if (mapping_params_.space_down_sample) {
@@ -275,7 +282,7 @@ bool LaserMappingNode::prepareFrame() {
     sort(feats_down_body->points.begin(), feats_down_body->points.end(),
          time_list);
   } else {
-    feats_down_body = Measures.lidar;
+    feats_down_body = measures_.lidar;
     sort(feats_down_body->points.begin(), feats_down_body->points.end(),
          time_list);
   }
@@ -328,7 +335,7 @@ void LaserMappingNode::dumpLioStatetoLog() {
   }
 
   state_.fp << std::fixed << std::setprecision(6);
-  state_.fp << Measures.lidar_beg_time - first_lidar_time << ' ';
+  state_.fp << measures_.lidar_beg_time - first_lidar_time_ << ' ';
   state_.fp << rot_ang(0) << ' ' << rot_ang(1) << ' ' << rot_ang(2)
             << ' ';  // Angle
   if (mapping_params_.use_imu_as_input) {
@@ -424,7 +431,7 @@ void LaserMappingNode::publishInitMap() {
 
   pcl::toROSMsg(*state_.init_feats_world, laser_cloudmsg);
 
-  laser_cloudmsg.header.stamp = get_ros_time(lidar_end_time);
+  laser_cloudmsg.header.stamp = get_ros_time(lidar_end_time_);
   laser_cloudmsg.header.frame_id = "camera_init";
   pub_laser_cloud_map_->publish(laser_cloudmsg);
 }
@@ -434,7 +441,7 @@ void LaserMappingNode::publishFrameWorld() {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
     pcl::toROSMsg(*feats_down_world, laser_cloud_msg);
 
-    laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time);
+    laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time_);
     laser_cloud_msg.header.frame_id = "camera_init";
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
 
@@ -449,9 +456,9 @@ void LaserMappingNode::publishFrameWorld() {
       if (!state_.pcl_wait_save->empty()
           && publish_params_.pcd_save_interval > 0
           && scan_wait_num >= publish_params_.pcd_save_interval) {
-        pcd_index++;
+        pcd_index_++;
         string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_")
-                              + to_string(pcd_index) + string(".pcd"));
+                              + to_string(pcd_index_) + string(".pcd"));
         pcl::PCDWriter pcd_writer;
         std::cout << "current scan saved to /PCD/" << all_points_dir << '\n';
         pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
@@ -473,7 +480,7 @@ void LaserMappingNode::publishFrameBody() {
 
   sensor_msgs::msg::PointCloud2 laser_cloud_msg;
   pcl::toROSMsg(*lasercloud_imu_body, laser_cloud_msg);
-  laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time);
+  laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time_);
   laser_cloud_msg.header.frame_id = "body";
   pub_laser_cloud_full_res_body_->publish(laser_cloud_msg);
 }
@@ -515,9 +522,9 @@ void LaserMappingNode::publishOdometry() {
   state_.odom_aft_mapped.header.frame_id = "camera_init";
   state_.odom_aft_mapped.child_frame_id = "body";
   if (mapping_params_.publish_odometry_without_downsample) {
-    state_.odom_aft_mapped.header.stamp = get_ros_time(time_current);
+    state_.odom_aft_mapped.header.stamp = get_ros_time(time_current_);
   } else {
-    state_.odom_aft_mapped.header.stamp = get_ros_time(lidar_end_time);
+    state_.odom_aft_mapped.header.stamp = get_ros_time(lidar_end_time_);
   }
   setPosestamp(state_.odom_aft_mapped.pose.pose);
 
@@ -549,7 +556,7 @@ void LaserMappingNode::publishOdometry() {
 void LaserMappingNode::publishPath() {
   setPosestamp(state_.msg_body_pose.pose);
   // state_.msg_body_pose.header.stamp = ros::Time::now();
-  state_.msg_body_pose.header.stamp = get_ros_time(lidar_end_time);
+  state_.msg_body_pose.header.stamp = get_ros_time(lidar_end_time_);
   state_.msg_body_pose.header.frame_id = "camera_init";
   state_.path.poses.emplace_back(state_.msg_body_pose);
   pub_path_->publish(state_.path);
@@ -563,14 +570,12 @@ void LaserMappingNode::resetSystem() {
   lidar_.reset();
   state_.feats_undistort = std::make_shared<PointCloudXYZI>();
   if (mapping_params_.use_imu_as_input) {
-    state_in = state_input();
     kf_input.change_P(state_.p_init);
   } else {
-    state_out = state_output();
     kf_output.change_P(state_.p_init_output);
   }
   state_.flg_first_scan = true;
-  is_first_frame = true;
+  is_first_frame_ = true;
   state_.flg_reset = false;
   state_.init_map = false;
   ivox_ = std::make_shared<IVoxType>(mapping_params_.ivox_options);
@@ -652,7 +657,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
     state_.aver_time_propag = (state_.aver_time_propag * (state_.frame_num - 1)
                                / state_.frame_num)
                               + (state_.propag_time / state_.frame_num);
-    lidar_.T1[state_.time_log_counter] = Measures.lidar_beg_time;
+    lidar_.T1[state_.time_log_counter] = measures_.lidar_beg_time;
     lidar_.s_plot[state_.time_log_counter] = t3 - t0;
     lidar_.s_plot2[state_.time_log_counter] =
         (double)state_.feats_undistort->points.size();
@@ -670,7 +675,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
     if (!mapping_params_.publish_odometry_without_downsample) {
       if (!mapping_params_.use_imu_as_input) {
         state_.euler_cur = SO3ToEuler(kf_output.x_.rot);
-        fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+        fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
                  << " " << state_.euler_cur.transpose() << " "
                  << kf_output.x_.pos.transpose() << " "
                  << kf_output.x_.vel.transpose() << " "
@@ -682,7 +687,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
                  << state_.feats_undistort->points.size() << '\n';
       } else {
         state_.euler_cur = SO3ToEuler(kf_input.x_.rot);
-        fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+        fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
                  << " " << state_.euler_cur.transpose() << " "
                  << kf_input.x_.pos.transpose() << " "
                  << kf_input.x_.vel.transpose() << " "
@@ -700,7 +705,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
  * @tparam ImuAsInput true = kf_input (24维, IMU-as-input) / false =
  * kf_output (30维)
  * @param kf        对应滤波器 (kf_input / kf_output)
- * @param last_time 传播时间基准 (t_last / time_predict_last_const)
+ * @param last_time 传播时间基准 (t_last_ / time_predict_last_const_)
  * @param q         过程噪声 (state_.q_input / state_.q_output)
  */
 template <bool ImuAsInput, typename KF>
@@ -713,13 +718,13 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     if (!imu_.empty()) {
       imu_.advanceCursor();
 
-      while (get_time_sec(imu_next.header.stamp) > time_current
+      while (get_time_sec(imu_next.header.stamp) > time_current_
              && (get_time_sec(imu_next.header.stamp)
-                 < Measures.lidar_beg_time
+                 < measures_.lidar_beg_time
                        + laser_mapping_params_.lidar_time_interval)) {
-        if (is_first_frame) {
+        if (is_first_frame_) {
           while (get_time_sec(imu_next.header.stamp)
-                 < Measures.lidar_beg_time
+                 < measures_.lidar_beg_time
                        + laser_mapping_params_.lidar_time_interval) {
             imu_.popAndAdvance();
             if (imu_.empty()) {
@@ -734,18 +739,18 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             angvel_avr = measurement.angular_velocity;
             acc_avr = measurement.linear_acceleration;
           }
-          last_time = time_current;
-          time_update_last = time_current;
-          is_first_frame = false;
+          last_time = time_current_;
+          time_update_last_ = time_current_;
+          is_first_frame_ = false;
           break;
         }
-        time_current = get_time_sec(imu_next.header.stamp);
+        time_current_ = get_time_sec(imu_next.header.stamp);
 
         if constexpr (ImuAsInput) {
           // 原 B2: 仅推进 IMU 指针/填充输入 (无传播)
-          double dt_cov = time_current - time_update_last;
+          double dt_cov = time_current_ - time_update_last_;
           if (dt_cov > 0.0) {
-            time_update_last = get_time_sec(imu_next.header.stamp);
+            time_update_last_ = get_time_sec(imu_next.header.stamp);
           }
           last_time = get_time_sec(imu_next.header.stamp);
           input_in = imu_.nextInput(
@@ -753,16 +758,16 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         } else {
           // [Workflow 1] 状态传播 (9)(10): 以下 kf.predict
           // 分别完成协方差传播与状态预测。 原 A2: 传播 + IMU 更新
-          double dt = time_current - last_time;
+          double dt = time_current_ - last_time;
           {
-            double dt_cov = time_current - time_update_last;
+            double dt_cov = time_current_ - time_update_last_;
             if (dt_cov > 0.0) {
               kf.predict(dt_cov, q, input_in, false, true);
-              time_update_last = time_current;
+              time_update_last_ = time_current_;
             }
             kf.predict(dt, q, input_in, true, false);
           }
-          last_time = time_current;
+          last_time = time_current_;
           const auto measurement = imu_.nextMeasurement();
           angvel_avr = measurement.angular_velocity;
           acc_avr = measurement.linear_acceleration;
@@ -786,15 +791,15 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
   // [Workflow 2] LiDAR 点输入分支: 逐时间组处理 (传播 → 平面更新 →
   // 世界变换)。
-  double pcl_beg_time = Measures.lidar_beg_time;
+  double pcl_beg_time = measures_.lidar_beg_time;
   idx = -1;
   for (k = 0; k < (int)time_seq.size(); k++) {
     PointType& point_body = feats_down_body->points[idx + time_seq[k]];
-    time_current = (point_body.curvature / 1000.0)  // NOLINT
+    time_current_ = (point_body.curvature / 1000.0)  // NOLINT
                    + pcl_beg_time;
-    if (is_first_frame) {
+    if (is_first_frame_) {
       if constexpr (ImuAsInput) {
-        while (time_current > get_time_sec(imu_next.header.stamp)) {
+        while (time_current_ > get_time_sec(imu_next.header.stamp)) {
           imu_.popAndAdvance();
           if (imu_.empty()) {
             break;
@@ -804,7 +809,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
       } else {
         if (laser_mapping_params_.imu_enabled) {
-          while (time_current > get_time_sec(imu_next.header.stamp)) {
+          while (time_current_ > get_time_sec(imu_next.header.stamp)) {
             imu_.popAndAdvance();
             if (imu_.empty()) {
               break;
@@ -815,23 +820,23 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           acc_avr = measurement.linear_acceleration;
         }
       }
-      is_first_frame = false;
-      last_time = time_current;
-      time_update_last = time_current;
+      is_first_frame_ = false;
+      last_time = time_current_;
+      time_update_last_ = time_current_;
     }
 
     // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
     if constexpr (ImuAsInput) {
-      while (time_current > get_time_sec(imu_next.header.stamp)) {
+      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
         imu_.popBuffer();
         input_in = imu_.lastInput(
             estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
         double dt = get_time_sec(imu_last.header.stamp) - last_time;
-        double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last;
+        double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
 
         if (dt_cov > 0.0) {
           kf.predict(dt_cov, q, input_in, false, true);
-          time_update_last = get_time_sec(imu_last.header.stamp);
+          time_update_last_ = get_time_sec(imu_last.header.stamp);
         }
 
         kf.predict(dt, q, input_in, true, false);
@@ -857,7 +862,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             break;
           }
         }
-        bool imu_comes = time_current > get_time_sec(imu_next.header.stamp);
+        bool imu_comes = time_current_ > get_time_sec(imu_next.header.stamp);
         while (imu_comes) {
           const auto measurement = imu_.nextMeasurement();
           angvel_avr = measurement.angular_velocity;
@@ -869,10 +874,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
           {
             double dt_cov = get_time_sec(imu_next.header.stamp)
-                            - time_update_last;
+                            - time_update_last_;
 
             if (dt_cov > 0.0) {
-              time_update_last = get_time_sec(imu_next.header.stamp);
+              time_update_last_ = get_time_sec(imu_next.header.stamp);
               double propag_imu_start = omp_get_wtime();
 
               kf.predict(dt_cov, q, input_in, false, true);
@@ -891,7 +896,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           if (imu_.empty()) {
             break;
           }
-          imu_comes = time_current > get_time_sec(imu_next.header.stamp);
+          imu_comes = time_current_ > get_time_sec(imu_next.header.stamp);
         }
       }
     }
@@ -899,18 +904,18 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       break;
     }
 
-    double dt = time_current - last_time;
+    double dt = time_current_ - last_time;
     double propag_state_start = omp_get_wtime();
     if (!mapping_params_.propagate_at_imu_frequency) {
-      double dt_cov = time_current - time_update_last;
+      double dt_cov = time_current_ - time_update_last_;
       if (dt_cov > 0.0) {
         kf.predict(dt_cov, q, input_in, false, true);
-        time_update_last = time_current;
+        time_update_last_ = time_current_;
       }
     }
     kf.predict(dt, q, input_in, true, false);
     state_.propag_time += omp_get_wtime() - propag_state_start;
-    last_time = time_current;
+    last_time = time_current_;
     double t_update_start = omp_get_wtime();
 
     if (feats_down_size < 1) {
@@ -935,14 +940,14 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       if (publish_params_.runtime_log_enabled) {
         state_.euler_cur = SO3ToEuler(kf.x_.rot);
         if constexpr (ImuAsInput) {
-          fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+          fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
                    << " " << state_.euler_cur.transpose() << " "
                    << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
                    << " " << kf.x_.bg.transpose() << " " << kf.x_.ba.transpose()
                    << " " << kf.x_.gravity.transpose() << " "
                    << state_.feats_undistort->points.size() << '\n';
         } else {
-          fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time
+          fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
                    << " " << state_.euler_cur.transpose() << " "
                    << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
                    << " " << kf.x_.omg.transpose() << " "
@@ -969,16 +974,16 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
 void LaserMappingNode::initScan() {
   const auto& imu_next = imu_.next();
-  first_lidar_time = Measures.lidar_beg_time;
+  first_lidar_time_ = measures_.lidar_beg_time;
   state_.flg_first_scan = false;
   std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
             << '\n';
-  time_current = 0.0;
+  time_current_ = 0.0;
 
   if (laser_mapping_params_.imu_enabled) {
     kf_input.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
     kf_output.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
-    imu_.discardBefore(Measures.lidar_beg_time);
+    imu_.discardBefore(measures_.lidar_beg_time);
   } else {
     kf_input.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
     kf_output.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
