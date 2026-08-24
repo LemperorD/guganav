@@ -120,9 +120,9 @@ private:
   /** @brief 将完整的 LIO 状态转储到日志文件 (输出到 state_.fp) */
   void dumpLioStatetoLog();
 
-  void pointBodyLidarToIMU(PointType const* pi, PointType* po);
+  void pointBodyLidarToIMU(PointType const* pi, PointType* po) const;
 
-  void mapIncremental();
+  void mapIncremental() const;
 
   void publishInitMap();
 
@@ -147,7 +147,7 @@ private:
    */
   bool initMapState();
 
-  void preparePointMeasurements();
+  void preparePointMeasurements() const;
 
   /** @brief 帧尾: 计时收尾 + 发布输出 + 运行时位姿/耗时日志 */
   void publishAndLogFrame(double t0, double t1, double t2);

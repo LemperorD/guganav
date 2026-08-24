@@ -194,9 +194,8 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh,
 
   if (params.laser_mapping.gravity.size() >= 3) {
     const auto& gravity = params.laser_mapping.gravity;
-    params.estimator.gravity_magnitude = std::sqrt(
-        gravity[0] * gravity[0] + gravity[1] * gravity[1]
-        + gravity[2] * gravity[2]);
+    params.estimator.gravity_magnitude =
+        std::hypot(gravity[0], gravity[1], gravity[2]);
   }
 }
 
