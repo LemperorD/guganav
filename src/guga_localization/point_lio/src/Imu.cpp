@@ -1,10 +1,11 @@
 #include "Imu.h"
 
-void Imu::configure(int lidar_type, bool enabled,
-                    const std::vector<double>& gravity) {
-  processor_->lidar_type = lidar_type;
-  processor_->imu_en = enabled;
-  processor_->gravity_ = to_vec3d(gravity);
+void Imu::configure(const Params& params) {
+  processor_->lidar_type = params.lidar_type;
+  processor_->imu_en = params.enabled;
+  processor_->gravity_ = to_vec3d(params.gravity);
+  processor_->gravity_init_ = to_vec3d(params.gravity_init);
+  processor_->gravity_magnitude_ = params.gravity_magnitude;
 }
 
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {

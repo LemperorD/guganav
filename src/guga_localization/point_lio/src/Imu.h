@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "IMU_Processing.h"
+#include "preprocess.h"
 
 struct ImuMeasurement {
   V3D angular_velocity;
@@ -12,8 +13,15 @@ struct ImuMeasurement {
 
 class Imu {
 public:
-  void configure(int lidar_type, bool enabled,
-                 const std::vector<double>& gravity);
+  struct Params {
+    int lidar_type{AVIA};
+    bool enabled{true};
+    std::vector<double> gravity;
+    std::vector<double> gravity_init;
+    double gravity_magnitude{9.81};
+  };
+
+  void configure(const Params& params);
 
   void onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
 

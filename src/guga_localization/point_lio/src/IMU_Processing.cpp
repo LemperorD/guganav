@@ -105,9 +105,9 @@ void ImuProcessor::init_state() {
   }
   V3D tmp_gravity;
   if (imu_en) {
-    tmp_gravity = -mean_acc / mean_acc.norm() * G_m_s2;
+    tmp_gravity = -mean_acc / mean_acc.norm() * gravity_magnitude_;
   } else {
-    tmp_gravity = to_vec3d(gravity_init);
+    tmp_gravity = gravity_init_;
   }
   M3D rot_init;
   Set_init(tmp_gravity, rot_init);

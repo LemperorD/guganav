@@ -106,6 +106,8 @@ public:
   int lidar_type;           ///< LiDAR 类型 (从参数复制)
 
   V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
+  V3D gravity_init_{0.0, 0.0, -9.81};
+  double gravity_magnitude_{9.81};
   bool imu_en;   ///< 是否启用 IMU
 
   V3D mean_acc;                  ///< 平均加速度 (累积, 用于重力估计)
@@ -133,7 +135,3 @@ private:
   int init_iter_num = 1;  ///< 初始化迭代计数 (当前累积帧数)
   rclcpp::Logger logger;  ///< ROS2 日志器
 };
-
-extern double G_m_s2;
-extern std::vector<double> gravity_init;  ///< 初始重力向量
-extern bool imu_enabled;                  ///< 默认启用 IMU

@@ -51,6 +51,40 @@ using IVoxType =
     faster_lio::IVox<3, faster_lio::IVoxNodeType::DEFAULT, PointType>;
 #endif
 
+struct MappingParams {
+  bool space_down_sample{true};
+  bool use_imu_as_input{false};
+  bool extrinsic_estimation{true};
+  bool publish_odometry_without_downsample{false};
+  int init_map_size{100};
+  double filter_size_surf{0.5};
+  double filter_size_map{0.5};
+  double fov_deg{180.0};
+  double match_s{81.0};
+  float plane_thr{0.05F};
+  float det_range{300.0F};
+  IVoxType::Options ivox_options;
+};
+
+struct EstimatorParams {
+  bool check_saturation{true};
+  double saturation_acc{3.0};
+  double saturation_gyro{35.0};
+  double acc_norm{1.0};
+  double laser_point_cov{0.1};
+  double match_s{81.0};
+  float plane_thr{0.05F};
+  double acc_cov_input{0.1};
+  double gyr_cov_input{0.1};
+  double vel_cov{20.0};
+  double gyr_cov_output{0.1};
+  double acc_cov_output{0.1};
+  double b_gyr_cov{0.0001};
+  double b_acc_cov{0.0001};
+  double imu_meas_acc_cov{0.1};
+  double imu_meas_omg_cov{0.1};
+};
+
 // ==================== 帧控制标志 ====================
 extern bool is_first_frame;      ///< 首帧标志
 extern double lidar_end_time;    ///< 当前帧结束时间戳 (秒)
@@ -126,6 +160,7 @@ extern int pcd_save_interval;  ///< PCD 保存间隔 (帧数)
 
 // ==================== 重力参数 ====================
 extern std::vector<double> gravity;  ///< 当前重力向量
+extern std::vector<double> gravity_init;  ///< 初始重力向量
 
 // ==================== 输出开关 ====================
 extern bool runtime_pos_log;   ///< 是否输出运行时位姿日志到文件
