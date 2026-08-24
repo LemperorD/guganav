@@ -81,7 +81,7 @@ enum EJump : uint8_t {
 /**
  * @brief 按 curvature (时间偏移) 升序排序 (切帧使用)
  */
-const bool time_list_cut_frame(PointType& x, PointType& y);
+bool time_list_cut_frame(PointType& x, PointType& y);
 
 // ==================== 点特征数据结构 ====================
 
@@ -201,6 +201,7 @@ public:
    * @brief 标准雷达切帧处理 (Velodyne/Ouster/Hesai)
    * @see process_cut_frame_livox
    */
+  constexpr static int MAX_LINE_NUM = 128;
   void processCutFramePCL2(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
                            deque<PointCloudXYZI::Ptr>& pcl_out,
                            deque<double>& time_lidar, int required_frame_num,

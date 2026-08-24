@@ -33,7 +33,7 @@ void configureEstimatorParams(const EstimatorParams& params) {
 /** @brief 每个点的平面法向量和截距: (nx, ny, nz, d=截距) */
 PointCloudXYZI::Ptr normvec(new PointCloudXYZI(100000, 1));
 
-/** @brief 时间分组序列 (根据 curvature 时间戳变化分组) */
+/** @brief 时间分组序列 (根据 curvature 时间偏移回跳分组) */
 std::vector<int> time_seq;
 
 /** @brief 降采样后的 IMU 坐标系特征点云 */

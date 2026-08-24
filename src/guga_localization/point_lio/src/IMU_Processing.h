@@ -38,7 +38,7 @@
  * 点云的 curvature 域存储该点的时间偏移 (ms)，
  * 按时间升序排列以便做时间分组处理。
  */
-const bool time_list(PointType& x, PointType& y);
+bool time_list(PointType& x, PointType& y);
 
 /// *************IMU Process and undistortion
 /**
@@ -108,7 +108,7 @@ public:
   V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
-  bool imu_en;   ///< 是否启用 IMU
+  bool imu_en;  ///< 是否启用 IMU
 
   V3D mean_acc;                  ///< 平均加速度 (累积, 用于重力估计)
   bool imu_need_init_ = true;    ///< 标志: 是否需要 IMU 初始化

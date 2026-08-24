@@ -19,11 +19,15 @@
 #define RETURN0 0x00
 #define RETURN0AND1 0x10
 
+namespace {
+float point_time_offset_ms(const PointType& point) { return point.curvature; }
+}  // namespace
+
 /**
- * @brief 按 curvature 升序排序 (切帧模式下时间戳单调递增)
+ * @brief 按 curvature 升序排序 (切帧模式下时间偏移单调递增)
  */
-const bool time_list_cut_frame(PointType& x, PointType& y) {
-  return (x.curvature < y.curvature);  // NOLINT
+bool time_list_cut_frame(PointType& x, PointType& y) {
+  return point_time_offset_ms(x) < point_time_offset_ms(y);
 }
 
 /**
@@ -76,21 +80,22 @@ void Preprocess::process(
 void Preprocess::process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
                          PointCloudXYZI::Ptr& pcl_out) {
   // 根据 time_unit 设置时间缩放因子
+  // TODO : 太前卫了
   switch (time_unit_) {
     case SEC:
-      time_unit_scale_ = 1.e3f;  // 秒 → 毫秒
+      time_unit_scale_ = 1.e3F;  // 秒 → 毫秒
       break;
     case MS:
-      time_unit_scale_ = 1.f;  // 毫秒 → 毫秒
+      time_unit_scale_ = 1.F;  // 毫秒 → 毫秒
       break;
     case US:
-      time_unit_scale_ = 1.e-3f;  // 微秒 → 毫秒
+      time_unit_scale_ = 1.e-3F;  // 微秒 → 毫秒
       break;
     case NS:
-      time_unit_scale_ = 1.e-6f;  // 纳秒 → 毫秒
+      time_unit_scale_ = 1.e-6F;  // 纳秒 → 毫秒
       break;
     default:
-      time_unit_scale_ = 1.f;
+      time_unit_scale_ = 1.F;
       break;
   }
 
@@ -109,7 +114,7 @@ void Preprocess::process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
       break;
 
     default:
-      printf("Error LiDAR Type");
+      std::cout << "Error LiDAR Type" << '\n';
       break;
   }
   *pcl_out = pl_surf_;
@@ -132,18 +137,20 @@ void Preprocess::processCutFrameLivox(
             || (msg->points[i].tag & 0x30) == 0x00)) {
       valid_point_num++;
       if (valid_point_num % point_filter_num_ == 0) {
-        pl_full_[i].x = msg->points[i].x;
-        pl_full_[i].y = msg->points[i].y;
-        pl_full_[i].z = msg->points[i].z;
-        pl_full_[i].intensity = msg->points[i].reflectivity;
+        pl_full_[i].x = msg->points[i].x;                     // NOLINT
+        pl_full_[i].y = msg->points[i].y;                     // NOLINT
+        pl_full_[i].z = msg->points[i].z;                     // NOLINT
+        pl_full_[i].intensity = msg->points[i].reflectivity;  // NOLINT
         // use curvature as time of each laser points，unit: ms
-        pl_full_[i].curvature = msg->points[i].offset_time / float(1000000);
+        pl_full_[i].curvature = msg->points[i].offset_time  // NOLINT
+                                / float(1000000);
 
         double dist = pl_full_[i].x * pl_full_[i].x
                       + pl_full_[i].y * pl_full_[i].y
                       + pl_full_[i].z * pl_full_[i].z;
-        if (dist < blind_ * blind_ || dist > det_range_ * det_range_)
+        if (dist < blind_ * blind_ || dist > det_range_ * det_range_) {
           continue;
+        }
 
         if ((abs(pl_full_[i].x - pl_full_[i - 1].x) > 1e-7)
             || (abs(pl_full_[i].y - pl_full_[i - 1].y) > 1e-7)
@@ -161,8 +168,9 @@ void Preprocess::processCutFrameLivox(
   uint valid_pcl_size = pl_surf_.points.size();
 
   int required_cut_num = required_frame_num;
-  if (scan_count < 5)
+  if (scan_count < 5) {
     required_cut_num = 1;
+  }
 
   PointCloudXYZI pcl_cut;
   for (uint i = 1; i < valid_pcl_size; i++) {
@@ -186,7 +194,6 @@ void Preprocess::processCutFrameLivox(
     }
   }
 }
-#define MAX_LINE_NUM 128
 void Preprocess::processCutFramePCL2(
     const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
     deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
@@ -197,7 +204,7 @@ void Preprocess::processCutFramePCL2(
   if (lidar_type_ == VELO16) {
     pcl::PointCloud<velodyne_ros::Point> pl_orig;
     pcl::fromROSMsg(*msg, pl_orig);
-    int plsize = pl_orig.points.size();
+    auto plsize = pl_orig.points.size();
     pl_surf_.reserve(plsize);
 
     bool is_first[MAX_LINE_NUM];
@@ -224,11 +231,12 @@ void Preprocess::processCutFramePCL2(
       added_pt.intensity = pl_orig.points[i].intensity;
       added_pt.curvature = pl_orig.points[i].time * 1000.0;  // ms
 
-      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
-                    + added_pt.z * added_pt.z;
+      double dist = added_pt.getVector3fMap().squaredNorm();
       if (dist < blind_ * blind_ || dist > det_range_ * det_range_
-          || isnan(added_pt.x) || isnan(added_pt.y) || isnan(added_pt.z))
+          || isnan(added_pt.x) || isnan(added_pt.y)  // NOLINT
+          || isnan(added_pt.z)) {                    // NOLINT
         continue;
+      }
 
       if (!given_offset_time_) {
         int layer = pl_orig.points[i].ring;
@@ -273,8 +281,7 @@ void Preprocess::processCutFramePCL2(
       added_pt.intensity = pl_orig.points[i].intensity;
       added_pt.curvature = pl_orig.points[i].t / 1e6;  // ns to ms
 
-      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
-                    + added_pt.z * added_pt.z;
+      double dist = added_pt.getVector3fMap().squaredNorm();
       if (dist < blind_ * blind_ || dist > det_range_ * det_range_
           || isnan(added_pt.x) || isnan(added_pt.y) || isnan(added_pt.z))
         continue;
@@ -301,8 +308,7 @@ void Preprocess::processCutFramePCL2(
                             - rclcpp::Time(msg->header.stamp).seconds())
                            * 1000;  // s to ms
 
-      double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
-                    + added_pt.z * added_pt.z;
+      double dist = added_pt.getVector3fMap().squaredNorm();
       if (dist < blind_ * blind_ || dist > det_range_ * det_range_
           || isnan(added_pt.x) || isnan(added_pt.y) || isnan(added_pt.z))
         continue;
@@ -326,8 +332,9 @@ void Preprocess::processCutFramePCL2(
 
   int required_cut_num = required_frame_num;
 
-  if (scan_count < 20)
+  if (scan_count < 20) {
     required_cut_num = 1;
+  }
 
   PointCloudXYZI pcl_cut;
   for (uint i = 1; i < valid_pcl_size; i++) {
@@ -544,8 +551,7 @@ void Preprocess::velodyneHandler(
     }
 
     // 距离过滤
-    double dist = added_pt.x * added_pt.x + added_pt.y * added_pt.y
-                  + added_pt.z * added_pt.z;
+    double dist = added_pt.getVector3fMap().squaredNorm();
     {
       if (dist > (blind_ * blind_) && dist < (det_range_ * det_range_)) {
         pl_surf_.points.push_back(added_pt);

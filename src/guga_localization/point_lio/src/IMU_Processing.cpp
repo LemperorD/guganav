@@ -17,8 +17,8 @@
  * curvature 域存储每个点的扫描偏移时间 (ms),
  * 排序后配合 time_compressing() 进行分组处理。
  */
-const bool time_list(PointType& x, PointType& y) {
-  return (x.curvature < y.curvature);
+bool time_list(PointType& x, PointType& y) {
+  return point_time_offset_ms(x) < point_time_offset_ms(y);
 };
 
 void ImuProcessor::set_gyr_cov(const V3D& scaler) {
@@ -133,7 +133,8 @@ void ImuProcessor::init_state() {
 void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   RCLCPP_INFO(logger, "IMU Initializing: %.1f %%",
               double(N) / MAX_INI_COUNT * 100);
-  V3D cur_acc, cur_gyr;
+  V3D cur_acc;
+  V3D cur_gyr;
 
   if (b_first_frame_) {
     reset();

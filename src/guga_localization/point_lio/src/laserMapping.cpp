@@ -797,8 +797,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   idx = -1;
   for (k = 0; k < (int)time_seq.size(); k++) {
     PointType& point_body = feats_down_body->points[idx + time_seq[k]];
-    time_current_ = (point_body.curvature / 1000.0)  // NOLINT
-                    + pcl_beg_time;
+    const double point_offset_ms = point_time_offset_ms(point_body);
+    time_current_ = point_offset_ms / 1000.0 + pcl_beg_time;
     if (is_first_frame_) {
       if constexpr (ImuAsInput) {
         while (time_current_ > get_time_sec(imu_next.header.stamp)) {

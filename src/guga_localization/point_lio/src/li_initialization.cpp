@@ -4,6 +4,8 @@
 
 namespace {
 
+float point_time_offset_ms(const PointType& point) { return point.curvature; }
+
   bool take_lidar_frame(const Lidar& lidar, MeasureGroup& meas) {
     meas.lidar = lidar.lidar_buffer.front();
     meas.lidar_beg_time = lidar.time_buffer.front();
@@ -18,10 +20,11 @@ namespace {
     const auto max_point = std::max_element(
         meas.lidar->points.begin(), meas.lidar->points.end(),
         [](const auto& lhs, const auto& rhs) {
-          return lhs.curvature < rhs.curvature;
+          return point_time_offset_ms(lhs) < point_time_offset_ms(rhs);
         });
+    const double max_point_time_offset_ms = point_time_offset_ms(*max_point);
     meas.lidar_last_time =
-        meas.lidar_beg_time + max_point->curvature / 1000.0;
+        meas.lidar_beg_time + max_point_time_offset_ms / 1000.0;
   }
 
   void pop_lidar_frame(Lidar& lidar) {
