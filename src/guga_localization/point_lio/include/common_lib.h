@@ -128,7 +128,8 @@ extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
   (string(string(ROOT_DIR) + "Log/" + name))  ///< 调试日志文件路径
 
 // ==================== PCL/Eigen 类型别名 ====================
-using PointType = pcl::PointXYZINormal;  ///< PCL curvature 字段存储点时间偏移 (ms)
+using PointType =
+    pcl::PointXYZINormal;  ///< PCL curvature 字段存储点时间偏移 (ms)
 
 // PCL 固定字段名为 curvature；Point-LIO 通过语义化访问器将其作为时间偏移使用。
 inline float point_time_offset_ms(const PointType& point) {
@@ -188,9 +189,9 @@ const V3F Zero3f(0, 0, 0);         ///< 3维零向量 (float)
  * - lidar_last_time: 当前帧结束时间 (秒)
  */
 struct MeasureGroup {
-  double lidar_beg_time{0.0};   ///< 当前帧起始时间戳
-  double lidar_last_time{0.0};  ///< 当前帧最后一个点的时间戳
-  PointCloudXYZI::Ptr lidar;    ///< 降采样后的点云
+  double lidar_start_time{0.0};  ///< 当前帧起始时间戳
+  double lidar_last_time{0.0};   ///< 当前帧最后一个点的时间戳
+  PointCloudXYZI::Ptr lidar;     ///< 降采样后的点云
   deque<sensor_msgs::msg::Imu::ConstSharedPtr>
       imu;  ///< 该帧时间范围内的IMU数据
 };
@@ -252,7 +253,9 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
     }
   }
   // 最后一组
-  { time_seq.emplace_back(j + 1); }
+  {
+    time_seq.emplace_back(j + 1);
+  }
   return time_seq;
 }
 

@@ -4,9 +4,9 @@
 
 namespace {
 
-  bool take_lidar_frame(const Lidar& lidar, MeasureGroup& meas) {
+  bool get_lidar_measurements(const Lidar& lidar, MeasureGroup& meas) {
     meas.lidar = lidar.lidar_buffer.front();
-    meas.lidar_beg_time = lidar.time_buffer.front();
+    meas.lidar_start_time = lidar.time_buffer.front();
     if (meas.lidar->points.empty()) {
       std::cout << "lose lidar\n";
       return false;
@@ -15,14 +15,16 @@ namespace {
   }
 
   void update_frame_end_time(MeasureGroup& meas) {
-    const auto max_point = std::max_element(
+    const auto max_point_ptr = std::max_element(
         meas.lidar->points.begin(), meas.lidar->points.end(),
         [](const auto& lhs, const auto& rhs) {
           return point_time_offset_ms(lhs) < point_time_offset_ms(rhs);
-        });
-    const double max_point_time_offset_ms = point_time_offset_ms(*max_point);
-    meas.lidar_last_time = meas.lidar_beg_time
-                           + max_point_time_offset_ms / 1000.0;
+        });  // 寻找lidar帧的最大点,确定结束时间lidar_last_time.
+
+    const double max_point_time_offset_ms = point_time_offset_ms(
+        *max_point_ptr);
+    meas.lidar_last_time = meas.lidar_start_time
+                           + (max_point_time_offset_ms / 1000.0);
   }
 
   void pop_lidar_frame(Lidar& lidar) {
@@ -140,15 +142,22 @@ void Lidar::onLivoxPcl(
   }
 }
 
-bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
+bool Lidar::syncPackages(  // TODO函数逻辑混乱,将整改
+    Imu& imu,
+    MeasureGroup&
+        meas) {  // TODO:组装不应是lidar的职责,其必然暴露imu内部实现.将构建syncalizor同步器处理.
   if (!params_.imu_enabled) {
-    if (lidar_buffer.empty()) {
+    if (lidar_buffer.empty()) {  // TODO: lidar_buffer隐式依赖复杂.
       return false;
     }
-    if (!take_lidar_frame(*this, meas)) {
+    if (lidar_buffer.front()->points.empty()) {
       pop_lidar_frame(*this);
+      std::cout << "lose lidar\n";
       return false;
     }
+
+    meas.lidar = lidar_buffer.front();
+    meas.lidar_start_time = time_buffer.front();
     update_frame_end_time(meas);
     pop_lidar_frame(*this);
     return true;
@@ -159,14 +168,14 @@ bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
   }
 
   if (!lidar_pushed) {
-    lose_lid = !take_lidar_frame(*this, meas);
+    lose_lid = !get_lidar_measurements(*this, meas);
     if (!lose_lid) {
       update_frame_end_time(meas);
     }
     lidar_pushed = true;
   }
 
-  const double required_end = lose_lid ? meas.lidar_beg_time
+  const double required_end = lose_lid ? meas.lidar_start_time
                                              + params_.lidar_time_interval
                                        : meas.lidar_last_time;
   if (imu.lastTimestamp() < required_end) {

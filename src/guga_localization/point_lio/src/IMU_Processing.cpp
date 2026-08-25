@@ -142,17 +142,6 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   V3D cur_acc;
   V3D cur_gyr;
 
-  if (b_first_frame_) {
-    reset();
-    N = 1;
-    b_first_frame_ = false;
-    // 第一帧: 直接用第一组 IMU 数据初始化均值
-    const auto& imu_acc = meas.imu.front()->linear_acceleration;
-    const auto& gyr_acc = meas.imu.front()->angular_velocity;
-    mean_acc << imu_acc.x, imu_acc.y, imu_acc.z;
-    mean_gyr << gyr_acc.x, gyr_acc.y, gyr_acc.z;
-  }
-
   // 遍历帧内所有 IMU 数据，更新滑动平均
   for (const auto& imu : meas.imu) {
     const auto& imu_acc = imu->linear_acceleration;
@@ -195,18 +184,15 @@ void ImuProcessor::process(const MeasureGroup& meas,
     if (imu_need_init_) {
       // ---- IMU 初始化阶段 ----
       IMU_init(meas, init_iter_num);
-
-      if (init_iter_num > MAX_INI_COUNT) {
-        // 初始化完成: 数据级累积 + 状态级初始化一步完成
-        RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
-        imu_need_init_ = false;
-        *cur_pcl_un_ = *(meas.lidar);  // 复制原始点云
-        initState();
+      if (init_iter_num <= MAX_INI_COUNT) {
+        return;  // 初始化阶段不输出去畸变点云
       }
-      return;  // 初始化阶段不输出去畸变点云
+      // 初始化完成: 数据级累积 + 状态级初始化一步完成
+      RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
+      imu_need_init_ = false;
+      initState();
     }
 
-    // ---- 初始化已完成 ----
     *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
 
     // @todo: 实现 IMU 反向传播去畸变

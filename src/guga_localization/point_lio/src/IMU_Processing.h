@@ -27,7 +27,6 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-
 // ==================== 预配置 ====================
 
 /// @brief IMU 初始化最大累积帧数
@@ -115,14 +114,13 @@ public:
   MD(12, 12)
   state_cov = MD(
       12, 12)::Identity();  ///< IMU 状态协方差 (12维: 姿态/速度/位置/零偏)
-  V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
+  V3D gravity_;             ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
 
   V3D mean_acc{V3D::Zero()};     ///< 平均加速度 (累积, 用于重力估计)
   bool imu_need_init_ = true;    ///< 标志: 是否需要 IMU 初始化
   bool after_imu_init_ = false;  ///< 标志: IMU 初始化是否已完成
-  bool b_first_frame_ = true;    ///< 标志: 是否第一帧
 
   double time_last_scan = 0.0;                      ///< 上帧扫描时间
   V3D cov_gyr_scale = V3D(0.0001, 0.0001, 0.0001);  ///< 陀螺仪协方差缩放
@@ -142,6 +140,6 @@ private:
 
   V3D mean_gyr{V3D::Zero()};  ///< 平均角速度 (用于陀螺零偏估计)
   int init_iter_num = 1;      ///< 初始化迭代计数 (当前累积帧数)
-  bool imu_en{true};           ///< 是否启用 IMU
+  bool imu_en{true};          ///< 是否启用 IMU
   rclcpp::Logger logger;      ///< ROS2 日志器
 };

@@ -55,10 +55,12 @@ int LaserMappingNode::run() {
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
 
-    if (!lidar_.syncPackages(imu_, measures_)) {
+    if (!lidar_.syncPackages(
+            imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
       rate_.sleep();
       continue;
     }
+
     lidar_end_time_ = measures_.lidar_last_time;
 
     if (state_.flg_first_scan) {  // 首次扫描
@@ -332,7 +334,7 @@ void LaserMappingNode::dumpLioStatetoLog() {
   }
 
   state_.fp << std::fixed << std::setprecision(6);
-  state_.fp << measures_.lidar_beg_time - first_lidar_time_ << ' ';
+  state_.fp << measures_.lidar_start_time - first_lidar_time_ << ' ';
   state_.fp << rot_ang(0) << ' ' << rot_ang(1) << ' ' << rot_ang(2)
             << ' ';  // Angle
   if (mapping_params_.use_imu_as_input) {
@@ -640,7 +642,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
     state_.aver_time_propag = (state_.aver_time_propag * (state_.frame_num - 1)
                                / state_.frame_num)
                               + (state_.propag_time / state_.frame_num);
-    lidar_.T1[state_.time_log_counter] = measures_.lidar_beg_time;
+    lidar_.T1[state_.time_log_counter] = measures_.lidar_start_time;
     lidar_.s_plot[state_.time_log_counter] = t3 - t0;
     lidar_.s_plot2[state_.time_log_counter] =
         (double)state_.feats_undistort->points.size();
@@ -658,7 +660,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
     if (!mapping_params_.publish_odometry_without_downsample) {
       if (!mapping_params_.use_imu_as_input) {
         state_.euler_cur = SO3ToEuler(kf_output.x_.rot);
-        fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
+        fout_out_ << setw(20) << measures_.lidar_start_time - first_lidar_time_
                   << " " << state_.euler_cur.transpose() << " "
                   << kf_output.x_.pos.transpose() << " "
                   << kf_output.x_.vel.transpose() << " "
@@ -670,7 +672,7 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
                   << state_.feats_undistort->points.size() << '\n';
       } else {
         state_.euler_cur = SO3ToEuler(kf_input.x_.rot);
-        fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
+        fout_out_ << setw(20) << measures_.lidar_start_time - first_lidar_time_
                   << " " << state_.euler_cur.transpose() << " "
                   << kf_input.x_.pos.transpose() << " "
                   << kf_input.x_.vel.transpose() << " "
@@ -703,11 +705,11 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
       while (get_time_sec(imu_next.header.stamp) > time_current_
              && (get_time_sec(imu_next.header.stamp)
-                 < measures_.lidar_beg_time
+                 < measures_.lidar_start_time
                        + laser_mapping_params_.lidar_time_interval)) {
         if (is_first_frame_) {
           while (get_time_sec(imu_next.header.stamp)
-                 < measures_.lidar_beg_time
+                 < measures_.lidar_start_time
                        + laser_mapping_params_.lidar_time_interval) {
             imu_.popAndAdvance();
             if (imu_.empty()) {
@@ -775,7 +777,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
   // [Workflow 2] LiDAR 点输入分支: 逐时间组处理 (传播 → 平面更新 →
   // 世界变换)。
-  double pcl_beg_time = measures_.lidar_beg_time;
+  double pcl_beg_time = measures_.lidar_start_time;
   estimator_state.idx = -1;
   for (estimator_state.k = 0;
        estimator_state.k < (int)estimator_state.time_seq.size();
@@ -930,15 +932,17 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       if (publish_params_.runtime_log_enabled) {
         state_.euler_cur = SO3ToEuler(kf.x_.rot);
         if constexpr (ImuAsInput) {
-          fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
-                    << " " << state_.euler_cur.transpose() << " "
+          fout_out_ << setw(20)
+                    << measures_.lidar_start_time - first_lidar_time_ << " "
+                    << state_.euler_cur.transpose() << " "
                     << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
                     << " " << kf.x_.bg.transpose() << " "
                     << kf.x_.ba.transpose() << " " << kf.x_.gravity.transpose()
                     << " " << state_.feats_undistort->points.size() << '\n';
         } else {
-          fout_out_ << setw(20) << measures_.lidar_beg_time - first_lidar_time_
-                    << " " << state_.euler_cur.transpose() << " "
+          fout_out_ << setw(20)
+                    << measures_.lidar_start_time - first_lidar_time_ << " "
+                    << state_.euler_cur.transpose() << " "
                     << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
                     << " " << kf.x_.omg.transpose() << " "
                     << kf.x_.acc.transpose() << " " << kf.x_.gravity.transpose()
@@ -967,7 +971,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
 void LaserMappingNode::initScan() {
   const auto& imu_next = imu_.next();
-  first_lidar_time_ = measures_.lidar_beg_time;
+  first_lidar_time_ = measures_.lidar_start_time;
   state_.flg_first_scan = false;
   std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
             << '\n';
@@ -976,7 +980,7 @@ void LaserMappingNode::initScan() {
   if (laser_mapping_params_.imu_enabled) {
     kf_input.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
     kf_output.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
-    imu_.discardBefore(measures_.lidar_beg_time);
+    imu_.discardBefore(measures_.lidar_start_time);  // 去除起始时间之前的帧
   } else {
     kf_input.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
     kf_output.x_.gravity = to_vec3d(laser_mapping_params_.gravity);
@@ -984,7 +988,7 @@ void LaserMappingNode::initScan() {
     kf_output.x_.acc *= -1;
     imu_.setNeedInit(false);
   }
-  if (laser_mapping_params_.gravity.size() >= 3) {
+  if (laser_mapping_params_.gravity.size() >= 3) {  // TODO 重力不是四维向量
     estimator_params_.gravity_magnitude = std::hypot(
         laser_mapping_params_.gravity[0], laser_mapping_params_.gravity[1],
         laser_mapping_params_.gravity[2]);
@@ -1008,4 +1012,5 @@ void LaserMappingNode::savePcd() {
 }
 
 bool LaserMappingNode::initialize() {
+  return true;
 }
