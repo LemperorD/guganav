@@ -28,67 +28,15 @@ void configureEstimatorParams(const EstimatorParams& params) {
 }
 
 
-// ==================== 全局变量定义 ====================
+// ==================== 估计器共享状态 ====================
 
-/** @brief 每个点的平面法向量和截距: (nx, ny, nz, d=截距) */
-PointCloudXYZI::Ptr normvec(new PointCloudXYZI(100000, 1));
-
-/** @brief 时间分组序列 (根据点时间偏移回跳分组) */
-std::vector<int> time_seq;
-
-/** @brief 降采样后的 IMU 坐标系特征点云 */
-PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI(10000, 1));
-
-/** @brief 降采样后的世界坐标系特征点云 */
-PointCloudXYZI::Ptr feats_down_world(new PointCloudXYZI(10000, 1));
-
-/** @brief IMU 坐标系下的位置缓存 */
-std::vector<V3D> pbody_list;
-
-/** @brief 每个特征点的 5 个最近邻 */
-std::vector<PointVector> Nearest_Points;
-
-/** @brief iVox 增量体素局部地图 (Faster-LIO 数据结构) */
-IVoxType::Ptr ivox_ = nullptr;
-
-/** @brief 最近邻搜索距离平方 */
-std::vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
-
-/** @brief 有效曲面点标记数组 */
-std::bitset<100000> point_selected_surf = {0};
-
-/** @brief 反对称矩阵缓存: crossmat[i] = [p_body_i]_IMU× */
-std::vector<M3D> crossmat_list;
-
-/** @brief 当前帧有效特征点计数 */
-int effct_feat_num = 0;
-
-/** @brief 当前处理的时间分组索引 */
-int k = 0;
-
-/** @brief 点偏移索引 (指向当前组前一个点) */
-int idx = -1;
+EstimatorState estimator_state;
 
 /** @brief 卡尔曼滤波器实例 — IMU-as-input 模式 (状态24维, 输入6维) */
 esekfom::esekf<state_input, 24, input_ikfom> kf_input;
 
 /** @brief 卡尔曼滤波器实例 — IMU-as-output 模式 (状态30维, 输入6维) */
 esekfom::esekf<state_output, 30, input_ikfom> kf_output;
-
-/** @brief IMU 输入数据缓存 */
-input_ikfom input_in;
-
-/** @brief 平均角速度、加速度、加速度范数 (用于 IMU 伪量测) */
-V3D angvel_avr, acc_avr, acc_avr_norm;
-
-/** @brief 降采样后的点数 */
-size_t feats_down_size = 0;
-
-/** @brief LiDAR→IMU 外参 (固定外参模式, 从 YAML 读取) */
-V3D Lidar_T_wrt_IMU(Zero3d);
-M3D Lidar_R_wrt_IMU(Eye3d);
-
-/** @brief 重力加速度大小 (m/s²), 默认 9.81 */
 
 // ==================== 过程噪声协方差 ====================
 
@@ -274,7 +222,7 @@ Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
 /**
  * @brief 点到平面距离量测模型 — IMU-as-input 模式
  *
- * 对 time_seq[k] 组内每个点依次处理:
+ * 对 estimator_state.time_seq[estimator_state.k] 组内每个点依次处理:
  *
  * **匹配阶段 (match)**:
  *   1. 将 IMU 系下的点转换到世界系 (pointBodyToWorld)
@@ -302,33 +250,33 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
                    esekfom::dyn_share_modified<double>& ekfom_data) {
   VF(4) pabcd;  ///< 平面系数: (nx, ny, nz, d)
   pabcd.setZero();
-  normvec->resize(time_seq[k]);  ///< 分配该组点数的法向量缓存
+  estimator_state.normvec->resize(estimator_state.time_seq[estimator_state.k]);  ///< 分配该组点数的法向量缓存
   int effect_num_k = 0;          ///< 当前组中的有效特征点数
 
   // ---- Step 1: 遍历当前时间分组中的每个点，进行特征匹配 ----
-  for (int j = 0; j < time_seq[k]; j++) {
-    PointType& point_body_j = feats_down_body->points[idx + j + 1];
-    PointType& point_world_j = feats_down_world->points[idx + j + 1];
+  for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
+    PointType& point_body_j = estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
+    PointType& point_world_j = estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
 
     // 坐标变换: Body → World
     pointBodyToWorld(&point_body_j, &point_world_j);
 
-    V3D p_body = pbody_list[idx + j + 1];  // IMU系下的坐标
+    V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];  // IMU系下的坐标
     double p_norm = p_body.norm();         // 距 IMU 原点的距离
     V3D p_world;
     p_world << point_world_j.x, point_world_j.y, point_world_j.z;
 
     {
-      auto& points_near = Nearest_Points[idx + j + 1];
+      auto& points_near = estimator_state.Nearest_Points[estimator_state.idx + j + 1];
 
       // 在 iVox 地图中搜索 5 个最近邻
-      ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
+      estimator_state.ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
         // 近邻不足5个 → 该点无效
-        point_selected_surf[idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
       } else {
-        point_selected_surf[idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
 
         // 用 5 个近邻拟合局部平面 (IMLS)
         if (esti_plane(pabcd, points_near, estimator_config.plane_thr)) {
@@ -340,12 +288,12 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
           // Mahalanobis 距离检验: |p_body|² > match_s · pd2²
           // match_s 为马氏距离阈值 (典型值 81, 即 9σ)
           if (p_norm > estimator_config.match_s * pd2 * pd2) {
-            point_selected_surf[idx + j + 1] = true;
+            estimator_state.point_selected_surf[estimator_state.idx + j + 1] = true;
             // 存储平面系数: (nx, ny, nz) 存于 xyz, d 存于 intensity
-            normvec->points[j].x = pabcd(0);
-            normvec->points[j].y = pabcd(1);
-            normvec->points[j].z = pabcd(2);
-            normvec->points[j].intensity = pabcd(3);
+            estimator_state.normvec->points[j].x = pabcd(0);
+            estimator_state.normvec->points[j].y = pabcd(1);
+            estimator_state.normvec->points[j].z = pabcd(2);
+            estimator_state.normvec->points[j].intensity = pabcd(3);
             effect_num_k++;
           }
         }
@@ -366,15 +314,15 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
   ekfom_data.z.resize(effect_num_k);
   int m = 0;  // 有效点计数器 (H 的行索引)
 
-  for (int j = 0; j < time_seq[k]; j++) {
-    if (point_selected_surf[idx + j + 1]) {
+  for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
+    if (estimator_state.point_selected_surf[estimator_state.idx + j + 1]) {
       // 提取平面法向量
-      V3D norm_vec(normvec->points[j].x, normvec->points[j].y,
-                   normvec->points[j].z);
+      V3D norm_vec(estimator_state.normvec->points[j].x, estimator_state.normvec->points[j].y,
+                   estimator_state.normvec->points[j].z);
 
       if (estimator_config.extrinsic_estimation) {
         // ------ 在线外参估计模式: 需要 B 分量 ------
-        V3D p_body = pbody_list[idx + j + 1];
+        V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
         // [p_body]× — 点在 IMU 系下的反对称矩阵
         p_crossmat << SKEW_SYM_MATRX(p_body);
@@ -395,7 +343,7 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
       } else {
         // ------ 固定外参模式: B 部分为零 ------
         M3D point_crossmat =
-            crossmat_list[idx + j + 1];  // [R_LI_fixed * p_body + T_LI_fixed]×
+            estimator_state.crossmat_list[estimator_state.idx + j + 1];  // [R_LI_fixed * p_body + T_LI_fixed]×
         V3D C(s.rot.transpose() * norm_vec);  // C = R^T · n
         V3D A(point_crossmat * C);            // A = [p_imu]× · C
 
@@ -405,15 +353,15 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
       }
 
       // 残差: z_j = -n · p_world - d (点面有向距离)
-      ekfom_data.z(m) = -norm_vec(0) * feats_down_world->points[idx + j + 1].x
-                        - norm_vec(1) * feats_down_world->points[idx + j + 1].y
-                        - norm_vec(2) * feats_down_world->points[idx + j + 1].z
-                        - normvec->points[j].intensity;
+      ekfom_data.z(m) = -norm_vec(0) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].x
+                        - norm_vec(1) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].y
+                        - norm_vec(2) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].z
+                        - estimator_state.normvec->points[j].intensity;
 
       m++;
     }
   }
-  effct_feat_num += effect_num_k;
+  estimator_state.effct_feat_num += effect_num_k;
 }
 
 /**
@@ -430,27 +378,27 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
                     esekfom::dyn_share_modified<double>& ekfom_data) {
   VF(4) pabcd;
   pabcd.setZero();
-  normvec->resize(time_seq[k]);
+  estimator_state.normvec->resize(estimator_state.time_seq[estimator_state.k]);
   int effect_num_k = 0;
 
   // ---- Step 1: 遍历点，搜索近邻，拟合平面，马氏距离检验 ----
-  for (int j = 0; j < time_seq[k]; j++) {
-    PointType& point_body_j = feats_down_body->points[idx + j + 1];
-    PointType& point_world_j = feats_down_world->points[idx + j + 1];
+  for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
+    PointType& point_body_j = estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
+    PointType& point_world_j = estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
     pointBodyToWorld(&point_body_j, &point_world_j);
-    V3D p_body = pbody_list[idx + j + 1];
+    V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
     double p_norm = p_body.norm();
     V3D p_world;
     p_world << point_world_j.x, point_world_j.y, point_world_j.z;
     {
-      auto& points_near = Nearest_Points[idx + j + 1];
+      auto& points_near = estimator_state.Nearest_Points[estimator_state.idx + j + 1];
 
-      ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
+      estimator_state.ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
-        point_selected_surf[idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
       } else {
-        point_selected_surf[idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
         if (esti_plane(pabcd, points_near, estimator_config.plane_thr)) {
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
@@ -458,11 +406,11 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
 
           // Mahalanobis 距离检验 (注释掉的代码是自适应加权的备选方案)
           if (p_norm > estimator_config.match_s * pd2 * pd2) {
-            point_selected_surf[idx + j + 1] = true;
-            normvec->points[j].x = pabcd(0);
-            normvec->points[j].y = pabcd(1);
-            normvec->points[j].z = pabcd(2);
-            normvec->points[j].intensity = pabcd(3);
+            estimator_state.point_selected_surf[estimator_state.idx + j + 1] = true;
+            estimator_state.normvec->points[j].x = pabcd(0);
+            estimator_state.normvec->points[j].y = pabcd(1);
+            estimator_state.normvec->points[j].z = pabcd(2);
+            estimator_state.normvec->points[j].intensity = pabcd(3);
             effect_num_k++;
           }
         }
@@ -482,12 +430,12 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
   ekfom_data.z.resize(effect_num_k);
   int m = 0;
 
-  for (int j = 0; j < time_seq[k]; j++) {
-    if (point_selected_surf[idx + j + 1]) {
-      V3D norm_vec(normvec->points[j].x, normvec->points[j].y,
-                   normvec->points[j].z);
+  for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
+    if (estimator_state.point_selected_surf[estimator_state.idx + j + 1]) {
+      V3D norm_vec(estimator_state.normvec->points[j].x, estimator_state.normvec->points[j].y,
+                   estimator_state.normvec->points[j].z);
       if (estimator_config.extrinsic_estimation) {
-        V3D p_body = pbody_list[idx + j + 1];
+        V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
         p_crossmat << SKEW_SYM_MATRX(p_body);
         V3D point_imu = s.offset_R_L_I * p_body + s.offset_T_L_I;
@@ -498,21 +446,21 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), B.transpose(), C.transpose();
       } else {
-        M3D point_crossmat = crossmat_list[idx + j + 1];
+        M3D point_crossmat = estimator_state.crossmat_list[estimator_state.idx + j + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
-      ekfom_data.z(m) = -norm_vec(0) * feats_down_world->points[idx + j + 1].x
-                        - norm_vec(1) * feats_down_world->points[idx + j + 1].y
-                        - norm_vec(2) * feats_down_world->points[idx + j + 1].z
-                        - normvec->points[j].intensity;
+      ekfom_data.z(m) = -norm_vec(0) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].x
+                        - norm_vec(1) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].y
+                        - norm_vec(2) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].z
+                        - estimator_state.normvec->points[j].intensity;
 
       m++;
     }
   }
-  effct_feat_num += effect_num_k;
+  estimator_state.effct_feat_num += effect_num_k;
 }
 
 /**
@@ -542,11 +490,11 @@ void h_model_IMU_output(state_output& s,
 
   // [Workflow 14] 计算 IMU 量测残差 r_IMU 与量测噪声 R_IMU (对应 (14)(15))。
   // 角速度残差: ω_meas - (omg + bg)
-  ekfom_data.z_IMU.block<3, 1>(0, 0) = angvel_avr - s.omg - s.bg;
+  ekfom_data.z_IMU.block<3, 1>(0, 0) = estimator_state.angvel_avr - s.omg - s.bg;
 
   // 加速度残差: a_meas * G/acc_norm - (acc + ba)
   // 注: IMU 测量值已归一化，需要乘以 G/acc_norm 恢复
-  ekfom_data.z_IMU.block<3, 1>(3, 0) = acc_avr * estimator_config.gravity_magnitude
+  ekfom_data.z_IMU.block<3, 1>(3, 0) = estimator_state.acc_avr * estimator_config.gravity_magnitude
                                          / estimator_config.acc_norm - s.acc
                                        - s.ba;
 
@@ -561,28 +509,28 @@ void h_model_IMU_output(state_output& s,
   // ---- IMU 饱和检测与处理 ----
   if (estimator_config.check_saturation) {
     // 陀螺仪 x 轴饱和
-    if (fabs(angvel_avr(0)) >= 0.99 * estimator_config.saturation_gyro) {
+    if (fabs(estimator_state.angvel_avr(0)) >= 0.99 * estimator_config.saturation_gyro) {
       ekfom_data.satu_check[0] = true;  // 标记饱和
       ekfom_data.z_IMU(0) = 0.0;        // 残差置零 (该轴无信息)
     }
-    if (fabs(angvel_avr(1)) >= 0.99 * estimator_config.saturation_gyro) {
+    if (fabs(estimator_state.angvel_avr(1)) >= 0.99 * estimator_config.saturation_gyro) {
       ekfom_data.satu_check[1] = true;
       ekfom_data.z_IMU(1) = 0.0;
     }
-    if (fabs(angvel_avr(2)) >= 0.99 * estimator_config.saturation_gyro) {
+    if (fabs(estimator_state.angvel_avr(2)) >= 0.99 * estimator_config.saturation_gyro) {
       ekfom_data.satu_check[2] = true;
       ekfom_data.z_IMU(2) = 0.0;
     }
     // 加速度计饱和
-    if (fabs(acc_avr(0)) >= 0.99 * estimator_config.saturation_acc) {
+    if (fabs(estimator_state.acc_avr(0)) >= 0.99 * estimator_config.saturation_acc) {
       ekfom_data.satu_check[3] = true;
       ekfom_data.z_IMU(3) = 0.0;
     }
-    if (fabs(acc_avr(1)) >= 0.99 * estimator_config.saturation_acc) {
+    if (fabs(estimator_state.acc_avr(1)) >= 0.99 * estimator_config.saturation_acc) {
       ekfom_data.satu_check[4] = true;
       ekfom_data.z_IMU(4) = 0.0;
     }
-    if (fabs(acc_avr(2)) >= 0.99 * estimator_config.saturation_acc) {
+    if (fabs(estimator_state.acc_avr(2)) >= 0.99 * estimator_config.saturation_acc) {
       ekfom_data.satu_check[5] = true;
       ekfom_data.z_IMU(5) = 0.0;
     }
@@ -599,8 +547,8 @@ void h_model_IMU_output(state_output& s,
  * 外参选择:
  *   - 在线估计 (extrinsic_est_en=true): 使用 EKF 状态中的 offset_R_L_I 和
  * offset_T_L_I
- *   - 固定外参 (extrinsic_est_en=false): 使用 YAML 中的 Lidar_R_wrt_IMU 和
- * Lidar_T_wrt_IMU
+ *   - 固定外参 (extrinsic_est_en=false): 使用 YAML 中的 estimator_state.Lidar_R_wrt_IMU 和
+ * estimator_state.Lidar_T_wrt_IMU
  *
  * 模式选择: 根据 use_imu_as_input 选择 kf_input 或 kf_output 的状态
  *
@@ -627,10 +575,10 @@ void pointBodyToWorld(PointType const* const pi, PointType* const po) {
   } else {
     // 固定外参: 使用 YAML 配置
     if (!estimator_config.use_imu_as_input) {
-      p_global = kf_output.x_.rot * (Lidar_R_wrt_IMU * p_body + Lidar_T_wrt_IMU)
+      p_global = kf_output.x_.rot * (estimator_state.Lidar_R_wrt_IMU * p_body + estimator_state.Lidar_T_wrt_IMU)
                  + kf_output.x_.pos;
     } else {
-      p_global = kf_input.x_.rot * (Lidar_R_wrt_IMU * p_body + Lidar_T_wrt_IMU)
+      p_global = kf_input.x_.rot * (estimator_state.Lidar_R_wrt_IMU * p_body + estimator_state.Lidar_T_wrt_IMU)
                  + kf_input.x_.pos;
     }
   }

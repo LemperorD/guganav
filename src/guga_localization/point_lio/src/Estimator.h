@@ -35,64 +35,30 @@ void configureEstimatorParams(const EstimatorParams& params);
 #include <bitset>
 #include <unordered_set>
 
-// ==================== 量测相关全局变量 ====================
+// ==================== 量测相关状态 ====================
 
-/** @brief 每个有效点的平面法向量 (法向量分量存于 xyz, 截距存于 intensity) */
-extern PointCloudXYZI::Ptr normvec;
+struct EstimatorState {
+  PointCloudXYZI::Ptr normvec{new PointCloudXYZI(100000, 1)}; // 每个有效点的平面法向量
+  std::vector<int> time_seq; // 时间分组序列
+  PointCloudXYZI::Ptr feats_down_body{new PointCloudXYZI(10000, 1)}; // IMU 坐标系下的降采样特征点云
+  PointCloudXYZI::Ptr feats_down_world{new PointCloudXYZI(10000, 1)}; // 世界坐标系下的降采样特征点云
+  std::vector<V3D> pbody_list; // IMU 坐标系下的点位置列表
+  std::vector<PointVector> Nearest_Points; // 每个特征点的最近邻点列表
+  IVoxType::Ptr ivox_{nullptr}; // iVox 增量体素局部地图
+  std::vector<float> pointSearchSqDis = std::vector<float>(NUM_MATCH_POINTS); // 最近邻搜索距离平方
+  std::bitset<100000> point_selected_surf{}; // 有效曲面点标记
+  std::vector<M3D> crossmat_list; // 反对称矩阵列表
+  int effct_feat_num{0}; // 当前帧有效特征点总数
+  int k{0}; // 当前处理的时间分组索引
+  int idx{-1}; // 当前处理的点偏移索引
+  input_ikfom input_in; // IMU 输入数据
+  V3D angvel_avr, acc_avr, acc_avr_norm; // IMU 平均角速度、平均加速度、平均加速度范数
+  size_t feats_down_size{0}; // feats_down_body 中的点数
+  V3D Lidar_T_wrt_IMU{Zero3d}; // LiDAR → IMU 外参平移
+  M3D Lidar_R_wrt_IMU{Eye3d}; // LiDAR → IMU 外参旋转
+};
 
-/** @brief 时间分组序列: 每组包含的点数 (由 time_compressing() 生成) */
-extern std::vector<int> time_seq;
-
-/** @brief IMU 坐标系下的降采样特征点云 */
-extern PointCloudXYZI::Ptr feats_down_body;
-
-/** @brief 世界坐标系下的降采样特征点云 */
-extern PointCloudXYZI::Ptr feats_down_world;
-
-/** @brief IMU 坐标系下的点位置列表 (pbody_list) */
-extern std::vector<V3D> pbody_list;
-
-/** @brief 每个特征点的最近邻点列表 (5个) */
-extern std::vector<PointVector> Nearest_Points;
-
-/** @brief iVox 增量体素局部地图 */
-extern std::shared_ptr<IVoxType> ivox_;
-
-/** @brief 最近邻搜索距离平方 (5个) */
-extern std::vector<float> pointSearchSqDis;
-
-/** @brief 每个点是否被选为有效曲面点 */
-extern std::bitset<100000> point_selected_surf;
-
-/** @brief 反对称矩阵列表: crossmat_i = [p_body_i]× */
-extern std::vector<M3D> crossmat_list;
-
-/** @brief 当前帧有效特征点总数 (累加 time_seq 各组) */
-extern int effct_feat_num;
-
-/** @brief 当前处理的时间分组索引 (k) */
-extern int k;
-
-/** @brief 当前处理的点偏移索引 (idx): 指向 feats_down_body
- * 中当前组前的最后一个点 */
-extern int idx;
-
-/** @brief IMU 平均角速度、平均加速度、平均加速度范数 */
-extern V3D angvel_avr, acc_avr, acc_avr_norm;
-
-/** @brief feats_down_body 中的点数 */
-extern size_t feats_down_size;
-
-/** @brief LiDAR → IMU 外参平移 (固定外参模式) */
-extern V3D Lidar_T_wrt_IMU;
-
-/** @brief LiDAR → IMU 外参旋转 (固定外参模式) */
-extern M3D Lidar_R_wrt_IMU;
-
-/** @brief 当地重力加速度大小 (m/s²) */
-
-/** @brief IMU 输入数据 (加速度+角速度) */
-extern input_ikfom input_in;
+extern EstimatorState estimator_state;
 
 // ==================== 函数声明 ====================
 
