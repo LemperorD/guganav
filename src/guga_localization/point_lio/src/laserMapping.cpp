@@ -88,8 +88,8 @@ int LaserMappingNode::run() {
                                 state_.q_output);
     }
 
-    // [Workflow 18] 输出阶段 (算法末尾): 发布更新后的里程计 x_{estimator_state.k+1} /
-    // P_{estimator_state.k+1}。
+    // [Workflow 18] 输出阶段 (算法末尾): 发布更新后的里程计
+    // x_{estimator_state.k+1} / P_{estimator_state.k+1}。
     if (!mapping_params_.publish_odometry_without_downsample) {
       publishOdometry();
     }
@@ -160,7 +160,8 @@ void LaserMappingNode::initialize() {
   RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
               laser_mapping_params_.lidar_type);
 
-  estimator_state.ivox_ = std::make_shared<IVoxType>(mapping_params_.ivox_options);
+  estimator_state.ivox_ = std::make_shared<IVoxType>(
+      mapping_params_.ivox_options);
 
   estimator_state.point_selected_surf.set();
   state_.downsize_filter_surf.setLeafSize(
@@ -277,15 +278,17 @@ bool LaserMappingNode::prepareFrame() {
   if (mapping_params_.space_down_sample) {
     state_.downsize_filter_surf.setInputCloud(state_.feats_undistort);
     state_.downsize_filter_surf.filter(*estimator_state.feats_down_body);
-    sort(estimator_state.feats_down_body->points.begin(), estimator_state.feats_down_body->points.end(),
-         time_list);
+    sort(estimator_state.feats_down_body->points.begin(),
+         estimator_state.feats_down_body->points.end(), time_list);
   } else {
     estimator_state.feats_down_body = measures_.lidar;
-    sort(estimator_state.feats_down_body->points.begin(), estimator_state.feats_down_body->points.end(),
-         time_list);
+    sort(estimator_state.feats_down_body->points.begin(),
+         estimator_state.feats_down_body->points.end(), time_list);
   }
-  estimator_state.time_seq = time_compressing<int>(estimator_state.feats_down_body);
-  estimator_state.feats_down_size = estimator_state.feats_down_body->points.size();
+  estimator_state.time_seq = time_compressing<int>(
+      estimator_state.feats_down_body);
+  estimator_state.feats_down_size =
+      estimator_state.feats_down_body->points.size();
 
   // ---- 就绪检查: IMU 初始化 / 地图初始化 ----
   if (imu_.needInit()) {
@@ -380,7 +383,8 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
                    + kf_input.x_.offset_T_L_I;
     }
   } else {
-    p_body_imu = estimator_state.Lidar_R_wrt_IMU * p_body_lidar + estimator_state.Lidar_T_wrt_IMU;
+    p_body_imu = estimator_state.Lidar_R_wrt_IMU * p_body_lidar
+                 + estimator_state.Lidar_T_wrt_IMU;
   }
   po->x = (float)p_body_imu(0);   // NOLINT
   po->y = (float)p_body_imu(1);   // NOLINT
@@ -578,7 +582,8 @@ void LaserMappingNode::resetSystem() {
   is_first_frame_ = true;
   state_.flg_reset = false;
   state_.init_map = false;
-  estimator_state.ivox_ = std::make_shared<IVoxType>(mapping_params_.ivox_options);
+  estimator_state.ivox_ = std::make_shared<IVoxType>(
+      mapping_params_.ivox_options);
 }
 
 /** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
@@ -623,7 +628,8 @@ void LaserMappingNode::preparePointMeasurements() const {
 
     estimator_state.pbody_list[i] = point_this;
     if (!mapping_params_.extrinsic_estimation) {
-      point_this = estimator_state.Lidar_R_wrt_IMU * point_this + estimator_state.Lidar_T_wrt_IMU;
+      point_this = estimator_state.Lidar_R_wrt_IMU * point_this
+                   + estimator_state.Lidar_T_wrt_IMU;
       M3D point_crossmat;
       point_crossmat << SKEW_SYM_MATRX(point_this);
       estimator_state.crossmat_list[i] = point_crossmat;
@@ -733,8 +739,9 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             }
           }
           if constexpr (ImuAsInput) {
-            estimator_state.input_in = imu_.lastInput(estimator_params_.gravity_magnitude
-                                      / estimator_params_.acc_norm);
+            estimator_state.input_in = imu_.lastInput(
+                estimator_params_.gravity_magnitude
+                / estimator_params_.acc_norm);
           } else {
             const auto measurement = imu_.lastMeasurement();
             estimator_state.angvel_avr = measurement.angular_velocity;
@@ -754,8 +761,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             time_update_last_ = get_time_sec(imu_next.header.stamp);
           }
           last_time = get_time_sec(imu_next.header.stamp);
-          estimator_state.input_in = imu_.nextInput(estimator_params_.gravity_magnitude
-                                    / estimator_params_.acc_norm);
+          estimator_state.input_in = imu_.nextInput(
+              estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
         } else {
           // [Workflow 1] 状态传播 (9)(10): 以下 kf.predict
           // 分别完成协方差传播与状态预测。 原 A2: 传播 + IMU 更新
@@ -794,8 +801,13 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   // 世界变换)。
   double pcl_beg_time = measures_.lidar_beg_time;
   estimator_state.idx = -1;
-  for (estimator_state.k = 0; estimator_state.k < (int)estimator_state.time_seq.size(); estimator_state.k++) {
-    PointType& point_body = estimator_state.feats_down_body->points[estimator_state.idx + estimator_state.time_seq[estimator_state.k]];
+  for (estimator_state.k = 0;
+       estimator_state.k < (int)estimator_state.time_seq.size();
+       estimator_state.k++) {
+    PointType& point_body =
+        estimator_state.feats_down_body
+            ->points[estimator_state.idx
+                     + estimator_state.time_seq[estimator_state.k]];
     const double point_offset_ms = point_time_offset_ms(point_body);
     time_current_ = point_offset_ms / 1000.0 + pcl_beg_time;
     if (is_first_frame_) {
@@ -806,8 +818,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             break;
           }
         }
-        estimator_state.input_in = imu_.lastInput(estimator_params_.gravity_magnitude
-                                  / estimator_params_.acc_norm);
+        estimator_state.input_in = imu_.lastInput(
+            estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
       } else {
         if (laser_mapping_params_.imu_enabled) {
           while (time_current_ > get_time_sec(imu_next.header.stamp)) {
@@ -830,8 +842,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     if constexpr (ImuAsInput) {
       while (time_current_ > get_time_sec(imu_next.header.stamp)) {
         imu_.popBuffer();
-        estimator_state.input_in = imu_.lastInput(estimator_params_.gravity_magnitude
-                                  / estimator_params_.acc_norm);
+        estimator_state.input_in = imu_.lastInput(
+            estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
         double dt = get_time_sec(imu_last.header.stamp) - last_time;
         double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
 
@@ -931,7 +943,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
     if (!kf.update_iterated_dyn_share_modified()) {
       // [Workflow 9] 无有效平面对应时跳过当前点更新。
-      estimator_state.idx = estimator_state.idx + estimator_state.time_seq[estimator_state.k];
+      estimator_state.idx = estimator_state.idx
+                            + estimator_state.time_seq[estimator_state.k];
       continue;
     }
     double solve_start = omp_get_wtime();
@@ -962,8 +975,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
     // [Workflow 8] 将更新后的点变换到世界系。
     for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
-      PointType& point_body_j = estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
-      PointType& point_world_j = estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
+      PointType& point_body_j =
+          estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
+      PointType& point_world_j =
+          estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
       pointBodyToWorld(&point_body_j, &point_world_j);
     }
 

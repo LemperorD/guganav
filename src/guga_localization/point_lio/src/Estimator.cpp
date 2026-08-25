@@ -20,13 +20,20 @@
 #include "parameters.h"
 
 namespace {
-EstimatorParams estimator_config;
+  Estimator default_estimator;
+}
+
+void Estimator::configureEstimatorParams(const EstimatorParams& params) {
+  params_ = params;
+}
+
+const EstimatorParams& Estimator::params() const {
+  return params_;
 }
 
 void configureEstimatorParams(const EstimatorParams& params) {
-  estimator_config = params;
+  default_estimator.configureEstimatorParams(params);
 }
-
 
 // ==================== 估计器共享状态 ====================
 
@@ -51,18 +58,22 @@ esekfom::esekf<state_output, 30, input_ikfom> kf_output;
  *
  * 注释中的 MTK 版本是类型安全但不在此使用的替代方式。
  */
-Eigen::Matrix<double, 24, 24> process_noise_cov_input() {
+Eigen::Matrix<double, 24, 24> Estimator::processNoiseCovInput() const {
   Eigen::Matrix<double, 24, 24> cov;
   cov.setZero();
-  cov.block<3, 3>(3, 3).diagonal() << estimator_config.gyr_cov_input,
-      estimator_config.gyr_cov_input, estimator_config.gyr_cov_input;
-  cov.block<3, 3>(12, 12).diagonal() << estimator_config.acc_cov_input,
-      estimator_config.acc_cov_input, estimator_config.acc_cov_input;
-  cov.block<3, 3>(15, 15).diagonal() << estimator_config.b_gyr_cov,
-      estimator_config.b_gyr_cov, estimator_config.b_gyr_cov;
-  cov.block<3, 3>(18, 18).diagonal() << estimator_config.b_acc_cov,
-      estimator_config.b_acc_cov, estimator_config.b_acc_cov;
+  cov.block<3, 3>(3, 3).diagonal() << params_.gyr_cov_input,
+      params_.gyr_cov_input, params_.gyr_cov_input;
+  cov.block<3, 3>(12, 12).diagonal() << params_.acc_cov_input,
+      params_.acc_cov_input, params_.acc_cov_input;
+  cov.block<3, 3>(15, 15).diagonal() << params_.b_gyr_cov,
+      params_.b_gyr_cov, params_.b_gyr_cov;
+  cov.block<3, 3>(18, 18).diagonal() << params_.b_acc_cov,
+      params_.b_acc_cov, params_.b_acc_cov;
   return cov;
+}
+
+Eigen::Matrix<double, 24, 24> process_noise_cov_input() {
+  return default_estimator.processNoiseCovInput();
 }
 
 /**
@@ -70,20 +81,24 @@ Eigen::Matrix<double, 24, 24> process_noise_cov_input() {
  *
  * 额外包含 vel_cov (索引 12:15), 因为速度本身带有过程噪声。
  */
-Eigen::Matrix<double, 30, 30> process_noise_cov_output() {
+Eigen::Matrix<double, 30, 30> Estimator::processNoiseCovOutput() const {
   Eigen::Matrix<double, 30, 30> cov;
   cov.setZero();
-  cov.block<3, 3>(12, 12).diagonal() << estimator_config.vel_cov,
-      estimator_config.vel_cov, estimator_config.vel_cov;
-  cov.block<3, 3>(15, 15).diagonal() << estimator_config.gyr_cov_output,
-      estimator_config.gyr_cov_output, estimator_config.gyr_cov_output;
-  cov.block<3, 3>(18, 18).diagonal() << estimator_config.acc_cov_output,
-      estimator_config.acc_cov_output, estimator_config.acc_cov_output;
-  cov.block<3, 3>(24, 24).diagonal() << estimator_config.b_gyr_cov,
-      estimator_config.b_gyr_cov, estimator_config.b_gyr_cov;
-  cov.block<3, 3>(27, 27).diagonal() << estimator_config.b_acc_cov,
-      estimator_config.b_acc_cov, estimator_config.b_acc_cov;
+  cov.block<3, 3>(12, 12).diagonal() << params_.vel_cov, params_.vel_cov,
+      params_.vel_cov;
+  cov.block<3, 3>(15, 15).diagonal() << params_.gyr_cov_output,
+      params_.gyr_cov_output, params_.gyr_cov_output;
+  cov.block<3, 3>(18, 18).diagonal() << params_.acc_cov_output,
+      params_.acc_cov_output, params_.acc_cov_output;
+  cov.block<3, 3>(24, 24).diagonal() << params_.b_gyr_cov, params_.b_gyr_cov,
+      params_.b_gyr_cov;
+  cov.block<3, 3>(27, 27).diagonal() << params_.b_acc_cov, params_.b_acc_cov,
+      params_.b_acc_cov;
   return cov;
+}
+
+Eigen::Matrix<double, 30, 30> process_noise_cov_output() {
+  return default_estimator.processNoiseCovOutput();
 }
 
 // ==================== 状态转移函数 ====================
@@ -100,8 +115,8 @@ Eigen::Matrix<double, 30, 30> process_noise_cov_output() {
  *
  * @return 24维状态导数向量 \dot{x}
  */
-Eigen::Matrix<double, 24, 1> get_f_input(state_input& s,
-                                         const input_ikfom& in) {
+Eigen::Matrix<double, 24, 1> Estimator::getFInput(
+    state_input& s, const input_ikfom& in) const {
   Eigen::Matrix<double, 24, 1> res = Eigen::Matrix<double, 24, 1>::Zero();
   vect3 omega;
   // 去零偏后的角速度: ω = ω_meas - bg (在流形上做 boxminus)
@@ -118,6 +133,11 @@ Eigen::Matrix<double, 24, 1> get_f_input(state_input& s,
   return res;
 }
 
+Eigen::Matrix<double, 24, 1> get_f_input(state_input& s,
+                                         const input_ikfom& in) {
+  return default_estimator.getFInput(s, in);
+}
+
 /**
  * @brief f(x) — IMU-as-output 模式状态导数
  *
@@ -128,8 +148,8 @@ Eigen::Matrix<double, 24, 1> get_f_input(state_input& s,
  *
  * @return 30维状态导数向量 \dot{x}
  */
-Eigen::Matrix<double, 30, 1> get_f_output(state_output& s,
-                                          const input_ikfom& in) {
+Eigen::Matrix<double, 30, 1> Estimator::getFOutput(
+    state_output& s, const input_ikfom& in) const {
   Eigen::Matrix<double, 30, 1> res = Eigen::Matrix<double, 30, 1>::Zero();
   // 世界坐标系下的加速度: R_wb * acc (acc 是当前估计的加速度)
   vect3 a_inertial = s.rot * s.acc;
@@ -140,6 +160,11 @@ Eigen::Matrix<double, 30, 1> get_f_output(state_output& s,
     res(i + 12) = a_inertial[i] + s.gravity[i];  ///< d(vel)/dt = R·acc + g
   }
   return res;
+}
+
+Eigen::Matrix<double, 30, 1> get_f_output(state_output& s,
+                                          const input_ikfom& in) {
+  return default_estimator.getFOutput(s, in);
 }
 
 // ==================== 状态转移雅可比矩阵 ====================
@@ -158,8 +183,8 @@ Eigen::Matrix<double, 30, 1> get_f_output(state_output& s,
  *
  * @return 24×24 雅可比矩阵 F
  */
-Eigen::Matrix<double, 24, 24> df_dx_input(state_input& s,
-                                          const input_ikfom& in) {
+Eigen::Matrix<double, 24, 24> Estimator::dfDxInput(
+    state_input& s, const input_ikfom& in) const {
   Eigen::Matrix<double, 24, 24> cov = Eigen::Matrix<double, 24, 24>::Zero();
   // d(pos)/d(vel) = I3
   cov.template block<3, 3>(0, 12) = Eigen::Matrix3d::Identity();
@@ -187,6 +212,11 @@ Eigen::Matrix<double, 24, 24> df_dx_input(state_input& s,
   return cov;
 }
 
+Eigen::Matrix<double, 24, 24> df_dx_input(state_input& s,
+                                          const input_ikfom& in) {
+  return default_estimator.dfDxInput(s, in);
+}
+
 /**
  * @brief F = \partial f / \partial x — IMU-as-output 模式
  *
@@ -196,8 +226,8 @@ Eigen::Matrix<double, 24, 24> df_dx_input(state_input& s,
  *
  * @return 30×30 雅可比矩阵 F
  */
-Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
-                                           const input_ikfom& in) {
+Eigen::Matrix<double, 30, 30> Estimator::dfDxOutput(
+    state_output& s, const input_ikfom& in) const {
   Eigen::Matrix<double, 30, 30> cov = Eigen::Matrix<double, 30, 30>::Zero();
   // d(pos)/d(vel) = I3
   cov.template block<3, 3>(0, 12) = Eigen::Matrix3d::Identity();
@@ -215,6 +245,11 @@ Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
   cov.template block<3, 3>(3, 15) = Eigen::Matrix3d::Identity();
 
   return cov;
+}
+
+Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
+                                           const input_ikfom& in) {
+  return default_estimator.dfDxOutput(s, in);
 }
 
 // ==================== 量测模型 ====================
@@ -246,40 +281,50 @@ Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
  * @param[out] ekfom_data.M_Noise 量测噪声标量
  * @param[out] ekfom_data.valid 是否有效 (至少一个特征点)
  */
-void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
-                   esekfom::dyn_share_modified<double>& ekfom_data) {
+void Estimator::hModelInput(
+    state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+    esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;  ///< 平面系数: (nx, ny, nz, d)
   pabcd.setZero();
-  estimator_state.normvec->resize(estimator_state.time_seq[estimator_state.k]);  ///< 分配该组点数的法向量缓存
-  int effect_num_k = 0;          ///< 当前组中的有效特征点数
+  estimator_state.normvec->resize(
+      estimator_state
+          .time_seq[estimator_state.k]);  ///< 分配该组点数的法向量缓存
+  int effect_num_k = 0;                   ///< 当前组中的有效特征点数
 
   // ---- Step 1: 遍历当前时间分组中的每个点，进行特征匹配 ----
   for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
-    PointType& point_body_j = estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
-    PointType& point_world_j = estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
+    PointType& point_body_j =
+        estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
+    PointType& point_world_j =
+        estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
 
     // 坐标变换: Body → World
     pointBodyToWorld(&point_body_j, &point_world_j);
 
-    V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];  // IMU系下的坐标
-    double p_norm = p_body.norm();         // 距 IMU 原点的距离
+    V3D p_body = estimator_state
+                     .pbody_list[estimator_state.idx + j + 1];  // IMU系下的坐标
+    double p_norm = p_body.norm();  // 距 IMU 原点的距离
     V3D p_world;
     p_world << point_world_j.x, point_world_j.y, point_world_j.z;
 
     {
-      auto& points_near = estimator_state.Nearest_Points[estimator_state.idx + j + 1];
+      auto& points_near =
+          estimator_state.Nearest_Points[estimator_state.idx + j + 1];
 
       // 在 iVox 地图中搜索 5 个最近邻
-      estimator_state.ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
+      estimator_state.ivox_->GetClosestPoint(point_world_j, points_near,
+                                             NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
         // 近邻不足5个 → 该点无效
-        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] =
+            false;
       } else {
-        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] =
+            false;
 
         // 用 5 个近邻拟合局部平面 (IMLS)
-        if (esti_plane(pabcd, points_near, estimator_config.plane_thr)) {
+        if (esti_plane(pabcd, points_near, params_.plane_thr)) {
           // 点面距离
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
@@ -287,8 +332,9 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
 
           // Mahalanobis 距离检验: |p_body|² > match_s · pd2²
           // match_s 为马氏距离阈值 (典型值 81, 即 9σ)
-          if (p_norm > estimator_config.match_s * pd2 * pd2) {
-            estimator_state.point_selected_surf[estimator_state.idx + j + 1] = true;
+          if (p_norm > params_.match_s * pd2 * pd2) {
+            estimator_state.point_selected_surf[estimator_state.idx + j + 1] =
+                true;
             // 存储平面系数: (nx, ny, nz) 存于 xyz, d 存于 intensity
             estimator_state.normvec->points[j].x = pabcd(0);
             estimator_state.normvec->points[j].y = pabcd(1);
@@ -308,7 +354,7 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
   }
 
   // ---- Step 3: 构造量测雅可比矩阵 H 和残差向量 z ----
-  ekfom_data.M_Noise = estimator_config.laser_point_cov;
+  ekfom_data.M_Noise = params_.laser_point_cov;
   ekfom_data.h_x.resize(effect_num_k, 12);
   ekfom_data.h_x = Eigen::MatrixXd::Zero(effect_num_k, 12);
   ekfom_data.z.resize(effect_num_k);
@@ -317,10 +363,11 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
   for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
     if (estimator_state.point_selected_surf[estimator_state.idx + j + 1]) {
       // 提取平面法向量
-      V3D norm_vec(estimator_state.normvec->points[j].x, estimator_state.normvec->points[j].y,
+      V3D norm_vec(estimator_state.normvec->points[j].x,
+                   estimator_state.normvec->points[j].y,
                    estimator_state.normvec->points[j].z);
 
-      if (estimator_config.extrinsic_estimation) {
+      if (params_.extrinsic_estimation) {
         // ------ 在线外参估计模式: 需要 B 分量 ------
         V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
@@ -343,7 +390,9 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
       } else {
         // ------ 固定外参模式: B 部分为零 ------
         M3D point_crossmat =
-            estimator_state.crossmat_list[estimator_state.idx + j + 1];  // [R_LI_fixed * p_body + T_LI_fixed]×
+            estimator_state
+                .crossmat_list[estimator_state.idx + j
+                               + 1];  // [R_LI_fixed * p_body + T_LI_fixed]×
         V3D C(s.rot.transpose() * norm_vec);  // C = R^T · n
         V3D A(point_crossmat * C);            // A = [p_imu]× · C
 
@@ -353,15 +402,28 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
       }
 
       // 残差: z_j = -n · p_world - d (点面有向距离)
-      ekfom_data.z(m) = -norm_vec(0) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].x
-                        - norm_vec(1) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].y
-                        - norm_vec(2) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].z
+      ekfom_data.z(m) = (-norm_vec(0)
+                         * estimator_state.feats_down_world
+                               ->points[estimator_state.idx + j + 1]
+                               .x)
+                        - (norm_vec(1)
+                           * estimator_state.feats_down_world
+                                 ->points[estimator_state.idx + j + 1]
+                                 .y)
+                        - (norm_vec(2)
+                           * estimator_state.feats_down_world
+                                 ->points[estimator_state.idx + j + 1]
+                                 .z)
                         - estimator_state.normvec->points[j].intensity;
-
       m++;
     }
   }
   estimator_state.effct_feat_num += effect_num_k;
+}
+
+void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+                   esekfom::dyn_share_modified<double>& ekfom_data) {
+  default_estimator.hModelInput(s, cov_p, cov_R, ekfom_data);
 }
 
 /**
@@ -373,9 +435,9 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
  *
  * @see h_model_input
  */
-void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
-                    Eigen::Matrix3d cov_R,
-                    esekfom::dyn_share_modified<double>& ekfom_data) {
+void Estimator::hModelOutput(
+    state_output& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+    esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;
   pabcd.setZero();
   estimator_state.normvec->resize(estimator_state.time_seq[estimator_state.k]);
@@ -383,30 +445,37 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
 
   // ---- Step 1: 遍历点，搜索近邻，拟合平面，马氏距离检验 ----
   for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
-    PointType& point_body_j = estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
-    PointType& point_world_j = estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
+    PointType& point_body_j =
+        estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
+    PointType& point_world_j =
+        estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
     pointBodyToWorld(&point_body_j, &point_world_j);
     V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
     double p_norm = p_body.norm();
     V3D p_world;
     p_world << point_world_j.x, point_world_j.y, point_world_j.z;
     {
-      auto& points_near = estimator_state.Nearest_Points[estimator_state.idx + j + 1];
+      auto& points_near =
+          estimator_state.Nearest_Points[estimator_state.idx + j + 1];
 
-      estimator_state.ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
+      estimator_state.ivox_->GetClosestPoint(point_world_j, points_near,
+                                             NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
-        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] =
+            false;
       } else {
-        estimator_state.point_selected_surf[estimator_state.idx + j + 1] = false;
-        if (esti_plane(pabcd, points_near, estimator_config.plane_thr)) {
+        estimator_state.point_selected_surf[estimator_state.idx + j + 1] =
+            false;
+        if (esti_plane(pabcd, points_near, params_.plane_thr)) {
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
                            + pabcd(2) * point_world_j.z + pabcd(3));
 
           // Mahalanobis 距离检验 (注释掉的代码是自适应加权的备选方案)
-          if (p_norm > estimator_config.match_s * pd2 * pd2) {
-            estimator_state.point_selected_surf[estimator_state.idx + j + 1] = true;
+          if (p_norm > params_.match_s * pd2 * pd2) {
+            estimator_state.point_selected_surf[estimator_state.idx + j + 1] =
+                true;
             estimator_state.normvec->points[j].x = pabcd(0);
             estimator_state.normvec->points[j].y = pabcd(1);
             estimator_state.normvec->points[j].z = pabcd(2);
@@ -424,7 +493,7 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
   }
 
   // ---- Step 2: 构造雅可比和残差 ----
-  ekfom_data.M_Noise = estimator_config.laser_point_cov;
+  ekfom_data.M_Noise = params_.laser_point_cov;
   ekfom_data.h_x.resize(effect_num_k, 12);
   ekfom_data.h_x = Eigen::MatrixXd::Zero(effect_num_k, 12);
   ekfom_data.z.resize(effect_num_k);
@@ -432,9 +501,10 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
 
   for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
     if (estimator_state.point_selected_surf[estimator_state.idx + j + 1]) {
-      V3D norm_vec(estimator_state.normvec->points[j].x, estimator_state.normvec->points[j].y,
+      V3D norm_vec(estimator_state.normvec->points[j].x,
+                   estimator_state.normvec->points[j].y,
                    estimator_state.normvec->points[j].z);
-      if (estimator_config.extrinsic_estimation) {
+      if (params_.extrinsic_estimation) {
         V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
         p_crossmat << SKEW_SYM_MATRX(p_body);
@@ -446,21 +516,37 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), B.transpose(), C.transpose();
       } else {
-        M3D point_crossmat = estimator_state.crossmat_list[estimator_state.idx + j + 1];
+        M3D point_crossmat =
+            estimator_state.crossmat_list[estimator_state.idx + j + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
-      ekfom_data.z(m) = -norm_vec(0) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].x
-                        - norm_vec(1) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].y
-                        - norm_vec(2) * estimator_state.feats_down_world->points[estimator_state.idx + j + 1].z
+      ekfom_data.z(m) = -norm_vec(0)
+                            * estimator_state.feats_down_world
+                                  ->points[estimator_state.idx + j + 1]
+                                  .x
+                        - norm_vec(1)
+                              * estimator_state.feats_down_world
+                                    ->points[estimator_state.idx + j + 1]
+                                    .y
+                        - norm_vec(2)
+                              * estimator_state.feats_down_world
+                                    ->points[estimator_state.idx + j + 1]
+                                    .z
                         - estimator_state.normvec->points[j].intensity;
 
       m++;
     }
   }
   estimator_state.effct_feat_num += effect_num_k;
+}
+
+void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
+                    Eigen::Matrix3d cov_R,
+                    esekfom::dyn_share_modified<double>& ekfom_data) {
+  default_estimator.hModelOutput(s, cov_p, cov_R, ekfom_data);
 }
 
 /**
@@ -483,58 +569,65 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
  * @param[out] ekfom_data.R_IMU   6维权值 (噪声标准差的倒数平方?)
  * @param[out] ekfom_data.satu_check 6维饱和标记 (true=该轴饱和)
  */
-void h_model_IMU_output(state_output& s,
-                        esekfom::dyn_share_modified<double>& ekfom_data) {
+void Estimator::hModelImuOutput(
+    state_output& s,
+    esekfom::dyn_share_modified<double>& ekfom_data) const {
   // 重置饱和标记
   std::memset(ekfom_data.satu_check, false, 6);
 
   // [Workflow 14] 计算 IMU 量测残差 r_IMU 与量测噪声 R_IMU (对应 (14)(15))。
   // 角速度残差: ω_meas - (omg + bg)
-  ekfom_data.z_IMU.block<3, 1>(0, 0) = estimator_state.angvel_avr - s.omg - s.bg;
+  ekfom_data.z_IMU.block<3, 1>(0, 0) = estimator_state.angvel_avr - s.omg
+                                       - s.bg;
 
   // 加速度残差: a_meas * G/acc_norm - (acc + ba)
   // 注: IMU 测量值已归一化，需要乘以 G/acc_norm 恢复
-  ekfom_data.z_IMU.block<3, 1>(3, 0) = estimator_state.acc_avr * estimator_config.gravity_magnitude
-                                         / estimator_config.acc_norm - s.acc
-                                       - s.ba;
+  ekfom_data.z_IMU.block<3, 1>(3, 0) =
+      estimator_state.acc_avr * params_.gravity_magnitude / params_.acc_norm
+      - s.acc - s.ba;
 
   // 量测噪声权重 (方差倒数)
-  ekfom_data.R_IMU << estimator_config.imu_meas_omg_cov,
-      estimator_config.imu_meas_omg_cov, estimator_config.imu_meas_omg_cov,
-      estimator_config.imu_meas_acc_cov, estimator_config.imu_meas_acc_cov,
-      estimator_config.imu_meas_acc_cov;
+  ekfom_data.R_IMU << params_.imu_meas_omg_cov, params_.imu_meas_omg_cov,
+      params_.imu_meas_omg_cov, params_.imu_meas_acc_cov,
+      params_.imu_meas_acc_cov, params_.imu_meas_acc_cov;
 
   // [Workflow 13] 如果无饱和度 (a_m, ω_m): 各轴测量值未接近饱和阈值时参与更新。
-  // [Workflow 17] 否则 (饱和): 饱和轴残差置零并标记 satu_check, 更新时跳过该轴。
+  // [Workflow 17] 否则 (饱和): 饱和轴残差置零并标记 satu_check,
+  // 更新时跳过该轴。
   // ---- IMU 饱和检测与处理 ----
-  if (estimator_config.check_saturation) {
+  if (params_.check_saturation) {
     // 陀螺仪 x 轴饱和
-    if (fabs(estimator_state.angvel_avr(0)) >= 0.99 * estimator_config.saturation_gyro) {
+    if (fabs(estimator_state.angvel_avr(0)) >= 0.99 * params_.saturation_gyro) {
       ekfom_data.satu_check[0] = true;  // 标记饱和
       ekfom_data.z_IMU(0) = 0.0;        // 残差置零 (该轴无信息)
     }
-    if (fabs(estimator_state.angvel_avr(1)) >= 0.99 * estimator_config.saturation_gyro) {
+    if (fabs(estimator_state.angvel_avr(1)) >= 0.99 * params_.saturation_gyro) {
       ekfom_data.satu_check[1] = true;
       ekfom_data.z_IMU(1) = 0.0;
     }
-    if (fabs(estimator_state.angvel_avr(2)) >= 0.99 * estimator_config.saturation_gyro) {
+    if (fabs(estimator_state.angvel_avr(2)) >= 0.99 * params_.saturation_gyro) {
       ekfom_data.satu_check[2] = true;
       ekfom_data.z_IMU(2) = 0.0;
     }
     // 加速度计饱和
-    if (fabs(estimator_state.acc_avr(0)) >= 0.99 * estimator_config.saturation_acc) {
+    if (fabs(estimator_state.acc_avr(0)) >= 0.99 * params_.saturation_acc) {
       ekfom_data.satu_check[3] = true;
       ekfom_data.z_IMU(3) = 0.0;
     }
-    if (fabs(estimator_state.acc_avr(1)) >= 0.99 * estimator_config.saturation_acc) {
+    if (fabs(estimator_state.acc_avr(1)) >= 0.99 * params_.saturation_acc) {
       ekfom_data.satu_check[4] = true;
       ekfom_data.z_IMU(4) = 0.0;
     }
-    if (fabs(estimator_state.acc_avr(2)) >= 0.99 * estimator_config.saturation_acc) {
+    if (fabs(estimator_state.acc_avr(2)) >= 0.99 * params_.saturation_acc) {
       ekfom_data.satu_check[5] = true;
       ekfom_data.z_IMU(5) = 0.0;
     }
   }
+}
+
+void h_model_IMU_output(state_output& s,
+                        esekfom::dyn_share_modified<double>& ekfom_data) {
+  default_estimator.hModelImuOutput(s, ekfom_data);
 }
 
 /**
@@ -547,21 +640,21 @@ void h_model_IMU_output(state_output& s,
  * 外参选择:
  *   - 在线估计 (extrinsic_est_en=true): 使用 EKF 状态中的 offset_R_L_I 和
  * offset_T_L_I
- *   - 固定外参 (extrinsic_est_en=false): 使用 YAML 中的 estimator_state.Lidar_R_wrt_IMU 和
- * estimator_state.Lidar_T_wrt_IMU
+ *   - 固定外参 (extrinsic_est_en=false): 使用 YAML 中的
+ * estimator_state.Lidar_R_wrt_IMU 和 estimator_state.Lidar_T_wrt_IMU
  *
  * 模式选择: 根据 use_imu_as_input 选择 kf_input 或 kf_output 的状态
  *
  * @param pi 输入: 雷达/IMU 坐标系下的点
  * @param po 输出: 世界坐标系下的点 (保持 intensity)
  */
-void pointBodyToWorld(PointType const* const pi, PointType* const po) {
+void Estimator::pointBodyToWorld(PointType const* pi, PointType* po) const {
   V3D p_body(pi->x, pi->y, pi->z);
 
   V3D p_global;
-  if (estimator_config.extrinsic_estimation) {
+  if (params_.extrinsic_estimation) {
     // 在线外参估计: 使用 EKF 状态中的外参
-    if (!estimator_config.use_imu_as_input) {
+    if (!params_.use_imu_as_input) {
       p_global = kf_output.x_.rot
                      * (kf_output.x_.offset_R_L_I * p_body
                         + kf_output.x_.offset_T_L_I)
@@ -574,11 +667,15 @@ void pointBodyToWorld(PointType const* const pi, PointType* const po) {
     }
   } else {
     // 固定外参: 使用 YAML 配置
-    if (!estimator_config.use_imu_as_input) {
-      p_global = kf_output.x_.rot * (estimator_state.Lidar_R_wrt_IMU * p_body + estimator_state.Lidar_T_wrt_IMU)
+    if (!params_.use_imu_as_input) {
+      p_global = kf_output.x_.rot
+                     * (estimator_state.Lidar_R_wrt_IMU * p_body
+                        + estimator_state.Lidar_T_wrt_IMU)
                  + kf_output.x_.pos;
     } else {
-      p_global = kf_input.x_.rot * (estimator_state.Lidar_R_wrt_IMU * p_body + estimator_state.Lidar_T_wrt_IMU)
+      p_global = kf_input.x_.rot
+                     * (estimator_state.Lidar_R_wrt_IMU * p_body
+                        + estimator_state.Lidar_T_wrt_IMU)
                  + kf_input.x_.pos;
     }
   }
@@ -587,4 +684,8 @@ void pointBodyToWorld(PointType const* const pi, PointType* const po) {
   po->y = p_global(1);
   po->z = p_global(2);
   po->intensity = pi->intensity;  // 保留强度信息
+}
+
+void pointBodyToWorld(PointType const* const pi, PointType* const po) {
+  default_estimator.pointBodyToWorld(pi, po);
 }

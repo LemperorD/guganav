@@ -24,9 +24,6 @@
 #include "common_lib.h"
 #include "parameters.h"
 
-void configureEstimatorParams(const EstimatorParams& params);
-
-
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -35,27 +32,63 @@ void configureEstimatorParams(const EstimatorParams& params);
 #include <bitset>
 #include <unordered_set>
 
+class Estimator {
+public:
+  void configureEstimatorParams(const EstimatorParams& params);
+  [[nodiscard]] const EstimatorParams& params() const;
+  [[nodiscard]] Eigen::Matrix<double, 24, 24> processNoiseCovInput() const;
+  [[nodiscard]] Eigen::Matrix<double, 30, 30> processNoiseCovOutput() const;
+  [[nodiscard]] Eigen::Matrix<double, 24, 1> getFInput(
+      state_input& state, const input_ikfom& input) const;
+  [[nodiscard]] Eigen::Matrix<double, 30, 1> getFOutput(
+      state_output& state, const input_ikfom& input) const;
+  [[nodiscard]] Eigen::Matrix<double, 24, 24> dfDxInput(
+      state_input& state, const input_ikfom& input) const;
+  [[nodiscard]] Eigen::Matrix<double, 30, 30> dfDxOutput(
+      state_output& state, const input_ikfom& input) const;
+  void hModelInput(state_input& state, Eigen::Matrix3d cov_p,
+                   Eigen::Matrix3d cov_R,
+                   esekfom::dyn_share_modified<double>& ekfom_data) const;
+  void hModelOutput(state_output& state, Eigen::Matrix3d cov_p,
+                    Eigen::Matrix3d cov_R,
+                    esekfom::dyn_share_modified<double>& ekfom_data) const;
+  void hModelImuOutput(
+      state_output& state,
+      esekfom::dyn_share_modified<double>& ekfom_data) const;
+  void pointBodyToWorld(PointType const* input, PointType* output) const;
+
+private:
+  EstimatorParams params_;
+};
+
+void configureEstimatorParams(const EstimatorParams& params);
+
 // ==================== 量测相关状态 ====================
 
 struct EstimatorState {
-  PointCloudXYZI::Ptr normvec{new PointCloudXYZI(100000, 1)}; // 每个有效点的平面法向量
-  std::vector<int> time_seq; // 时间分组序列
-  PointCloudXYZI::Ptr feats_down_body{new PointCloudXYZI(10000, 1)}; // IMU 坐标系下的降采样特征点云
-  PointCloudXYZI::Ptr feats_down_world{new PointCloudXYZI(10000, 1)}; // 世界坐标系下的降采样特征点云
-  std::vector<V3D> pbody_list; // IMU 坐标系下的点位置列表
-  std::vector<PointVector> Nearest_Points; // 每个特征点的最近邻点列表
-  IVoxType::Ptr ivox_{nullptr}; // iVox 增量体素局部地图
-  std::vector<float> pointSearchSqDis = std::vector<float>(NUM_MATCH_POINTS); // 最近邻搜索距离平方
-  std::bitset<100000> point_selected_surf{}; // 有效曲面点标记
-  std::vector<M3D> crossmat_list; // 反对称矩阵列表
-  int effct_feat_num{0}; // 当前帧有效特征点总数
-  int k{0}; // 当前处理的时间分组索引
-  int idx{-1}; // 当前处理的点偏移索引
-  input_ikfom input_in; // IMU 输入数据
-  V3D angvel_avr, acc_avr, acc_avr_norm; // IMU 平均角速度、平均加速度、平均加速度范数
-  size_t feats_down_size{0}; // feats_down_body 中的点数
-  V3D Lidar_T_wrt_IMU{Zero3d}; // LiDAR → IMU 外参平移
-  M3D Lidar_R_wrt_IMU{Eye3d}; // LiDAR → IMU 外参旋转
+  PointCloudXYZI::Ptr normvec{
+      new PointCloudXYZI(100000, 1)};  // 每个有效点的平面法向量
+  std::vector<int> time_seq;           // 时间分组序列
+  PointCloudXYZI::Ptr feats_down_body{
+      new PointCloudXYZI(10000, 1)};  // IMU 坐标系下的降采样特征点云
+  PointCloudXYZI::Ptr feats_down_world{
+      new PointCloudXYZI(10000, 1)};        // 世界坐标系下的降采样特征点云
+  std::vector<V3D> pbody_list;              // IMU 坐标系下的点位置列表
+  std::vector<PointVector> Nearest_Points;  // 每个特征点的最近邻点列表
+  IVoxType::Ptr ivox_{nullptr};             // iVox 增量体素局部地图
+  std::vector<float> pointSearchSqDis = std::vector<float>(
+      NUM_MATCH_POINTS);                      // 最近邻搜索距离平方
+  std::bitset<100000> point_selected_surf{};  // 有效曲面点标记
+  std::vector<M3D> crossmat_list;             // 反对称矩阵列表
+  int effct_feat_num{0};                      // 当前帧有效特征点总数
+  int k{0};                                   // 当前处理的时间分组索引
+  int idx{-1};                                // 当前处理的点偏移索引
+  input_ikfom input_in;                       // IMU 输入数据
+  V3D angvel_avr, acc_avr,
+      acc_avr_norm;             // IMU 平均角速度、平均加速度、平均加速度范数
+  size_t feats_down_size{0};    // feats_down_body 中的点数
+  V3D Lidar_T_wrt_IMU{Zero3d};  // LiDAR → IMU 外参平移
+  M3D Lidar_R_wrt_IMU{Eye3d};   // LiDAR → IMU 外参旋转
 };
 
 extern EstimatorState estimator_state;
