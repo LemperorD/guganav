@@ -45,7 +45,6 @@ public:
 
   bool collectUntil(double end_time, MeasureGroup& meas);
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort);
-  void reset();
 
   [[nodiscard]] bool needInit() const;
   [[nodiscard]] double lastTimestamp() const;

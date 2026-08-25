@@ -21,8 +21,8 @@ namespace {
           return point_time_offset_ms(lhs) < point_time_offset_ms(rhs);
         });
     const double max_point_time_offset_ms = point_time_offset_ms(*max_point);
-    meas.lidar_last_time =
-        meas.lidar_beg_time + max_point_time_offset_ms / 1000.0;
+    meas.lidar_last_time = meas.lidar_beg_time
+                           + max_point_time_offset_ms / 1000.0;
   }
 
   void pop_lidar_frame(Lidar& lidar) {
@@ -48,8 +48,9 @@ namespace {
     if (lidar.frame_ct < lidar.mergeFrameCount()) {
       for (auto point : points->points) {
         set_point_time_offset_ms(
-            point, point_time_offset_ms(point)
-                      + static_cast<float>((timestamp - lidar.time_con) * 1000.0));
+            point,
+            point_time_offset_ms(point)
+                + static_cast<float>((timestamp - lidar.time_con) * 1000.0));
         lidar.ptr_con->push_back(point);
       }
       ++lidar.frame_ct;
@@ -165,9 +166,9 @@ bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
     lidar_pushed = true;
   }
 
-  const double required_end =
-      lose_lid ? meas.lidar_beg_time + params_.lidar_time_interval
-               : meas.lidar_last_time;
+  const double required_end = lose_lid ? meas.lidar_beg_time
+                                             + params_.lidar_time_interval
+                                       : meas.lidar_last_time;
   if (imu.lastTimestamp() < required_end) {
     return false;
   }
@@ -182,17 +183,4 @@ bool Lidar::syncPackages(Imu& imu, MeasureGroup& meas) {
   imu_pushed = false;
   lose_lid = false;
   return true;
-}
-
-void Lidar::reset() {
-  ptr_con->clear();
-  lidar_buffer.clear();
-  time_buffer.clear();
-  scan_count = 0;
-  frame_ct = 0;
-  lidar_pushed = false;
-  imu_pushed = false;
-  last_timestamp_lidar = -1.0;
-  time_con = 0.0;
-  lose_lid = false;
 }

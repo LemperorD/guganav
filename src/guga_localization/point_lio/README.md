@@ -1,5 +1,30 @@
 # Point-LIO
 
+## 本仓库适配
+
+本包是 `guganav` 中的 ROS 2 Humble Point-LIO 实现，构建目标为
+`pointlio_mapping`。从工作空间根目录构建并启动：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --packages-select point_lio
+source install/setup.bash
+ros2 launch point_lio point_lio.launch.py rviz:=False
+```
+
+启动文件默认加载 `config/mid360.yaml`。通过
+`point_lio_cfg_dir:=/absolute/path/to/config.yaml` 选择其他配置；包内提供
+`avia.yaml`、`horizon.yaml`、`mid360.yaml`、`ouster64.yaml` 和
+`velody16.yaml`。
+
+节点订阅 LiDAR 与 IMU 话题，具体名称由 YAML 的 `common.lid_topic` 与
+`common.imu_topic` 配置；输出包括 `aft_mapped_to_init`、
+`cloud_registered`、`cloud_registered_body` 和 `Laser_map`。算法流程、当前
+接口和重构记录见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+下方内容来自上游 Point-LIO，保留用于算法背景与参数含义参考；其中涉及
+独立仓库目录、旧构建命令或旧 launch 文件的步骤不适用于本工作空间。
+
 > ROS2 Fork repo maintainer: [LihanChen2004](https://github.com/LihanChen2004)
 
 ## Point-LIO: Robust High-Bandwidth Lidar-Inertial Odometry

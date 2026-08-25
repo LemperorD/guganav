@@ -140,14 +140,6 @@ void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort) {
   processor_->process(meas, undistort);
 }
 
-void Imu::reset() {
-  processor_->reset();
-  buffer_.clear();
-  last_ = sensor_msgs::msg::Imu();
-  next_ = sensor_msgs::msg::Imu();
-  last_timestamp_ = -1.0;
-}
-
 bool Imu::needInit() const {
   return processor_->needInit();
 }

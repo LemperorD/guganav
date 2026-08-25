@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
 
 /** @brief 节点入口: 调用 initialize() 后进入主循环 (原 main) */
 int LaserMappingNode::run() {
-  initialize();
+  totalInitialize();
 
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
@@ -61,11 +61,7 @@ int LaserMappingNode::run() {
     }
     lidar_end_time_ = measures_.lidar_last_time;
 
-    if (state_.flg_reset) {  // 需要reset
-      resetSystem();
-    }
-
-    if (state_.flg_first_scan) {  // (reset后)首次扫描
+    if (state_.flg_first_scan) {  // 首次扫描
       initScan();
     }
 
@@ -126,7 +122,7 @@ LaserMappingNode::LaserMappingNode() : rclcpp::Node("laserMapping") {
 }
 
 /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (原 run 前半段) */
-void LaserMappingNode::initialize() {
+void LaserMappingNode::totalInitialize() {
   // 本类已继承 rclcpp::Node, 直接以自身加入执行器。
   executor_.add_node(this->get_node_base_interface());
 
@@ -564,26 +560,6 @@ void LaserMappingNode::publishPath() {
   state_.msg_body_pose.header.frame_id = "camera_init";
   state_.path.poses.emplace_back(state_.msg_body_pose);
   pub_path_->publish(state_.path);
-}
-
-/** @brief 系统复位: 重置滤波器/里程计状态/地图 (bag 回放等场景) */
-void LaserMappingNode::resetSystem() {
-  RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
-              "reset when rosbag play back");
-  imu_.reset();
-  lidar_.reset();
-  state_.feats_undistort = std::make_shared<PointCloudXYZI>();
-  if (mapping_params_.use_imu_as_input) {
-    kf_input.change_P(state_.p_init);
-  } else {
-    kf_output.change_P(state_.p_init_output);
-  }
-  state_.flg_first_scan = true;
-  is_first_frame_ = true;
-  state_.flg_reset = false;
-  state_.init_map = false;
-  estimator_state.ivox_ = std::make_shared<IVoxType>(
-      mapping_params_.ivox_options);
 }
 
 /** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
@@ -1029,4 +1005,7 @@ void LaserMappingNode::savePcd() {
   string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
   pcl::PCDWriter pcd_writer;
   pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
+}
+
+bool LaserMappingNode::initialize() {
 }

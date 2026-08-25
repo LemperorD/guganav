@@ -42,12 +42,13 @@ public:
   };
 
   void configure(const Params& params);
-  [[nodiscard]] int mergeFrameCount() const { return params_.con_frame_num; }
+  [[nodiscard]] int mergeFrameCount() const {
+    return params_.con_frame_num;
+  }
 
   void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
   void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
   bool syncPackages(Imu& imu, MeasureGroup& meas);
-  void reset();
 
   double T1[MAXN]{};
   double s_plot[MAXN]{};
@@ -76,5 +77,4 @@ public:
 private:
   Params params_;
   Preprocess preprocess_;
-
 };

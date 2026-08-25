@@ -106,7 +106,7 @@ private:
   // ==================== 私有成员函数 (原匿名namespace, 只由本节点调用)
 
   /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (由 run 调用) */
-  void initialize();
+  void totalInitialize();
 
   /** @brief 帧级初始化 (每轮主循环): 计时归零 + IMU 预处理 + 降采样/排序/分组
    *         + 地图就绪检查 + 量测准备
@@ -137,9 +137,6 @@ private:
 
   void publishPath();
 
-  /** @brief 系统复位: 重置滤波器/里程计状态/地图 (bag 回放等场景) */
-  void resetSystem();
-
   /** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
    * (iVox/先验PCD)
    * @return true  地图已就绪, 本帧可继续正常处理
@@ -165,4 +162,6 @@ private:
   void initScan();
 
   void savePcd();
+
+  bool initialize();
 };
