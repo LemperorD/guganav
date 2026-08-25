@@ -83,7 +83,7 @@ param_value() {
   local output
 
   if ! output=$(timeout 3 ros2 param get "$node" "$param" 2>&1); then
-    echo "获取失败 [$param]:" >&2
+    echo "获取失败 [$param#FollowPath.]:" >&2
     echo "$output" >&2
     printf '?\n'
     return 0
@@ -151,8 +151,9 @@ interactive_menu() {
     local i=1
     for p in "${names[@]}"; do
       local mark=""
+      p_print="${p#FollowPath.}"   # 显示时去掉前缀
       [ "${changed[$p]:-0}" = "1" ] && mark=" *"   # * = 上次更改，本循环已重取确认
-      printf "  %2d) %-38s [%s]%s\n" "$i" "$p" "${values[$p]:-?}" "$mark"
+      printf "  %2d) %-38s [%s]%s\n" "$i" "${p_print}" "${values[$p]:-?}" "$mark"
       i=$((i+1))
     done
     echo "  0) 退出"
