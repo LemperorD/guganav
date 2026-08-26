@@ -13,9 +13,17 @@ struct ImuMeasurement {
 class Imu {
 public:
   struct Params {
-    ImuProcessor::Params processor;
-    double integration_interval{0.005};
-    double timestamp_offset{0.0};  ///< corrected_time = raw_time + offset
+    static Params create(ImuProcessor::Params processor,
+                         double integration_interval,
+                         double timestamp_offset);
+    [[nodiscard]] const ImuProcessor::Params& processor() const { return processor_; }
+    [[nodiscard]] double integrationInterval() const { return integration_interval_; }
+    [[nodiscard]] double timestampOffset() const { return timestamp_offset_; }
+
+  private:
+    ImuProcessor::Params processor_;
+    double integration_interval_{0.005};
+    double timestamp_offset_{0.0};
   };
 
   void configure(const Params& params);

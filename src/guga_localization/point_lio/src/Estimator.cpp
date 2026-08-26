@@ -17,11 +17,6 @@
  */
 
 #include "point_lio/Estimator.h"
-#include "point_lio/parameters.h"
-
-namespace {
-  Estimator default_estimator;
-}
 
 void Estimator::configureEstimatorParams(const EstimatorParams& params) {
   params_ = params;
@@ -29,10 +24,6 @@ void Estimator::configureEstimatorParams(const EstimatorParams& params) {
 
 const EstimatorParams& Estimator::params() const {
   return params_;
-}
-
-void configureEstimatorParams(const EstimatorParams& params) {
-  default_estimator.configureEstimatorParams(params);
 }
 
 // ==================== 估计器共享状态 ====================
@@ -72,10 +63,6 @@ Eigen::Matrix<double, 24, 24> Estimator::processNoiseCovInput() const {
   return cov;
 }
 
-Eigen::Matrix<double, 24, 24> process_noise_cov_input() {
-  return default_estimator.processNoiseCovInput();
-}
-
 /**
  * @brief 构造 IMU-as-output 模式的 Q 矩阵
  *
@@ -95,10 +82,6 @@ Eigen::Matrix<double, 30, 30> Estimator::processNoiseCovOutput() const {
   cov.block<3, 3>(27, 27).diagonal() << params_.b_acc_cov, params_.b_acc_cov,
       params_.b_acc_cov;
   return cov;
-}
-
-Eigen::Matrix<double, 30, 30> process_noise_cov_output() {
-  return default_estimator.processNoiseCovOutput();
 }
 
 // ==================== 状态转移函数 ====================
@@ -133,11 +116,6 @@ Eigen::Matrix<double, 24, 1> Estimator::getFInput(state_input& s,
   return res;
 }
 
-Eigen::Matrix<double, 24, 1> get_f_input(state_input& s,
-                                         const input_ikfom& in) {
-  return default_estimator.getFInput(s, in);
-}
-
 /**
  * @brief f(x) — IMU-as-output 模式状态导数
  *
@@ -160,11 +138,6 @@ Eigen::Matrix<double, 30, 1> Estimator::getFOutput(
     res(i + 12) = a_inertial[i] + s.gravity[i];  ///< d(vel)/dt = R·acc + g
   }
   return res;
-}
-
-Eigen::Matrix<double, 30, 1> get_f_output(state_output& s,
-                                          const input_ikfom& in) {
-  return default_estimator.getFOutput(s, in);
 }
 
 // ==================== 状态转移雅可比矩阵 ====================
@@ -212,11 +185,6 @@ Eigen::Matrix<double, 24, 24> Estimator::dfDxInput(
   return cov;
 }
 
-Eigen::Matrix<double, 24, 24> df_dx_input(state_input& s,
-                                          const input_ikfom& in) {
-  return default_estimator.dfDxInput(s, in);
-}
-
 /**
  * @brief F = \partial f / \partial x — IMU-as-output 模式
  *
@@ -245,11 +213,6 @@ Eigen::Matrix<double, 30, 30> Estimator::dfDxOutput(
   cov.template block<3, 3>(3, 15) = Eigen::Matrix3d::Identity();
 
   return cov;
-}
-
-Eigen::Matrix<double, 30, 30> df_dx_output(state_output& s,
-                                           const input_ikfom& in) {
-  return default_estimator.dfDxOutput(s, in);
 }
 
 // ==================== 量测模型 ====================
@@ -299,7 +262,7 @@ void Estimator::hModelInput(
         estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
 
     // 坐标变换: Body → World
-    pointBodyToWorld(&point_body_j, &point_world_j);
+    this->pointBodyToWorld(&point_body_j, &point_world_j);
 
     V3D p_body = estimator_state
                      .pbody_list[estimator_state.idx + j + 1];  // IMU系下的坐标
@@ -421,19 +384,14 @@ void Estimator::hModelInput(
   estimator_state.effct_feat_num += effect_num_k;
 }
 
-void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
-                   esekfom::dyn_share_modified<double>& ekfom_data) {
-  default_estimator.hModelInput(s, cov_p, cov_R, ekfom_data);
-}
-
 /**
  * @brief 点到平面距离量测模型 — IMU-as-output 模式
  *
- * 与 h_model_input 逻辑完全相同，唯一的区别:
+ * 与 hModelInput 逻辑完全相同，唯一的区别:
  * - 使用 kf_output 的状态 (通过 pointBodyToWorld 内部的判断)
  * - 量测雅可比结构不变 (同样依赖时间分组)
  *
- * @see h_model_input
+ * @see hModelInput
  */
 void Estimator::hModelOutput(
     state_output& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
@@ -449,7 +407,7 @@ void Estimator::hModelOutput(
         estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
     PointType& point_world_j =
         estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
-    pointBodyToWorld(&point_body_j, &point_world_j);
+    this->pointBodyToWorld(&point_body_j, &point_world_j);
     V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
     double p_norm = p_body.norm();
     V3D p_world;
@@ -543,12 +501,6 @@ void Estimator::hModelOutput(
   estimator_state.effct_feat_num += effect_num_k;
 }
 
-void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
-                    Eigen::Matrix3d cov_R,
-                    esekfom::dyn_share_modified<double>& ekfom_data) {
-  default_estimator.hModelOutput(s, cov_p, cov_R, ekfom_data);
-}
-
 /**
  * @brief IMU 伪量测模型 — IMU-as-output 模式专用
  *
@@ -624,11 +576,6 @@ void Estimator::hModelImuOutput(
   }
 }
 
-void h_model_IMU_output(state_output& s,
-                        esekfom::dyn_share_modified<double>& ekfom_data) {
-  default_estimator.hModelImuOutput(s, ekfom_data);
-}
-
 /**
  * @brief 雷达/IMU 坐标系点 → 世界坐标系点
  *
@@ -671,8 +618,4 @@ void Estimator::pointBodyToWorld(PointType const* pi, PointType* po) const {
   po->y = p_global(1);
   po->z = p_global(2);
   po->intensity = pi->intensity;  // 保留强度信息
-}
-
-void pointBodyToWorld(PointType const* const pi, PointType* const po) {
-  default_estimator.pointBodyToWorld(pi, po);
 }

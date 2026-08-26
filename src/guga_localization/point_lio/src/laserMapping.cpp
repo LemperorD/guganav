@@ -100,7 +100,10 @@ void LaserMappingNode::totalInitialize() {
   rclcpp::Node::SharedPtr self = this->shared_from_this();
   const PointLioParams params = readParameters(self);
   config_ = params;
-  configureEstimatorParams(config_.estimator);
+  estimator_.configureEstimatorParams(config_.estimator);
+  // Current IKFoM callbacks are free functions and dispatch through the
+  // shared estimator instance; keep it synchronized with the node-owned
+  // configuration until callbacks are bound directly to estimator_.
 
   Lidar::Params lidar_params;
   lidar_params.preprocess = config_.laser_mapping.preprocess;
@@ -146,20 +149,41 @@ void LaserMappingNode::totalInitialize() {
   }
 
   Imu::Params imu_params;
-  imu_params.processor.enabled = config_.laser_mapping.imu_enabled;
-  imu_params.processor.gravity =
-      to_vec3d(config_.laser_mapping.gravity);
-  imu_params.processor.gravity_init =
-      to_vec3d(config_.laser_mapping.gravity_init);
-  imu_params.processor.gravity_magnitude =
-      config_.estimator.gravity_magnitude;
-  imu_params.integration_interval = config_.laser_mapping.imu_time_interval;
-  imu_params.timestamp_offset = config_.sensor.lidar_to_imu_time;
+  ImuProcessor::Params processor_params;
+  processor_params.enabled = config_.laser_mapping.imu_enabled;
+  processor_params.gravity = to_vec3d(config_.laser_mapping.gravity);
+  processor_params.gravity_init = to_vec3d(config_.laser_mapping.gravity_init);
+  processor_params.gravity_magnitude = config_.estimator.gravity_magnitude;
+  imu_params = Imu::Params::create(std::move(processor_params),
+                                   config_.laser_mapping.imu_time_interval,
+                                   config_.sensor.lidar_to_imu_time);
   imu_.configure(imu_params);
 
-  kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
-  kf_output.init_dyn_share_modified_3h(get_f_output, df_dx_output,
-                                       h_model_output, h_model_IMU_output);
+  kf_input.init_dyn_share_modified_2h(
+      [this](state_input& state, const input_ikfom& input) {
+        return estimator_.getFInput(state, input);
+      },
+      [this](state_input& state, const input_ikfom& input) {
+        return estimator_.dfDxInput(state, input);
+      },
+      [this](state_input& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+             esekfom::dyn_share_modified<double>& data) {
+        estimator_.hModelInput(state, cov_p, cov_R, data);
+      });
+  kf_output.init_dyn_share_modified_3h(
+      [this](state_output& state, const input_ikfom& input) {
+        return estimator_.getFOutput(state, input);
+      },
+      [this](state_output& state, const input_ikfom& input) {
+        return estimator_.dfDxOutput(state, input);
+      },
+      [this](state_output& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+             esekfom::dyn_share_modified<double>& data) {
+        estimator_.hModelOutput(state, cov_p, cov_R, data);
+      },
+      [this](state_output& state, esekfom::dyn_share_modified<double>& data) {
+        estimator_.hModelImuOutput(state, data);
+      });
 
   reset_cov(state_.p_init);
   kf_input.change_P(state_.p_init);
@@ -167,8 +191,8 @@ void LaserMappingNode::totalInitialize() {
   reset_cov_output(state_.p_init_output);
   kf_output.change_P(state_.p_init_output);
 
-  state_.q_input = process_noise_cov_input();
-  state_.q_output = process_noise_cov_output();
+  state_.q_input = estimator_.processNoiseCovInput();
+  state_.q_output = estimator_.processNoiseCovOutput();
 
   state_.pos_log_dir = std::string(ROOT_DIR) + "/Log/pos_log.txt";
   state_.fp.open(state_.pos_log_dir);
@@ -526,8 +550,8 @@ bool LaserMappingNode::initMapState() {
   }
   estimator_state.feats_down_world->resize(state_.feats_undistort->size());
   for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
-    pointBodyToWorld(&(state_.feats_undistort->points[i]),
-                     &(estimator_state.feats_down_world->points[i]));
+    estimator_.pointBodyToWorld(&(state_.feats_undistort->points[i]),
+                                &(estimator_state.feats_down_world->points[i]));
   }
   for (const auto& point : *estimator_state.feats_down_world) {
     state_.init_feats_world->points.emplace_back(point);
@@ -756,7 +780,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
       PointType& point_world_j =
           estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
-      pointBodyToWorld(&point_body_j, &point_world_j);
+      estimator_.pointBodyToWorld(&point_body_j, &point_world_j);
     }
 
     estimator_state.idx += estimator_state.time_seq[estimator_state.k];
@@ -786,7 +810,7 @@ void LaserMappingNode::initScan() {
     config_.estimator.gravity_magnitude = std::hypot(
         config_.laser_mapping.gravity[0], config_.laser_mapping.gravity[1],
         config_.laser_mapping.gravity[2]);
-    configureEstimatorParams(config_.estimator);
+    estimator_.configureEstimatorParams(config_.estimator);
   }
 }
 

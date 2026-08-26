@@ -1,14 +1,24 @@
 #include "point_lio/Imu.h"
 
+Imu::Params Imu::Params::create(ImuProcessor::Params processor,
+                                double integration_interval,
+                                double timestamp_offset) {
+  Params params;
+  params.processor_ = std::move(processor);
+  params.integration_interval_ = integration_interval;
+  params.timestamp_offset_ = timestamp_offset;
+  return params;
+}
+
 void Imu::configure(const Params& params) {
   params_ = params;
-  processor_->configure(params.processor);
+  processor_->configure(params.processor());
 }
 
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
   auto msg = std::make_shared<sensor_msgs::msg::Imu>(*msg_in);
   msg->header.stamp = get_ros_time(get_time_sec(msg_in->header.stamp)
-                                   + params_.timestamp_offset);
+                                   + params_.timestampOffset());
 
   const double timestamp = get_time_sec(msg->header.stamp);
   if (timestamp < last_timestamp_) {
