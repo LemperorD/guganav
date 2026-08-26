@@ -18,8 +18,9 @@
 namespace guga_ui
 {
 
-void CreatePanelDecision(pangolin::View& view, const UiDataSource& ui_data_source) {
-  pangolin::CreatePanel("menu").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
+inline void CreatePanelDecision(const UiDataSource& ui_data_source) {
+  // 左下：决策面板（下半个面板列）
+  pangolin::CreatePanel("menu").SetBounds(0.0, 0.5, 0.0, pangolin::Attach::Pix(UiPanelWidth()));
   
 }
 

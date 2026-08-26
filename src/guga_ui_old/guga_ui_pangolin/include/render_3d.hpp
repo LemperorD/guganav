@@ -58,11 +58,9 @@ class GugaRender3D {
    * @param ds 数据源。
    */
   void draw(pangolin::View& view, const UiDataSource& ds) {
-    view.Activate(s_cam_);
-
-    // 清除背景为深灰
+    // 只清除本视图区域（scissor），避免整窗 glClear 覆盖左侧面板
     glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    view.ActivateScissorAndClear(s_cam_);
 
     const auto& d = ds.data();
 
