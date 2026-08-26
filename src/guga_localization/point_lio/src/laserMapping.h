@@ -13,20 +13,11 @@
 #include "li_initialization.h"
 
 struct MainLoopState {
-  // ---- 控制标志 / 计数器 / 耗时统计 ----
-  bool init_map = false;        ///< 地图已初始化
-  bool flg_reset = false;       ///< 请求复位 (bag 回放等)
-  bool flg_first_scan = true;   ///< 首次/复位后的第一帧
-  int frame_num = 0;            ///< 已处理帧数
-  int sleep_time = 0;           ///< 等待计数
-  int time_log_counter = 0;     ///< 时间日志计数
-  double solve_time = 0;        ///< 求解耗时 (s)
-  double propag_time = 0;       ///< 状态传播耗时 (s)
-  double update_time = 0;       ///< 更新耗时 (s)
-  double aver_time_consu = 0;   ///< 平均单帧总耗时 (s)
-  double aver_time_icp = 0;     ///< 平均配准耗时 (s)
-  double aver_time_solve = 0;   ///< 平均求解耗时 (s)
-  double aver_time_propag = 0;  ///< 平均传播耗时 (s)
+  // ---- 控制标志 / 计数器 ----
+  bool init_map = false;       ///< 地图已初始化
+  bool flg_reset = false;      ///< 请求复位 (bag 回放等)
+  bool flg_first_scan = true;  ///< 首次/复位后的第一帧
+  int sleep_time = 0;          ///< 等待计数
 
   // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
   pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
@@ -109,12 +100,10 @@ private:
   void totalInitialize();
 
   /** @brief 轮次初始化: 同步传感器数据、处理首帧并准备当前帧
-   * @param[out] t0 帧级初始化开始时间
-   * @param[out] t1 帧级初始化结束时间
    * @return true 当前轮次已准备好进入 ESKF 处理
    *         false 尚未同步到数据或 IMU/地图仍在初始化
    */
-  bool initializeIteration(double& t0, double& t1);
+  bool initializeIteration();
 
   /** @brief 帧级初始化 (每轮主循环): 计时归零 + IMU 预处理 + 降采样/排序/分组
    *         + 地图就绪检查 + 量测准备
@@ -154,8 +143,8 @@ private:
 
   void preparePointMeasurements() const;
 
-  /** @brief 帧尾: 计时收尾 + 发布输出 + 运行时位姿/耗时日志 */
-  void publishAndLogFrame(double t0, double t1, double t2);
+  /** @brief 帧尾: 发布输出 + 运行时位姿日志 */
+  void publishAndLogFrame();
 
   /** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
    * @tparam ImuAsInput true = kf_input (24维, IMU-as-input) / false =
@@ -170,6 +159,4 @@ private:
   void initScan();
 
   void savePcd();
-
-  bool initialize();
 };

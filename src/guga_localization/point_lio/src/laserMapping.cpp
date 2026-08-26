@@ -55,9 +55,7 @@ int LaserMappingNode::run() {
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
 
-    double t0 = 0.0;
-    double t1 = 0.0;
-    if (!initializeIteration(t0, t1)) {
+    if (!initializeIteration()) {
       continue;
     }
 
@@ -77,7 +75,6 @@ int LaserMappingNode::run() {
       publishOdometry();
     }
 
-    double t2 = omp_get_wtime();
     // [Workflow 8][Workflow 10] 增量地图更新: 将已更新/未匹配的点加入 iVox
     // 地图。
     if (estimator_state.feats_down_size > 4) {
@@ -89,7 +86,7 @@ int LaserMappingNode::run() {
       }
     }
 
-    publishAndLogFrame(t0, t1, t2);
+    publishAndLogFrame();
 
     rate_.sleep();
   }
@@ -102,33 +99,6 @@ int LaserMappingNode::run() {
   fout_imu_pbp_.close();
 
   return 0;
-}
-
-bool LaserMappingNode::initializeIteration(double& t0, double& t1) {
-  if (!lidar_.syncPackages(
-          imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
-    rate_.sleep();
-    return false;
-  }
-
-  lidar_end_time_ = measures_.lidar_last_time;
-
-  if (state_.flg_first_scan) {  // 首次扫描
-    initScan();
-  }
-
-  // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
-  t0 = omp_get_wtime();
-  const bool frame_ready = prepareFrame();
-  t1 = omp_get_wtime();
-  if (!frame_ready) {
-    return false;  // IMU 初始化中或地图未就绪: 跳过本帧
-  }
-  return true;
-}
-
-/** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
-LaserMappingNode::LaserMappingNode() : rclcpp::Node("laserMapping") {
 }
 
 /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (原 run 前半段) */
@@ -266,16 +236,32 @@ void LaserMappingNode::totalInitialize() {
         imu_.onMessage(msg);
       });
 
+  while (state_.flg_first_scan && rclcpp::ok()) {
+    executor_.spin_some();
+    if (!lidar_.syncPackages(
+            imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
+      rate_.sleep();
+      continue;
+    }
+    lidar_end_time_ = measures_.lidar_last_time;
+    initScan();
+  }
+
   signal(SIGINT, SigHandle);  // NOLINT
 }
+bool LaserMappingNode::initializeIteration() {
+  if (!lidar_.syncPackages(
+          imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
+    rate_.sleep();
+    return false;
+  }
+  lidar_end_time_ = measures_.lidar_last_time;
 
+  // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
+  return prepareFrame();
+}
 /** @brief 帧级初始化 (每轮主循环): 见类声明 */
 bool LaserMappingNode::prepareFrame() {
-  // ---- 耗时统计归零 (本帧内由 processFramePoints 累加) ----
-  state_.solve_time = 0;
-  state_.propag_time = 0;
-  state_.update_time = 0;
-
   // IMU 预处理: 在线初始化 / 重力对齐 / 点云拷贝 (去畸变预留;
   // 饱和检查不在本函数, 见 [Workflow 13] IMU 量测更新处)。
   imu_.process(measures_, state_.feats_undistort);
@@ -322,6 +308,9 @@ bool LaserMappingNode::prepareFrame() {
   preparePointMeasurements();
 
   return true;
+}
+/** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
+LaserMappingNode::LaserMappingNode() : rclcpp::Node("laserMapping") {
 }
 
 PointCloudXYZI::Ptr LaserMappingNode::loadPointcloudFromPcd(
@@ -630,8 +619,7 @@ void LaserMappingNode::preparePointMeasurements() const {
 }
 
 /** @brief 帧尾: 计时收尾 + 发布输出 + 运行时位姿/耗时日志 */
-void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
-  double t3 = omp_get_wtime();
+void LaserMappingNode::publishAndLogFrame() {
   if (publish_params_.path_enabled) {
     publishPath();
   }
@@ -643,34 +631,6 @@ void LaserMappingNode::publishAndLogFrame(double t0, double t1, double t2) {
   }
 
   if (publish_params_.runtime_log_enabled) {
-    state_.frame_num++;
-    state_.aver_time_consu = (state_.aver_time_consu * (state_.frame_num - 1)
-                              / state_.frame_num)
-                             + ((t3 - t0) / state_.frame_num);
-    state_.aver_time_icp = (state_.aver_time_icp * (state_.frame_num - 1)
-                            / state_.frame_num)
-                           + (state_.update_time / state_.frame_num);
-    state_.aver_time_solve = (state_.aver_time_solve * (state_.frame_num - 1)
-                              / state_.frame_num)
-                             + (state_.solve_time / state_.frame_num);
-    state_.aver_time_propag = (state_.aver_time_propag * (state_.frame_num - 1)
-                               / state_.frame_num)
-                              + (state_.propag_time / state_.frame_num);
-    lidar_.T1[state_.time_log_counter] = measures_.lidar_start_time;
-    lidar_.s_plot[state_.time_log_counter] = t3 - t0;
-    lidar_.s_plot2[state_.time_log_counter] =
-        (double)state_.feats_undistort->points.size();
-    lidar_.s_plot3[state_.time_log_counter] = state_.aver_time_consu;
-    state_.time_log_counter++;
-
-    std::cout << std::fixed << std::setprecision(6)
-              << "[ mapping ]: time: IMU + Map + Input Downsample: " << t1 - t0
-              << " ave solve: " << state_.aver_time_solve
-              << "  ave ICP: " << t2 - t1 << "  map incre: " << t3 - t2
-              << " ave total: " << state_.aver_time_consu
-              << " icp: " << state_.aver_time_icp
-              << " propogate: " << state_.aver_time_propag << '\n';
-
     if (!mapping_params_.publish_odometry_without_downsample) {
       if (!mapping_params_.use_imu_as_input) {
         state_.euler_cur = SO3ToEuler(kf_output.x_.rot);
@@ -883,18 +843,12 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
             if (dt_cov > 0.0) {
               time_update_last_ = get_time_sec(imu_next.header.stamp);
-              double propag_imu_start = omp_get_wtime();
-
               kf.predict(dt_cov, q, estimator_state.input_in, false, true);
-
-              state_.propag_time += omp_get_wtime() - propag_imu_start;
-              double solve_imu_start = omp_get_wtime();
               // [Workflow 13]-[Workflow 17] IMU 量测更新 (同列2):
               //   饱和检查与残差 (13)(14) 在 h_model_IMU_output 内完成;
               //   状态/协方差更新 (15)(16) 在 EKF 更新函数内完成;
               //   饱和轴被排除在更新之外 (17)。
               kf.update_iterated_dyn_share_IMU();
-              state_.solve_time += omp_get_wtime() - solve_imu_start;
             }
           }
           imu_.popAndAdvance();
@@ -910,7 +864,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     }
 
     double dt = time_current_ - last_time;
-    double propag_state_start = omp_get_wtime();
     if (!mapping_params_.propagate_at_imu_frequency) {
       double dt_cov = time_current_ - time_update_last_;
       if (dt_cov > 0.0) {
@@ -919,9 +872,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       }
     }
     kf.predict(dt, q, estimator_state.input_in, true, false);
-    state_.propag_time += omp_get_wtime() - propag_state_start;
     last_time = time_current_;
-    double t_update_start = omp_get_wtime();
 
     if (estimator_state.feats_down_size < 1) {
       RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
@@ -939,8 +890,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
                             + estimator_state.time_seq[estimator_state.k];
       continue;
     }
-    double solve_start = omp_get_wtime();
-
     if (mapping_params_.publish_odometry_without_downsample) {
       publishOdometry();
       if (publish_params_.runtime_log_enabled) {
@@ -976,9 +925,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       pointBodyToWorld(&point_body_j, &point_world_j);
     }
 
-    state_.solve_time += omp_get_wtime() - solve_start;
-
-    state_.update_time += omp_get_wtime() - t_update_start;
     estimator_state.idx += estimator_state.time_seq[estimator_state.k];
   }
 }
@@ -1023,8 +969,4 @@ void LaserMappingNode::savePcd() {
   string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
   pcl::PCDWriter pcd_writer;
   pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
-}
-
-bool LaserMappingNode::initialize() {
-  return true;
 }

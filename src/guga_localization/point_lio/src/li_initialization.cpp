@@ -4,14 +4,9 @@
 
 namespace {
 
-  bool get_lidar_measurements(const Lidar& lidar, MeasureGroup& meas) {
+  void get_lidar_measurements(const Lidar& lidar, MeasureGroup& meas) {
     meas.lidar = lidar.lidar_buffer.front();
     meas.lidar_start_time = lidar.time_buffer.front();
-    if (meas.lidar->points.empty()) {
-      std::cout << "lose lidar\n";
-      return false;
-    }
-    return true;
   }
 
   void update_frame_end_time(MeasureGroup& meas) {
@@ -68,6 +63,45 @@ namespace {
 
 }  // namespace
 
+bool Lidar::syncPackages(  // TODO函数逻辑具有大量flag,准备提取状态机
+    Imu& imu,
+    MeasureGroup&
+        meas) {  // TODO:组装不应是lidar的职责,其必然暴露imu内部实现.将构建syncalizor同步器处理.
+  if (lidar_buffer.empty() || imu.empty()) {  // lidar/imu空
+    return false;
+  }
+
+  if (!lidar_pushed) {
+    lose_lid = lidar_buffer.front()->points.empty();
+    get_lidar_measurements(*this, meas);
+
+    if (!lose_lid) {
+      update_frame_end_time(meas);
+    }
+    lidar_pushed = true;
+  }
+
+  // 丢失为开始+偏置,未丢失为结束
+  const double required_end_time = lose_lid ? meas.lidar_start_time
+                                                  + params_.lidar_time_interval
+                                            : meas.lidar_last_time;
+
+  if (imu.lastTimestamp() < required_end_time) {
+    return false;
+  }
+
+  if (!imu_pushed) {
+    imu.collectUntil(required_end_time, meas);
+    imu_pushed = true;
+  }
+
+  pop_lidar_frame(*this);
+  lidar_pushed = false;
+  imu_pushed = false;
+  lose_lid = false;
+  return true;
+}
+
 void Lidar::configure(const Params& params) {
   params_ = params;
   params_.con_frame_num = std::max(1, params_.con_frame_num);
@@ -76,7 +110,6 @@ void Lidar::configure(const Params& params) {
 
 void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   ++scan_count;
-  const double start = omp_get_wtime();
   const double timestamp = rclcpp::Time(msg->header.stamp).seconds();
   if (timestamp < last_timestamp_lidar) {
     RCLCPP_ERROR(rclcpp::get_logger("li_initialization"),
@@ -104,15 +137,11 @@ void Lidar::onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
       time_buffer.emplace_back(timestamp);
     }
   }
-  if (scan_count < MAXN) {
-    s_plot11[scan_count] = omp_get_wtime() - start;
-  }
 }
 
 void Lidar::onLivoxPcl(
     const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg) {
   ++scan_count;
-  const double start = omp_get_wtime();
   const double timestamp = rclcpp::Time(msg->header.stamp).seconds();
   if (timestamp < last_timestamp_lidar) {
     RCLCPP_ERROR(rclcpp::get_logger("li_initialization"),
@@ -137,59 +166,4 @@ void Lidar::onLivoxPcl(
       time_buffer.emplace_back(timestamp);
     }
   }
-  if (scan_count < MAXN) {
-    s_plot11[scan_count] = omp_get_wtime() - start;
-  }
-}
-
-bool Lidar::syncPackages(  // TODO函数逻辑混乱,将整改
-    Imu& imu,
-    MeasureGroup&
-        meas) {  // TODO:组装不应是lidar的职责,其必然暴露imu内部实现.将构建syncalizor同步器处理.
-  if (!params_.imu_enabled) {
-    if (lidar_buffer.empty()) {  // TODO: lidar_buffer隐式依赖复杂.
-      return false;
-    }
-    if (lidar_buffer.front()->points.empty()) {
-      pop_lidar_frame(*this);
-      std::cout << "lose lidar\n";
-      return false;
-    }
-
-    meas.lidar = lidar_buffer.front();
-    meas.lidar_start_time = time_buffer.front();
-    update_frame_end_time(meas);
-    pop_lidar_frame(*this);
-    return true;
-  }
-
-  if (lidar_buffer.empty() || imu.empty()) {
-    return false;
-  }
-
-  if (!lidar_pushed) {
-    lose_lid = !get_lidar_measurements(*this, meas);
-    if (!lose_lid) {
-      update_frame_end_time(meas);
-    }
-    lidar_pushed = true;
-  }
-
-  const double required_end = lose_lid ? meas.lidar_start_time
-                                             + params_.lidar_time_interval
-                                       : meas.lidar_last_time;
-  if (imu.lastTimestamp() < required_end) {
-    return false;
-  }
-
-  if (!imu_pushed) {
-    imu.collectUntil(required_end, meas);
-    imu_pushed = true;
-  }
-
-  pop_lidar_frame(*this);
-  lidar_pushed = false;
-  imu_pushed = false;
-  lose_lid = false;
-  return true;
 }

@@ -50,12 +50,6 @@ public:
   void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
   bool syncPackages(Imu& imu, MeasureGroup& meas);
 
-  double T1[MAXN]{};
-  double s_plot[MAXN]{};
-  double s_plot2[MAXN]{};
-  double s_plot3[MAXN]{};
-  double s_plot11[MAXN]{};  ///< 预处理耗时
-
   // ==================== 线程同步 ====================
 
   PointCloudXYZI::Ptr ptr_con =
