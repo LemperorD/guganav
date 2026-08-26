@@ -1,7 +1,6 @@
 #pragma once
 
 #include <deque>
-#include <vector>
 
 #include "point_lio/IMU_Processing.h"
 #include "point_lio/preprocess.h"
@@ -14,10 +13,7 @@ struct ImuMeasurement {
 class Imu {
 public:
   struct Params {
-    bool enabled{true};
-    std::vector<double> gravity;
-    std::vector<double> gravity_init;
-    double gravity_magnitude{9.81};
+    ImuProcessor::Params processor;
     double integration_interval{0.005};
     double timestamp_offset{0.0};  ///< corrected_time = raw_time + offset
   };

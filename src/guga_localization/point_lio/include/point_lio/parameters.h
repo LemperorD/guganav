@@ -139,8 +139,10 @@ struct PointLioParams {
  * 参数直接写入各模块的参数结构。
  *
  * @param n ROS2 节点共享指针
+ * @return 完整的只读配置值
  */
-void readParameters(std::shared_ptr<rclcpp::Node>& n, PointLioParams& params);
+[[nodiscard]] PointLioParams readParameters(
+    const std::shared_ptr<rclcpp::Node>& n);
 
 /**
  * @brief SO(3) → ZYX 欧拉角

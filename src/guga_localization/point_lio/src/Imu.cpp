@@ -2,12 +2,7 @@
 
 void Imu::configure(const Params& params) {
   params_ = params;
-  ImuProcessor::Params processor_params;
-  processor_params.enabled = params.enabled;
-  processor_params.gravity = to_vec3d(params.gravity);
-  processor_params.gravity_init = to_vec3d(params.gravity_init);
-  processor_params.gravity_magnitude = params.gravity_magnitude;
-  processor_->configure(processor_params);
+  processor_->configure(params.processor);
 }
 
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {

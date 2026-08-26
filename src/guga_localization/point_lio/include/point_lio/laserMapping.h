@@ -58,11 +58,7 @@ private:
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
-  MappingParams mapping_params_;
-  EstimatorParams estimator_params_;
-  PublishParams publish_params_;
-  SensorParams sensor_params_;
-  LaserMappingParams laser_mapping_params_;
+  PointLioParams config_;
   bool is_first_frame_{true};
   double lidar_end_time_{0.0};
   double first_lidar_time_{0.0};

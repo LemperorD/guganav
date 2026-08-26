@@ -15,7 +15,8 @@
 #include "point_lio/parameters.h"
 #include <memory>
 
-void readParameters(std::shared_ptr<rclcpp::Node>& nh, PointLioParams& params) {
+PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
+  PointLioParams params;
   try {
     // ==================== 模式开关 ====================
     params.mapping.propagate_at_imu_frequency = nh->declare_parameter<bool>(
@@ -188,6 +189,7 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh, PointLioParams& params) {
     params.estimator.gravity_magnitude = std::hypot(gravity[0], gravity[1],
                                                     gravity[2]);
   }
+  return params;
 }
 
 /**
