@@ -37,9 +37,8 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         "mapping.acc_norm", 1.0);
 
     // ==================== mapping 参数 — 平面提取 ====================
-    params.mapping.plane_thr = static_cast<float>(
+    params.estimator.plane_thr = static_cast<float>(
         nh->declare_parameter<double>("mapping.plane_thr", 0.05F));
-    params.estimator.plane_thr = params.mapping.plane_thr;
     params.lidar.preprocess.point_filter_num = static_cast<int>(
         nh->declare_parameter<long>("point_filter_num", 2));
 
@@ -83,9 +82,8 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
     // ==================== mapping 参数 — IMU 功能开关 ====================
     params.imu.processor.enabled = nh->declare_parameter<bool>(
         "mapping.imu_en", true);
-    params.mapping.extrinsic_estimation = nh->declare_parameter<bool>(
+    params.estimator.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
-    params.estimator.extrinsic_estimation = params.mapping.extrinsic_estimation;
     params.imu.integration_interval = nh->declare_parameter<double>(
         "mapping.imu_time_inte", 0.005);
 
@@ -124,9 +122,8 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         nh->declare_parameter<long>("preprocess.scan_rate", 10));
     params.lidar.preprocess.timestamp_unit = static_cast<int>(
         nh->declare_parameter<long>("preprocess.timestamp_unit", 1));
-    params.mapping.match_s = nh->declare_parameter<double>("mapping.match_s",
-                                                           81);
-    params.estimator.match_s = params.mapping.match_s;
+    params.estimator.match_s = nh->declare_parameter<double>("mapping.match_s",
+                                                             81);
 
     // ==================== mapping 参数 — 重力 ====================
     const auto gravity = nh->declare_parameter<std::vector<double>>(
@@ -193,9 +190,11 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
 
   if (params.imu.processor.gravity.norm() > 0.0) {
     const auto& gravity = params.imu.processor.gravity;
-    params.estimator.gravity_magnitude = std::hypot(gravity[0], gravity[1],
-                                                    gravity[2]);
+    params.common.gravity_magnitude = std::hypot(gravity[0], gravity[1],
+                                                 gravity[2]);
   }
+  params.estimator.gravity_magnitude = params.common.gravity_magnitude;
+  params.imu.processor.gravity_magnitude = params.common.gravity_magnitude;
   return params;
 }
 

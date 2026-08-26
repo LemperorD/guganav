@@ -54,16 +54,17 @@ using IVoxType =
 struct MappingParams {
   bool space_down_sample{true};
   bool propagate_at_imu_frequency{true};
-  bool extrinsic_estimation{true};
   bool publish_odometry_without_downsample{false};
   int init_map_size{100};
   double filter_size_surf{0.5};
   double filter_size_map{0.5};
   double fov_deg{180.0};
-  double match_s{81.0};
-  float plane_thr{0.05F};
   float det_range{300.0F};
   IVoxType::Options ivox_options;
+};
+
+struct CommonParams {
+  double gravity_magnitude{9.81};
 };
 
 struct EstimatorParams {
@@ -126,6 +127,7 @@ struct LidarParams {
 };
 
 struct PointLioParams {
+  CommonParams common;
   MappingParams mapping;
   EstimatorParams estimator;
   PublishParams publish;

@@ -101,7 +101,7 @@ void LaserMappingNode::totalInitialize() {
 
   const PointLioParams params = readParameters(self);
   config_ = params;
-  estimator_.configureEstimatorParams(config_.estimator);
+  estimator_.configure(config_.estimator);
   // Current IKFoM callbacks are free functions and dispatch through the
   // shared estimator instance; keep it synchronized with the node-owned
   // configuration until callbacks are bound directly to estimator_.
@@ -129,12 +129,12 @@ void LaserMappingNode::totalInitialize() {
   estimator_state.Lidar_T_wrt_IMU = to_vec3d(config_.sensor.extrinsic_t);
   estimator_state.Lidar_R_wrt_IMU = to_mat3d(config_.sensor.extrinsic_r);
 
-  if (config_.mapping.extrinsic_estimation) {
+  if (config_.estimator.extrinsic_estimation) {
     kf_input.x_.offset_R_L_I = estimator_state.Lidar_R_wrt_IMU;
     kf_input.x_.offset_T_L_I = estimator_state.Lidar_T_wrt_IMU;
   }
 
-  initializeRosInterfaces();
+  initializeRos2Interfaces();
 
   kf_input.init_dyn_share_modified_2h(
       [this](state_input& state, const input_ikfom& input) {
@@ -215,7 +215,7 @@ void LaserMappingNode::initializeSensors() {
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
 
-void LaserMappingNode::initializeRosInterfaces() {
+void LaserMappingNode::initializeRos2Interfaces() {
   if (config_.lidar.lidar_type == AVIA) {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
         config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
@@ -229,6 +229,7 @@ void LaserMappingNode::initializeRosInterfaces() {
           lidar_.onStandardPcl(msg);
         });
   }
+
   pub_laser_cloud_full_res_ = create_publisher<sensor_msgs::msg::PointCloud2>(
       "cloud_registered", 20);
   pub_laser_cloud_full_res_body_ =
@@ -359,7 +360,7 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
                                            PointType* const po) const {
   V3D p_body_lidar(pi->x, pi->y, pi->z);  // NOLINT
   V3D p_body_imu;
-  if (config_.mapping.extrinsic_estimation) {
+  if (config_.estimator.extrinsic_estimation) {
     p_body_imu = kf_input.x_.offset_R_L_I * p_body_lidar
                  + kf_input.x_.offset_T_L_I;
 
@@ -574,7 +575,7 @@ void LaserMappingNode::preparePointMeasurements() const {
                    estimator_state.feats_down_body->points[i].z);  // NOLINT
 
     estimator_state.pbody_list[i] = point_this;
-    if (!config_.mapping.extrinsic_estimation) {
+    if (!config_.estimator.extrinsic_estimation) {
       point_this = estimator_state.Lidar_R_wrt_IMU * point_this
                    + estimator_state.Lidar_T_wrt_IMU;
       M3D point_crossmat;
@@ -803,7 +804,7 @@ void LaserMappingNode::initScan() {
   if (config_.imu.processor.gravity.norm() > 0.0) {
     config_.estimator.gravity_magnitude =
         config_.imu.processor.gravity_magnitude;
-    estimator_.configureEstimatorParams(config_.estimator);
+    estimator_.configure(config_.estimator);
   }
 }
 

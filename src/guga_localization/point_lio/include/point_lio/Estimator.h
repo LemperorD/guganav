@@ -27,7 +27,7 @@
 
 class Estimator {
 public:
-  void configureEstimatorParams(const EstimatorParams& params);
+  void configure(const EstimatorParams& params);
   [[nodiscard]] const EstimatorParams& params() const;
   [[nodiscard]] Eigen::Matrix<double, 24, 24> processNoiseCovInput() const;
   [[nodiscard]] Eigen::Matrix<double, 30, 30> processNoiseCovOutput() const;

@@ -18,7 +18,7 @@
 
 #include "point_lio/Estimator.h"
 
-void Estimator::configureEstimatorParams(const EstimatorParams& params) {
+void Estimator::configure(const EstimatorParams& params) {
   params_ = params;
 }
 
