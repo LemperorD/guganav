@@ -12,7 +12,7 @@
  * - **odometry/publish/pcd_save**: 输出相关 (发布开关、路径、PCD)
  */
 
-#include "parameters.h"
+#include "point_lio/parameters.h"
 #include <memory>
 
 void readParameters(std::shared_ptr<rclcpp::Node>& nh, PointLioParams& params) {

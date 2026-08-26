@@ -13,7 +13,7 @@
  * - **process_cut_frame_***: 切帧处理 (将单帧按时间均匀切分为多子帧)
  */
 
-#include "preprocess.h"
+#include "point_lio/preprocess.h"
 
 /// @brief 特征提取返回值: 0=非平面, 0x10=平面+跳变?
 #define RETURN0 0x00

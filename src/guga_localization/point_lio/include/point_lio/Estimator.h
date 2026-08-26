@@ -20,8 +20,8 @@
 
 #pragma once
 
-#include "common_lib.h"
-#include "parameters.h"
+#include "point_lio/common_lib.h"
+#include "point_lio/parameters.h"
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>

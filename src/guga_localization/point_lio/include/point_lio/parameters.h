@@ -37,8 +37,8 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <thread>
 
-#include "IMU_Processing.h"
-#include "preprocess.h"
+#include "point_lio/IMU_Processing.h"
+#include "point_lio/preprocess.h"
 
 // 选择 iVox 节点类型: PHC (Plane-Histogram-Coplanarity) 或 DEFAULT
 // #define IVOX_NODE_TYPE_PHC

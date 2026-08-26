@@ -26,7 +26,7 @@
  *   角速度和加速度本身被估计, 每帧同时做激光量测和 IMU 量测更新
  */
 
-#include "laserMapping.h"
+#include "point_lio/laserMapping.h"
 
 namespace {
   bool flg_exit = false;  // NOLINT
@@ -58,13 +58,8 @@ int LaserMappingNode::run() {
       continue;
     }
 
-    // LiDAR/IMU 分支在 processFramePoints 内部
-    //  ([Workflow 2] / [Workflow 12])。
-
     processFramePoints(kf_input, t_last_, state_.q_input);
 
-    // [Workflow 18] 输出阶段 (算法末尾): 发布更新后的里程计
-    // x_{estimator_state.k+1} / P_{estimator_state.k+1}。
     if (!mapping_params_.publish_odometry_without_downsample) {
       publishOdometry();
     }

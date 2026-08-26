@@ -32,16 +32,10 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ESEKFOM_EKF_HPP
-#define ESEKFOM_EKF_HPP
+#pragma once
 
-#include <Eigen/Core>
 #include <Eigen/Dense>
-#include <Eigen/Eigen>
-#include <Eigen/Geometry>
 #include <Eigen/Sparse>
-#include <boost/bind/bind.hpp>
-#include <cstdlib>
 #include <functional>
 #include <vector>
 
@@ -51,9 +45,6 @@
 #include "../mtk/types/SEn.hpp"
 #include "../mtk/types/SOn.hpp"
 #include "../mtk/types/vect.hpp"
-#include "util.hpp"
-
-using namespace boost::placeholders;
 
 namespace esekfom {
 
@@ -74,50 +65,49 @@ namespace esekfom {
   template <typename state, int process_noise_dof, typename input = state,
             typename measurement = state, int measurement_noise_dof = 0>
   class esekf {
-    using self = esekf;
-    enum { n = state::DOF, m = state::DIM, l = measurement::DOF };
+    static constexpr int StateDof = state::DOF;
+    static constexpr int StateDim = state::DIM;
+    static constexpr int MeasurementDof = measurement::DOF;
 
   public:
-    using scalar_type = typename state::scalar;
-    using cov = Matrix<scalar_type, n, n>;
-    using cov_ = Matrix<scalar_type, m, n>;
-    using spMt = SparseMatrix<scalar_type>;
-    using vectorized_state = Matrix<scalar_type, n, 1>;
-    using flatted_state = Matrix<scalar_type, m, 1>;
-    using processModel = std::function<flatted_state(state&, const input&)>;
-    using processMatrix1 =
-        std::function<Eigen::Matrix<scalar_type, m, n>(state&, const input&)>;
-    using processMatrix2 =
-        std::function<Eigen::Matrix<scalar_type, m, process_noise_dof>(
+    using Scalar = typename state::scalar;
+    using Covariance = Matrix<Scalar, StateDof, StateDof>;
+    using CovarianceJacobian = Matrix<Scalar, StateDim, StateDof>;
+    using SparseMatrixType = SparseMatrix<Scalar>;
+    using VectorizedState = Matrix<Scalar, StateDof, 1>;
+    using FlattenedState = Matrix<Scalar, StateDim, 1>;
+    using ProcessModel = std::function<FlattenedState(state&, const input&)>;
+    using ProcessMatrix1 =
+        std::function<Matrix<Scalar, StateDim, StateDof>(state&, const input&)>;
+    using ProcessMatrix2 =
+        std::function<Matrix<Scalar, StateDim, process_noise_dof>(
             state&, const input&)>;
-    using processnoisecovariance =
-        Eigen::Matrix<scalar_type, process_noise_dof, process_noise_dof>;
+    using ProcessNoiseCovariance =
+        Matrix<Scalar, process_noise_dof, process_noise_dof>;
+    using MeasurementModelDynShareModifiedCov = std::function<void(
+        state&, Eigen::Matrix3d, Eigen::Matrix3d, dyn_share_modified<Scalar>&)>;
+    using MeasurementModelDynShareModified =
+        std::function<void(state&, dyn_share_modified<Scalar>&)>;
+    using MeasurementMatrix1 =
+        std::function<Matrix<Scalar, MeasurementDof, StateDof>(state&)>;
+    using MeasurementMatrix1Dyn =
+        std::function<Matrix<Scalar, Eigen::Dynamic, StateDof>(state&)>;
+    using MeasurementMatrix2 = std::function<
+        Matrix<Scalar, MeasurementDof, measurement_noise_dof>(state&)>;
+    using MeasurementMatrix2Dyn =
+        std::function<Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>(state&)>;
+    using MeasurementNoiseCovariance =
+        Matrix<Scalar, measurement_noise_dof, measurement_noise_dof>;
+    using MeasurementNoiseCovarianceDyn =
+        Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
 
-    using measurementModel_dyn_share_modified_cov =
-        std::function<void(state&, Eigen::Matrix3d, Eigen::Matrix3d,
-                           dyn_share_modified<scalar_type>&)>;
-    using measurementModel_dyn_share_modified =
-        std::function<void(state&, dyn_share_modified<scalar_type>&)>;
-    using measurementMatrix1 =
-        std::function<Eigen::Matrix<scalar_type, l, n>(state&)>;
-    using measurementMatrix1_dyn =
-        std::function<Eigen::Matrix<scalar_type, Eigen::Dynamic, n>(state&)>;
-    using measurementMatrix2 = std::function<
-        Eigen::Matrix<scalar_type, l, measurement_noise_dof>(state&)>;
-    using measurementMatrix2_dyn = std::function<
-        Eigen::Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic>(state&)>;
-    using measurementnoisecovariance =
-        Eigen::Matrix<scalar_type, measurement_noise_dof,
-                      measurement_noise_dof>;
-    using measurementnoisecovariance_dyn =
-        Eigen::Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic>;
-
-    esekf(const state& x = state(), const cov& P = cov::Identity())
+    esekf(const state& x = state(),
+          const Covariance& P = Covariance::Identity())
         : x_(x), P_(P) {};
 
     void init_dyn_share_modified_2h(
-        processModel f_in, processMatrix1 f_x_in,
-        measurementModel_dyn_share_modified_cov h_dyn_share_in1) {
+        ProcessModel f_in, ProcessMatrix1 f_x_in,
+        MeasurementModelDynShareModifiedCov h_dyn_share_in1) {
       f = f_in;
       f_x = f_x_in;
       // f_w = f_w_in;
@@ -131,9 +121,9 @@ namespace esekfom {
     }
 
     void init_dyn_share_modified_3h(
-        processModel f_in, processMatrix1 f_x_in,
-        measurementModel_dyn_share_modified_cov h_dyn_share_in1,
-        measurementModel_dyn_share_modified h_dyn_share_in2) {
+        ProcessModel f_in, ProcessMatrix1 f_x_in,
+        MeasurementModelDynShareModifiedCov h_dyn_share_in1,
+        MeasurementModelDynShareModified h_dyn_share_in2) {
       f = f_in;
       f_x = f_x_in;
       // f_w = f_w_in;
@@ -148,46 +138,43 @@ namespace esekfom {
     }
 
     // iterated error state EKF propogation
-    void predict(double& dt, processnoisecovariance& Q, const input& i_in,
+    void predict(double& dt, ProcessNoiseCovariance& Q, const input& i_in,
                  bool predict_state, bool prop_cov) {
       if (predict_state) {
-        flatted_state f_ = f(x_, i_in);
+        FlattenedState f_ = f(x_, i_in);
         x_.oplus(f_, dt);
       }
 
       if (prop_cov) {
-        flatted_state f_ = f(x_, i_in);
+        FlattenedState f_ = f(x_, i_in);
         // state x_before = x_;
 
-        cov_ f_x_ = f_x(x_, i_in);
-        cov f_x_final;
-        F_x1 = cov::Identity();
+        CovarianceJacobian f_x_ = f_x(x_, i_in);
+        Covariance f_x_final;
+        F_x1 = Covariance::Identity();
         for (auto it = x_.vect_state.begin(); it != x_.vect_state.end(); it++) {
           int idx = (*it).first.first;
           int dim = (*it).first.second;
           int dof = (*it).second;
-          for (int i = 0; i < n; i++) {
+          for (int i = 0; i < StateDof; i++) {
             for (int j = 0; j < dof; j++) {
               f_x_final(idx + j, i) = f_x_(dim + j, i);
             }
           }
         }
 
-        Matrix<scalar_type, 3, 3> res_temp_SO3;
-        MTK::vect<3, scalar_type> seg_SO3;
+        Matrix<Scalar, 3, 3> res_temp_SO3;
+        MTK::vect<3, Scalar> seg_SO3;
         for (auto it = x_.SO3_state.begin(); it != x_.SO3_state.end(); it++) {
           int idx = (*it).first;
           int dim = (*it).second;
           for (int i = 0; i < 3; i++) {
             seg_SO3(i) = -1 * f_(dim + i) * dt;
           }
-          // MTK::SO3<scalar_type> res;
-          // res.w() = MTK::exp<scalar_type, 3>(res.vec(), seg_SO3,
-          // scalar_type(1/2));
-          F_x1.template block<3, 3>(idx, idx) = MTK::SO3<scalar_type>::exp(
+          F_x1.template block<3, 3>(idx, idx) = MTK::SO3<Scalar>::exp(
               seg_SO3);  // res.normalized().toRotationMatrix();
           res_temp_SO3 = MTK::A_matrix(seg_SO3);
-          for (int i = 0; i < n; i++) {
+          for (int i = 0; i < StateDof; i++) {
             f_x_final.template block<3, 1>(
                 idx, i) = res_temp_SO3 * (f_x_.template block<3, 1>(dim, i));
           }
@@ -199,7 +186,7 @@ namespace esekfom {
     }
 
     bool update_iterated_dyn_share_modified() {
-      dyn_share_modified<scalar_type> dyn_share;
+      dyn_share_modified<Scalar> dyn_share;
       state x_propagated = x_;
       int dof_Measurement;
       double m_noise;
@@ -211,56 +198,52 @@ namespace esekfom {
           return false;
           // continue;
         }
-        Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> z = dyn_share.z;
-        // Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> R = dyn_share.R;
-        Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> h_x = dyn_share.h_x;
-        // Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> h_v =
-        // dyn_share.h_v;
+        Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> z = dyn_share.z;
+        Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> h_x = dyn_share.h_x;
         dof_Measurement = h_x.rows();
         m_noise = dyn_share.M_Noise;
         // dof_Measurement_noise = dyn_share.R.rows();
-        // vectorized_state dx, dx_new;
         // x_.boxminus(dx, x_propagated);
         // dx_new = dx;
         // P_ = P_propagated;
 
-        Matrix<scalar_type, n, Eigen::Dynamic> PHT;
-        Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> HPHT;
-        Matrix<scalar_type, n, Eigen::Dynamic> K_;
-        if (n > dof_Measurement) {
-          PHT = P_.template block<n, 12>(0, 0) * h_x.transpose();
+        Matrix<Scalar, StateDof, Eigen::Dynamic> PHT;
+        Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> HPHT;
+        Matrix<Scalar, StateDof, Eigen::Dynamic> K_;
+        if (StateDof > dof_Measurement) {
+          PHT = P_.template block<StateDof, 12>(0, 0) * h_x.transpose();
           HPHT = h_x * PHT.topRows(12);
           for (int m = 0; m < dof_Measurement; m++) {
             HPHT(m, m) += m_noise;
           }
           K_ = PHT * HPHT.inverse();
         } else {
-          Matrix<scalar_type, 12, 12> HTH = m_noise * h_x.transpose() * h_x;
-          Matrix<scalar_type, n, n> P_inv = P_.inverse();
+          Matrix<Scalar, 12, 12> HTH = m_noise * h_x.transpose() * h_x;
+          Matrix<Scalar, StateDof, StateDof> P_inv = P_.inverse();
           P_inv.template block<12, 12>(0, 0) += HTH;
           P_inv = P_inv.inverse();
-          K_ = P_inv.template block<n, 12>(0, 0) * h_x.transpose() * m_noise;
+          K_ = P_inv.template block<StateDof, 12>(0, 0) * h_x.transpose()
+               * m_noise;
         }
-        Matrix<scalar_type, n, 1> dx_ =
-            K_ * z;  // - h) + (K_x - Matrix<scalar_type, n, n>::Identity()) *
-                     // dx_new;
+        Matrix<Scalar, StateDof, 1> dx_ = K_ * z;
+        // dx_new;
         // state x_before = x_;
 
         x_.boxplus(dx_);
         {
-          P_ = P_ - K_ * h_x * P_.template block<12, n>(0, 0);
+          P_ = P_ - K_ * h_x * P_.template block<12, StateDof>(0, 0);
         }
       }
       return true;
     }
 
     void update_iterated_dyn_share_IMU() {
-      dyn_share_modified<scalar_type> dyn_share;
+      dyn_share_modified<Scalar> dyn_share;
       for (int i = 0; i < maximum_iter; i++) {
         dyn_share.valid = true;
         h_dyn_share_modified_2(x_, dyn_share);
 
-        Matrix<scalar_type, 6, 1> z = dyn_share.z_IMU;
+        Matrix<Scalar, 6, 1> z = dyn_share.z_IMU;
 
         Matrix<double, 30, 6> PHT;
         Matrix<double, 6, 30> HP;
@@ -282,7 +265,7 @@ namespace esekfom {
         }
         Eigen::Matrix<double, 30, 6> K = PHT * HPHT.inverse();
 
-        Matrix<scalar_type, n, 1> dx_ = K * z;
+        Matrix<Scalar, StateDof, 1> dx_ = K * z;
 
         P_ -= K * HP;
         x_.boxplus(dx_);
@@ -302,51 +285,49 @@ namespace esekfom {
       }
     }
 
-    void change_P(cov& input_cov) {
+    void change_P(Covariance& input_cov) {
       P_ = input_cov;
     }
 
     const state& get_x() const {
       return x_;
     }
-    const cov& get_P() const {
+    const Covariance& get_P() const {
       return P_;
     }
     state x_;
-    cov P_;
+    Covariance P_;
 
   private:
     measurement m_;
-    spMt l_;
-    spMt f_x_1;
-    spMt f_x_2;
-    cov F_x1 = cov::Identity();
-    cov F_x2 = cov::Identity();
-    cov L_ = cov::Identity();
+    SparseMatrixType l_;
+    SparseMatrixType f_x_1;
+    SparseMatrixType f_x_2;
+    Covariance F_x1 = Covariance::Identity();
+    Covariance F_x2 = Covariance::Identity();
+    Covariance L_ = Covariance::Identity();
 
-    processModel f;
-    processMatrix1 f_x;
-    processMatrix2 f_w;
+    ProcessModel f;
+    ProcessMatrix1 f_x;
+    ProcessMatrix2 f_w;
 
-    measurementMatrix1 h_x;
-    measurementMatrix2 h_v;
+    MeasurementMatrix1 h_x;
+    MeasurementMatrix2 h_v;
 
-    measurementMatrix1_dyn h_x_dyn;
-    measurementMatrix2_dyn h_v_dyn;
+    MeasurementMatrix1Dyn h_x_dyn;
+    MeasurementMatrix2Dyn h_v_dyn;
 
-    measurementModel_dyn_share_modified_cov h_dyn_share_modified_1;
+    MeasurementModelDynShareModifiedCov h_dyn_share_modified_1;
 
-    measurementModel_dyn_share_modified h_dyn_share_modified_2;
+    MeasurementModelDynShareModified h_dyn_share_modified_2;
 
-    measurementModel_dyn_share_modified h_dyn_share_modified_3;
+    MeasurementModelDynShareModified h_dyn_share_modified_3;
 
     int maximum_iter = 0;
-    scalar_type limit[n];
+    Scalar limit[StateDof];
 
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 
 }  // namespace esekfom
-
-#endif  //  ESEKFOM_EKF_HPP

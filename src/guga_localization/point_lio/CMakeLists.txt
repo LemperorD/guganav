@@ -68,6 +68,11 @@ include_directories(
   ${PYTHON_INCLUDE_DIRS}
 )
 
+install(
+  DIRECTORY include/point_lio
+  DESTINATION include
+)
+
 link_directories(
   include
   ${PCL_LIBRARY_DIRS}

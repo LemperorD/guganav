@@ -28,7 +28,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include "common_lib.h"
+#include "point_lio/common_lib.h"
 
 using namespace std;
 

@@ -16,8 +16,8 @@
  * - 优化: 迭代卡尔曼更新 (Iterated Kalman Update)
  */
 
-#include "Estimator.h"
-#include "parameters.h"
+#include "point_lio/Estimator.h"
+#include "point_lio/parameters.h"
 
 namespace {
   Estimator default_estimator;

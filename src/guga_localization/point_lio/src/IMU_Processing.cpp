@@ -9,7 +9,7 @@
  * - Process: 主入口 (初始化分发)
  */
 
-#include "IMU_Processing.h"
+#include "point_lio/IMU_Processing.h"
 
 /**
  * @brief 按点时间偏移升序排序

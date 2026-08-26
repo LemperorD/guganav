@@ -17,10 +17,10 @@
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <so3_math.h>
+#include <point_lio/so3_math.h>
 #include <tf2_ros/transform_broadcaster.h>
 
-#include <../include/IKFoM/IKFoM_toolkit/esekfom/esekfom.hpp>
+#include <IKFoM/IKFoM_toolkit/esekfom/esekfom.hpp>
 #include <Eigen/Eigen>
 #include <memory>
 #include <nav_msgs/msg/odometry.hpp>

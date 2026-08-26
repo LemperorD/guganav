@@ -1,4 +1,4 @@
-#include "Imu.h"
+#include "point_lio/Imu.h"
 
 void Imu::configure(const Params& params) {
   params_ = params;

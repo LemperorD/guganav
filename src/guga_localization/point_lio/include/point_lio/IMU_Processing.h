@@ -17,7 +17,7 @@
 #include <csignal>
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
-#include <common_lib.h>
+#include <point_lio/common_lib.h>
 #include <pcl/common/io.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>

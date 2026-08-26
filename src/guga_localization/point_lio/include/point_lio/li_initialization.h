@@ -17,11 +17,11 @@
 #pragma once
 
 #include <memory>
-#include "preprocess.h"
-#include "common_lib.h"
-#include "Imu.h"
+#include "point_lio/preprocess.h"
+#include "point_lio/common_lib.h"
+#include "point_lio/Imu.h"
 
-#include "Estimator.h"
+#include "point_lio/Estimator.h"
 
 /// @brief 最大缓冲区大小
 #define MAXN (720000)

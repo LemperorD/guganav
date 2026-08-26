@@ -1,4 +1,4 @@
-#include "li_initialization.h"
+#include "point_lio/li_initialization.h"
 
 #include <algorithm>
 

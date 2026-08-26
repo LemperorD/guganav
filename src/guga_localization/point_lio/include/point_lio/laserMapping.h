@@ -10,7 +10,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 
-#include "li_initialization.h"
+#include "point_lio/li_initialization.h"
 
 struct MainLoopState {
   // ---- 控制标志 / 计数器 ----
