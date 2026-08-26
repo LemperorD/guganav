@@ -58,7 +58,7 @@ int LaserMappingNode::run() {
       continue;
     }
 
-    processFramePoints(kf_input, t_last_, state_.q_input);
+    processFramePoints(filter_.input(), t_last_, filter_.inputNoise());
 
     if (!config_.mapping.publish_odometry_without_downsample) {
       publishOdometry();
@@ -136,40 +136,7 @@ void LaserMappingNode::totalInitialize() {
 
   initializeRos2Interfaces();
 
-  kf_input.init_dyn_share_modified_2h(
-      [this](state_input& state, const input_ikfom& input) {
-        return estimator_.getFInput(state, input);
-      },
-      [this](state_input& state, const input_ikfom& input) {
-        return estimator_.dfDxInput(state, input);
-      },
-      [this](state_input& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
-             esekfom::dyn_share_modified<double>& data) {
-        estimator_.hModelInput(state, cov_p, cov_R, data);
-      });
-  kf_output.init_dyn_share_modified_3h(
-      [this](state_output& state, const input_ikfom& input) {
-        return estimator_.getFOutput(state, input);
-      },
-      [this](state_output& state, const input_ikfom& input) {
-        return estimator_.dfDxOutput(state, input);
-      },
-      [this](state_output& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
-             esekfom::dyn_share_modified<double>& data) {
-        estimator_.hModelOutput(state, cov_p, cov_R, data);
-      },
-      [this](state_output& state, esekfom::dyn_share_modified<double>& data) {
-        estimator_.hModelImuOutput(state, data);
-      });
-
-  reset_cov(state_.p_init);
-  kf_input.change_P(state_.p_init);
-
-  reset_cov_output(state_.p_init_output);
-  kf_output.change_P(state_.p_init_output);
-
-  state_.q_input = estimator_.processNoiseCovInput();
-  state_.q_output = estimator_.processNoiseCovOutput();
+  filter_.initialize(estimator_);
 
   state_.pos_log_dir = std::string(ROOT_DIR) + "/Log/pos_log.txt";
   state_.fp.open(state_.pos_log_dir);
@@ -618,7 +585,7 @@ void LaserMappingNode::publishAndLogFrame() {
  * kf_output (30维)
  * @param kf        对应滤波器 (kf_input / kf_output)
  * @param last_time 传播时间基准 (t_last_ / time_predict_last_const_)
- * @param q         过程噪声 (state_.q_input / state_.q_output)
+ * @param q         对应滤波器持有的过程噪声
  */
 template <typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {

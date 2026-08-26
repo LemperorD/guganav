@@ -85,6 +85,7 @@ add_executable(pointlio_mapping
   src/parameters.cpp
   src/preprocess.cpp
   src/Estimator.cpp
+  src/Filter.cpp
   src/IMU_Processing.cpp
   src/Imu.cpp
 )

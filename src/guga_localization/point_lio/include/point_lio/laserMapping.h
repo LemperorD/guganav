@@ -11,6 +11,7 @@
 #include "nav_msgs/msg/path.hpp"
 
 #include "point_lio/li_initialization.h"
+#include "point_lio/Filter.h"
 
 struct MainLoopState {
   // ---- 控制标志 / 计数器 ----
@@ -33,12 +34,6 @@ struct MainLoopState {
   PointCloudXYZI::Ptr pcl_wait_save =
       std::make_shared<PointCloudXYZI>();  ///< 待保存点云
 
-  // ---- 滤波协方差 / 过程噪声 ----
-  Eigen::Matrix<double, 24, 24> p_init;         ///< 初始协方差 (24维状态)
-  Eigen::Matrix<double, 30, 30> p_init_output;  ///< 初始协方差 (30维状态)
-  Eigen::Matrix<double, 24, 24> q_input;        ///< 过程噪声 (input 模式)
-  Eigen::Matrix<double, 30, 30> q_output;       ///< 过程噪声 (output 模式)
-
   // ---- 位姿日志 ----
   std::string pos_log_dir;  ///< 位姿日志路径
   std::ofstream fp;         ///< 位姿日志文件
@@ -59,6 +54,7 @@ private:
   Imu imu_;
   Lidar lidar_;
   Estimator estimator_;
+  Filter filter_;
   PointLioParams config_;
   bool is_first_frame_{true};
   double lidar_end_time_{0.0};
@@ -150,7 +146,7 @@ private:
    * kf_output (30维)
    * @param kf        对应滤波器 (kf_input / kf_output)
    * @param last_time 传播时间基准 (t_last / time_predict_last_const)
-   * @param q         过程噪声 (state_.q_input / state_.q_output)
+   * @param q         对应滤波器的过程噪声
    */
   template <typename KF>
   void processFramePoints(KF& kf, double& last_time, auto& q);
