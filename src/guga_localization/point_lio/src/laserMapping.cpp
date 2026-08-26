@@ -98,6 +98,7 @@ void LaserMappingNode::totalInitialize() {
   // shared_from_this() 要求对象由 shared_ptr 管理 (main 中以 make_shared
   // 创建)。
   rclcpp::Node::SharedPtr self = this->shared_from_this();
+
   const PointLioParams params = readParameters(self);
   config_ = params;
   estimator_.configureEstimatorParams(config_.estimator);
@@ -105,28 +106,13 @@ void LaserMappingNode::totalInitialize() {
   // shared estimator instance; keep it synchronized with the node-owned
   // configuration until callbacks are bound directly to estimator_.
 
-  Lidar::Params lidar_params;
-  lidar_params.preprocess = config_.laser_mapping.preprocess;
-  lidar_params.imu_enabled = config_.laser_mapping.imu_enabled;
-  lidar_params.con_frame = config_.laser_mapping.con_frame;
-  lidar_params.con_frame_num = config_.laser_mapping.con_frame_num;
-  lidar_params.cut_frame = config_.laser_mapping.cut_frame;
-  if (config_.laser_mapping.cut_frame_interval > 0.0) {
-    lidar_params.cut_frame_num = std::max(
-        1, static_cast<int>(
-               std::lround(config_.laser_mapping.lidar_time_interval
-                           / config_.laser_mapping.cut_frame_interval)));
-  }
-  lidar_params.lidar_time_interval = config_.laser_mapping.lidar_time_interval;
-  lidar_.configure(lidar_params);
-
-  RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "lidar_type: %d.\n",
-              config_.laser_mapping.lidar_type);
+  initializeSensors();
 
   estimator_state.ivox_ = std::make_shared<IVoxType>(
       config_.mapping.ivox_options);
 
   estimator_state.point_selected_surf.set();
+
   state_.downsize_filter_surf.setLeafSize(
       static_cast<float>(config_.mapping.filter_size_surf),
       static_cast<float>(config_.mapping.filter_size_surf),
@@ -148,16 +134,7 @@ void LaserMappingNode::totalInitialize() {
     kf_input.x_.offset_T_L_I = estimator_state.Lidar_T_wrt_IMU;
   }
 
-  Imu::Params imu_params;
-  ImuProcessor::Params processor_params;
-  processor_params.enabled = config_.laser_mapping.imu_enabled;
-  processor_params.gravity = to_vec3d(config_.laser_mapping.gravity);
-  processor_params.gravity_init = to_vec3d(config_.laser_mapping.gravity_init);
-  processor_params.gravity_magnitude = config_.estimator.gravity_magnitude;
-  imu_params = Imu::Params::create(std::move(processor_params),
-                                   config_.laser_mapping.imu_time_interval,
-                                   config_.sensor.lidar_to_imu_time);
-  imu_.configure(imu_params);
+  initializeRosInterfaces();
 
   kf_input.init_dyn_share_modified_2h(
       [this](state_input& state, const input_ikfom& input) {
@@ -208,40 +185,6 @@ void LaserMappingNode::totalInitialize() {
     std::cout << "~~~~" << ROOT_DIR << " doesn't exist" << '\n';
   }
 
-  if (config_.laser_mapping.lidar_type == AVIA) {
-    sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
-        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
-        [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
-          lidar_.onLivoxPcl(msg);
-        });
-  } else {
-    sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
-        [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          lidar_.onStandardPcl(msg);
-        });
-  }
-
-  pub_laser_cloud_full_res_ = create_publisher<sensor_msgs::msg::PointCloud2>(
-      "cloud_registered", 20);
-  pub_laser_cloud_full_res_body_ =
-      create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_body",
-                                                      20);
-  pub_laser_cloud_effect_ = create_publisher<sensor_msgs::msg::PointCloud2>(
-      "cloud_effected", 20);
-  pub_laser_cloud_map_ = create_publisher<sensor_msgs::msg::PointCloud2>(
-      "Laser_map", 20);
-  pub_odom_aft_mapped_ = create_publisher<nav_msgs::msg::Odometry>(
-      "aft_mapped_to_init", 20);
-  pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
-  tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
-
-  sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
-      config_.sensor.imu_topic, rclcpp::SensorDataQoS(),
-      [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
-        imu_.onMessage(msg);
-      });
-
   while (state_.flg_first_scan && rclcpp::ok()) {
     executor_.spin_some();
     if (!lidar_.syncPackages(
@@ -255,6 +198,62 @@ void LaserMappingNode::totalInitialize() {
 
   signal(SIGINT, SigHandle);  // NOLINT
 }
+
+void LaserMappingNode::initializeSensors() {
+  auto lidar_params = config_.lidar;
+  if (lidar_params.cut_frame_interval > 0.0) {
+    lidar_params.cut_frame_num = std::max(
+        1, static_cast<int>(std::lround(
+               lidar_params.lidar_time_interval /
+               lidar_params.cut_frame_interval)));
+  }
+  lidar_.configure(lidar_params);
+
+  ImuProcessor::Params processor_params;
+  processor_params.enabled = config_.lidar.imu_enabled;
+  processor_params.gravity = to_vec3d(config_.lidar.gravity);
+  processor_params.gravity_init = to_vec3d(config_.lidar.gravity_init);
+  processor_params.gravity_magnitude = config_.estimator.gravity_magnitude;
+  imu_.configure(Imu::Params::create(
+      std::move(processor_params), config_.lidar.imu_time_interval,
+      config_.sensor.lidar_to_imu_time));
+
+  RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
+}
+
+void LaserMappingNode::initializeRosInterfaces() {
+  if (config_.lidar.lidar_type == AVIA) {
+    sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
+        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
+        [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
+          lidar_.onLivoxPcl(msg);
+        });
+  } else {
+    sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
+        [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+          lidar_.onStandardPcl(msg);
+        });
+  }
+  pub_laser_cloud_full_res_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      "cloud_registered", 20);
+  pub_laser_cloud_full_res_body_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      "cloud_registered_body", 20);
+  pub_laser_cloud_effect_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      "cloud_effected", 20);
+  pub_laser_cloud_map_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      "Laser_map", 20);
+  pub_odom_aft_mapped_ = create_publisher<nav_msgs::msg::Odometry>(
+      "aft_mapped_to_init", 20);
+  pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
+  tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+  sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
+      config_.sensor.imu_topic, rclcpp::SensorDataQoS(),
+      [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
+        imu_.onMessage(msg);
+      });
+}
+
 bool LaserMappingNode::initializeIteration() {
   if (!lidar_.syncPackages(
           imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
@@ -639,11 +638,11 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       while (get_time_sec(imu_next.header.stamp) > time_current_
              && (get_time_sec(imu_next.header.stamp)
                  < measures_.lidar_start_time
-                       + config_.laser_mapping.lidar_time_interval)) {
+                       + config_.lidar.lidar_time_interval)) {
         if (is_first_frame_) {
           while (get_time_sec(imu_next.header.stamp)
                  < measures_.lidar_start_time
-                       + config_.laser_mapping.lidar_time_interval) {
+                       + config_.lidar.lidar_time_interval) {
             imu_.popAndAdvance();
             if (imu_.empty()) {
               break;
@@ -795,21 +794,21 @@ void LaserMappingNode::initScan() {
             << '\n';
   time_current_ = 0.0;
 
-  if (config_.laser_mapping.imu_enabled) {
-    kf_input.x_.gravity = to_vec3d(config_.laser_mapping.gravity);
-    kf_output.x_.gravity = to_vec3d(config_.laser_mapping.gravity);
+  if (config_.lidar.imu_enabled) {
+    kf_input.x_.gravity = to_vec3d(config_.lidar.gravity);
+    kf_output.x_.gravity = to_vec3d(config_.lidar.gravity);
     imu_.discardBefore(measures_.lidar_start_time);  // 去除起始时间之前的帧
   } else {
-    kf_input.x_.gravity = to_vec3d(config_.laser_mapping.gravity);
-    kf_output.x_.gravity = to_vec3d(config_.laser_mapping.gravity);
-    kf_output.x_.acc = to_vec3d(config_.laser_mapping.gravity);
+    kf_input.x_.gravity = to_vec3d(config_.lidar.gravity);
+    kf_output.x_.gravity = to_vec3d(config_.lidar.gravity);
+    kf_output.x_.acc = to_vec3d(config_.lidar.gravity);
     kf_output.x_.acc *= -1;
     imu_.setNeedInit(false);
   }
-  if (config_.laser_mapping.gravity.size() >= 3) {  // TODO 重力不是四维向量
+  if (config_.lidar.gravity.size() >= 3) {  // TODO 重力不是四维向量
     config_.estimator.gravity_magnitude = std::hypot(
-        config_.laser_mapping.gravity[0], config_.laser_mapping.gravity[1],
-        config_.laser_mapping.gravity[2]);
+        config_.lidar.gravity[0], config_.lidar.gravity[1],
+        config_.lidar.gravity[2]);
     estimator_.configureEstimatorParams(config_.estimator);
   }
 }

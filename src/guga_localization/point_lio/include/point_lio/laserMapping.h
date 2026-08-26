@@ -95,6 +95,8 @@ private:
 
   /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (由 run 调用) */
   void totalInitialize();
+  void initializeSensors();
+  void initializeRosInterfaces();
 
   /** @brief 轮次初始化: 同步传感器数据、处理首帧并准备当前帧
    * @return true 当前轮次已准备好进入 ESKF 处理

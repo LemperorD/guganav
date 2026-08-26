@@ -108,13 +108,14 @@ struct SensorParams {
   std::vector<double> initial_pose;
 };
 
-struct LaserMappingParams {
+struct LidarParams {
   PreprocessParams preprocess;
   int lidar_type{AVIA};
   bool imu_enabled{true};
   bool con_frame{false};
   int con_frame_num{1};
   bool cut_frame{false};
+  int cut_frame_num{1};
   double cut_frame_interval{0.1};
   double lidar_time_interval{0.1};
   double imu_time_interval{0.005};
@@ -127,7 +128,7 @@ struct PointLioParams {
   EstimatorParams estimator;
   PublishParams publish;
   SensorParams sensor;
-  LaserMappingParams laser_mapping;
+  LidarParams lidar;
 };
 
 // ==================== 函数声明 ====================

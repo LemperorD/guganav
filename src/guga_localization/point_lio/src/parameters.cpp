@@ -40,7 +40,7 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
     params.mapping.plane_thr = static_cast<float>(
         nh->declare_parameter<double>("mapping.plane_thr", 0.05F));
     params.estimator.plane_thr = params.mapping.plane_thr;
-    params.laser_mapping.preprocess.point_filter_num = static_cast<int>(
+    params.lidar.preprocess.point_filter_num = static_cast<int>(
         nh->declare_parameter<long>("point_filter_num", 2));
 
     // ==================== common 参数 — 话题名 ====================
@@ -50,13 +50,13 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         "common.imu_topic", ".livox.imu");
 
     // ==================== common 参数 — 合帧/切帧 ====================
-    params.laser_mapping.con_frame = nh->declare_parameter<bool>(
+    params.lidar.con_frame = nh->declare_parameter<bool>(
         "common.con_frame", false);
-    params.laser_mapping.con_frame_num = static_cast<int>(
+    params.lidar.con_frame_num = static_cast<int>(
         nh->declare_parameter<long>("common.con_frame_num", 1));
-    params.laser_mapping.cut_frame = nh->declare_parameter<bool>(
+    params.lidar.cut_frame = nh->declare_parameter<bool>(
         "common.cut_frame", false);
-    params.laser_mapping.cut_frame_interval = nh->declare_parameter<double>(
+    params.lidar.cut_frame_interval = nh->declare_parameter<double>(
         "common.cut_frame_time_interval", 0.1);
     params.sensor.lidar_to_imu_time = nh->declare_parameter<double>(
         "common.time_diff_lidar_to_imu", 0.0);
@@ -76,17 +76,17 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         "filter_size_map", 0.5);
     params.mapping.det_range = static_cast<float>(
         nh->declare_parameter<double>("mapping.det_range", 300.F));
-    params.laser_mapping.preprocess.det_range = params.mapping.det_range;
+    params.lidar.preprocess.det_range = params.mapping.det_range;
     params.mapping.fov_deg = nh->declare_parameter<double>("mapping.fov_degree",
                                                            180);
 
     // ==================== mapping 参数 — IMU 功能开关 ====================
-    params.laser_mapping.imu_enabled = nh->declare_parameter<bool>(
+    params.lidar.imu_enabled = nh->declare_parameter<bool>(
         "mapping.imu_en", true);
     params.mapping.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
     params.estimator.extrinsic_estimation = params.mapping.extrinsic_estimation;
-    params.laser_mapping.imu_time_interval = nh->declare_parameter<double>(
+    params.lidar.imu_time_interval = nh->declare_parameter<double>(
         "mapping.imu_time_inte", 0.005);
 
     // ==================== mapping 参数 — 噪声协方差 ====================
@@ -112,26 +112,26 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         "mapping.imu_meas_omg_cov", 0.1);
 
     // ==================== preprocess 参数 — 雷达配置 ====================
-    params.laser_mapping.preprocess.blind = nh->declare_parameter<double>(
+    params.lidar.preprocess.blind = nh->declare_parameter<double>(
         "preprocess.blind", 1.0);
-    params.laser_mapping.lidar_type = static_cast<int>(
+    params.lidar.lidar_type = static_cast<int>(
         nh->declare_parameter<long>("preprocess.lidar_type", 1));
-    params.laser_mapping.preprocess.lidar_type =
-        params.laser_mapping.lidar_type;
-    params.laser_mapping.preprocess.scan_lines = static_cast<int>(
+    params.lidar.preprocess.lidar_type =
+        params.lidar.lidar_type;
+    params.lidar.preprocess.scan_lines = static_cast<int>(
         nh->declare_parameter<long>("preprocess.scan_line", 16));
-    params.laser_mapping.preprocess.scan_rate = static_cast<int>(
+    params.lidar.preprocess.scan_rate = static_cast<int>(
         nh->declare_parameter<long>("preprocess.scan_rate", 10));
-    params.laser_mapping.preprocess.timestamp_unit = static_cast<int>(
+    params.lidar.preprocess.timestamp_unit = static_cast<int>(
         nh->declare_parameter<long>("preprocess.timestamp_unit", 1));
     params.mapping.match_s = nh->declare_parameter<double>("mapping.match_s",
                                                            81);
     params.estimator.match_s = params.mapping.match_s;
 
     // ==================== mapping 参数 — 重力 ====================
-    params.laser_mapping.gravity = nh->declare_parameter<std::vector<double>>(
+    params.lidar.gravity = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity", std::vector<double>());
-    params.laser_mapping.gravity_init =
+    params.lidar.gravity_init =
         nh->declare_parameter<std::vector<double>>("mapping.gravity_init",
                                                    std::vector<double>());
 
@@ -161,7 +161,7 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         "pcd_save.pcd_save_en", false);
     params.publish.pcd_save_interval = static_cast<int>(
         nh->declare_parameter<long>("pcd_save.interval", -1));
-    params.laser_mapping.lidar_time_interval = nh->declare_parameter<double>(
+    params.lidar.lidar_time_interval = nh->declare_parameter<double>(
         "mapping.lidar_time_inte", 0.1);
 
     // ==================== iVox 网格参数 ====================
@@ -184,8 +184,8 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
     RCLCPP_ERROR(nh->get_logger(), "Exception: %s", e.what());
   }
 
-  if (params.laser_mapping.gravity.size() >= 3) {
-    const auto& gravity = params.laser_mapping.gravity;
+  if (params.lidar.gravity.size() >= 3) {
+    const auto& gravity = params.lidar.gravity;
     params.estimator.gravity_magnitude = std::hypot(gravity[0], gravity[1],
                                                     gravity[2]);
   }

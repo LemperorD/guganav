@@ -31,44 +31,33 @@ public:
   Lidar() = default;
   ~Lidar() = default;
 
-  struct Params {
-    PreprocessParams preprocess;
-    bool imu_enabled{true};
-    bool con_frame{false};
-    int con_frame_num{1};
-    bool cut_frame{false};
-    int cut_frame_num{1};
-    double lidar_time_interval{0.1};
-  };
+  using Params = LidarParams;
 
   void configure(const Params& params);
-  [[nodiscard]] int mergeFrameCount() const {
-    return params_.con_frame_num;
-  }
-
   void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
   void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
   bool syncPackages(Imu& imu, MeasureGroup& meas);
 
-  // ==================== 线程同步 ====================
-
-  PointCloudXYZI::Ptr ptr_con =
-      std::make_shared<PointCloudXYZI>();  ///< 合帧累积点云
-
-  // ==================== 调试数组 ====================
-
-  int scan_count = 0;         ///< 接收帧数
-  int frame_ct = 0;           ///< 合帧计数
-  bool lidar_pushed = false;  ///< 雷达帧已推入 (IMU模式防重复取帧)
-  bool imu_pushed = false;    ///< IMU 已推入
-  std::deque<PointCloudXYZI::Ptr> lidar_buffer;  ///< 雷达帧缓冲队列
-  std::deque<double> time_buffer;                ///< 雷达时间戳缓冲队列
-
-  double last_timestamp_lidar = -1.0;
-  double time_con = 0.0;
-  bool lose_lid = false;
-
 private:
+  [[nodiscard]] int mergeFrameCount() const {
+    return params_.con_frame_num;
+  }
+  void getMeasurements(MeasureGroup& meas) const;
+  void popLidarFrame();
+  void appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
+                       std::deque<double>& timestamps);
+  void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
+
   Params params_;
   Preprocess preprocess_;
+  PointCloudXYZI::Ptr ptr_con_{std::make_shared<PointCloudXYZI>()};
+  int scan_count_{0};
+  int frame_ct_{0};
+  bool lidar_pushed_{false};
+  bool imu_pushed_{false};
+  std::deque<PointCloudXYZI::Ptr> lidar_buffer_;
+  std::deque<double> time_buffer_;
+  double last_timestamp_lidar_{-1.0};
+  double time_con_{0.0};
+  bool lose_lid_{false};
 };
