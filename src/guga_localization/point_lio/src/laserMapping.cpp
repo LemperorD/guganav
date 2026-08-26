@@ -203,20 +203,14 @@ void LaserMappingNode::initializeSensors() {
   auto lidar_params = config_.lidar;
   if (lidar_params.cut_frame_interval > 0.0) {
     lidar_params.cut_frame_num = std::max(
-        1, static_cast<int>(std::lround(
-               lidar_params.lidar_time_interval /
-               lidar_params.cut_frame_interval)));
+        1, static_cast<int>(std::lround(lidar_params.lidar_time_interval
+                                        / lidar_params.cut_frame_interval)));
   }
   lidar_.configure(lidar_params);
 
-  ImuProcessor::Params processor_params;
-  processor_params.enabled = config_.lidar.imu_enabled;
-  processor_params.gravity = to_vec3d(config_.lidar.gravity);
-  processor_params.gravity_init = to_vec3d(config_.lidar.gravity_init);
-  processor_params.gravity_magnitude = config_.estimator.gravity_magnitude;
-  imu_.configure(Imu::Params::create(
-      std::move(processor_params), config_.lidar.imu_time_interval,
-      config_.sensor.lidar_to_imu_time));
+  config_.imu.processor.gravity_magnitude = config_.estimator.gravity_magnitude;
+  config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
+  imu_.configure(config_.imu);
 
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
@@ -237,8 +231,9 @@ void LaserMappingNode::initializeRosInterfaces() {
   }
   pub_laser_cloud_full_res_ = create_publisher<sensor_msgs::msg::PointCloud2>(
       "cloud_registered", 20);
-  pub_laser_cloud_full_res_body_ = create_publisher<sensor_msgs::msg::PointCloud2>(
-      "cloud_registered_body", 20);
+  pub_laser_cloud_full_res_body_ =
+      create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_body",
+                                                      20);
   pub_laser_cloud_effect_ = create_publisher<sensor_msgs::msg::PointCloud2>(
       "cloud_effected", 20);
   pub_laser_cloud_map_ = create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -794,21 +789,20 @@ void LaserMappingNode::initScan() {
             << '\n';
   time_current_ = 0.0;
 
-  if (config_.lidar.imu_enabled) {
-    kf_input.x_.gravity = to_vec3d(config_.lidar.gravity);
-    kf_output.x_.gravity = to_vec3d(config_.lidar.gravity);
+  if (config_.imu.processor.enabled) {
+    kf_input.x_.gravity = config_.imu.processor.gravity;
+    kf_output.x_.gravity = config_.imu.processor.gravity;
     imu_.discardBefore(measures_.lidar_start_time);  // 去除起始时间之前的帧
   } else {
-    kf_input.x_.gravity = to_vec3d(config_.lidar.gravity);
-    kf_output.x_.gravity = to_vec3d(config_.lidar.gravity);
-    kf_output.x_.acc = to_vec3d(config_.lidar.gravity);
+    kf_input.x_.gravity = config_.imu.processor.gravity;
+    kf_output.x_.gravity = config_.imu.processor.gravity;
+    kf_output.x_.acc = config_.imu.processor.gravity;
     kf_output.x_.acc *= -1;
     imu_.setNeedInit(false);
   }
-  if (config_.lidar.gravity.size() >= 3) {  // TODO 重力不是四维向量
-    config_.estimator.gravity_magnitude = std::hypot(
-        config_.lidar.gravity[0], config_.lidar.gravity[1],
-        config_.lidar.gravity[2]);
+  if (config_.imu.processor.gravity.norm() > 0.0) {
+    config_.estimator.gravity_magnitude =
+        config_.imu.processor.gravity_magnitude;
     estimator_.configureEstimatorParams(config_.estimator);
   }
 }

@@ -3,6 +3,7 @@
 #include <deque>
 
 #include "point_lio/IMU_Processing.h"
+#include "point_lio/parameters.h"
 #include "point_lio/preprocess.h"
 
 struct ImuMeasurement {
@@ -12,19 +13,7 @@ struct ImuMeasurement {
 
 class Imu {
 public:
-  struct Params {
-    static Params create(ImuProcessor::Params processor,
-                         double integration_interval,
-                         double timestamp_offset);
-    [[nodiscard]] const ImuProcessor::Params& processor() const { return processor_; }
-    [[nodiscard]] double integrationInterval() const { return integration_interval_; }
-    [[nodiscard]] double timestampOffset() const { return timestamp_offset_; }
-
-  private:
-    ImuProcessor::Params processor_;
-    double integration_interval_{0.005};
-    double timestamp_offset_{0.0};
-  };
+  using Params = ImuParams;
 
   void configure(const Params& params);
 

@@ -87,6 +87,12 @@ struct EstimatorParams {
   double imu_meas_omg_cov{0.1};
 };
 
+struct ImuParams {
+  ImuProcessor::Params processor;
+  double integration_interval{0.005};
+  double timestamp_offset{0.0};
+};
+
 struct PublishParams {
   bool path_enabled{true};
   bool scan_enabled{true};
@@ -111,16 +117,12 @@ struct SensorParams {
 struct LidarParams {
   PreprocessParams preprocess;
   int lidar_type{AVIA};
-  bool imu_enabled{true};
   bool con_frame{false};
   int con_frame_num{1};
   bool cut_frame{false};
   int cut_frame_num{1};
   double cut_frame_interval{0.1};
   double lidar_time_interval{0.1};
-  double imu_time_interval{0.005};
-  std::vector<double> gravity;
-  std::vector<double> gravity_init;
 };
 
 struct PointLioParams {
@@ -129,6 +131,7 @@ struct PointLioParams {
   PublishParams publish;
   SensorParams sensor;
   LidarParams lidar;
+  ImuParams imu;
 };
 
 // ==================== 函数声明 ====================

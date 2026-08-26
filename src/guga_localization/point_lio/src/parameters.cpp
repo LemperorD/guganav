@@ -81,12 +81,12 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
                                                            180);
 
     // ==================== mapping 参数 — IMU 功能开关 ====================
-    params.lidar.imu_enabled = nh->declare_parameter<bool>(
+    params.imu.processor.enabled = nh->declare_parameter<bool>(
         "mapping.imu_en", true);
     params.mapping.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
     params.estimator.extrinsic_estimation = params.mapping.extrinsic_estimation;
-    params.lidar.imu_time_interval = nh->declare_parameter<double>(
+    params.imu.integration_interval = nh->declare_parameter<double>(
         "mapping.imu_time_inte", 0.005);
 
     // ==================== mapping 参数 — 噪声协方差 ====================
@@ -129,11 +129,18 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
     params.estimator.match_s = params.mapping.match_s;
 
     // ==================== mapping 参数 — 重力 ====================
-    params.lidar.gravity = nh->declare_parameter<std::vector<double>>(
+    const auto gravity = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity", std::vector<double>());
-    params.lidar.gravity_init =
-        nh->declare_parameter<std::vector<double>>("mapping.gravity_init",
-                                                   std::vector<double>());
+    const auto gravity_init = nh->declare_parameter<std::vector<double>>(
+        "mapping.gravity_init", std::vector<double>());
+    if (gravity.size() >= 3) {
+      params.imu.processor.gravity =
+          V3D(gravity[0], gravity[1], gravity[2]);
+    }
+    if (gravity_init.size() >= 3) {
+      params.imu.processor.gravity_init =
+          V3D(gravity_init[0], gravity_init[1], gravity_init[2]);
+    }
 
     // ==================== mapping 参数 — 外参 ====================
     params.sensor.extrinsic_t = nh->declare_parameter<std::vector<double>>(
@@ -184,8 +191,8 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
     RCLCPP_ERROR(nh->get_logger(), "Exception: %s", e.what());
   }
 
-  if (params.lidar.gravity.size() >= 3) {
-    const auto& gravity = params.lidar.gravity;
+  if (params.imu.processor.gravity.norm() > 0.0) {
+    const auto& gravity = params.imu.processor.gravity;
     params.estimator.gravity_magnitude = std::hypot(gravity[0], gravity[1],
                                                     gravity[2]);
   }
