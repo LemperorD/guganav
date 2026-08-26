@@ -37,7 +37,8 @@ public:
   [[nodiscard]] ImuMeasurement nextMeasurement() const;
 
   bool collectUntil(double end_time, MeasureGroup& meas);
-  void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort);
+  void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
+               state_input& input_state, state_output& output_state);
 
   [[nodiscard]] bool needInit() const;
   [[nodiscard]] double lastTimestamp() const;

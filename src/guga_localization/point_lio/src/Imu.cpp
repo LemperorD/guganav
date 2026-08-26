@@ -131,8 +131,9 @@ bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
   return true;
 }
 
-void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort) {
-  processor_->process(meas, undistort);
+void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
+                  state_input& input_state, state_output& output_state) {
+  processor_->process(meas, undistort, input_state, output_state);
 }
 
 bool Imu::needInit() const {

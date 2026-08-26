@@ -30,12 +30,6 @@ const EstimatorParams& Estimator::params() const {
 
 EstimatorState estimator_state;
 
-/** @brief 卡尔曼滤波器实例 — IMU-as-input 模式 (状态24维, 输入6维) */
-esekfom::esekf<state_input, 24, input_ikfom> kf_input;
-
-/** @brief 卡尔曼滤波器实例 — IMU-as-output 模式 (状态30维, 输入6维) */
-esekfom::esekf<state_output, 30, input_ikfom> kf_output;
-
 // ==================== 过程噪声协方差 ====================
 
 /**
@@ -262,7 +256,7 @@ void Estimator::hModelInput(
         estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
 
     // 坐标变换: Body → World
-    this->pointBodyToWorld(&point_body_j, &point_world_j);
+    this->pointBodyToWorld(&point_body_j, &point_world_j, s);
 
     V3D p_body = estimator_state
                      .pbody_list[estimator_state.idx + j + 1];  // IMU系下的坐标
@@ -388,7 +382,7 @@ void Estimator::hModelInput(
  * @brief 点到平面距离量测模型 — IMU-as-output 模式
  *
  * 与 hModelInput 逻辑完全相同，唯一的区别:
- * - 使用 kf_output 的状态 (通过 pointBodyToWorld 内部的判断)
+ * - 使用回调传入的 output 状态进行坐标变换
  * - 量测雅可比结构不变 (同样依赖时间分组)
  *
  * @see hModelInput
@@ -407,7 +401,7 @@ void Estimator::hModelOutput(
         estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
     PointType& point_world_j =
         estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
-    this->pointBodyToWorld(&point_body_j, &point_world_j);
+    this->pointBodyToWorld(&point_body_j, &point_world_j, s);
     V3D p_body = estimator_state.pbody_list[estimator_state.idx + j + 1];
     double p_norm = p_body.norm();
     V3D p_world;
@@ -593,29 +587,49 @@ void Estimator::hModelImuOutput(
  * @param pi 输入: 雷达/IMU 坐标系下的点
  * @param po 输出: 世界坐标系下的点 (保持 intensity)
  */
-void Estimator::pointBodyToWorld(PointType const* pi, PointType* po) const {
+void Estimator::pointBodyToWorld(PointType const* pi, PointType* po,
+                                 const state_input& state) const {
   V3D p_body(pi->x, pi->y, pi->z);
 
   V3D p_global;
   if (params_.extrinsic_estimation) {
     // 在线外参估计: 使用 EKF 状态中的外参
 
-    p_global = kf_input.x_.rot
-                   * (kf_input.x_.offset_R_L_I * p_body
-                      + kf_input.x_.offset_T_L_I)
-               + kf_input.x_.pos;
+    p_global = state.rot
+                   * (state.offset_R_L_I * p_body + state.offset_T_L_I)
+               + state.pos;
 
   } else {
     // 固定外参: 使用 YAML 配置
 
-    p_global = kf_input.x_.rot
+    p_global = state.rot
                    * (estimator_state.Lidar_R_wrt_IMU * p_body
                       + estimator_state.Lidar_T_wrt_IMU)
-               + kf_input.x_.pos;
+               + state.pos;
   }
 
   po->x = p_global(0);
   po->y = p_global(1);
   po->z = p_global(2);
   po->intensity = pi->intensity;  // 保留强度信息
+}
+
+void Estimator::pointBodyToWorld(PointType const* pi, PointType* po,
+                                 const state_output& state) const {
+  const V3D p_body(pi->x, pi->y, pi->z);
+  V3D p_global;
+  if (params_.extrinsic_estimation) {
+    p_global = state.rot
+                   * (state.offset_R_L_I * p_body + state.offset_T_L_I)
+               + state.pos;
+  } else {
+    p_global = state.rot
+                   * (estimator_state.Lidar_R_wrt_IMU * p_body
+                      + estimator_state.Lidar_T_wrt_IMU)
+               + state.pos;
+  }
+  po->x = p_global(0);
+  po->y = p_global(1);
+  po->z = p_global(2);
+  po->intensity = pi->intensity;
 }

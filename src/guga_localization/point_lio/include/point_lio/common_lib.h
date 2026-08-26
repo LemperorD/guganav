@@ -95,10 +95,6 @@ MTK_BUILD_MANIFOLD(
 
 /** @} */  // manifold_defs
 
-/** @brief 全局卡尔曼滤波器实例声明 */
-extern esekfom::esekf<state_input, 24, input_ikfom> kf_input;
-extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
-
 // ==================== 数值常量 ====================
 #define PBWIDTH 30  ///< 进度条宽度
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"

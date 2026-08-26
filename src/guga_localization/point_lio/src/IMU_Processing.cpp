@@ -105,7 +105,8 @@ void ImuProcessor::Set_init(Eigen::Vector3d& tmp_gravity,
 }
 
 /** @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值 */
-void ImuProcessor::initState() {
+void ImuProcessor::initState(state_input& input_state,
+                             state_output& output_state) {
   if (after_imu_init_) {
     return;  // 已完成
   }
@@ -117,9 +118,9 @@ void ImuProcessor::initState() {
   }
   M3D rot_init;
   Set_init(tmp_gravity, rot_init);
-  kf_input.x_.rot = rot_init;
-  kf_output.x_.rot = rot_init;
-  kf_output.x_.acc = -rot_init.transpose() * kf_output.x_.gravity;
+  input_state.rot = rot_init;
+  output_state.rot = rot_init;
+  output_state.acc = -rot_init.transpose() * output_state.gravity;
   after_imu_init_ = true;
 }
 
@@ -175,7 +176,9 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
  * @param[out] cur_pcl_un_ 输出点云 (当前版本为原始点云副本)
  */
 void ImuProcessor::process(const MeasureGroup& meas,
-                           PointCloudXYZI::Ptr cur_pcl_un_) {
+                           PointCloudXYZI::Ptr cur_pcl_un_,
+                           state_input& input_state,
+                           state_output& output_state) {
   if (imu_en) {
     if (meas.imu.empty()) {
       return;
@@ -190,7 +193,7 @@ void ImuProcessor::process(const MeasureGroup& meas,
       // 初始化完成: 数据级累积 + 状态级初始化一步完成
       RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
       imu_need_init_ = false;
-      initState();
+      initState(input_state, output_state);
     }
 
     *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
@@ -200,7 +203,7 @@ void ImuProcessor::process(const MeasureGroup& meas,
   } else {
     // ---- IMU 禁用: 直接使用原始点云 ----
     imu_need_init_ = false;  // 无累积过程, 直接进入就绪
-    initState();             // 用配置重力 gravity_init 完成状态初始化
+    initState(input_state, output_state);
     *cur_pcl_un_ = *(meas.lidar);
     return;
   }

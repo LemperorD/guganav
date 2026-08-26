@@ -47,7 +47,10 @@ public:
                     esekfom::dyn_share_modified<double>& ekfom_data) const;
   void hModelImuOutput(state_output& state,
                        esekfom::dyn_share_modified<double>& ekfom_data) const;
-  void pointBodyToWorld(PointType const* input, PointType* output) const;
+  void pointBodyToWorld(PointType const* input, PointType* output,
+                        const state_input& state) const;
+  void pointBodyToWorld(PointType const* input, PointType* output,
+                        const state_output& state) const;
 
 private:
   EstimatorParams params_;

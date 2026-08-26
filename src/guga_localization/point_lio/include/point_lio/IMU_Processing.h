@@ -77,7 +77,8 @@ public:
    * @param meas 当前帧的测量组 (点云 + IMU 数据)
    * @param[out] pcl_un_ 处理后/去畸变后的点云
    */
-  void process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_);
+  void process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_,
+               state_input& input_state, state_output& output_state);
 
   /** @brief 设置陀螺仪协方差缩放因子 */
   void set_gyr_cov(const V3D& scaler);
@@ -107,7 +108,7 @@ public:
    * - 无 IMU 模式: 用配置的先验重力 gravity_init
    * 内部通过 after_imu_init_ 保证只执行一次。
    */
-  void initState();
+  void initState(state_input& input_state, state_output& output_state);
 
   // ==================== 公有成员变量 ====================
 

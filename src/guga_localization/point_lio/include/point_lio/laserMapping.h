@@ -91,8 +91,12 @@ private:
 
   /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (由 run 调用) */
   void totalInitialize();
+  void initializeEstimator();
   void initializeSensors();
+  void initializeMappingState();
+  void initializeFilter();
   void initializeRos2Interfaces();
+  void initializeLogging();
 
   /** @brief 轮次初始化: 同步传感器数据、处理首帧并准备当前帧
    * @return true 当前轮次已准备好进入 ESKF 处理
@@ -142,9 +146,9 @@ private:
   void publishAndLogFrame();
 
   /** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
-   * @tparam ImuAsInput true = kf_input (24维, IMU-as-input) / false =
-   * kf_output (30维)
-   * @param kf        对应滤波器 (kf_input / kf_output)
+   * @tparam ImuAsInput true = input filter (24维) / false = output filter
+   * (30维)
+   * @param kf        当前模式对应的滤波器
    * @param last_time 传播时间基准 (t_last / time_predict_last_const)
    * @param q         对应滤波器的过程噪声
    */

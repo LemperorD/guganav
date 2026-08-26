@@ -7,7 +7,7 @@ void Filter::initialize(Estimator& estimator) {
     return;
   }
 
-  kf_input.init_dyn_share_modified_2h(
+  input_.init_dyn_share_modified_2h(
       [&estimator](state_input& state, const input_ikfom& input) {
         return estimator.getFInput(state, input);
       },
@@ -20,7 +20,7 @@ void Filter::initialize(Estimator& estimator) {
         estimator.hModelInput(state, cov_p, cov_R, data);
       });
 
-  kf_output.init_dyn_share_modified_3h(
+  output_.init_dyn_share_modified_3h(
       [&estimator](state_output& state, const input_ikfom& input) {
         return estimator.getFOutput(state, input);
       },
@@ -39,10 +39,10 @@ void Filter::initialize(Estimator& estimator) {
 
   Eigen::Matrix<double, 24, 24> input_covariance;
   reset_cov(input_covariance);
-  kf_input.change_P(input_covariance);
+  input_.change_P(input_covariance);
   Eigen::Matrix<double, 30, 30> output_covariance;
   reset_cov_output(output_covariance);
-  kf_output.change_P(output_covariance);
+  output_.change_P(output_covariance);
   input_noise_ = estimator.processNoiseCovInput();
   output_noise_ = estimator.processNoiseCovOutput();
   initialized_ = true;
