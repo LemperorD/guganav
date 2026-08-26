@@ -15,29 +15,25 @@
 #include "parameters.h"
 #include <memory>
 
-void readParameters(std::shared_ptr<rclcpp::Node>& nh,
-                    PointLioParams& params) {
+void readParameters(std::shared_ptr<rclcpp::Node>& nh, PointLioParams& params) {
   try {
     // ==================== 模式开关 ====================
-    params.mapping.propagate_at_imu_frequency =
-        nh->declare_parameter<bool>("prop_at_freq_of_imu", true);
-    params.mapping.use_imu_as_input =
-        nh->declare_parameter<bool>("use_imu_as_input", false);
-    params.estimator.use_imu_as_input = params.mapping.use_imu_as_input;
-    params.estimator.check_saturation =
-        nh->declare_parameter<bool>("check_satu", true);
-    params.mapping.init_map_size =
-        static_cast<int>(nh->declare_parameter<long>("init_map_size", 100));
-    params.mapping.space_down_sample =
-        nh->declare_parameter<bool>("space_down_sample", true);
+    params.mapping.propagate_at_imu_frequency = nh->declare_parameter<bool>(
+        "prop_at_freq_of_imu", true);
+    params.estimator.check_saturation = nh->declare_parameter<bool>(
+        "check_satu", true);
+    params.mapping.init_map_size = static_cast<int>(
+        nh->declare_parameter<long>("init_map_size", 100));
+    params.mapping.space_down_sample = nh->declare_parameter<bool>(
+        "space_down_sample", true);
 
     // ==================== mapping 参数 — IMU 饱和 ====================
-    params.estimator.saturation_acc =
-        nh->declare_parameter<double>("mapping.satu_acc", 3.0);
-    params.estimator.saturation_gyro =
-        nh->declare_parameter<double>("mapping.satu_gyro", 35.0);
-    params.estimator.acc_norm =
-        nh->declare_parameter<double>("mapping.acc_norm", 1.0);
+    params.estimator.saturation_acc = nh->declare_parameter<double>(
+        "mapping.satu_acc", 3.0);
+    params.estimator.saturation_gyro = nh->declare_parameter<double>(
+        "mapping.satu_gyro", 35.0);
+    params.estimator.acc_norm = nh->declare_parameter<double>(
+        "mapping.acc_norm", 1.0);
 
     // ==================== mapping 参数 — 平面提取 ====================
     params.mapping.plane_thr = static_cast<float>(
@@ -53,71 +49,70 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh,
         "common.imu_topic", ".livox.imu");
 
     // ==================== common 参数 — 合帧/切帧 ====================
-    params.laser_mapping.con_frame =
-        nh->declare_parameter<bool>("common.con_frame", false);
+    params.laser_mapping.con_frame = nh->declare_parameter<bool>(
+        "common.con_frame", false);
     params.laser_mapping.con_frame_num = static_cast<int>(
         nh->declare_parameter<long>("common.con_frame_num", 1));
-    params.laser_mapping.cut_frame =
-        nh->declare_parameter<bool>("common.cut_frame", false);
+    params.laser_mapping.cut_frame = nh->declare_parameter<bool>(
+        "common.cut_frame", false);
     params.laser_mapping.cut_frame_interval = nh->declare_parameter<double>(
         "common.cut_frame_time_interval", 0.1);
     params.sensor.lidar_to_imu_time = nh->declare_parameter<double>(
         "common.time_diff_lidar_to_imu", 0.0);
 
     // ==================== prior_pcd 参数 — 先验地图 ====================
-    params.sensor.enable_prior_map =
-        nh->declare_parameter<bool>("prior_pcd.enable", false);
+    params.sensor.enable_prior_map = nh->declare_parameter<bool>(
+        "prior_pcd.enable", false);
     params.sensor.prior_map_path = nh->declare_parameter<string>(
         "prior_pcd.prior_pcd_map_path", "");
     params.sensor.initial_pose = nh->declare_parameter<std::vector<double>>(
         "prior_pcd.init_pose", std::vector<double>());
 
     // ==================== 滤波参数 ====================
-    params.mapping.filter_size_surf =
-        nh->declare_parameter<double>("filter_size_surf", 0.5);
-    params.mapping.filter_size_map =
-        nh->declare_parameter<double>("filter_size_map", 0.5);
+    params.mapping.filter_size_surf = nh->declare_parameter<double>(
+        "filter_size_surf", 0.5);
+    params.mapping.filter_size_map = nh->declare_parameter<double>(
+        "filter_size_map", 0.5);
     params.mapping.det_range = static_cast<float>(
         nh->declare_parameter<double>("mapping.det_range", 300.F));
     params.laser_mapping.preprocess.det_range = params.mapping.det_range;
-    params.mapping.fov_deg =
-        nh->declare_parameter<double>("mapping.fov_degree", 180);
+    params.mapping.fov_deg = nh->declare_parameter<double>("mapping.fov_degree",
+                                                           180);
 
     // ==================== mapping 参数 — IMU 功能开关 ====================
-    params.laser_mapping.imu_enabled =
-        nh->declare_parameter<bool>("mapping.imu_en", true);
+    params.laser_mapping.imu_enabled = nh->declare_parameter<bool>(
+        "mapping.imu_en", true);
     params.mapping.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
-    params.estimator.extrinsic_estimation =
-        params.mapping.extrinsic_estimation;
-    params.laser_mapping.imu_time_interval =
-        nh->declare_parameter<double>("mapping.imu_time_inte", 0.005);
+    params.estimator.extrinsic_estimation = params.mapping.extrinsic_estimation;
+    params.laser_mapping.imu_time_interval = nh->declare_parameter<double>(
+        "mapping.imu_time_inte", 0.005);
 
     // ==================== mapping 参数 — 噪声协方差 ====================
-    params.estimator.laser_point_cov =
-        nh->declare_parameter<double>("mapping.lidar_meas_cov", 0.1);
-    params.estimator.acc_cov_input =
-        nh->declare_parameter<double>("mapping.acc_cov_input", 0.1);
-    params.estimator.vel_cov =
-        nh->declare_parameter<double>("mapping.vel_cov", 20);
-    params.estimator.gyr_cov_input =
-        nh->declare_parameter<double>("mapping.gyr_cov_input", 0.1);
-    params.estimator.gyr_cov_output =
-        nh->declare_parameter<double>("mapping.gyr_cov_output", 0.1);
-    params.estimator.acc_cov_output =
-        nh->declare_parameter<double>("mapping.acc_cov_output", 0.1);
-    params.estimator.b_gyr_cov =
-        nh->declare_parameter<double>("mapping.b_gyr_cov", 0.0001);
-    params.estimator.b_acc_cov =
-        nh->declare_parameter<double>("mapping.b_acc_cov", 0.0001);
-    params.estimator.imu_meas_acc_cov =
-        nh->declare_parameter<double>("mapping.imu_meas_acc_cov", 0.1);
-    params.estimator.imu_meas_omg_cov =
-        nh->declare_parameter<double>("mapping.imu_meas_omg_cov", 0.1);
+    params.estimator.laser_point_cov = nh->declare_parameter<double>(
+        "mapping.lidar_meas_cov", 0.1);
+    params.estimator.acc_cov_input = nh->declare_parameter<double>(
+        "mapping.acc_cov_input", 0.1);
+    params.estimator.vel_cov = nh->declare_parameter<double>("mapping.vel_cov",
+                                                             20);
+    params.estimator.gyr_cov_input = nh->declare_parameter<double>(
+        "mapping.gyr_cov_input", 0.1);
+    params.estimator.gyr_cov_output = nh->declare_parameter<double>(
+        "mapping.gyr_cov_output", 0.1);
+    params.estimator.acc_cov_output = nh->declare_parameter<double>(
+        "mapping.acc_cov_output", 0.1);
+    params.estimator.b_gyr_cov = nh->declare_parameter<double>(
+        "mapping.b_gyr_cov", 0.0001);
+    params.estimator.b_acc_cov = nh->declare_parameter<double>(
+        "mapping.b_acc_cov", 0.0001);
+    params.estimator.imu_meas_acc_cov = nh->declare_parameter<double>(
+        "mapping.imu_meas_acc_cov", 0.1);
+    params.estimator.imu_meas_omg_cov = nh->declare_parameter<double>(
+        "mapping.imu_meas_omg_cov", 0.1);
 
     // ==================== preprocess 参数 — 雷达配置 ====================
-    params.laser_mapping.preprocess.blind =
-        nh->declare_parameter<double>("preprocess.blind", 1.0);
+    params.laser_mapping.preprocess.blind = nh->declare_parameter<double>(
+        "preprocess.blind", 1.0);
     params.laser_mapping.lidar_type = static_cast<int>(
         nh->declare_parameter<long>("preprocess.lidar_type", 1));
     params.laser_mapping.preprocess.lidar_type =
@@ -128,16 +123,16 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh,
         nh->declare_parameter<long>("preprocess.scan_rate", 10));
     params.laser_mapping.preprocess.timestamp_unit = static_cast<int>(
         nh->declare_parameter<long>("preprocess.timestamp_unit", 1));
-    params.mapping.match_s =
-        nh->declare_parameter<double>("mapping.match_s", 81);
+    params.mapping.match_s = nh->declare_parameter<double>("mapping.match_s",
+                                                           81);
     params.estimator.match_s = params.mapping.match_s;
 
     // ==================== mapping 参数 — 重力 ====================
     params.laser_mapping.gravity = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity", std::vector<double>());
     params.laser_mapping.gravity_init =
-        nh->declare_parameter<std::vector<double>>(
-        "mapping.gravity_init", std::vector<double>());
+        nh->declare_parameter<std::vector<double>>("mapping.gravity_init",
+                                                   std::vector<double>());
 
     // ==================== mapping 参数 — 外参 ====================
     params.sensor.extrinsic_t = nh->declare_parameter<std::vector<double>>(
@@ -148,43 +143,39 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh,
     // ==================== odometry/publish 参数 ====================
     params.mapping.publish_odometry_without_downsample =
         nh->declare_parameter<bool>(
-        "odometry.publish_odometry_without_downsample", false);
-    params.publish.path_enabled =
-        nh->declare_parameter<bool>("publish.path_en", true);
-    params.publish.scan_enabled =
-        nh->declare_parameter<bool>("publish.scan_publish_en", true);
+            "odometry.publish_odometry_without_downsample", false);
+    params.publish.path_enabled = nh->declare_parameter<bool>("publish.path_en",
+                                                              true);
+    params.publish.scan_enabled = nh->declare_parameter<bool>(
+        "publish.scan_publish_en", true);
     params.publish.scan_body_enabled = nh->declare_parameter<bool>(
         "publish.scan_bodyframe_pub_en", true);
-    params.publish.tf_enabled =
-        nh->declare_parameter<bool>("publish.tf_send_en", true);
-    params.publish.runtime_log_enabled =
-        nh->declare_parameter<bool>("runtime_pos_log_enable", false);
+    params.publish.tf_enabled = nh->declare_parameter<bool>(
+        "publish.tf_send_en", true);
+    params.publish.runtime_log_enabled = nh->declare_parameter<bool>(
+        "runtime_pos_log_enable", false);
 
     // ==================== pcd_save 参数 ====================
-    params.publish.pcd_save_enabled =
-        nh->declare_parameter<bool>("pcd_save.pcd_save_en", false);
+    params.publish.pcd_save_enabled = nh->declare_parameter<bool>(
+        "pcd_save.pcd_save_en", false);
     params.publish.pcd_save_interval = static_cast<int>(
         nh->declare_parameter<long>("pcd_save.interval", -1));
-    params.laser_mapping.lidar_time_interval =
-        nh->declare_parameter<double>("mapping.lidar_time_inte", 0.1);
+    params.laser_mapping.lidar_time_interval = nh->declare_parameter<double>(
+        "mapping.lidar_time_inte", 0.1);
 
     // ==================== iVox 网格参数 ====================
     params.mapping.ivox_options.resolution_ = static_cast<float>(
-        nh->declare_parameter<double>(
-            "mapping.ivox_grid_resolution", 0.2));
+        nh->declare_parameter<double>("mapping.ivox_grid_resolution", 0.2));
     const int ivox_nearby_type = static_cast<int>(
         nh->declare_parameter<long>("ivox_nearby_type", 18));
     if (ivox_nearby_type == 0) {
       params.mapping.ivox_options.nearby_type_ = IVoxType::NearbyType::CENTER;
     } else if (ivox_nearby_type == 6) {
-      params.mapping.ivox_options.nearby_type_ =
-          IVoxType::NearbyType::NEARBY6;
+      params.mapping.ivox_options.nearby_type_ = IVoxType::NearbyType::NEARBY6;
     } else if (ivox_nearby_type == 26) {
-      params.mapping.ivox_options.nearby_type_ =
-          IVoxType::NearbyType::NEARBY26;
+      params.mapping.ivox_options.nearby_type_ = IVoxType::NearbyType::NEARBY26;
     } else {
-      params.mapping.ivox_options.nearby_type_ =
-          IVoxType::NearbyType::NEARBY18;
+      params.mapping.ivox_options.nearby_type_ = IVoxType::NearbyType::NEARBY18;
     }
   } catch (const rclcpp::ParameterTypeException& e) {
     RCLCPP_ERROR(nh->get_logger(), "Parameter type exception: %s", e.what());
@@ -194,8 +185,8 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh,
 
   if (params.laser_mapping.gravity.size() >= 3) {
     const auto& gravity = params.laser_mapping.gravity;
-    params.estimator.gravity_magnitude =
-        std::hypot(gravity[0], gravity[1], gravity[2]);
+    params.estimator.gravity_magnitude = std::hypot(gravity[0], gravity[1],
+                                                    gravity[2]);
   }
 }
 

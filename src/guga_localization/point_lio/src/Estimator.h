@@ -10,7 +10,6 @@
  * - 量测模型 (点面距离残差 Jacobian + IMU 伪量测)
  * - 雷达坐标系 → 世界坐标系 点变换
  *
- * 支持两种 EKF 模式 (通过 use_imu_as_input 切换):
  * - input 模式:  IMU 数据驱动状态传播，激光点云用于量测更新 (24维)
  * - output 模式: IMU 数据作为额外量测，角速度和加速度本身被估计 (30维)
  *
@@ -52,9 +51,8 @@ public:
   void hModelOutput(state_output& state, Eigen::Matrix3d cov_p,
                     Eigen::Matrix3d cov_R,
                     esekfom::dyn_share_modified<double>& ekfom_data) const;
-  void hModelImuOutput(
-      state_output& state,
-      esekfom::dyn_share_modified<double>& ekfom_data) const;
+  void hModelImuOutput(state_output& state,
+                       esekfom::dyn_share_modified<double>& ekfom_data) const;
   void pointBodyToWorld(PointType const* input, PointType* output) const;
 
 private:

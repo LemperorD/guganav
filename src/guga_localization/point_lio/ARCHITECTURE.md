@@ -347,8 +347,7 @@ Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法�
 
 说明:
 - 步骤 ⑪ (LiDAR 分支的结束 `否则`) 无对应代码, 故无标记。
-- IMU 量测更新 (⑬-⑰) 仅存在于 **IMU-as-output** 模式 (`use_imu_as_input=false`,
-  当前配置默认), 因为只有 `kf_output` 注册了 `h_model_IMU_output`。
+
 - 标记编号与伪代码步骤号一一对应, 与代码出现顺序无关。
 
 ---
@@ -400,7 +399,6 @@ Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法�
 
 | 维度 | input 模式 | output 模式 |
 |------|-----------|------------|
-| 参数名 | `use_imu_as_input: True` | `use_imu_as_input: False` (默认) |
 | 状态维度 | 24 | 30 |
 | 过程噪声维度 | 12 (ng, na, nbg, nba) | 15 (+ vel噪声) |
 | 量测模型数 | 1 (激光点面) | 2 (激光点面 + IMU伪量测) |
@@ -456,7 +454,6 @@ Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法�
 ```
 ros__parameters:
 ├── 模式开关
-│   ├── use_imu_as_input       # True=input(24维) / False=output(30维)
 │   ├── prop_at_freq_of_imu    # 按IMU频率传播
 │   ├── check_satu             # IMU饱和检测
 │   ├── space_down_sample      # 二次空间降采样

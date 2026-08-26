@@ -153,7 +153,7 @@ private:
    * @param last_time 传播时间基准 (t_last / time_predict_last_const)
    * @param q         过程噪声 (state_.q_input / state_.q_output)
    */
-  template <bool ImuAsInput, typename KF>
+  template <typename KF>
   void processFramePoints(KF& kf, double& last_time, auto& q);
 
   void initScan();

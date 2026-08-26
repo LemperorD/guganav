@@ -54,7 +54,6 @@ using IVoxType =
 struct MappingParams {
   bool space_down_sample{true};
   bool propagate_at_imu_frequency{true};
-  bool use_imu_as_input{true};
   bool extrinsic_estimation{true};
   bool publish_odometry_without_downsample{false};
   int init_map_size{100};
@@ -69,7 +68,6 @@ struct MappingParams {
 
 struct EstimatorParams {
   double gravity_magnitude{9.81};
-  bool use_imu_as_input{false};
   bool extrinsic_estimation{true};
   bool check_saturation{true};
   double saturation_acc{3.0};

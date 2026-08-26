@@ -65,10 +65,10 @@ Eigen::Matrix<double, 24, 24> Estimator::processNoiseCovInput() const {
       params_.gyr_cov_input, params_.gyr_cov_input;
   cov.block<3, 3>(12, 12).diagonal() << params_.acc_cov_input,
       params_.acc_cov_input, params_.acc_cov_input;
-  cov.block<3, 3>(15, 15).diagonal() << params_.b_gyr_cov,
-      params_.b_gyr_cov, params_.b_gyr_cov;
-  cov.block<3, 3>(18, 18).diagonal() << params_.b_acc_cov,
-      params_.b_acc_cov, params_.b_acc_cov;
+  cov.block<3, 3>(15, 15).diagonal() << params_.b_gyr_cov, params_.b_gyr_cov,
+      params_.b_gyr_cov;
+  cov.block<3, 3>(18, 18).diagonal() << params_.b_acc_cov, params_.b_acc_cov,
+      params_.b_acc_cov;
   return cov;
 }
 
@@ -115,8 +115,8 @@ Eigen::Matrix<double, 30, 30> process_noise_cov_output() {
  *
  * @return 24维状态导数向量 \dot{x}
  */
-Eigen::Matrix<double, 24, 1> Estimator::getFInput(
-    state_input& s, const input_ikfom& in) const {
+Eigen::Matrix<double, 24, 1> Estimator::getFInput(state_input& s,
+                                                  const input_ikfom& in) const {
   Eigen::Matrix<double, 24, 1> res = Eigen::Matrix<double, 24, 1>::Zero();
   vect3 omega;
   // 去零偏后的角速度: ω = ω_meas - bg (在流形上做 boxminus)
@@ -570,8 +570,7 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
  * @param[out] ekfom_data.satu_check 6维饱和标记 (true=该轴饱和)
  */
 void Estimator::hModelImuOutput(
-    state_output& s,
-    esekfom::dyn_share_modified<double>& ekfom_data) const {
+    state_output& s, esekfom::dyn_share_modified<double>& ekfom_data) const {
   // 重置饱和标记
   std::memset(ekfom_data.satu_check, false, 6);
 
@@ -643,7 +642,6 @@ void h_model_IMU_output(state_output& s,
  *   - 固定外参 (extrinsic_est_en=false): 使用 YAML 中的
  * estimator_state.Lidar_R_wrt_IMU 和 estimator_state.Lidar_T_wrt_IMU
  *
- * 模式选择: 根据 use_imu_as_input 选择 kf_input 或 kf_output 的状态
  *
  * @param pi 输入: 雷达/IMU 坐标系下的点
  * @param po 输出: 世界坐标系下的点 (保持 intensity)
@@ -654,30 +652,19 @@ void Estimator::pointBodyToWorld(PointType const* pi, PointType* po) const {
   V3D p_global;
   if (params_.extrinsic_estimation) {
     // 在线外参估计: 使用 EKF 状态中的外参
-    if (!params_.use_imu_as_input) {
-      p_global = kf_output.x_.rot
-                     * (kf_output.x_.offset_R_L_I * p_body
-                        + kf_output.x_.offset_T_L_I)
-                 + kf_output.x_.pos;
-    } else {
-      p_global = kf_input.x_.rot
-                     * (kf_input.x_.offset_R_L_I * p_body
-                        + kf_input.x_.offset_T_L_I)
-                 + kf_input.x_.pos;
-    }
+
+    p_global = kf_input.x_.rot
+                   * (kf_input.x_.offset_R_L_I * p_body
+                      + kf_input.x_.offset_T_L_I)
+               + kf_input.x_.pos;
+
   } else {
     // 固定外参: 使用 YAML 配置
-    if (!params_.use_imu_as_input) {
-      p_global = kf_output.x_.rot
-                     * (estimator_state.Lidar_R_wrt_IMU * p_body
-                        + estimator_state.Lidar_T_wrt_IMU)
-                 + kf_output.x_.pos;
-    } else {
-      p_global = kf_input.x_.rot
-                     * (estimator_state.Lidar_R_wrt_IMU * p_body
-                        + estimator_state.Lidar_T_wrt_IMU)
-                 + kf_input.x_.pos;
-    }
+
+    p_global = kf_input.x_.rot
+                   * (estimator_state.Lidar_R_wrt_IMU * p_body
+                      + estimator_state.Lidar_T_wrt_IMU)
+               + kf_input.x_.pos;
   }
 
   po->x = p_global(0);

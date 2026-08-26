@@ -22,8 +22,7 @@
  * @endcode
  *
  * 两种 EKF 模式:
- * - **IMU-as-input** (use_imu_as_input=true): IMU 驱动预测, 激光做量测更新
- * - **IMU-as-output** (use_imu_as_input=false, default): IMU 也作为量测,
+ * IMU 驱动预测, 激光做量测更新
  *   角速度和加速度本身被估计, 每帧同时做激光量测和 IMU 量测更新
  */
 
@@ -59,15 +58,10 @@ int LaserMappingNode::run() {
       continue;
     }
 
-    // 按 use_imu_as_input 选择滤波器 (input: IMU 驱动预测 / output: IMU
-    // 亦作量测)。 LiDAR/IMU 分支在 processFramePoints 内部 ([Workflow 2] /
-    // [Workflow 12])。
-    if (mapping_params_.use_imu_as_input) {
-      processFramePoints<true>(kf_input, t_last_, state_.q_input);
-    } else {
-      processFramePoints<false>(kf_output, time_predict_last_const_,
-                                state_.q_output);
-    }
+    // LiDAR/IMU 分支在 processFramePoints 内部
+    //  ([Workflow 2] / [Workflow 12])。
+
+    processFramePoints(kf_input, t_last_, state_.q_input);
 
     // [Workflow 18] 输出阶段 (算法末尾): 发布更新后的里程计
     // x_{estimator_state.k+1} / P_{estimator_state.k+1}。
@@ -157,13 +151,8 @@ void LaserMappingNode::totalInitialize() {
   estimator_state.Lidar_R_wrt_IMU = to_mat3d(sensor_params_.extrinsic_r);
 
   if (mapping_params_.extrinsic_estimation) {
-    if (!mapping_params_.use_imu_as_input) {
-      kf_output.x_.offset_R_L_I = estimator_state.Lidar_R_wrt_IMU;
-      kf_output.x_.offset_T_L_I = estimator_state.Lidar_T_wrt_IMU;
-    } else {
-      kf_input.x_.offset_R_L_I = estimator_state.Lidar_R_wrt_IMU;
-      kf_input.x_.offset_T_L_I = estimator_state.Lidar_T_wrt_IMU;
-    }
+    kf_input.x_.offset_R_L_I = estimator_state.Lidar_R_wrt_IMU;
+    kf_input.x_.offset_T_L_I = estimator_state.Lidar_T_wrt_IMU;
   }
 
   Imu::Params imu_params;
@@ -330,43 +319,27 @@ PointCloudXYZI::Ptr LaserMappingNode::loadPointcloudFromPcd(
 
 void LaserMappingNode::dumpLioStatetoLog() {
   V3D rot_ang;
-  if (!mapping_params_.use_imu_as_input) {
-    rot_ang = SO3ToEuler(kf_output.x_.rot);
-  } else {
-    rot_ang = SO3ToEuler(kf_input.x_.rot);
-  }
+
+  rot_ang = SO3ToEuler(kf_input.x_.rot);
 
   state_.fp << std::fixed << std::setprecision(6);
   state_.fp << measures_.lidar_start_time - first_lidar_time_ << ' ';
   state_.fp << rot_ang(0) << ' ' << rot_ang(1) << ' ' << rot_ang(2)
             << ' ';  // Angle
-  if (mapping_params_.use_imu_as_input) {
-    state_.fp << kf_input.x_.pos(0) << ' ' << kf_input.x_.pos(1) << ' '
-              << kf_input.x_.pos(2) << ' ';               // Pos
-    state_.fp << 0.0 << ' ' << 0.0 << ' ' << 0.0 << ' ';  // omega
-    state_.fp << kf_input.x_.vel(0) << ' ' << kf_input.x_.vel(1) << ' '
-              << kf_input.x_.vel(2) << ' ';               // Vel
-    state_.fp << 0.0 << ' ' << 0.0 << ' ' << 0.0 << ' ';  // Acc
-    state_.fp << kf_input.x_.bg(0) << ' ' << kf_input.x_.bg(1) << ' '
-              << kf_input.x_.bg(2) << ' ';  // Bias_g
-    state_.fp << kf_input.x_.ba(0) << ' ' << kf_input.x_.ba(1) << ' '
-              << kf_input.x_.ba(2) << ' ';  // Bias_a
-    state_.fp << kf_input.x_.gravity(0) << ' ' << kf_input.x_.gravity(1) << ' '
-              << kf_input.x_.gravity(2) << ' ';  // Gravity
-  } else {
-    state_.fp << kf_output.x_.pos(0) << ' ' << kf_output.x_.pos(1) << ' '
-              << kf_output.x_.pos(2) << ' ';              // Pos
-    state_.fp << 0.0 << ' ' << 0.0 << ' ' << 0.0 << ' ';  // omega
-    state_.fp << kf_output.x_.vel(0) << ' ' << kf_output.x_.vel(1) << ' '
-              << kf_output.x_.vel(2) << ' ';              // Vel
-    state_.fp << 0.0 << ' ' << 0.0 << ' ' << 0.0 << ' ';  // Acc
-    state_.fp << kf_output.x_.bg(0) << ' ' << kf_output.x_.bg(1) << ' '
-              << kf_output.x_.bg(2) << ' ';  // Bias_g
-    state_.fp << kf_output.x_.ba(0) << ' ' << kf_output.x_.ba(1) << ' '
-              << kf_output.x_.ba(2) << ' ';  // Bias_a
-    state_.fp << kf_output.x_.gravity(0) << ' ' << kf_output.x_.gravity(1)
-              << ' ' << kf_output.x_.gravity(2) << ' ';  // Gravity
-  }
+
+  state_.fp << kf_input.x_.pos(0) << ' ' << kf_input.x_.pos(1) << ' '
+            << kf_input.x_.pos(2) << ' ';               // Pos
+  state_.fp << 0.0 << ' ' << 0.0 << ' ' << 0.0 << ' ';  // omega
+  state_.fp << kf_input.x_.vel(0) << ' ' << kf_input.x_.vel(1) << ' '
+            << kf_input.x_.vel(2) << ' ';               // Vel
+  state_.fp << 0.0 << ' ' << 0.0 << ' ' << 0.0 << ' ';  // Acc
+  state_.fp << kf_input.x_.bg(0) << ' ' << kf_input.x_.bg(1) << ' '
+            << kf_input.x_.bg(2) << ' ';  // Bias_g
+  state_.fp << kf_input.x_.ba(0) << ' ' << kf_input.x_.ba(1) << ' '
+            << kf_input.x_.ba(2) << ' ';  // Bias_a
+  state_.fp << kf_input.x_.gravity(0) << ' ' << kf_input.x_.gravity(1) << ' '
+            << kf_input.x_.gravity(2) << ' ';  // Gravity
+
   state_.fp << "\r\n";
   state_.fp.flush();
 }
@@ -376,13 +349,9 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
   V3D p_body_lidar(pi->x, pi->y, pi->z);  // NOLINT
   V3D p_body_imu;
   if (mapping_params_.extrinsic_estimation) {
-    if (!mapping_params_.use_imu_as_input) {
-      p_body_imu = kf_output.x_.offset_R_L_I * p_body_lidar
-                   + kf_output.x_.offset_T_L_I;
-    } else {
-      p_body_imu = kf_input.x_.offset_R_L_I * p_body_lidar
-                   + kf_input.x_.offset_T_L_I;
-    }
+    p_body_imu = kf_input.x_.offset_R_L_I * p_body_lidar
+                 + kf_input.x_.offset_T_L_I;
+
   } else {
     p_body_imu = estimator_state.Lidar_R_wrt_IMU * p_body_lidar
                  + estimator_state.Lidar_T_wrt_IMU;
@@ -506,21 +475,7 @@ void LaserMappingNode::setPosestamp(T& out) {
     out.orientation.w = q.coeffs()[3];
   };
 
-  if (!mapping_params_.use_imu_as_input) {
-    if (sensor_params_.enable_prior_map && is_first_kf
-        && sensor_params_.initial_pose.size() >= 3) {
-      // Execute only on the first call
-      kf_output.x_.pos(0) = sensor_params_.initial_pose[0];
-      kf_output.x_.pos(1) = sensor_params_.initial_pose[1];
-      kf_output.x_.pos(2) = sensor_params_.initial_pose[2];
-      set_output_from_kf(kf_output);
-      is_first_kf = false;  // Set is_first_kf to false after the first call
-    } else {
-      set_output_from_kf(kf_output);
-    }
-  } else {
-    set_output_from_kf(kf_input);
-  }
+  set_output_from_kf(kf_input);
 }
 
 void LaserMappingNode::publishOdometry() {
@@ -632,29 +587,15 @@ void LaserMappingNode::publishAndLogFrame() {
 
   if (publish_params_.runtime_log_enabled) {
     if (!mapping_params_.publish_odometry_without_downsample) {
-      if (!mapping_params_.use_imu_as_input) {
-        state_.euler_cur = SO3ToEuler(kf_output.x_.rot);
-        fout_out_ << setw(20) << measures_.lidar_start_time - first_lidar_time_
-                  << " " << state_.euler_cur.transpose() << " "
-                  << kf_output.x_.pos.transpose() << " "
-                  << kf_output.x_.vel.transpose() << " "
-                  << kf_output.x_.omg.transpose() << " "
-                  << kf_output.x_.acc.transpose() << " "
-                  << kf_output.x_.gravity.transpose() << " "
-                  << kf_output.x_.bg.transpose() << " "
-                  << kf_output.x_.ba.transpose() << " "
-                  << state_.feats_undistort->points.size() << '\n';
-      } else {
-        state_.euler_cur = SO3ToEuler(kf_input.x_.rot);
-        fout_out_ << setw(20) << measures_.lidar_start_time - first_lidar_time_
-                  << " " << state_.euler_cur.transpose() << " "
-                  << kf_input.x_.pos.transpose() << " "
-                  << kf_input.x_.vel.transpose() << " "
-                  << kf_input.x_.bg.transpose() << " "
-                  << kf_input.x_.ba.transpose() << " "
-                  << kf_input.x_.gravity.transpose() << " "
-                  << state_.feats_undistort->points.size() << '\n';
-      }
+      state_.euler_cur = SO3ToEuler(kf_input.x_.rot);
+      fout_out_ << setw(20) << measures_.lidar_start_time - first_lidar_time_
+                << " " << state_.euler_cur.transpose() << " "
+                << kf_input.x_.pos.transpose() << " "
+                << kf_input.x_.vel.transpose() << " "
+                << kf_input.x_.bg.transpose() << " "
+                << kf_input.x_.ba.transpose() << " "
+                << kf_input.x_.gravity.transpose() << " "
+                << state_.feats_undistort->points.size() << '\n';
     }
     dumpLioStatetoLog();
   }
@@ -667,7 +608,7 @@ void LaserMappingNode::publishAndLogFrame() {
  * @param last_time 传播时间基准 (t_last_ / time_predict_last_const_)
  * @param q         过程噪声 (state_.q_input / state_.q_output)
  */
-template <bool ImuAsInput, typename KF>
+template <typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
@@ -690,15 +631,10 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
               break;
             }
           }
-          if constexpr (ImuAsInput) {
-            estimator_state.input_in = imu_.lastInput(
-                estimator_params_.gravity_magnitude
-                / estimator_params_.acc_norm);
-          } else {
-            const auto measurement = imu_.lastMeasurement();
-            estimator_state.angvel_avr = measurement.angular_velocity;
-            estimator_state.acc_avr = measurement.linear_acceleration;
-          }
+
+          estimator_state.input_in = imu_.lastInput(
+              estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
+
           last_time = time_current_;
           time_update_last_ = time_current_;
           is_first_frame_ = false;
@@ -706,40 +642,15 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         }
         time_current_ = get_time_sec(imu_next.header.stamp);
 
-        if constexpr (ImuAsInput) {
-          // 原 B2: 仅推进 IMU 指针/填充输入 (无传播)
-          double dt_cov = time_current_ - time_update_last_;
-          if (dt_cov > 0.0) {
-            time_update_last_ = get_time_sec(imu_next.header.stamp);
-          }
-          last_time = get_time_sec(imu_next.header.stamp);
-          estimator_state.input_in = imu_.nextInput(
-              estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
-        } else {
-          // [Workflow 1] 状态传播 (9)(10): 以下 kf.predict
-          // 分别完成协方差传播与状态预测。 原 A2: 传播 + IMU 更新
-          double dt = time_current_ - last_time;
-          {
-            double dt_cov = time_current_ - time_update_last_;
-            if (dt_cov > 0.0) {
-              kf.predict(dt_cov, q, estimator_state.input_in, false, true);
-              time_update_last_ = time_current_;
-            }
-            kf.predict(dt, q, estimator_state.input_in, true, false);
-          }
-          last_time = time_current_;
-          const auto measurement = imu_.nextMeasurement();
-          estimator_state.angvel_avr = measurement.angular_velocity;
-          estimator_state.acc_avr = measurement.linear_acceleration;
-          // [Workflow 13]-[Workflow 17] IMU 量测更新 (output 模式):
-          //   [Workflow 13] 无饱和度检查 (satu_check) 在 h_model_IMU_output
-          //   内完成; [Workflow 14] 残差/雅可比/量测噪声 (14)(15) 在
-          //   h_model_IMU_output 内计算; [Workflow 15] 状态更新 (20)(21) 在
-          //   EKF 更新函数内完成; [Workflow 16] 协方差更新 (23)(24) 在 EKF
-          //   更新函数内完成; [Workflow 17] 否则 (饱和):
-          //   饱和轴被排除在状态/协方差更新之外。
-          kf.update_iterated_dyn_share_IMU();
+        // 原 B2: 仅推进 IMU 指针/填充输入 (无传播)
+        double dt_cov = time_current_ - time_update_last_;
+        if (dt_cov > 0.0) {
+          time_update_last_ = get_time_sec(imu_next.header.stamp);
         }
+        last_time = get_time_sec(imu_next.header.stamp);
+        estimator_state.input_in = imu_.nextInput(
+            estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
+
         imu_.popAndAdvance();
         if (imu_.empty()) {
           break;
@@ -763,102 +674,43 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     const double point_offset_ms = point_time_offset_ms(point_body);
     time_current_ = point_offset_ms / 1000.0 + pcl_beg_time;
     if (is_first_frame_) {
-      if constexpr (ImuAsInput) {
-        while (time_current_ > get_time_sec(imu_next.header.stamp)) {
-          imu_.popAndAdvance();
-          if (imu_.empty()) {
-            break;
-          }
-        }
-        estimator_state.input_in = imu_.lastInput(
-            estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
-      } else {
-        if (laser_mapping_params_.imu_enabled) {
-          while (time_current_ > get_time_sec(imu_next.header.stamp)) {
-            imu_.popAndAdvance();
-            if (imu_.empty()) {
-              break;
-            }
-          }
-          const auto measurement = imu_.lastMeasurement();
-          estimator_state.angvel_avr = measurement.angular_velocity;
-          estimator_state.acc_avr = measurement.linear_acceleration;
+      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
+        imu_.popAndAdvance();
+        if (imu_.empty()) {
+          break;
         }
       }
+      estimator_state.input_in = imu_.lastInput(
+          estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
+
       is_first_frame_ = false;
       last_time = time_current_;
       time_update_last_ = time_current_;
     }
 
     // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
-    if constexpr (ImuAsInput) {
-      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
-        imu_.popBuffer();
-        estimator_state.input_in = imu_.lastInput(
-            estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
-        double dt = get_time_sec(imu_last.header.stamp) - last_time;
-        double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
 
-        if (dt_cov > 0.0) {
-          kf.predict(dt_cov, q, estimator_state.input_in, false, true);
-          time_update_last_ = get_time_sec(imu_last.header.stamp);
-        }
+    while (time_current_ > get_time_sec(imu_next.header.stamp)) {
+      imu_.popBuffer();
+      estimator_state.input_in = imu_.lastInput(
+          estimator_params_.gravity_magnitude / estimator_params_.acc_norm);
+      double dt = get_time_sec(imu_last.header.stamp) - last_time;
+      double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
 
-        kf.predict(dt, q, estimator_state.input_in, true, false);
-        last_time = get_time_sec(imu_last.header.stamp);
-
-        if (imu_.empty()) {
-          break;
-        }
-        imu_.advanceCursor();
+      if (dt_cov > 0.0) {
+        kf.predict(dt_cov, q, estimator_state.input_in, false, true);
+        time_update_last_ = get_time_sec(imu_last.header.stamp);
       }
-    } else {
-      if (laser_mapping_params_.imu_enabled && !imu_.empty()) {
-        bool last_imu = imu_.isSameStamp();
-        while (get_time_sec(imu_next.header.stamp) < last_time
-               && !imu_.empty()) {
-          if (!last_imu) {
-            imu_.advanceCursor();
-            break;
-          }
 
-          imu_.popAndAdvance();
-          if (imu_.empty()) {
-            break;
-          }
-        }
-        bool imu_comes = time_current_ > get_time_sec(imu_next.header.stamp);
-        while (imu_comes) {
-          const auto measurement = imu_.nextMeasurement();
-          estimator_state.angvel_avr = measurement.angular_velocity;
-          estimator_state.acc_avr = measurement.linear_acceleration;
+      kf.predict(dt, q, estimator_state.input_in, true, false);
+      last_time = get_time_sec(imu_last.header.stamp);
 
-          double dt = get_time_sec(imu_next.header.stamp) - last_time;
-          kf.predict(dt, q, estimator_state.input_in, true, false);
-          last_time = get_time_sec(imu_next.header.stamp);
-
-          {
-            double dt_cov = get_time_sec(imu_next.header.stamp)
-                            - time_update_last_;
-
-            if (dt_cov > 0.0) {
-              time_update_last_ = get_time_sec(imu_next.header.stamp);
-              kf.predict(dt_cov, q, estimator_state.input_in, false, true);
-              // [Workflow 13]-[Workflow 17] IMU 量测更新 (同列2):
-              //   饱和检查与残差 (13)(14) 在 h_model_IMU_output 内完成;
-              //   状态/协方差更新 (15)(16) 在 EKF 更新函数内完成;
-              //   饱和轴被排除在更新之外 (17)。
-              kf.update_iterated_dyn_share_IMU();
-            }
-          }
-          imu_.popAndAdvance();
-          if (imu_.empty()) {
-            break;
-          }
-          imu_comes = time_current_ > get_time_sec(imu_next.header.stamp);
-        }
+      if (imu_.empty()) {
+        break;
       }
+      imu_.advanceCursor();
     }
+
     if (state_.flg_reset) {
       break;
     }
@@ -894,25 +746,13 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       publishOdometry();
       if (publish_params_.runtime_log_enabled) {
         state_.euler_cur = SO3ToEuler(kf.x_.rot);
-        if constexpr (ImuAsInput) {
-          fout_out_ << setw(20)
-                    << measures_.lidar_start_time - first_lidar_time_ << " "
-                    << state_.euler_cur.transpose() << " "
-                    << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
-                    << " " << kf.x_.bg.transpose() << " "
-                    << kf.x_.ba.transpose() << " " << kf.x_.gravity.transpose()
-                    << " " << state_.feats_undistort->points.size() << '\n';
-        } else {
-          fout_out_ << setw(20)
-                    << measures_.lidar_start_time - first_lidar_time_ << " "
-                    << state_.euler_cur.transpose() << " "
-                    << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
-                    << " " << kf.x_.omg.transpose() << " "
-                    << kf.x_.acc.transpose() << " " << kf.x_.gravity.transpose()
-                    << " " << kf.x_.bg.transpose() << " "
-                    << kf.x_.ba.transpose() << " "
-                    << state_.feats_undistort->points.size() << '\n';
-        }
+
+        fout_out_ << setw(20) << measures_.lidar_start_time - first_lidar_time_
+                  << " " << state_.euler_cur.transpose() << " "
+                  << kf.x_.pos.transpose() << " " << kf.x_.vel.transpose()
+                  << " " << kf.x_.bg.transpose() << " " << kf.x_.ba.transpose()
+                  << " " << kf.x_.gravity.transpose() << " "
+                  << state_.feats_undistort->points.size() << '\n';
       }
     }
 

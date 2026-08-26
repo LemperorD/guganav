@@ -40,9 +40,7 @@ typedef MTK::vect<2, double> vect2;           ///< 2维向量流形
 /**
  * @defgroup manifold_defs 状态流形定义 (MTK_BUILD_MANIFOLD)
  *
- * Point-LIO 支持两种 EKF 模式，通过 use_imu_as_input 参数切换：
- * - input 模式 (24维): IMU 数据作为系统输入 (控制量), 类似于 FAST-LIO 经典模式
- * - output 模式 (30维): IMU 数据作为观测输出 (量测),
+ * IMU 数据作为系统输入 (控制量), 类似于 FAST-LIO 经典模式
  * 角速度和加速度被估计而非输入
  *
  * 两种模式共用相同的 input_ikfom 输入流形 (3维加速度 + 3维角速度)
