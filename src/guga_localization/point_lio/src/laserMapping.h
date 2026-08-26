@@ -108,6 +108,14 @@ private:
   /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (由 run 调用) */
   void totalInitialize();
 
+  /** @brief 轮次初始化: 同步传感器数据、处理首帧并准备当前帧
+   * @param[out] t0 帧级初始化开始时间
+   * @param[out] t1 帧级初始化结束时间
+   * @return true 当前轮次已准备好进入 ESKF 处理
+   *         false 尚未同步到数据或 IMU/地图仍在初始化
+   */
+  bool initializeIteration(double& t0, double& t1);
+
   /** @brief 帧级初始化 (每轮主循环): 计时归零 + IMU 预处理 + 降采样/排序/分组
    *         + 地图就绪检查 + 量测准备
    * @return true  本帧可继续正常处理

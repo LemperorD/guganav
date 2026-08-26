@@ -55,25 +55,10 @@ int LaserMappingNode::run() {
   while (rclcpp::ok() && !flg_exit) {
     executor_.spin_some();
 
-    if (!lidar_.syncPackages(
-            imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
-      rate_.sleep();
+    double t0 = 0.0;
+    double t1 = 0.0;
+    if (!initializeIteration(t0, t1)) {
       continue;
-    }
-
-    lidar_end_time_ = measures_.lidar_last_time;
-
-    if (state_.flg_first_scan) {  // 首次扫描
-      initScan();
-    }
-
-    // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
-    double t0 = omp_get_wtime();
-    bool frame_ready = prepareFrame();
-    double t1 = omp_get_wtime();
-
-    if (!frame_ready) {
-      continue;  // IMU 初始化中或地图未就绪: 跳过本帧
     }
 
     // 按 use_imu_as_input 选择滤波器 (input: IMU 驱动预测 / output: IMU
@@ -117,6 +102,29 @@ int LaserMappingNode::run() {
   fout_imu_pbp_.close();
 
   return 0;
+}
+
+bool LaserMappingNode::initializeIteration(double& t0, double& t1) {
+  if (!lidar_.syncPackages(
+          imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
+    rate_.sleep();
+    return false;
+  }
+
+  lidar_end_time_ = measures_.lidar_last_time;
+
+  if (state_.flg_first_scan) {  // 首次扫描
+    initScan();
+  }
+
+  // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
+  t0 = omp_get_wtime();
+  const bool frame_ready = prepareFrame();
+  t1 = omp_get_wtime();
+  if (!frame_ready) {
+    return false;  // IMU 初始化中或地图未就绪: 跳过本帧
+  }
+  return true;
 }
 
 /** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
@@ -272,6 +280,20 @@ bool LaserMappingNode::prepareFrame() {
   // 饱和检查不在本函数, 见 [Workflow 13] IMU 量测更新处)。
   imu_.process(measures_, state_.feats_undistort);
 
+  // ---- 就绪检查: IMU 初始化 / 地图初始化 ----
+
+  if (imu_.needInit()) {
+    return false;  // IMU 初始化中
+  }
+
+  if (!initMapState()) {
+    RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 2000, "Initializing map: %zu/%d points",
+        state_.init_feats_world->size(), mapping_params_.init_map_size);
+
+    return false;  // 地图初始化中: 跳过本帧
+  }
+
   // ---- 降采样 + 按时间戳排序 + 分组 ----
   if (mapping_params_.space_down_sample) {
     state_.downsize_filter_surf.setInputCloud(state_.feats_undistort);
@@ -287,14 +309,6 @@ bool LaserMappingNode::prepareFrame() {
       estimator_state.feats_down_body);
   estimator_state.feats_down_size =
       estimator_state.feats_down_body->points.size();
-
-  // ---- 就绪检查: IMU 初始化 / 地图初始化 ----
-  if (imu_.needInit()) {
-    return false;  // IMU 初始化中
-  }
-  if (!initMapState()) {
-    return false;  // 地图初始化中: 跳过本帧
-  }
 
   // ---- 量测准备 ----
   estimator_state.normvec->resize(estimator_state.feats_down_size);
