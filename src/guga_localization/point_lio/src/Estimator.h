@@ -75,13 +75,13 @@ struct EstimatorState {
   std::vector<PointVector> Nearest_Points;  // 每个特征点的最近邻点列表
   IVoxType::Ptr ivox_{nullptr};             // iVox 增量体素局部地图
   std::vector<float> pointSearchSqDis = std::vector<float>(
-      NUM_MATCH_POINTS);                      // 最近邻搜索距离平方
-  std::bitset<100000> point_selected_surf{};  // 有效曲面点标记
-  std::vector<M3D> crossmat_list;             // 反对称矩阵列表
-  int effct_feat_num{0};                      // 当前帧有效特征点总数
-  int k{0};                                   // 当前处理的时间分组索引
-  int idx{-1};                                // 当前处理的点偏移索引
-  input_ikfom input_in;                       // IMU 输入数据
+      NUM_MATCH_POINTS);                    // 最近邻搜索距离平方
+  std::bitset<100000> point_selected_surf;  // 有效曲面点标记
+  std::vector<M3D> crossmat_list;           // 反对称矩阵列表
+  int effct_feat_num{0};                    // 当前帧有效特征点总数
+  int k{0};                                 // 当前处理的时间分组索引
+  int idx{-1};                              // 当前处理的点偏移索引
+  input_ikfom input_in;                     // IMU 输入数据
   V3D angvel_avr, acc_avr,
       acc_avr_norm;             // IMU 平均角速度、平均加速度、平均加速度范数
   size_t feats_down_size{0};    // feats_down_body 中的点数

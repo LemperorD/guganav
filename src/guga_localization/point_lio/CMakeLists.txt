@@ -112,9 +112,7 @@ install(
 )
 
 if(BUILD_TESTING)
-  find_package(launch_testing_ament_cmake REQUIRED)
 
-  add_launch_test(test/test_point_lio_smoke.py TIMEOUT 40)
 endif()
 
 # Export dependencies

@@ -613,6 +613,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
   estimator_state.effct_feat_num = 0;
+
   if (estimator_state.time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
     if (!imu_.empty()) {
@@ -672,7 +673,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             ->points[estimator_state.idx
                      + estimator_state.time_seq[estimator_state.k]];
     const double point_offset_ms = point_time_offset_ms(point_body);
-    time_current_ = point_offset_ms / 1000.0 + pcl_beg_time;
+    time_current_ = (point_offset_ms / 1000.0) + pcl_beg_time;
     if (is_first_frame_) {
       while (time_current_ > get_time_sec(imu_next.header.stamp)) {
         imu_.popAndAdvance();
