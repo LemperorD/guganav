@@ -118,8 +118,6 @@ MTK_BUILD_MANIFOLD(
   vector<decltype(mat)::Scalar>( \
       mat.data(),                \
       mat.data() + mat.rows() * mat.cols())  ///< Eigen→std::vector
-#define DEBUG_FILE_DIR(name) \
-  (string(string(ROOT_DIR) + "Log/" + name))  ///< 调试日志文件路径
 
 // ==================== PCL/Eigen 类型别名 ====================
 using PointType =

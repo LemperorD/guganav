@@ -157,9 +157,6 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
         "publish.scan_bodyframe_pub_en", true);
     params.publish.tf_enabled = nh->declare_parameter<bool>(
         "publish.tf_send_en", true);
-    params.publish.runtime_log_enabled = nh->declare_parameter<bool>(
-        "runtime_pos_log_enable", false);
-
     // ==================== pcd_save 参数 ====================
     params.publish.pcd_save_enabled = nh->declare_parameter<bool>(
         "pcd_save.pcd_save_en", false);
@@ -195,29 +192,4 @@ PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
   }
   params.imu.processor.gravity_magnitude = params.common.gravity_magnitude;
   return params;
-}
-
-/**
- * @brief SO(3) 流形 → ZYX 欧拉角转换
- *
- * 利用 MTK::SO3 类型的 operator() 提取旋转矩阵元素，
- * 然后按照 ZYX 顺序解算欧拉角。
- * 处理万向节死锁情况 (sy≈0 时 yaw=0)。
- */
-Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3& rot) {
-  double sy = sqrt(rot(0, 0) * rot(0, 0) + rot(1, 0) * rot(1, 0));
-  bool singular = sy < 1e-6;  ///< 万向节死锁阈值
-  double x, y, z;
-  if (!singular) {
-    x = atan2(rot(2, 1), rot(2, 2));  ///< roll  = atan2(R32, R33)
-    y = atan2(-rot(2, 0), sy);        ///< pitch = atan2(-R31, √(R11²+R21²))
-    z = atan2(rot(1, 0), rot(0, 0));  ///< yaw   = atan2(R21, R11)
-  } else {
-    // 万向节死锁: 设 yaw = 0, 通过 R12,R13 计算 roll
-    x = atan2(-rot(1, 2), rot(1, 1));
-    y = atan2(-rot(2, 0), sy);
-    z = 0;
-  }
-  Eigen::Matrix<double, 3, 1> ang(x, y, z);
-  return ang;
 }

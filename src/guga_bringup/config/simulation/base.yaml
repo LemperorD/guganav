@@ -18,7 +18,6 @@ point_lio:
     filter_size_surf: 0.2                               # Options: 0.5, 0.3, 0.2, 0.15, 0.1
     filter_size_map: 0.2                                # Options: 0.5, 0.3, 0.15, 0.1
     ivox_nearby_type: 18                                # Options: 0, 6, 18, 26
-    runtime_pos_log_enable: False                       # Option: True
 
     common:
       lid_topic: "velodyne_points"
@@ -484,4 +483,3 @@ global_costmap:
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
 # If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
 # file & provide full path to map below. If CLI map configuration or launch default is provided, that will be used.
-

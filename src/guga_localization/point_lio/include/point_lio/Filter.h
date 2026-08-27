@@ -3,6 +3,9 @@
 #include "point_lio/common_lib.h"
 #include "point_lio/parameters.h"
 
+class ImuMeasurementModel;
+class LidarMeasurementModel;
+
 class EskfProcessModel {
 public:
   void configure(const FilterParams& params);
@@ -28,14 +31,9 @@ public:
   using InputNoise = Eigen::Matrix<double, 24, 24>;
   using OutputNoise = Eigen::Matrix<double, 30, 30>;
 
-  struct Models {
-    InputFilter::MeasurementModelDynShareModifiedCov input_measurement;
-    OutputFilter::MeasurementModelDynShareModifiedCov output_measurement;
-    OutputFilter::MeasurementModelDynShareModified imu_measurement;
-  };
-
   void configure(const FilterParams& params);
-  void initialize(Models models);
+  void initialize(LidarMeasurementModel& lidar_model,
+                  ImuMeasurementModel& imu_model);
 
   [[nodiscard]] InputFilter& input() { return input_; }
   [[nodiscard]] OutputFilter& output() { return output_; }

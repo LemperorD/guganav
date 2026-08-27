@@ -1,6 +1,7 @@
 #include "point_lio/Filter.h"
 
-#include <utility>
+#include "point_lio/Imu.h"
+#include "point_lio/Lidar.h"
 
 void EskfProcessModel::configure(const FilterParams& params) {
   params_ = params;
@@ -85,7 +86,8 @@ void Filter::configure(const FilterParams& params) {
   output_noise_ = process_model_.outputNoise();
 }
 
-void Filter::initialize(Models models) {
+void Filter::initialize(LidarMeasurementModel& lidar_model,
+                        ImuMeasurementModel& imu_model) {
   if (initialized_) {
     return;
   }
@@ -97,7 +99,11 @@ void Filter::initialize(Models models) {
       [this](state_input& state, const input_ikfom& input) {
         return process_model_.dfDxInput(state, input);
       },
-      std::move(models.input_measurement));
+      [model = &lidar_model](
+          state_input& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+          esekfom::dyn_share_modified<double>& data) {
+        model->hModelInput(state, cov_p, cov_R, data);
+      });
 
   output_.init_dyn_share_modified_3h(
       [this](state_output& state, const input_ikfom& input) {
@@ -106,8 +112,16 @@ void Filter::initialize(Models models) {
       [this](state_output& state, const input_ikfom& input) {
         return process_model_.dfDxOutput(state, input);
       },
-      std::move(models.output_measurement),
-      std::move(models.imu_measurement));
+      [model = &lidar_model](
+          state_output& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+          esekfom::dyn_share_modified<double>& data) {
+        model->hModelOutput(state, cov_p, cov_R, data);
+      },
+      [model = &imu_model](
+          state_output& state,
+          esekfom::dyn_share_modified<double>& data) {
+        model->hModelOutput(state, data);
+      });
 
   InputNoise input_covariance = InputNoise::Identity() * 0.1;
   input_covariance.block<3, 3>(21, 21) =

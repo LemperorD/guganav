@@ -23,7 +23,6 @@ struct MainLoopState {
   // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
   pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
   pcl::VoxelGrid<PointType> downsize_filter_map;   ///< 地图降采样
-  V3D euler_cur;                                   ///< 欧拉角 (发布用)
   nav_msgs::msg::Path path;                        ///< 轨迹消息
   nav_msgs::msg::Odometry odom_aft_mapped;         ///< 里程计消息
   geometry_msgs::msg::PoseStamped msg_body_pose;   ///< 位姿消息
@@ -33,10 +32,6 @@ struct MainLoopState {
       std::make_shared<PointCloudXYZI>();  ///< 初始化世界系点云
   PointCloudXYZI::Ptr pcl_wait_save =
       std::make_shared<PointCloudXYZI>();  ///< 待保存点云
-
-  // ---- 位姿日志 ----
-  std::string pos_log_dir;  ///< 位姿日志路径
-  std::ofstream fp;         ///< 位姿日志文件
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
@@ -57,15 +52,11 @@ private:
   PointLioParams config_;
   bool is_first_frame_{true};
   double lidar_end_time_{0.0};
-  double first_lidar_time_{0.0};
   int pcd_index_{0};
   double time_update_last_{0.0};
   double time_current_{0.0};
-  double time_predict_last_const_{0.0};
   double t_last_{0.0};
   MeasureGroup measures_;
-  std::ofstream fout_out_;
-  std::ofstream fout_imu_pbp_;
   rclcpp::executors::MultiThreadedExecutor
       executor_;         ///< 执行器 (主循环 spin_some)
   MainLoopState state_;  ///< 主循环状态
@@ -88,13 +79,12 @@ private:
 
   // ==================== 私有成员函数 (原匿名namespace, 只由本节点调用)
 
-  /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (由 run 调用) */
+  /** @brief 节点初始化: 参数 / 滤波器 / 订阅发布 (由 run 调用) */
   void totalInitialize();
   void initializeSensors();
   void initializeMappingState();
   void initializeFilter();
   void initializeRos2Interfaces();
-  void initializeLogging();
 
   /** @brief 轮次初始化: 同步传感器数据、处理首帧并准备当前帧
    * @return true 当前轮次已准备好进入 ESKF 处理
@@ -111,9 +101,6 @@ private:
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
-  /** @brief 将完整的 LIO 状态转储到日志文件 (输出到 state_.fp) */
-  void dumpLioStatetoLog();
-
   void pointBodyLidarToIMU(PointType const* pi, PointType* po) const;
 
   void mapIncremental() const;
@@ -141,7 +128,7 @@ private:
   void preparePointMeasurements() const;
 
   /** @brief 帧尾: 发布输出 + 运行时位姿日志 */
-  void publishAndLogFrame();
+  void publishFrameOutputs();
 
   /** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
    * @tparam ImuAsInput true = input filter (24维) / false = output filter

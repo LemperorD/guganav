@@ -27,7 +27,6 @@
 #include <condition_variable>
 #include <csignal>
 #include <cstring>
-#include <fstream>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <livox_ros_driver2/msg/custom_msg.hpp>
 #include <mutex>
@@ -94,7 +93,6 @@ struct PublishParams {
   bool scan_enabled{true};
   bool scan_body_enabled{true};
   bool tf_enabled{true};
-  bool runtime_log_enabled{false};
   bool pcd_save_enabled{false};
   int pcd_save_interval{-1};
 };
@@ -154,4 +152,3 @@ struct PointLioParams {
  * @param orient SO(3) 旋转
  * @return 3维欧拉角 [roll, pitch, yaw] (rad)
  */
-Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3& orient);
