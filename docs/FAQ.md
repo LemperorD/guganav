@@ -34,3 +34,6 @@ python3 c_codegen/c_codegen_omni.py
 ## rviz因未知原因打不开
 将你的互联网设置为buaa mobile试试.
 
+# POINT_LIO
+## 修改后发现地图随小车旋转
+多半是改动了初始化的相关逻辑.重点检查初始化的次数是否与改动前相同,是否将一次性初始化的量多次初始化了.

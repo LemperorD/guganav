@@ -12,8 +12,7 @@
  * - 平面估计等模板工具函数
  */
 
-#ifndef COMMON_LIB_H
-#define COMMON_LIB_H
+#pragma once
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -359,5 +358,3 @@ inline rclcpp::Time get_ros_time(double timestamp) {
   uint32_t nanosec = nanosec_d;
   return rclcpp::Time(sec, nanosec);
 }
-
-#endif

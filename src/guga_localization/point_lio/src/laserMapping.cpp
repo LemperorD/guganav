@@ -102,7 +102,7 @@ void LaserMappingNode::totalInitialize() {
   signal(SIGINT, SigHandle);  // NOLINT
 }
 
-void LaserMappingNode::initializeMappingState() {
+void LaserMappingNode::initializeMappingState() {  // TODO:公有数据存放位置待定
   lio_workspace.ivox_ = std::make_shared<IVoxType>(
       config_.mapping.ivox_options);
   lio_workspace.point_selected_surf.set();
@@ -123,7 +123,6 @@ void LaserMappingNode::initializeMappingState() {
   state_.path.header.stamp = get_ros_time(lidar_end_time_);
   state_.path.header.frame_id = "camera_init";
 }
-
 void LaserMappingNode::initializeFilter() {
   filter_.configure(config_.filter);
   filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());
@@ -132,7 +131,6 @@ void LaserMappingNode::initializeFilter() {
     filter_.input().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
   }
 }
-
 void LaserMappingNode::initializeSensors() {
   auto lidar_params = config_.lidar;
   if (lidar_params.cut_frame_interval > 0.0) {
@@ -147,7 +145,6 @@ void LaserMappingNode::initializeSensors() {
 
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
-
 void LaserMappingNode::initializeRos2Interfaces() {
   if (config_.lidar.lidar_type == AVIA) {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
@@ -230,10 +227,8 @@ bool LaserMappingNode::prepareFrame() {
     sort(lio_workspace.feats_down_body->points.begin(),
          lio_workspace.feats_down_body->points.end(), time_list);
   }
-  lio_workspace.time_seq = time_compressing<int>(
-      lio_workspace.feats_down_body);
-  lio_workspace.feats_down_size =
-      lio_workspace.feats_down_body->points.size();
+  lio_workspace.time_seq = time_compressing<int>(lio_workspace.feats_down_body);
+  lio_workspace.feats_down_size = lio_workspace.feats_down_body->points.size();
 
   // ---- 量测准备 ----
   lio_workspace.normvec->resize(lio_workspace.feats_down_size);
@@ -456,9 +451,9 @@ bool LaserMappingNode::initMapState() {
   }
   lio_workspace.feats_down_world->resize(state_.feats_undistort->size());
   for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
-    lidar_.measurementModel().pointBodyToWorld(&(state_.feats_undistort->points[i]),
-                                &(lio_workspace.feats_down_world->points[i]),
-                                filter_.input().x_);
+    lidar_.measurementModel().pointBodyToWorld(
+        &(state_.feats_undistort->points[i]),
+        &(lio_workspace.feats_down_world->points[i]), filter_.input().x_);
   }
   for (const auto& point : *lio_workspace.feats_down_world) {
     state_.init_feats_world->points.emplace_back(point);
@@ -508,7 +503,6 @@ void LaserMappingNode::publishFrameOutputs() {
   if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
     publishFrameBody();
   }
-
 }
 
 /** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
@@ -649,7 +643,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     if (!kf.update_iterated_dyn_share_modified()) {
       // [Workflow 9] 无有效平面对应时跳过当前点更新。
       lio_workspace.idx = lio_workspace.idx
-                            + lio_workspace.time_seq[lio_workspace.k];
+                          + lio_workspace.time_seq[lio_workspace.k];
       continue;
     }
     if (config_.mapping.publish_odometry_without_downsample) {
@@ -662,7 +656,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           lio_workspace.feats_down_body->points[lio_workspace.idx + j + 1];
       PointType& point_world_j =
           lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1];
-      lidar_.measurementModel().pointBodyToWorld(&point_body_j, &point_world_j, kf.x_);
+      lidar_.measurementModel().pointBodyToWorld(&point_body_j, &point_world_j,
+                                                 kf.x_);
     }
 
     lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
