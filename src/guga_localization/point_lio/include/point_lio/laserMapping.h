@@ -65,6 +65,7 @@ private:
   int pcd_scan_count_{0};
   double time_update_last_{0.0};
   double time_current_{0.0};
+  double time_predict_last_const_{0.0};
   double t_last_{0.0};
   MeasureGroup measures_;
   MainLoopState state_;  ///< 主循环状态
@@ -153,7 +154,7 @@ private:
    * @param last_time 传播时间基准 (t_last / time_predict_last_const)
    * @param q         对应滤波器的过程噪声
    */
-  template <typename KF>
+  template <bool ImuAsInput, typename KF>
   void processFramePoints(KF& kf, double& last_time, auto& q);
 
   void initScan();

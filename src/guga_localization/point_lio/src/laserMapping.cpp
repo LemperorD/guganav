@@ -56,7 +56,12 @@ void LaserMappingNode::processIteration() {
   if (!initializeIteration()) {
     return;
   }
-  processFramePoints(filter_.input(), t_last_, filter_.inputNoise());
+  if (config_.mapping.use_imu_as_input) {
+    processFramePoints<true>(filter_.input(), t_last_, filter_.inputNoise());
+  } else {
+    processFramePoints<false>(filter_.output(), time_predict_last_const_,
+                              filter_.outputNoise());
+  }
   if (!config_.mapping.publish_odometry_without_downsample) {
     publishOdometry();
   }
@@ -122,6 +127,7 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_cleanup(
   pcd_scan_count_ = 0;
   time_update_last_ = 0.0;
   time_current_ = 0.0;
+  time_predict_last_const_ = 0.0;
   t_last_ = 0.0;
   pub_laser_cloud_full_res_.reset();
   pub_laser_cloud_full_res_body_.reset();
@@ -178,6 +184,8 @@ void LaserMappingNode::initializeFilter() {
   if (config_.lidar.extrinsic_estimation) {
     filter_.input().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
     filter_.input().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
+    filter_.output().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
+    filter_.output().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
   }
 }
 void LaserMappingNode::initializeRos2Interfaces() {
@@ -331,8 +339,13 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
   V3D p_body_lidar(pi->x, pi->y, pi->z);  // NOLINT
   V3D p_body_imu;
   if (config_.lidar.extrinsic_estimation) {
-    p_body_imu = filter_.input().x_.offset_R_L_I * p_body_lidar
-                 + filter_.input().x_.offset_T_L_I;
+    if (config_.mapping.use_imu_as_input) {
+      p_body_imu = filter_.input().x_.offset_R_L_I * p_body_lidar
+                   + filter_.input().x_.offset_T_L_I;
+    } else {
+      p_body_imu = filter_.output().x_.offset_R_L_I * p_body_lidar
+                   + filter_.output().x_.offset_T_L_I;
+    }
 
   } else {
     p_body_imu = lio_workspace.Lidar_R_wrt_IMU * p_body_lidar
@@ -456,7 +469,11 @@ void LaserMappingNode::setPosestamp(T& out) {
     out.orientation.w = q.coeffs()[3];
   };
 
-  set_output_from_kf(filter_.input());
+  if (config_.mapping.use_imu_as_input) {
+    set_output_from_kf(filter_.input());
+  } else {
+    set_output_from_kf(filter_.output());
+  }
 }
 
 void LaserMappingNode::publishOdometry() {
@@ -514,9 +531,15 @@ bool LaserMappingNode::initMapState() {
   }
   lio_workspace.feats_down_world->resize(state_.feats_undistort->size());
   for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
-    lidar_.measurementModel().pointBodyToWorld(
-        &(state_.feats_undistort->points[i]),
-        &(lio_workspace.feats_down_world->points[i]), filter_.input().x_);
+    if (config_.mapping.use_imu_as_input) {
+      lidar_.measurementModel().pointBodyToWorld(
+          &(state_.feats_undistort->points[i]),
+          &(lio_workspace.feats_down_world->points[i]), filter_.input().x_);
+    } else {
+      lidar_.measurementModel().pointBodyToWorld(
+          &(state_.feats_undistort->points[i]),
+          &(lio_workspace.feats_down_world->points[i]), filter_.output().x_);
+    }
   }
   for (const auto& point : *lio_workspace.feats_down_world) {
     state_.init_feats_world->points.emplace_back(point);
@@ -574,7 +597,7 @@ void LaserMappingNode::publishFrameOutputs() {
  * @param last_time 传播时间基准
  * @param q         对应滤波器持有的过程噪声
  */
-template <typename KF>
+template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
@@ -599,8 +622,15 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             }
           }
 
-          lio_workspace.input_in = imu_.lastInput(
-              config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
+          if constexpr (ImuAsInput) {
+            lio_workspace.input_in = imu_.lastInput(
+                config_.imu.processor.gravity_magnitude
+                / config_.imu.acc_norm);
+          } else {
+            const auto measurement = imu_.lastMeasurement();
+            lio_workspace.angvel_avr = measurement.angular_velocity;
+            lio_workspace.acc_avr = measurement.linear_acceleration;
+          }
 
           last_time = time_current_;
           time_update_last_ = time_current_;
@@ -609,14 +639,28 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
         }
         time_current_ = get_time_sec(imu_next.header.stamp);
 
-        // 原 B2: 仅推进 IMU 指针/填充输入 (无传播)
-        double dt_cov = time_current_ - time_update_last_;
-        if (dt_cov > 0.0) {
-          time_update_last_ = get_time_sec(imu_next.header.stamp);
+        if constexpr (ImuAsInput) {
+          double dt_cov = time_current_ - time_update_last_;
+          if (dt_cov > 0.0) {
+            time_update_last_ = get_time_sec(imu_next.header.stamp);
+          }
+          last_time = get_time_sec(imu_next.header.stamp);
+          lio_workspace.input_in = imu_.nextInput(
+              config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
+        } else {
+          double dt = time_current_ - last_time;
+          double dt_cov = time_current_ - time_update_last_;
+          if (dt_cov > 0.0) {
+            kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
+            time_update_last_ = time_current_;
+          }
+          kf.predict(dt, q, lio_workspace.input_in, true, false);
+          last_time = time_current_;
+          const auto measurement = imu_.nextMeasurement();
+          lio_workspace.angvel_avr = measurement.angular_velocity;
+          lio_workspace.acc_avr = measurement.linear_acceleration;
+          kf.update_iterated_dyn_share_IMU();
         }
-        last_time = get_time_sec(imu_next.header.stamp);
-        lio_workspace.input_in = imu_.nextInput(
-            config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
 
         imu_.popAndAdvance();
         if (imu_.empty()) {
@@ -647,8 +691,14 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           break;
         }
       }
-      lio_workspace.input_in = imu_.lastInput(
-          config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
+      if constexpr (ImuAsInput) {
+        lio_workspace.input_in = imu_.lastInput(
+            config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
+      } else if (config_.imu.processor.enabled) {
+        const auto measurement = imu_.lastMeasurement();
+        lio_workspace.angvel_avr = measurement.angular_velocity;
+        lio_workspace.acc_avr = measurement.linear_acceleration;
+      }
 
       is_first_frame_ = false;
       last_time = time_current_;
@@ -657,25 +707,61 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
     // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
 
-    while (time_current_ > get_time_sec(imu_next.header.stamp)) {
-      imu_.popBuffer();
-      lio_workspace.input_in = imu_.lastInput(
-          config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
-      double dt = get_time_sec(imu_last.header.stamp) - last_time;
-      double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
+    if constexpr (ImuAsInput) {
+      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
+        imu_.popBuffer();
+        lio_workspace.input_in = imu_.lastInput(
+            config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
+        double dt = get_time_sec(imu_last.header.stamp) - last_time;
+        double dt_cov =
+            get_time_sec(imu_last.header.stamp) - time_update_last_;
 
-      if (dt_cov > 0.0) {
-        kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-        time_update_last_ = get_time_sec(imu_last.header.stamp);
+        if (dt_cov > 0.0) {
+          kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
+          time_update_last_ = get_time_sec(imu_last.header.stamp);
+        }
+
+        kf.predict(dt, q, lio_workspace.input_in, true, false);
+        last_time = get_time_sec(imu_last.header.stamp);
+
+        if (imu_.empty()) {
+          break;
+        }
+        imu_.advanceCursor();
+      }
+    } else if (config_.imu.processor.enabled && !imu_.empty()) {
+      const bool last_imu = imu_.isSameStamp();
+      while (!imu_.empty()
+             && get_time_sec(imu_next.header.stamp) < last_time) {
+        if (!last_imu) {
+          imu_.advanceCursor();
+          break;
+        }
+        imu_.popAndAdvance();
+        if (imu_.empty()) {
+          break;
+        }
       }
 
-      kf.predict(dt, q, lio_workspace.input_in, true, false);
-      last_time = get_time_sec(imu_last.header.stamp);
+      while (!imu_.empty()
+             && time_current_ > get_time_sec(imu_next.header.stamp)) {
+        const auto measurement = imu_.nextMeasurement();
+        lio_workspace.angvel_avr = measurement.angular_velocity;
+        lio_workspace.acc_avr = measurement.linear_acceleration;
 
-      if (imu_.empty()) {
-        break;
+        const double imu_time = get_time_sec(imu_next.header.stamp);
+        double dt = imu_time - last_time;
+        kf.predict(dt, q, lio_workspace.input_in, true, false);
+        last_time = imu_time;
+
+        double dt_cov = imu_time - time_update_last_;
+        if (dt_cov > 0.0) {
+          kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
+          time_update_last_ = imu_time;
+          kf.update_iterated_dyn_share_IMU();
+        }
+        imu_.popAndAdvance();
       }
-      imu_.advanceCursor();
     }
 
     double dt = time_current_ - last_time;

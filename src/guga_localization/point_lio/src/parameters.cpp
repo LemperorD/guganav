@@ -22,6 +22,8 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     // ==================== 模式开关 ====================
     params.mapping.propagate_at_imu_frequency = nh->declare_parameter<bool>(
         "prop_at_freq_of_imu", true);
+    params.mapping.use_imu_as_input = nh->declare_parameter<bool>(
+        "use_imu_as_input", false);
     params.imu.check_saturation = nh->declare_parameter<bool>(
         "check_satu", true);
     params.mapping.init_map_size = static_cast<int>(

@@ -56,6 +56,7 @@ using IVoxType =
 struct MappingParams {
   bool space_down_sample{true};
   bool propagate_at_imu_frequency{true};
+  bool use_imu_as_input{false};
   bool publish_odometry_without_downsample{false};
   int init_map_size{100};
   double filter_size_surf{0.5};
