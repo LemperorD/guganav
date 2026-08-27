@@ -14,18 +14,9 @@
 #pragma once
 
 #include <cmath>
-#include <csignal>
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <point_lio/common_lib.h>
-#include <pcl/common/io.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
-
-#include <nav_msgs/msg/odometry.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
 
 // ==================== 预配置 ====================
 
@@ -82,11 +73,6 @@ public:
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_,
                state_input& input_state, state_output& output_state);
 
-  /** @brief 设置陀螺仪协方差缩放因子 */
-  void set_gyr_cov(const V3D& scaler);
-
-  /** @brief 设置加速度计协方差缩放因子 */
-  void set_acc_cov(const V3D& scaler);
   [[nodiscard]] bool needInit() const;
 
   /**
@@ -110,20 +96,11 @@ public:
    */
   void initState(state_input& input_state, state_output& output_state);
 
-  // ==================== 公有成员变量 ====================
-
-  MD(12, 12)
-  state_cov = MD(
-      12, 12)::Identity();  ///< IMU 状态协方差 (12维: 姿态/速度/位置/零偏)
   V3D gravity_;             ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
 
   V3D mean_acc{V3D::Zero()};  ///< 平均加速度 (累积, 用于重力估计)
-
-  double time_last_scan = 0.0;                      ///< 上帧扫描时间
-  V3D cov_gyr_scale = V3D(0.0001, 0.0001, 0.0001);  ///< 陀螺仪协方差缩放
-  V3D cov_vel_scale = V3D(0.0001, 0.0001, 0.0001);  ///< 速度协方差缩放
 
 private:
   /**
@@ -137,7 +114,6 @@ private:
    */
   void IMU_init(const MeasureGroup& meas, int& N);
 
-  V3D mean_gyr{V3D::Zero()};  ///< 平均角速度 (用于陀螺零偏估计)
   int init_iter_num = 1;      ///< 初始化迭代计数 (当前累积帧数)
   bool imu_en{true};          ///< 是否启用 IMU
   Stage stage_{Stage::Initializing};

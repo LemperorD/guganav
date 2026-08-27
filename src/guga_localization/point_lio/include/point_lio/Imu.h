@@ -37,8 +37,6 @@ public:
   [[nodiscard]] bool isSameStamp() const;
   [[nodiscard]] const sensor_msgs::msg::Imu& last() const;
   [[nodiscard]] const sensor_msgs::msg::Imu& next() const;
-  std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>& buffer();
-
   void popBuffer();
   void loadNextFromFront();
   void discardBefore(double timestamp);

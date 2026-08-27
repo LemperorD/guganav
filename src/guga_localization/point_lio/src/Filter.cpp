@@ -99,9 +99,9 @@ void Filter::initialize(LidarMeasurementModel& lidar_model,
         return process_model_.dfDxInput(state, input);
       },
       [model = &lidar_model](
-          state_input& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+          state_input& state, Eigen::Matrix3d, Eigen::Matrix3d,
           esekfom::dyn_share_modified<double>& data) {
-        model->hModelInput(state, cov_p, cov_R, data);
+        model->hModelInput(state, data);
       });
 
   output_.init_dyn_share_modified_3h(
@@ -112,9 +112,9 @@ void Filter::initialize(LidarMeasurementModel& lidar_model,
         return process_model_.dfDxOutput(state, input);
       },
       [model = &lidar_model](
-          state_output& state, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+          state_output& state, Eigen::Matrix3d, Eigen::Matrix3d,
           esekfom::dyn_share_modified<double>& data) {
-        model->hModelOutput(state, cov_p, cov_R, data);
+        model->hModelOutput(state, data);
       },
       [model = &imu_model](
           state_output& state,

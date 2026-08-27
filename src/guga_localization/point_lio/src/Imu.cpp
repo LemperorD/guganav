@@ -78,10 +78,6 @@ const sensor_msgs::msg::Imu& Imu::next() const {
   return next_;
 }
 
-std::deque<sensor_msgs::msg::Imu::ConstSharedPtr>& Imu::buffer() {
-  return buffer_;
-}
-
 void Imu::loadNextFromFront() {
   if (!buffer_.empty()) {
     next_ = *buffer_.front();

@@ -20,21 +20,13 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>
   <exec_depend>lifecycle_msgs</exec_depend>
-  <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>visualization_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>pcl_ros</depend>
   <depend>pcl_conversions</depend>
   <depend>livox_ros_driver2</depend>
-  <depend>libunwind-dev</depend>
-  <depend>libgoogle-glog-dev</depend>
-
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
-  <test_depend>launch_testing_ament_cmake</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

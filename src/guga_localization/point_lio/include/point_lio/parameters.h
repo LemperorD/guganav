@@ -15,25 +15,12 @@
  */
 
 #pragma once
-#include <ivox/ivox3d.h>
-#include <cmath>
-#include <omp.h>
-#include <pcl/common/transforms.h>
-#include <unistd.h>
 
-#include <Eigen/Core>
-#include <Eigen/Eigen>
-#include <condition_variable>
-#include <csignal>
-#include <cstring>
-#include <geometry_msgs/msg/vector3.hpp>
-#include <livox_ros_driver2/msg/custom_msg.hpp>
-#include <mutex>
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/imu.hpp>
-#include <sensor_msgs/msg/nav_sat_fix.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <thread>
+#include <cmath>
+#include <string>
+#include <vector>
+
+#include <ivox/ivox3d.h>
 
 #include "point_lio/IMU_Processing.h"
 #include "point_lio/preprocess.h"
@@ -61,7 +48,6 @@ struct MappingParams {
   int init_map_size{100};
   double filter_size_surf{0.5};
   double filter_size_map{0.5};
-  double fov_deg{180.0};
   float det_range{300.0F};
   IVoxType::Options ivox_options;
 };
@@ -82,7 +68,6 @@ struct FilterParams {
 
 struct ImuParams {
   ImuProcessor::Params processor;
-  double integration_interval{0.005};
   double timestamp_offset{0.0};
   bool check_saturation{true};
   double saturation_acc{3.0};

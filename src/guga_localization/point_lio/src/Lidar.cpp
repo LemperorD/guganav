@@ -45,7 +45,7 @@ void LidarMeasurementModel::configure(const LidarParams& params) {
  * @param[out] ekfom_data.valid 是否有效 (至少一个特征点)
  */
 void LidarMeasurementModel::hModelInput(
-    state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+    state_input& s,
     esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;  ///< 平面系数: (nx, ny, nz, d)
   pabcd.setZero();
@@ -66,9 +66,6 @@ void LidarMeasurementModel::hModelInput(
     V3D p_body =
         lio_workspace.pbody_list[lio_workspace.idx + j + 1];  // IMU系下的坐标
     double p_norm = p_body.norm();  // 距 IMU 原点的距离
-    V3D p_world;
-    p_world << point_world_j.x, point_world_j.y, point_world_j.z;
-
     {
       auto& points_near =
           lio_workspace.Nearest_Points[lio_workspace.idx + j + 1];
@@ -175,7 +172,6 @@ void LidarMeasurementModel::hModelInput(
       m++;
     }
   }
-  lio_workspace.effct_feat_num += effect_num_k;
 }
 
 /**
@@ -188,7 +184,7 @@ void LidarMeasurementModel::hModelInput(
  * @see hModelInput
  */
 void LidarMeasurementModel::hModelOutput(
-    state_output& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
+    state_output& s,
     esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;
   pabcd.setZero();
@@ -204,8 +200,6 @@ void LidarMeasurementModel::hModelOutput(
     this->pointBodyToWorld(&point_body_j, &point_world_j, s);
     V3D p_body = lio_workspace.pbody_list[lio_workspace.idx + j + 1];
     double p_norm = p_body.norm();
-    V3D p_world;
-    p_world << point_world_j.x, point_world_j.y, point_world_j.z;
     {
       auto& points_near =
           lio_workspace.Nearest_Points[lio_workspace.idx + j + 1];
@@ -289,7 +283,6 @@ void LidarMeasurementModel::hModelOutput(
       m++;
     }
   }
-  lio_workspace.effct_feat_num += effect_num_k;
 }
 
 /**

@@ -79,17 +79,11 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.mapping.det_range = static_cast<float>(
         nh->declare_parameter<double>("mapping.det_range", 300.F));
     params.lidar.preprocess.det_range = params.mapping.det_range;
-    params.mapping.fov_deg = nh->declare_parameter<double>("mapping.fov_degree",
-                                                           180);
-
     // ==================== mapping 参数 — IMU 功能开关 ====================
     params.imu.processor.enabled = nh->declare_parameter<bool>(
         "mapping.imu_en", true);
     params.lidar.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
-    params.imu.integration_interval = nh->declare_parameter<double>(
-        "mapping.imu_time_inte", 0.005);
-
     // ==================== mapping 参数 — 噪声协方差 ====================
     params.lidar.point_covariance = nh->declare_parameter<double>(
         "mapping.lidar_meas_cov", 0.1);

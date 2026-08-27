@@ -1,11 +1,9 @@
-#include <malloc.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 
@@ -21,7 +19,6 @@ struct MainLoopState {
 
   // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
   pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
-  pcl::VoxelGrid<PointType> downsize_filter_map;   ///< 地图降采样
   nav_msgs::msg::Path path;                        ///< 轨迹消息
   nav_msgs::msg::Odometry odom_aft_mapped;         ///< 里程计消息
   geometry_msgs::msg::PoseStamped msg_body_pose;   ///< 位姿消息
@@ -79,8 +76,6 @@ private:
       pub_laser_cloud_full_res_;
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_body_;
-  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
-      pub_laser_cloud_effect_;
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_map_;
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Odometry>::SharedPtr

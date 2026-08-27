@@ -80,7 +80,6 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_activate(
     const rclcpp_lifecycle::State&) {
   pub_laser_cloud_full_res_->on_activate();
   pub_laser_cloud_full_res_body_->on_activate();
-  pub_laser_cloud_effect_->on_activate();
   pub_laser_cloud_map_->on_activate();
   pub_odom_aft_mapped_->on_activate();
   pub_path_->on_activate();
@@ -97,7 +96,6 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_deactivate(
   destroySensorSubscriptions();
   pub_laser_cloud_full_res_->on_deactivate();
   pub_laser_cloud_full_res_body_->on_deactivate();
-  pub_laser_cloud_effect_->on_deactivate();
   pub_laser_cloud_map_->on_deactivate();
   pub_odom_aft_mapped_->on_deactivate();
   pub_path_->on_deactivate();
@@ -131,7 +129,6 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_cleanup(
   t_last_ = 0.0;
   pub_laser_cloud_full_res_.reset();
   pub_laser_cloud_full_res_body_.reset();
-  pub_laser_cloud_effect_.reset();
   pub_laser_cloud_map_.reset();
   pub_odom_aft_mapped_.reset();
   pub_path_.reset();
@@ -170,11 +167,6 @@ void LaserMappingNode::initializeMappingState() {  // TODO:公有数据存放位
       static_cast<float>(config_.mapping.filter_size_surf),
       static_cast<float>(config_.mapping.filter_size_surf));
 
-  state_.downsize_filter_map.setLeafSize(
-      static_cast<float>(config_.mapping.filter_size_map),
-      static_cast<float>(config_.mapping.filter_size_map),
-      static_cast<float>(config_.mapping.filter_size_map));
-
   state_.path.header.stamp = get_ros_time(lidar_end_time_);
   state_.path.header.frame_id = "camera_init";
 }
@@ -194,8 +186,6 @@ void LaserMappingNode::initializeRos2Interfaces() {
   pub_laser_cloud_full_res_body_ =
       create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_body",
                                                       20);
-  pub_laser_cloud_effect_ = create_publisher<sensor_msgs::msg::PointCloud2>(
-      "cloud_effected", 20);
   pub_laser_cloud_map_ = create_publisher<sensor_msgs::msg::PointCloud2>(
       "Laser_map", 20);
   pub_odom_aft_mapped_ = create_publisher<nav_msgs::msg::Odometry>(
@@ -288,7 +278,7 @@ bool LaserMappingNode::prepareFrame() {
     sort(lio_workspace.feats_down_body->points.begin(),
          lio_workspace.feats_down_body->points.end(), time_list);
   }
-  lio_workspace.time_seq = time_compressing<int>(lio_workspace.feats_down_body);
+  lio_workspace.time_seq = time_compressing(lio_workspace.feats_down_body);
   lio_workspace.feats_down_size = lio_workspace.feats_down_body->points.size();
 
   // ---- 量测准备 ----
@@ -362,7 +352,7 @@ void LaserMappingNode::mapIncremental() const {
   auto cur_pts = lio_workspace.feats_down_world->size();
   points_to_add.reserve(cur_pts);
 
-  for (int i = 0; i < cur_pts; ++i) {
+  for (std::size_t i = 0; i < cur_pts; ++i) {
     /* decide if need add to map */
     PointType& point_world = lio_workspace.feats_down_world->points[i];
     if (!lio_workspace.Nearest_Points[i].empty()) {
@@ -441,7 +431,7 @@ void LaserMappingNode::publishFrameBody() {
   size_t size = state_.feats_undistort->points.size();
   PointCloudXYZI::Ptr lasercloud_imu_body(new PointCloudXYZI(size, 1));
 
-  for (int i = 0; i < size; i++) {
+  for (std::size_t i = 0; i < size; i++) {
     pointBodyLidarToIMU(&state_.feats_undistort->points[i],
                         &lasercloud_imu_body->points[i]);
   }
@@ -455,9 +445,6 @@ void LaserMappingNode::publishFrameBody() {
 
 template <typename T>
 void LaserMappingNode::setPosestamp(T& out) {
-  // Static variable, initialized to true, only effective on the first call
-  static bool is_first_kf = true;
-
   auto set_output_from_kf = [&](const auto& kf) {
     out.position.x = kf.x_.pos(0);
     out.position.y = kf.x_.pos(1);
@@ -601,8 +588,6 @@ template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
-  lio_workspace.effct_feat_num = 0;
-
   if (lio_workspace.time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
     if (!imu_.empty()) {

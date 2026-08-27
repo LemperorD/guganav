@@ -135,7 +135,8 @@ struct SO2 : public Eigen::Rotation2D<_scalar>
     res = Eigen::Matrix<scalar, 2, 3>::Zero();
   }
 
-  void S2_Mx(Eigen::Matrix<scalar, 3, 2> & res, MTK::vectview<const scalar, 2> delta)
+  void S2_Mx(Eigen::Matrix<scalar, 3, 2> & res,
+             MTK::vectview<const scalar, 2>)
   {
     std::cerr << "wrong idx for S2" << '\n';
     std::exit(100);
@@ -279,7 +280,8 @@ struct SO3 : public Eigen::Matrix<_scalar, 3, 3>
     res = Eigen::Matrix<scalar, 2, 3>::Zero();
   }
 
-  void S2_Mx(Eigen::Matrix<scalar, 3, 2> & res, MTK::vectview<const scalar, 2> delta)
+  void S2_Mx(Eigen::Matrix<scalar, 3, 2> & res,
+             MTK::vectview<const scalar, 2>)
   {
     std::cerr << "wrong idx for S2" << '\n';
     std::exit(100);

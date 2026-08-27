@@ -21,14 +21,6 @@ bool time_list(PointType& x, PointType& y) {
   return point_time_offset_ms(x) < point_time_offset_ms(y);
 };
 
-void ImuProcessor::set_gyr_cov(const V3D& scaler) {
-  cov_gyr_scale = scaler;
-}
-
-void ImuProcessor::set_acc_cov(const V3D& scaler) {
-  cov_vel_scale = scaler;
-}
-
 ImuProcessor::ImuProcessor() : logger(rclcpp::get_logger("ImuProcess")) {
 }
 
@@ -46,10 +38,8 @@ bool ImuProcessor::needInit() const {
 void ImuProcessor::reset() {
   RCLCPP_WARN(logger, "reset ImuProcess");
   mean_acc = V3D(0, 0, 0.0);
-  mean_gyr = V3D(0, 0, 0);
   stage_ = Stage::Initializing;
   init_iter_num = 1;
-  time_last_scan = 0.0;
 }
 
 /**
@@ -132,18 +122,14 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   RCLCPP_INFO(logger, "IMU Initializing: %.1f %%",
               double(N) / MAX_INI_COUNT * 100);
   V3D cur_acc;
-  V3D cur_gyr;
 
   // 遍历帧内所有 IMU 数据，更新滑动平均
   for (const auto& imu : meas.imu) {
     const auto& imu_acc = imu->linear_acceleration;
-    const auto& gyr_acc = imu->angular_velocity;
     cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
-    cur_gyr << gyr_acc.x, gyr_acc.y, gyr_acc.z;
 
     // 增量更新: mean += (cur - mean) / N
     mean_acc += (cur_acc - mean_acc) / N;
-    mean_gyr += (cur_gyr - mean_gyr) / N;
 
     N++;
   }

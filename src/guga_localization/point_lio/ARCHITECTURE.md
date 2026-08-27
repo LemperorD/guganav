@@ -484,7 +484,7 @@ ros__parameters:
 │   ├── 滤波: filter_size_surf, filter_size_map, ivox_grid_resolution
 │   ├── 外参: extrinsic_T, extrinsic_R
 │   ├── 重力: gravity, gravity_init
-│   └── 时序: imu_time_inte, lidar_time_inte
+│   └── 时序: lidar_time_inte
 │
 ├── odometry
 │   └── publish_odometry_without_downsample
@@ -596,7 +596,6 @@ ros__parameters:
 - `libeigen3-dev` (Eigen3 线性代数)
 - `libpcl-dev` (PCL 点云库)
 - `ros-$ROS_DISTRO-pcl-conversions` (PCL↔ROS2 桥接)
-- `libgoogle-glog-dev` (Google 日志库)
 - `libunwind-dev` (栈回溯)
 
 ### 11.2 Vendor 依赖 (源码内嵌)
@@ -644,5 +643,4 @@ ros__parameters:
 | `filter_size_map_min` | 0.5m | 地图降采样分辨率 |
 | `ivox_grid_resolution` | 2.0m (Mid360) / 0.2m (默认) | iVox 体素边长 |
 | `laser_point_cov` | 0.01 | 量测噪声方差 |
-| `imu_time_inte` | 0.005s | IMU 积分步长 |
 | `G_m_s2` | 9.81 | 重力加速度 |

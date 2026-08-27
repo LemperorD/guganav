@@ -14,27 +14,26 @@
 
 #pragma once
 
+#include <deque>
+#include <memory>
+#include <stdexcept>
+#include <vector>
+
+#include <builtin_interfaces/msg/time.hpp>
+#include <rclcpp/time.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <point_lio/so3_math.h>
-#include <tf2_ros/transform_broadcaster.h>
-
 #include <IKFoM/IKFoM_toolkit/esekfom/esekfom.hpp>
 #include <Eigen/Eigen>
-#include <memory>
-#include <nav_msgs/msg/odometry.hpp>
-#include <queue>
 #include <sensor_msgs/msg/imu.hpp>
 
 using namespace std;
 using namespace Eigen;
 
 // ==================== MTK 流形类型别名 ====================
-typedef MTK::vect<3, double> vect3;           ///< 3维向量流形
-typedef MTK::SO3<double> SO3;                 ///< SO(3) 旋转群流形
-typedef MTK::S2<double, 98090, 10000, 1> S2;  ///< 2维球面流形 (重力方向)
-typedef MTK::vect<1, double> vect1;           ///< 1维向量流形
-typedef MTK::vect<2, double> vect2;           ///< 2维向量流形
+using vect3 = MTK::vect<3, double>;
+using SO3 = MTK::SO3<double>;
 
 /**
  * @defgroup manifold_defs 状态流形定义 (MTK_BUILD_MANIFOLD)
@@ -82,41 +81,9 @@ MTK_BUILD_MANIFOLD(input_ikfom, ((vect3, acc))((vect3, gyro)));
  *  ng: 陀螺仪白噪声, na: 加速度计白噪声,
  *  nbg: 陀螺仪零偏随机游走, nba: 加速度计零偏随机游走
  */
-MTK_BUILD_MANIFOLD(process_noise_input,
-                   ((vect3, ng))((vect3, na))((vect3, nbg))((vect3, nba)));
-
-/** @brief 15维过程噪声流形 — IMU-as-output 模式
- *  额外包含 vel 噪声 (角速度+加速度本身被估计而非作为输入)
- */
-MTK_BUILD_MANIFOLD(
-    process_noise_output,
-    ((vect3, vel))((vect3, ng))((vect3, na))((vect3, nbg))((vect3, nba)));
-
 /** @} */  // manifold_defs
 
-// ==================== 数值常量 ====================
-#define PBWIDTH 30  ///< 进度条宽度
-#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
-
-#define PI_M (3.14159265358)
-// #define G_m_s2 (9.81)         // Gravaty const in GuangDong/China
-#define DIM_STATE (24)        ///< 状态维度 (SO(3) 按 3 维计算)
-#define DIM_PROC_N (12)       ///< 过程噪声维度
-#define CUBE_LEN (6.0)        ///< 局部地图立方体边长
-#define LIDAR_SP_LEN (2)      ///< 激光雷达特殊长度阈值
-#define INIT_COV (0.0001)     ///< 初始协方差默认值
 #define NUM_MATCH_POINTS (5)  ///< 点到面匹配所需的最小近邻点数
-#define MAX_MEAS_DIM (10000)  ///< 单次量测最大维度
-
-// ==================== 常用宏 ====================
-#define CONSTRAIN(v, min, max) \
-  ((v > min) ? ((v < max) ? v : max) : min)  ///< 值限幅
-#define ARRAY_FROM_EIGEN(mat) \
-  mat.data(), mat.data() + mat.rows() * mat.cols()  ///< Eigen→原始数组
-#define STD_VEC_FROM_EIGEN(mat)  \
-  vector<decltype(mat)::Scalar>( \
-      mat.data(),                \
-      mat.data() + mat.rows() * mat.cols())  ///< Eigen→std::vector
 
 // ==================== PCL/Eigen 类型别名 ====================
 using PointType =
@@ -131,16 +98,12 @@ inline void set_point_time_offset_ms(PointType& point, float offset_ms) {
   point.curvature = offset_ms;
 }
 
-using PointTypeRGB = pcl::PointXYZRGB;              ///< 带颜色的点类型
 using PointCloudXYZI = pcl::PointCloud<PointType>;  ///< 常用点云类型
-using PointCloudXYZRGB = pcl::PointCloud<PointTypeRGB>;
 using PointVector =
     std::vector<PointType,
                 Eigen::aligned_allocator<PointType>>;  ///< 对齐点向量
 using V3D = Eigen::Vector3d;                           ///< 双精度3维向量
 using M3D = Eigen::Matrix3d;                           ///< 双精度3x3矩阵
-using V3F = Eigen::Vector3f;                           ///< 单精度3维向量
-using M3F = Eigen::Matrix3f;                           ///< 单精度3x3矩阵
 
 // ==================== std::vector → Eigen 转换 ====================
 /** @brief std::vector<double> → Eigen::Vector3d (带长度校验) */
@@ -159,16 +122,11 @@ inline M3D to_mat3d(const std::vector<double>& v) {
   return Eigen::Map<const M3D>(v.data());
 }
 
-#define MD(a, b) Matrix<double, (a), (b)>  ///< 动态大小双精度矩阵
-#define VD(a) Matrix<double, (a), 1>       ///< 动态大小双精度列向量
-#define MF(a, b) Matrix<float, (a), (b)>   ///< 动态大小单精度矩阵
 #define VF(a) Matrix<float, (a), 1>        ///< 动态大小单精度列向量
 
 /** @brief 预定义的常用常量矩阵 */
 const M3D Eye3d(M3D::Identity());  ///< 3x3 单位阵 (double)
-const M3F Eye3f(M3F::Identity());  ///< 3x3 单位阵 (float)
 const V3D Zero3d(0, 0, 0);         ///< 3维零向量 (double)
-const V3F Zero3f(0, 0, 0);         ///< 3维零向量 (float)
 
 /**
  * @brief 当前处理帧的雷达+IMU数据组合
@@ -190,30 +148,6 @@ struct MeasureGroup {
 // ==================== 工具函数 ====================
 
 /**
- * @brief 计算两点之间的欧氏距离平方
- * @tparam T 返回类型 (double 或 float)
- * @param p1 第一个点
- * @param p2 第二个点
- * @return 距离平方值 ||p1 - p2||²
- */
-template <typename T>
-T calc_dist(PointType p1, PointType p2) {
-  T d = (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y)
-        + (p1.z - p2.z) * (p1.z - p2.z);
-  return d;
-}
-
-/**
- * @brief 计算 Vector3d 到 PointType 的欧氏距离平方
- */
-template <typename T>
-T calc_dist(Eigen::Vector3d p1, PointType p2) {
-  T d = (p1(0) - p2.x) * (p1(0) - p2.x) + (p1(1) - p2.y) * (p1(1) - p2.y)
-        + (p1(2) - p2.z) * (p1(2) - p2.z);
-  return d;
-}
-
-/**
  * @brief 时间压缩: 按时间戳分组点云 (用于逐组点 Kalman 更新)
  *
  * 点云的 PCL curvature 存储字段用于保存该点相对帧首的时间偏移 (ms)。
@@ -224,12 +158,11 @@ T calc_dist(Eigen::Vector3d p1, PointType p2) {
  * - 遍历点云，当点时间偏移递增时 (同组内时间递增)，累加计数
  * - 当点时间偏移回跳时 (新的一组开始)，记录当前组大小并重置计数
  *
- * @tparam T 计数值类型
  * @param point_cloud 输入点云 (point time offset = 时间偏移，单位 ms)
  * @return 每组包含的点数序列
  */
-template <typename T>
-std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
+inline std::vector<int> time_compressing(
+    const PointCloudXYZI::Ptr& point_cloud) {
   int points_size = point_cloud->points.size();
   int j = 0;
   std::vector<int> time_seq;
@@ -248,51 +181,6 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
     time_seq.emplace_back(j + 1);
   }
   return time_seq;
-}
-
-/**
- * @brief 通过最小二乘法估计平面法向量
- *
- * 平面方程: Ax + By + Cz + D = 0
- * 归一化: A/D*x + B/D*y + C/D*z = -1
- * 构造最小二乘问题: A0 * x0 = b0
- *   其中 A0_i = [x_i, y_i, z_i], x0 = [A/D, B/D, C/D]^T, b0 = [-1,...,-1]^T
- * 求解后归一化得到单位法向量
- *
- * @tparam T 浮点类型
- * @param[out] normvec 输出归一化法向量
- * @param point 输入点集
- * @param threshold 平面内点距离阈值
- * @param point_num 参与估计的点数
- * @return true 如果所有点在阈值内 (平面有效), false 否则
- */
-template <typename T>
-bool esti_normvector(Matrix<T, 3, 1>& normvec, const PointVector& point,
-                     const T& threshold, const int& point_num) {
-  MatrixXf A(point_num, 3);
-  MatrixXf b(point_num, 1);
-  b.setOnes();
-  b *= -1.0f;
-
-  for (int j = 0; j < point_num; j++) {
-    A(j, 0) = point[j].x;
-    A(j, 1) = point[j].y;
-    A(j, 2) = point[j].z;
-  }
-  // 最小二乘求解 A/D, B/D, C/D
-  normvec = A.colPivHouseholderQr().solve(b);
-
-  // 验证所有点是否满足平面方程
-  for (int j = 0; j < point_num; j++) {
-    if (fabs(normvec(0) * point[j].x + normvec(1) * point[j].y
-             + normvec(2) * point[j].z + 1.0f)
-        > threshold) {
-      return false;
-    }
-  }
-
-  normvec.normalize();
-  return true;
 }
 
 /**

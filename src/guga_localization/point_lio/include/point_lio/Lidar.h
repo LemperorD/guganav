@@ -23,9 +23,6 @@
 #include "point_lio/Imu.h"
 class Synchronizer;
 
-/// @brief 最大缓冲区大小
-#define MAXN (720000)
-
 struct LioWorkspace {
   PointCloudXYZI::Ptr normvec{new PointCloudXYZI(100000, 1)};
   std::vector<int> time_seq;
@@ -36,7 +33,6 @@ struct LioWorkspace {
   IVoxType::Ptr ivox_{nullptr};
   std::bitset<100000> point_selected_surf;
   std::vector<M3D> crossmat_list;
-  int effct_feat_num{0};
   int k{0};
   int idx{-1};
   input_ikfom input_in;
@@ -52,11 +48,9 @@ extern LioWorkspace lio_workspace;
 class LidarMeasurementModel {
 public:
   void configure(const LidarParams& params);
-  void hModelInput(state_input& state, Eigen::Matrix3d cov_p,
-                   Eigen::Matrix3d cov_R,
+  void hModelInput(state_input& state,
                    esekfom::dyn_share_modified<double>& data) const;
-  void hModelOutput(state_output& state, Eigen::Matrix3d cov_p,
-                    Eigen::Matrix3d cov_R,
+  void hModelOutput(state_output& state,
                     esekfom::dyn_share_modified<double>& data) const;
   void pointBodyToWorld(PointType const* input, PointType* output,
                         const state_input& state) const;
