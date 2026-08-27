@@ -6,6 +6,7 @@
  */
 
 #include "point_lio/Lidar.h"
+#include "point_lio/Synchronizer.h"
 
 #include <algorithm>
 
@@ -365,21 +366,17 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
   po->intensity = pi->intensity;
 }
 
-bool Lidar::syncPackages(Imu& imu, MeasureGroup& measurement) {
-  return synchronizer_.syncPackages(imu, measurement);
-}
-
 void Lidar::configure(const Params& params) {
   params_ = params;
   params_.con_frame_num = std::max(1, params_.con_frame_num);
   params_.cut_frame_num = std::max(1, params_.cut_frame_num);
   preprocess_.configure(params_.preprocess);
-  synchronizer_.configure(params_);
   measurement_model_.configure(params_);
 }
 
 void Lidar::onStandardPcl(
-    const sensor_msgs::msg::PointCloud2::SharedPtr& message) {
+    const sensor_msgs::msg::PointCloud2::SharedPtr& message,
+    Synchronizer& synchronizer) {
   ++scan_count_;
   const double timestamp = rclcpp::Time(message->header.stamp).seconds();
   if (timestamp < last_timestamp_lidar_) {
@@ -395,20 +392,21 @@ void Lidar::onStandardPcl(
     std::deque<double> timestamps;
     preprocess_.processCutFramePCL2(message, frames, timestamps,
                                     params_.cut_frame_num, scan_count_);
-    synchronizer_.appendCutFrames(frames, timestamps);
+    synchronizer.appendCutFrames(frames, timestamps);
     return;
   }
   auto points = std::make_shared<PointCloudXYZI>(20000, 1);
   preprocess_.process(message, points);
   if (params_.con_frame) {
-    synchronizer_.appendMergedFrame(points, timestamp);
+    synchronizer.appendMergedFrame(points, timestamp);
   } else if (!points->empty()) {
-    synchronizer_.appendFrame(std::move(points), timestamp);
+    synchronizer.appendFrame(std::move(points), timestamp);
   }
 }
 
 void Lidar::onLivoxPcl(
-    const livox_ros_driver2::msg::CustomMsg::SharedPtr& message) {
+    const livox_ros_driver2::msg::CustomMsg::SharedPtr& message,
+    Synchronizer& synchronizer) {
   ++scan_count_;
   const double timestamp = rclcpp::Time(message->header.stamp).seconds();
   if (timestamp < last_timestamp_lidar_) {
@@ -422,14 +420,14 @@ void Lidar::onLivoxPcl(
     std::deque<double> timestamps;
     preprocess_.processCutFrameLivox(message, frames, timestamps,
                                      params_.cut_frame_num, scan_count_);
-    synchronizer_.appendCutFrames(frames, timestamps);
+    synchronizer.appendCutFrames(frames, timestamps);
     return;
   }
   auto points = std::make_shared<PointCloudXYZI>(10000, 1);
   preprocess_.process(message, points);
   if (params_.con_frame) {
-    synchronizer_.appendMergedFrame(points, timestamp);
+    synchronizer.appendMergedFrame(points, timestamp);
   } else if (!points->empty()) {
-    synchronizer_.appendFrame(std::move(points), timestamp);
+    synchronizer.appendFrame(std::move(points), timestamp);
   }
 }

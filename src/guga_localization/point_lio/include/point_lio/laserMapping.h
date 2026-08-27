@@ -11,6 +11,7 @@
 #include "nav_msgs/msg/path.hpp"
 
 #include "point_lio/Lidar.h"
+#include "point_lio/Synchronizer.h"
 #include "point_lio/Filter.h"
 
 struct MainLoopState {
@@ -48,6 +49,7 @@ private:
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
+  Synchronizer synchronizer_;
   Filter filter_;
   PointLioParams config_;
   bool is_first_frame_{true};

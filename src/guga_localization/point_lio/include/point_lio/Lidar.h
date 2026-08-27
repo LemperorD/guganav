@@ -21,7 +21,7 @@
 #include "point_lio/preprocess.h"
 #include "point_lio/common_lib.h"
 #include "point_lio/Imu.h"
-#include "point_lio/Synchronizer.h"
+class Synchronizer;
 
 /// @brief 最大缓冲区大小
 #define MAXN (720000)
@@ -78,15 +78,15 @@ public:
   [[nodiscard]] LidarMeasurementModel& measurementModel() {
     return measurement_model_;
   }
-  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
-  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
-  bool syncPackages(Imu& imu, MeasureGroup& meas);
+  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+                     Synchronizer& synchronizer);
+  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
+                  Synchronizer& synchronizer);
 
 private:
   Params params_;
   LidarMeasurementModel measurement_model_;
   Preprocess preprocess_;
-  Synchronizer synchronizer_;
   int scan_count_{0};
   double last_timestamp_lidar_{-1.0};
 };

@@ -139,6 +139,7 @@ void LaserMappingNode::initializeSensors() {
                                         / lidar_params.cut_frame_interval)));
   }
   lidar_.configure(lidar_params);
+  synchronizer_.configure(lidar_params);
 
   config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
   imu_.configure(config_.imu);
@@ -150,13 +151,13 @@ void LaserMappingNode::initializeRos2Interfaces() {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
         config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
         [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
-          lidar_.onLivoxPcl(msg);
+          lidar_.onLivoxPcl(msg, synchronizer_);
         });
   } else {
     sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
         config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
         [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          lidar_.onStandardPcl(msg);
+          lidar_.onStandardPcl(msg, synchronizer_);
         });
   }
 
@@ -181,7 +182,7 @@ void LaserMappingNode::initializeRos2Interfaces() {
 }
 
 bool LaserMappingNode::initializeIteration() {
-  if (!lidar_.syncPackages(
+  if (!synchronizer_.syncPackages(
           imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
     rate_.sleep();
     return false;
