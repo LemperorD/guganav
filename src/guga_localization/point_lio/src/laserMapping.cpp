@@ -102,6 +102,21 @@ void LaserMappingNode::totalInitialize() {
   signal(SIGINT, SigHandle);  // NOLINT
 }
 
+void LaserMappingNode::initializeSensors() {
+  auto lidar_params = config_.lidar;
+  if (lidar_params.cut_frame_interval > 0.0) {
+    lidar_params.cut_frame_num = std::max(
+        1, static_cast<int>(std::lround(lidar_params.lidar_time_interval
+                                        / lidar_params.cut_frame_interval)));
+  }
+  lidar_.configure(lidar_params);
+  synchronizer_.configure(lidar_params.lidar_time_interval);
+
+  config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
+  imu_.configure(config_.imu);
+
+  RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
+}
 void LaserMappingNode::initializeMappingState() {  // TODO:公有数据存放位置待定
   lio_workspace.ivox_ = std::make_shared<IVoxType>(
       config_.mapping.ivox_options);
@@ -131,33 +146,18 @@ void LaserMappingNode::initializeFilter() {
     filter_.input().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
   }
 }
-void LaserMappingNode::initializeSensors() {
-  auto lidar_params = config_.lidar;
-  if (lidar_params.cut_frame_interval > 0.0) {
-    lidar_params.cut_frame_num = std::max(
-        1, static_cast<int>(std::lround(lidar_params.lidar_time_interval
-                                        / lidar_params.cut_frame_interval)));
-  }
-  lidar_.configure(lidar_params);
-  synchronizer_.configure(lidar_params);
-
-  config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
-  imu_.configure(config_.imu);
-
-  RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
-}
 void LaserMappingNode::initializeRos2Interfaces() {
   if (config_.lidar.lidar_type == AVIA) {
     sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
         config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
         [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
-          lidar_.onLivoxPcl(msg, synchronizer_);
+          lidar_.onLivoxPcl(msg);
         });
   } else {
     sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
         config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
         [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          lidar_.onStandardPcl(msg, synchronizer_);
+          lidar_.onStandardPcl(msg);
         });
   }
 
@@ -173,7 +173,9 @@ void LaserMappingNode::initializeRos2Interfaces() {
   pub_odom_aft_mapped_ = create_publisher<nav_msgs::msg::Odometry>(
       "aft_mapped_to_init", 20);
   pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
+
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
   sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
       config_.sensor.imu_topic, rclcpp::SensorDataQoS(),
       [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
@@ -183,7 +185,7 @@ void LaserMappingNode::initializeRos2Interfaces() {
 
 bool LaserMappingNode::initializeIteration() {
   if (!synchronizer_.syncPackages(
-          imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
+          lidar_, imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
     rate_.sleep();
     return false;
   }

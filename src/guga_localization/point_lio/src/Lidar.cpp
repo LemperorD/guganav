@@ -6,7 +6,6 @@
  */
 
 #include "point_lio/Lidar.h"
-#include "point_lio/Synchronizer.h"
 
 #include <algorithm>
 
@@ -51,9 +50,8 @@ void LidarMeasurementModel::hModelInput(
   VF(4) pabcd;  ///< 平面系数: (nx, ny, nz, d)
   pabcd.setZero();
   lio_workspace.normvec->resize(
-      lio_workspace
-          .time_seq[lio_workspace.k]);  ///< 分配该组点数的法向量缓存
-  int effect_num_k = 0;                   ///< 当前组中的有效特征点数
+      lio_workspace.time_seq[lio_workspace.k]);  ///< 分配该组点数的法向量缓存
+  int effect_num_k = 0;                          ///< 当前组中的有效特征点数
 
   // ---- Step 1: 遍历当前时间分组中的每个点，进行特征匹配 ----
   for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
@@ -65,8 +63,8 @@ void LidarMeasurementModel::hModelInput(
     // 坐标变换: Body → World
     this->pointBodyToWorld(&point_body_j, &point_world_j, s);
 
-    V3D p_body = lio_workspace
-                     .pbody_list[lio_workspace.idx + j + 1];  // IMU系下的坐标
+    V3D p_body =
+        lio_workspace.pbody_list[lio_workspace.idx + j + 1];  // IMU系下的坐标
     double p_norm = p_body.norm();  // 距 IMU 原点的距离
     V3D p_world;
     p_world << point_world_j.x, point_world_j.y, point_world_j.z;
@@ -77,15 +75,13 @@ void LidarMeasurementModel::hModelInput(
 
       // 在 iVox 地图中搜索 5 个最近邻
       lio_workspace.ivox_->GetClosestPoint(point_world_j, points_near,
-                                             NUM_MATCH_POINTS);
+                                           NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
         // 近邻不足5个 → 该点无效
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] =
-            false;
+        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
       } else {
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] =
-            false;
+        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
 
         // 用 5 个近邻拟合局部平面 (IMLS)
         if (esti_plane(pabcd, points_near, params_.plane_threshold)) {
@@ -97,8 +93,7 @@ void LidarMeasurementModel::hModelInput(
           // Mahalanobis 距离检验: |p_body|² > match_s · pd2²
           // match_s 为马氏距离阈值 (典型值 81, 即 9σ)
           if (p_norm > params_.match_threshold * pd2 * pd2) {
-            lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] =
-                true;
+            lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = true;
             // 存储平面系数: (nx, ny, nz) 存于 xyz, d 存于 intensity
             lio_workspace.normvec->points[j].x = pabcd(0);
             lio_workspace.normvec->points[j].y = pabcd(1);
@@ -166,19 +161,17 @@ void LidarMeasurementModel::hModelInput(
       }
 
       // 残差: z_j = -n · p_world - d (点面有向距离)
-      ekfom_data.z(m) = (-norm_vec(0)
-                         * lio_workspace.feats_down_world
-                               ->points[lio_workspace.idx + j + 1]
-                               .x)
-                        - (norm_vec(1)
-                           * lio_workspace.feats_down_world
-                                 ->points[lio_workspace.idx + j + 1]
-                                 .y)
-                        - (norm_vec(2)
-                           * lio_workspace.feats_down_world
-                                 ->points[lio_workspace.idx + j + 1]
-                                 .z)
-                        - lio_workspace.normvec->points[j].intensity;
+      ekfom_data.z(m) =
+          (-norm_vec(0)
+           * lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1]
+                 .x)
+          - (norm_vec(1)
+             * lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1]
+                   .y)
+          - (norm_vec(2)
+             * lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1]
+                   .z)
+          - lio_workspace.normvec->points[j].intensity;
       m++;
     }
   }
@@ -218,14 +211,12 @@ void LidarMeasurementModel::hModelOutput(
           lio_workspace.Nearest_Points[lio_workspace.idx + j + 1];
 
       lio_workspace.ivox_->GetClosestPoint(point_world_j, points_near,
-                                             NUM_MATCH_POINTS);
+                                           NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] =
-            false;
+        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
       } else {
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] =
-            false;
+        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
         if (esti_plane(pabcd, points_near, params_.plane_threshold)) {
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
@@ -233,8 +224,7 @@ void LidarMeasurementModel::hModelOutput(
 
           // Mahalanobis 距离检验 (注释掉的代码是自适应加权的备选方案)
           if (p_norm > params_.match_threshold * pd2 * pd2) {
-            lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] =
-                true;
+            lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = true;
             lio_workspace.normvec->points[j].x = pabcd(0);
             lio_workspace.normvec->points[j].y = pabcd(1);
             lio_workspace.normvec->points[j].z = pabcd(2);
@@ -320,15 +310,14 @@ void LidarMeasurementModel::hModelOutput(
  * @param po 输出: 世界坐标系下的点 (保持 intensity)
  */
 void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
-                                 const state_input& state) const {
+                                             const state_input& state) const {
   V3D p_body(pi->x, pi->y, pi->z);
 
   V3D p_global;
   if (params_.extrinsic_estimation) {
     // 在线外参估计: 使用 EKF 状态中的外参
 
-    p_global = state.rot
-                   * (state.offset_R_L_I * p_body + state.offset_T_L_I)
+    p_global = state.rot * (state.offset_R_L_I * p_body + state.offset_T_L_I)
                + state.pos;
 
   } else {
@@ -347,12 +336,11 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
 }
 
 void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
-                                 const state_output& state) const {
+                                             const state_output& state) const {
   const V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global;
   if (params_.extrinsic_estimation) {
-    p_global = state.rot
-                   * (state.offset_R_L_I * p_body + state.offset_T_L_I)
+    p_global = state.rot * (state.offset_R_L_I * p_body + state.offset_T_L_I)
                + state.pos;
   } else {
     p_global = state.rot
@@ -374,9 +362,44 @@ void Lidar::configure(const Params& params) {
   measurement_model_.configure(params_);
 }
 
+void Lidar::appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
+                            std::deque<double>& timestamps) {
+  while (!frames.empty() && !timestamps.empty()) {
+    lidar_buffer_.emplace_back(frames.front());
+    frames.pop_front();
+    time_buffer_.emplace_back(timestamps.front() / 1000.0);
+    timestamps.pop_front();
+  }
+}
+
+void Lidar::appendFrame(PointCloudXYZI::Ptr points, double timestamp) {
+  lidar_buffer_.emplace_back(std::move(points));
+  time_buffer_.emplace_back(timestamp);
+}
+
+void Lidar::appendMergedFrame(const PointCloudXYZI::Ptr& points,
+                              double timestamp) {
+  if (frame_ct_ == 0) {
+    time_con_ = timestamp;
+  }
+  if (frame_ct_ < mergeFrameCount()) {
+    for (auto point : points->points) {
+      set_point_time_offset_ms(
+          point, point_time_offset_ms(point)
+                     + static_cast<float>((timestamp - time_con_) * 1000.0));
+      ptr_con_->push_back(point);
+    }
+    ++frame_ct_;
+    return;
+  }
+  lidar_buffer_.emplace_back(std::make_shared<PointCloudXYZI>(*ptr_con_));
+  time_buffer_.emplace_back(time_con_);
+  ptr_con_->clear();
+  frame_ct_ = 0;
+}
+
 void Lidar::onStandardPcl(
-    const sensor_msgs::msg::PointCloud2::SharedPtr& message,
-    Synchronizer& synchronizer) {
+    const sensor_msgs::msg::PointCloud2::SharedPtr& message) {
   ++scan_count_;
   const double timestamp = rclcpp::Time(message->header.stamp).seconds();
   if (timestamp < last_timestamp_lidar_) {
@@ -392,21 +415,20 @@ void Lidar::onStandardPcl(
     std::deque<double> timestamps;
     preprocess_.processCutFramePCL2(message, frames, timestamps,
                                     params_.cut_frame_num, scan_count_);
-    synchronizer.appendCutFrames(frames, timestamps);
+    appendCutFrames(frames, timestamps);
     return;
   }
   auto points = std::make_shared<PointCloudXYZI>(20000, 1);
   preprocess_.process(message, points);
   if (params_.con_frame) {
-    synchronizer.appendMergedFrame(points, timestamp);
+    appendMergedFrame(points, timestamp);
   } else if (!points->empty()) {
-    synchronizer.appendFrame(std::move(points), timestamp);
+    appendFrame(std::move(points), timestamp);
   }
 }
 
 void Lidar::onLivoxPcl(
-    const livox_ros_driver2::msg::CustomMsg::SharedPtr& message,
-    Synchronizer& synchronizer) {
+    const livox_ros_driver2::msg::CustomMsg::SharedPtr& message) {
   ++scan_count_;
   const double timestamp = rclcpp::Time(message->header.stamp).seconds();
   if (timestamp < last_timestamp_lidar_) {
@@ -420,14 +442,14 @@ void Lidar::onLivoxPcl(
     std::deque<double> timestamps;
     preprocess_.processCutFrameLivox(message, frames, timestamps,
                                      params_.cut_frame_num, scan_count_);
-    synchronizer.appendCutFrames(frames, timestamps);
+    appendCutFrames(frames, timestamps);
     return;
   }
   auto points = std::make_shared<PointCloudXYZI>(10000, 1);
   preprocess_.process(message, points);
   if (params_.con_frame) {
-    synchronizer.appendMergedFrame(points, timestamp);
+    appendMergedFrame(points, timestamp);
   } else if (!points->empty()) {
-    synchronizer.appendFrame(std::move(points), timestamp);
+    appendFrame(std::move(points), timestamp);
   }
 }

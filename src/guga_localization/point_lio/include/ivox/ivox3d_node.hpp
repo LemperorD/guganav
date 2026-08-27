@@ -1,3 +1,5 @@
+#pragma once
+
 #include <pcl/common/centroid.h>
 
 #include <algorithm>

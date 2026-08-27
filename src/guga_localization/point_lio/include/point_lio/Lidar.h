@@ -78,15 +78,25 @@ public:
   [[nodiscard]] LidarMeasurementModel& measurementModel() {
     return measurement_model_;
   }
-  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
-                     Synchronizer& synchronizer);
-  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
-                  Synchronizer& synchronizer);
+  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
+  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
 
 private:
+  friend class Synchronizer;
+  [[nodiscard]] int mergeFrameCount() const { return params_.con_frame_num; }
+  void appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
+                       std::deque<double>& timestamps);
+  void appendFrame(PointCloudXYZI::Ptr points, double timestamp);
+  void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
+
   Params params_;
   LidarMeasurementModel measurement_model_;
   Preprocess preprocess_;
+  PointCloudXYZI::Ptr ptr_con_{std::make_shared<PointCloudXYZI>()};
   int scan_count_{0};
+  int frame_ct_{0};
+  std::deque<PointCloudXYZI::Ptr> lidar_buffer_;
+  std::deque<double> time_buffer_;
   double last_timestamp_lidar_{-1.0};
+  double time_con_{0.0};
 };

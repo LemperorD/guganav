@@ -120,6 +120,10 @@ void ImuProcessor::initState(state_input& input_state,
   Set_init(tmp_gravity, rot_init);
   input_state.rot = rot_init;
   output_state.rot = rot_init;
+  // Use the stationary gyro mean accumulated during initialization as the
+  // initial bias for both filter state representations.
+  input_state.bg = mean_gyr;
+  output_state.bg = mean_gyr;
   output_state.acc = -rot_init.transpose() * output_state.gravity;
   after_imu_init_ = true;
 }
