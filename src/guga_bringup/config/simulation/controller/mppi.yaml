@@ -102,7 +102,7 @@ controller_server:
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
       model_dt: 0.033333333
-      batch_size: 2000
+      batch_size: 1800
       vx_std: 0.5
       vy_std: 0.5
       wz_std: 1.0

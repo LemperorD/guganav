@@ -356,10 +356,25 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
 
 void Lidar::configure(const Params& params) {
   params_ = params;
+  if (params.cut_frame_interval > 0.0) {
+    params_.cut_frame_num = std::max(
+        1, static_cast<int>(std::lround(params_.lidar_time_interval
+                                        / params_.cut_frame_interval)));
+  }
   params_.con_frame_num = std::max(1, params_.con_frame_num);
   params_.cut_frame_num = std::max(1, params_.cut_frame_num);
   preprocess_.configure(params_.preprocess);
   measurement_model_.configure(params_);
+}
+
+void Lidar::reset() {
+  ptr_con_->clear();
+  lidar_buffer_.clear();
+  time_buffer_.clear();
+  scan_count_ = 0;
+  frame_ct_ = 0;
+  last_timestamp_lidar_ = -1.0;
+  time_con_ = 0.0;
 }
 
 void Lidar::appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,

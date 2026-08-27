@@ -65,6 +65,8 @@ public:
     double gravity_magnitude{9.81};
   };
 
+  enum class Stage { Initializing, Ready };
+
   void configure(const Params& params);
 
   /**
@@ -85,7 +87,6 @@ public:
 
   /** @brief 设置加速度计协方差缩放因子 */
   void set_acc_cov(const V3D& scaler);
-  void setNeedInit(bool value);
   [[nodiscard]] bool needInit() const;
 
   /**
@@ -103,10 +104,9 @@ public:
   /**
    * @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值
    *
-   * 数据级累积完成 (imu_need_init_ == false) 后调用:
+   * 数据级累积完成后调用:
    * - IMU 模式: 用累积的 mean_acc 估计重力方向
    * - 无 IMU 模式: 用配置的先验重力 gravity_init
-   * 内部通过 after_imu_init_ 保证只执行一次。
    */
   void initState(state_input& input_state, state_output& output_state);
 
@@ -119,9 +119,7 @@ public:
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
 
-  V3D mean_acc{V3D::Zero()};     ///< 平均加速度 (累积, 用于重力估计)
-  bool imu_need_init_ = true;    ///< 标志: 是否需要 IMU 初始化
-  bool after_imu_init_ = false;  ///< 标志: IMU 初始化是否已完成
+  V3D mean_acc{V3D::Zero()};  ///< 平均加速度 (累积, 用于重力估计)
 
   double time_last_scan = 0.0;                      ///< 上帧扫描时间
   V3D cov_gyr_scale = V3D(0.0001, 0.0001, 0.0001);  ///< 陀螺仪协方差缩放
@@ -132,7 +130,7 @@ private:
    * @brief IMU 初始化子函数: 累积加速度和角速度的滑动平均
    *
    * 使用滑动平均公式: mean += (new - old_mean) / N
-   * 累积 MAX_INI_COUNT 帧后 imu_need_init_ 置 false
+   * 累积 MAX_INI_COUNT 帧后进入 Ready 阶段
    *
    * @param meas 当前帧的测量组 (包含 IMU 数据)
    * @param N 累积计数 (输入输出)
@@ -142,5 +140,6 @@ private:
   V3D mean_gyr{V3D::Zero()};  ///< 平均角速度 (用于陀螺零偏估计)
   int init_iter_num = 1;      ///< 初始化迭代计数 (当前累积帧数)
   bool imu_en{true};          ///< 是否启用 IMU
+  Stage stage_{Stage::Initializing};
   rclcpp::Logger logger;      ///< ROS2 日志器
 };

@@ -43,6 +43,14 @@ void Imu::configure(const Params& params) {
   measurement_model_.configure(params_);
 }
 
+void Imu::reset() {
+  buffer_.clear();
+  last_ = sensor_msgs::msg::Imu{};
+  next_ = sensor_msgs::msg::Imu{};
+  last_timestamp_ = -1.0;
+  processor_->reset();
+}
+
 void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
   auto msg = std::make_shared<sensor_msgs::msg::Imu>(*msg_in);
   msg->header.stamp = get_ros_time(get_time_sec(msg_in->header.stamp)
@@ -109,10 +117,6 @@ void Imu::popAndAdvance() {
   last_ = next_;
   buffer_.pop_front();
   loadNextFromFront();
-}
-
-void Imu::setNeedInit(bool value) {
-  processor_->setNeedInit(value);
 }
 
 namespace {

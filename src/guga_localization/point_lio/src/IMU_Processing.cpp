@@ -39,21 +39,16 @@ void ImuProcessor::configure(const Params& params) {
   gravity_magnitude_ = params.gravity_magnitude;
 }
 
-void ImuProcessor::setNeedInit(bool value) {
-  imu_need_init_ = value;
-}
-
 bool ImuProcessor::needInit() const {
-  return imu_need_init_;
+  return stage_ == Stage::Initializing;
 }
 
 void ImuProcessor::reset() {
   RCLCPP_WARN(logger, "reset ImuProcess");
   mean_acc = V3D(0, 0, 0.0);
   mean_gyr = V3D(0, 0, 0);
-  imu_need_init_ = true;  // 重新触发初始化
+  stage_ = Stage::Initializing;
   init_iter_num = 1;
-  after_imu_init_ = false;
   time_last_scan = 0.0;
 }
 
@@ -107,9 +102,6 @@ void ImuProcessor::Set_init(Eigen::Vector3d& tmp_gravity,
 /** @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值 */
 void ImuProcessor::initState(state_input& input_state,
                              state_output& output_state) {
-  if (after_imu_init_) {
-    return;  // 已完成
-  }
   V3D tmp_gravity;
   if (imu_en) {
     tmp_gravity = -mean_acc / mean_acc.norm() * gravity_magnitude_;
@@ -120,12 +112,7 @@ void ImuProcessor::initState(state_input& input_state,
   Set_init(tmp_gravity, rot_init);
   input_state.rot = rot_init;
   output_state.rot = rot_init;
-  // Use the stationary gyro mean accumulated during initialization as the
-  // initial bias for both filter state representations.
-  input_state.bg = mean_gyr;
-  output_state.bg = mean_gyr;
   output_state.acc = -rot_init.transpose() * output_state.gravity;
-  after_imu_init_ = true;
 }
 
 /**
@@ -169,7 +156,7 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
  *   if IMU 启用:
  *     if 需要初始化:
  *       IMU_init() 累积数据
- *       累积满 MAX_INI_COUNT 帧 → imu_need_init_ = false
+ *       累积满 MAX_INI_COUNT 帧 → 进入 Ready 阶段
  *       返回 (初始化阶段不输出去畸变点云)
  *     else:
  *       初始化完成 → 直接复制原始点云 (去畸变未实现)
@@ -188,7 +175,7 @@ void ImuProcessor::process(const MeasureGroup& meas,
       return;
     }
 
-    if (imu_need_init_) {
+    if (stage_ == Stage::Initializing) {
       // ---- IMU 初始化阶段 ----
       IMU_init(meas, init_iter_num);
       if (init_iter_num <= MAX_INI_COUNT) {
@@ -196,8 +183,8 @@ void ImuProcessor::process(const MeasureGroup& meas,
       }
       // 初始化完成: 数据级累积 + 状态级初始化一步完成
       RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
-      imu_need_init_ = false;
       initState(input_state, output_state);
+      stage_ = Stage::Ready;
     }
 
     *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
@@ -206,8 +193,10 @@ void ImuProcessor::process(const MeasureGroup& meas,
     // 可利用 IMU 预积分在点时间偏移上反向插值校正点坐标
   } else {
     // ---- IMU 禁用: 直接使用原始点云 ----
-    imu_need_init_ = false;  // 无累积过程, 直接进入就绪
-    initState(input_state, output_state);
+    if (stage_ == Stage::Initializing) {
+      initState(input_state, output_state);
+      stage_ = Stage::Ready;
+    }
     *cur_pcl_un_ = *(meas.lidar);
     return;
   }

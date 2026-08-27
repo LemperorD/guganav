@@ -6,6 +6,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -15,11 +17,7 @@
 #include "point_lio/Filter.h"
 
 struct MainLoopState {
-  // ---- 控制标志 / 计数器 ----
-  bool init_map = false;       ///< 地图已初始化
-  bool flg_reset = false;      ///< 请求复位 (bag 回放等)
-  bool flg_first_scan = true;  ///< 首次/复位后的第一帧
-  int sleep_time = 0;          ///< 等待计数
+  int sleep_time = 0;  ///< 等待计数
 
   // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
   pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
@@ -37,52 +35,68 @@ struct MainLoopState {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-class LaserMappingNode : public rclcpp::Node {
+class LaserMappingNode : public rclcpp_lifecycle::LifecycleNode {
 public:
   /** @brief 节点构造: 以 "laserMapping" 为节点名初始化基类 */
   LaserMappingNode();
-
-  /** @brief 节点入口: 初始化 + 主循环 (原 main) */
-  int run();
+  ~LaserMappingNode() override;
 
 private:
+  using CallbackReturn =
+      rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
+  enum class PointLioStage {
+    WAITINGFORDATA,
+    INITIALIZINGIMU,
+    INITIALIZINGMAP,
+    TRACKING
+  };
+
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
   Synchronizer synchronizer_;
   Filter filter_;
   PointLioParams config_;
+  bool parameters_loaded_{false};
+  PointLioStage stage_{PointLioStage::WAITINGFORDATA};
   bool is_first_frame_{true};
   double lidar_end_time_{0.0};
   int pcd_index_{0};
+  int pcd_scan_count_{0};
   double time_update_last_{0.0};
   double time_current_{0.0};
   double t_last_{0.0};
   MeasureGroup measures_;
-  rclcpp::executors::MultiThreadedExecutor
-      executor_;         ///< 执行器 (主循环 spin_some)
   MainLoopState state_;  ///< 主循环状态
+  rclcpp::CallbackGroup::SharedPtr callback_group_;
+  rclcpp::TimerBase::SharedPtr processing_timer_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl_pc_;
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr
       sub_pcl_livox_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_body_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_effect_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_map_;
-  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_aft_mapped_;
-  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Odometry>::SharedPtr
+      pub_odom_aft_mapped_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
+      pub_path_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  rclcpp::Rate rate_{500};  ///< 主循环频率
 
-  // ==================== 私有成员函数 (原匿名namespace, 只由本节点调用)
+  CallbackReturn on_configure(const rclcpp_lifecycle::State&) override;
+  CallbackReturn on_activate(const rclcpp_lifecycle::State&) override;
+  CallbackReturn on_deactivate(const rclcpp_lifecycle::State&) override;
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State&) override;
+  CallbackReturn on_shutdown(const rclcpp_lifecycle::State&) override;
+  void processIteration();
+  void createSensorSubscriptions();
+  void destroySensorSubscriptions();
 
-  /** @brief 节点初始化: 参数 / 滤波器 / 订阅发布 (由 run 调用) */
-  void totalInitialize();
   void initializeSensors();
   void initializeMappingState();
   void initializeFilter();
@@ -144,5 +158,6 @@ private:
 
   void initScan();
 
+  void savePendingPcd();
   void savePcd();
 };

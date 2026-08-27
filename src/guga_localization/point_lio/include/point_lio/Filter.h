@@ -48,5 +48,4 @@ private:
   EskfProcessModel process_model_;
   InputNoise input_noise_;
   OutputNoise output_noise_;
-  bool initialized_{false};
 };

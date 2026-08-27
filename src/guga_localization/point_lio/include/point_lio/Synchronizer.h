@@ -13,7 +13,4 @@ public:
 
 private:
   double lidar_time_interval_{0.1};
-  bool lidar_pushed_{false};
-  bool imu_pushed_{false};
-  bool lose_lid_{false};
 };

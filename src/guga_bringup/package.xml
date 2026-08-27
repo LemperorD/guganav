@@ -15,6 +15,7 @@
   <build_depend>launch_ros</build_depend>
 
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
   <exec_depend>navigation2</exec_depend>
   <exec_depend>nav2_common</exec_depend>
   <exec_depend>pb_nav2_plugins</exec_depend>

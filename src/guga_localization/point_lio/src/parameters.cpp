@@ -14,8 +14,9 @@
 
 #include "point_lio/parameters.h"
 #include <memory>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
-PointLioParams readParameters(const std::shared_ptr<rclcpp::Node>& nh) {
+PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
   PointLioParams params;
   try {
     // ==================== 模式开关 ====================

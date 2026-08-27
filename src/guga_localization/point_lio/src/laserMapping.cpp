@@ -28,92 +28,126 @@
 
 #include "point_lio/laserMapping.h"
 
-namespace {
-  bool flg_exit = false;  // NOLINT
-  std::condition_variable
-      sig_buffer;  // NOLINT< 缓冲区条件变量 (通知有数据可用)
-
-  /** @brief Ctrl+C 信号处理: 设置退出标志并通知条件变量 */
-  void SigHandle(int sig) {
-    flg_exit = true;
-    RCLCPP_WARN(rclcpp::get_logger("laserMapping"), "catch sig %d", sig);
-    sig_buffer.notify_all();
-  }
-}  // namespace
-
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<LaserMappingNode>();
-  return node->run();
-}
-
-/** @brief 节点入口: 调用 initialize() 后进入主循环 (原 main) */
-int LaserMappingNode::run() {
-  totalInitialize();
-
-  while (rclcpp::ok() && !flg_exit) {
-    executor_.spin_some();
-
-    if (!initializeIteration()) {
-      continue;
-    }
-
-    processFramePoints(filter_.input(), t_last_, filter_.inputNoise());
-
-    if (!config_.mapping.publish_odometry_without_downsample) {
-      publishOdometry();
-    }
-
-    // [Workflow 8][Workflow 10] 增量地图更新: 将已更新/未匹配的点加入 iVox
-    // 地图。
-    if (lio_workspace.feats_down_size > 4) {
-      if (config_.sensor.enable_prior_map) {
-        state_.sleep_time++;
-      }
-      if (!config_.sensor.enable_prior_map || state_.sleep_time > 200) {
-        mapIncremental();
-      }
-    }
-
-    publishFrameOutputs();
-
-    rate_.sleep();
-  }
-
-  if (!state_.pcl_wait_save->empty() && config_.publish.pcd_save_enabled) {
-    savePcd();
-  }
-
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node->get_node_base_interface());
+  executor.spin();
+  rclcpp::shutdown();
   return 0;
 }
 
-/** @brief 节点初始化: 参数 / 滤波器 / 订阅发布 (原 run 前半段) */
-void LaserMappingNode::totalInitialize() {
-  executor_.add_node(this->get_node_base_interface());
-  rclcpp::Node::SharedPtr self = this->shared_from_this();
-
-  config_ = readParameters(self);
-
+LaserMappingNode::CallbackReturn LaserMappingNode::on_configure(
+    const rclcpp_lifecycle::State&) {
+  if (!parameters_loaded_) {
+    config_ = readParameters(this);
+    parameters_loaded_ = true;
+  }
   initializeSensors();
   initializeMappingState();
   initializeFilter();
   initializeRos2Interfaces();
+  stage_ = PointLioStage::WAITINGFORDATA;
+  return CallbackReturn::SUCCESS;
+}
 
-  signal(SIGINT, SigHandle);  // NOLINT
+void LaserMappingNode::processIteration() {
+  if (!initializeIteration()) {
+    return;
+  }
+  processFramePoints(filter_.input(), t_last_, filter_.inputNoise());
+  if (!config_.mapping.publish_odometry_without_downsample) {
+    publishOdometry();
+  }
+  if (lio_workspace.feats_down_size > 4) {
+    if (config_.sensor.enable_prior_map) {
+      state_.sleep_time++;
+    }
+    if (!config_.sensor.enable_prior_map || state_.sleep_time > 200) {
+      mapIncremental();
+    }
+  }
+  publishFrameOutputs();
+}
+
+LaserMappingNode::CallbackReturn LaserMappingNode::on_activate(
+    const rclcpp_lifecycle::State&) {
+  pub_laser_cloud_full_res_->on_activate();
+  pub_laser_cloud_full_res_body_->on_activate();
+  pub_laser_cloud_effect_->on_activate();
+  pub_laser_cloud_map_->on_activate();
+  pub_odom_aft_mapped_->on_activate();
+  pub_path_->on_activate();
+  createSensorSubscriptions();
+  processing_timer_ = create_wall_timer(
+      std::chrono::milliseconds(2),
+      std::bind(&LaserMappingNode::processIteration, this), callback_group_);
+  return CallbackReturn::SUCCESS;
+}
+
+LaserMappingNode::CallbackReturn LaserMappingNode::on_deactivate(
+    const rclcpp_lifecycle::State&) {
+  processing_timer_.reset();
+  destroySensorSubscriptions();
+  pub_laser_cloud_full_res_->on_deactivate();
+  pub_laser_cloud_full_res_body_->on_deactivate();
+  pub_laser_cloud_effect_->on_deactivate();
+  pub_laser_cloud_map_->on_deactivate();
+  pub_odom_aft_mapped_->on_deactivate();
+  pub_path_->on_deactivate();
+  return CallbackReturn::SUCCESS;
+}
+
+LaserMappingNode::CallbackReturn LaserMappingNode::on_cleanup(
+    const rclcpp_lifecycle::State&) {
+  processing_timer_.reset();
+  destroySensorSubscriptions();
+  savePendingPcd();
+  lidar_.reset();
+  imu_.reset();
+  measures_ = MeasureGroup{};
+  lio_workspace = LioWorkspace{};
+  state_.sleep_time = 0;
+  state_.init_feats_world->clear();
+  state_.feats_undistort->clear();
+  state_.pcl_wait_save->clear();
+  state_.path = nav_msgs::msg::Path{};
+  state_.odom_aft_mapped = nav_msgs::msg::Odometry{};
+  state_.msg_body_pose = geometry_msgs::msg::PoseStamped{};
+  stage_ = PointLioStage::WAITINGFORDATA;
+  is_first_frame_ = true;
+  lidar_end_time_ = 0.0;
+  pcd_index_ = 0;
+  pcd_scan_count_ = 0;
+  time_update_last_ = 0.0;
+  time_current_ = 0.0;
+  t_last_ = 0.0;
+  pub_laser_cloud_full_res_.reset();
+  pub_laser_cloud_full_res_body_.reset();
+  pub_laser_cloud_effect_.reset();
+  pub_laser_cloud_map_.reset();
+  pub_odom_aft_mapped_.reset();
+  pub_path_.reset();
+  tf_broadcaster_.reset();
+  return CallbackReturn::SUCCESS;
+}
+
+LaserMappingNode::CallbackReturn LaserMappingNode::on_shutdown(
+    const rclcpp_lifecycle::State&) {
+  processing_timer_.reset();
+  destroySensorSubscriptions();
+  savePendingPcd();
+  return CallbackReturn::SUCCESS;
 }
 
 void LaserMappingNode::initializeSensors() {
-  auto lidar_params = config_.lidar;
-  if (lidar_params.cut_frame_interval > 0.0) {
-    lidar_params.cut_frame_num = std::max(
-        1, static_cast<int>(std::lround(lidar_params.lidar_time_interval
-                                        / lidar_params.cut_frame_interval)));
-  }
-  lidar_.configure(lidar_params);
-  synchronizer_.configure(lidar_params.lidar_time_interval);
+  lidar_.configure(config_.lidar);
+  synchronizer_.configure(config_.lidar.lidar_time_interval);
 
-  config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
-  imu_.configure(config_.imu);
+  auto imu_params = config_.imu;
+  imu_params.timestamp_offset = config_.sensor.lidar_to_imu_time;
+  imu_.configure(imu_params);
 
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
@@ -147,20 +181,6 @@ void LaserMappingNode::initializeFilter() {
   }
 }
 void LaserMappingNode::initializeRos2Interfaces() {
-  if (config_.lidar.lidar_type == AVIA) {
-    sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
-        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
-        [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
-          lidar_.onLivoxPcl(msg);
-        });
-  } else {
-    sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
-        [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          lidar_.onStandardPcl(msg);
-        });
-  }
-
   pub_laser_cloud_full_res_ = create_publisher<sensor_msgs::msg::PointCloud2>(
       "cloud_registered", 20);
   pub_laser_cloud_full_res_body_ =
@@ -173,26 +193,52 @@ void LaserMappingNode::initializeRos2Interfaces() {
   pub_odom_aft_mapped_ = create_publisher<nav_msgs::msg::Odometry>(
       "aft_mapped_to_init", 20);
   pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
-
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+}
 
+void LaserMappingNode::createSensorSubscriptions() {
+  rclcpp::SubscriptionOptions options;
+  options.callback_group = callback_group_;
+  if (config_.lidar.lidar_type == AVIA) {
+    sub_pcl_livox_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
+        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
+        [this](const livox_ros_driver2::msg::CustomMsg::SharedPtr msg) {
+          lidar_.onLivoxPcl(msg);
+        },
+        options);
+  } else {
+    sub_pcl_pc_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+        config_.sensor.lidar_topic, rclcpp::SensorDataQoS(),
+        [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+          lidar_.onStandardPcl(msg);
+        },
+        options);
+  }
   sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
       config_.sensor.imu_topic, rclcpp::SensorDataQoS(),
       [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
         imu_.onMessage(msg);
-      });
+      },
+      options);
+}
+
+void LaserMappingNode::destroySensorSubscriptions() {
+  sub_pcl_pc_.reset();
+  sub_pcl_livox_.reset();
+  sub_imu_.reset();
 }
 
 bool LaserMappingNode::initializeIteration() {
   if (!synchronizer_.syncPackages(
           lidar_, imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
-    rate_.sleep();
     return false;
   }
   lidar_end_time_ = measures_.lidar_last_time;
 
-  if (state_.flg_first_scan) {
+  if (stage_ == PointLioStage::WAITINGFORDATA) {
     initScan();
+    stage_ = imu_.needInit() ? PointLioStage::INITIALIZINGIMU
+                             : PointLioStage::INITIALIZINGMAP;
   }
 
   // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
@@ -208,7 +254,11 @@ bool LaserMappingNode::prepareFrame() {
   // ---- 就绪检查: IMU 初始化 / 地图初始化 ----
 
   if (imu_.needInit()) {
+    stage_ = PointLioStage::INITIALIZINGIMU;
     return false;  // IMU 初始化中
+  }
+  if (stage_ == PointLioStage::INITIALIZINGIMU) {
+    stage_ = PointLioStage::INITIALIZINGMAP;
   }
 
   if (!initMapState()) {
@@ -247,7 +297,18 @@ bool LaserMappingNode::prepareFrame() {
   return true;
 }
 /** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
-LaserMappingNode::LaserMappingNode() : rclcpp::Node("laserMapping") {
+LaserMappingNode::LaserMappingNode()
+    : rclcpp_lifecycle::LifecycleNode("laserMapping") {
+  callback_group_ = create_callback_group(
+      rclcpp::CallbackGroupType::MutuallyExclusive);
+}
+
+LaserMappingNode::~LaserMappingNode() {
+  try {
+    savePendingPcd();
+  } catch (...) {
+    // Destructors must not propagate PCL I/O failures during shutdown.
+  }
 }
 
 PointCloudXYZI::Ptr LaserMappingNode::loadPointcloudFromPcd(
@@ -346,11 +407,10 @@ void LaserMappingNode::publishFrameWorld() {
     if (config_.publish.pcd_save_enabled) {
       *state_.pcl_wait_save += *lio_workspace.feats_down_world;
 
-      static int scan_wait_num = 0;
-      scan_wait_num++;
+      pcd_scan_count_++;
       if (!state_.pcl_wait_save->empty()
           && config_.publish.pcd_save_interval > 0
-          && scan_wait_num >= config_.publish.pcd_save_interval) {
+          && pcd_scan_count_ >= config_.publish.pcd_save_interval) {
         pcd_index_++;
         string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_")
                               + to_string(pcd_index_) + string(".pcd"));
@@ -358,7 +418,7 @@ void LaserMappingNode::publishFrameWorld() {
         std::cout << "current scan saved to /PCD/" << all_points_dir << '\n';
         pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
         state_.pcl_wait_save->clear();
-        scan_wait_num = 0;
+        pcd_scan_count_ = 0;
       }
     }
   }
@@ -449,7 +509,7 @@ void LaserMappingNode::publishPath() {
  *         false 初始化阶段 (本帧用于累积/建图, 调用方应跳过)
  */
 bool LaserMappingNode::initMapState() {
-  if (state_.init_map) {
+  if (stage_ == PointLioStage::TRACKING) {
     return true;  // 已完成
   }
   lio_workspace.feats_down_world->resize(state_.feats_undistort->size());
@@ -472,7 +532,7 @@ bool LaserMappingNode::initMapState() {
     }
     publishInitMap();
     state_.init_feats_world.reset(new PointCloudXYZI());
-    state_.init_map = true;
+    stage_ = PointLioStage::TRACKING;
     return true;
   }
   return false;  // 仍在累积
@@ -618,10 +678,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       imu_.advanceCursor();
     }
 
-    if (state_.flg_reset) {
-      break;
-    }
-
     double dt = time_current_ - last_time;
     if (!config_.mapping.propagate_at_imu_frequency) {
       double dt_cov = time_current_ - time_update_last_;
@@ -669,7 +725,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
 void LaserMappingNode::initScan() {
   const auto& imu_next = imu_.next();
-  state_.flg_first_scan = false;
   std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
             << '\n';
   time_current_ = 0.0;
@@ -683,8 +738,16 @@ void LaserMappingNode::initScan() {
     filter_.output().x_.gravity = config_.imu.processor.gravity;
     filter_.output().x_.acc = config_.imu.processor.gravity;
     filter_.output().x_.acc *= -1;
-    imu_.setNeedInit(false);
   }
+}
+
+void LaserMappingNode::savePendingPcd() {
+  if (state_.pcl_wait_save->empty() || !config_.publish.pcd_save_enabled) {
+    return;
+  }
+  savePcd();
+  state_.pcl_wait_save->clear();
+  pcd_scan_count_ = 0;
 }
 
 void LaserMappingNode::savePcd() {

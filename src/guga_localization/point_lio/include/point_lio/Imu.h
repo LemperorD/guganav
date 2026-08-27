@@ -26,6 +26,7 @@ public:
   using Params = ImuParams;
 
   void configure(const Params& params);
+  void reset();
   [[nodiscard]] ImuMeasurementModel& measurementModel() {
     return measurement_model_;
   }
@@ -43,7 +44,6 @@ public:
   void discardBefore(double timestamp);
   void advanceCursor();
   void popAndAdvance();
-  void setNeedInit(bool value);
   [[nodiscard]] input_ikfom lastInput(double acc_scale) const;
   [[nodiscard]] input_ikfom nextInput(double acc_scale) const;
   [[nodiscard]] ImuMeasurement lastMeasurement() const;

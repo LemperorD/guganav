@@ -88,9 +88,8 @@ void Filter::configure(const FilterParams& params) {
 
 void Filter::initialize(LidarMeasurementModel& lidar_model,
                         ImuMeasurementModel& imu_model) {
-  if (initialized_) {
-    return;
-  }
+  input_ = InputFilter{};
+  output_ = OutputFilter{};
 
   input_.init_dyn_share_modified_2h(
       [this](state_input& state, const input_ikfom& input) {
@@ -136,5 +135,4 @@ void Filter::initialize(LidarMeasurementModel& lidar_model,
   output_covariance.block<6, 6>(24, 24) =
       Eigen::Matrix<double, 6, 6>::Identity() * 0.001;
   output_.change_P(output_covariance);
-  initialized_ = true;
 }

@@ -2,10 +2,15 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.event_handlers import OnProcessStart
+from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch_ros.actions import Node
+from launch_ros.actions import LifecycleNode, Node
 from launch_ros.descriptions import ParameterFile
+from launch_ros.event_handlers import OnStateTransition
+from launch_ros.events.lifecycle import ChangeState
+from lifecycle_msgs.msg import Transition
 from nav2_common.launch import RewrittenYaml
 
 
@@ -136,10 +141,11 @@ def generate_launch_description():
         ],
     )
 
-    start_point_lio_node = Node(
+    start_point_lio_node = LifecycleNode(
         package="point_lio",
         executable="pointlio_mapping",
         name="point_lio",
+        namespace="",
         output="screen",
         respawn=use_respawn,
         respawn_delay=2.0,
@@ -149,6 +155,35 @@ def generate_launch_description():
             {"pcd_save.pcd_save_en": True},
         ],
         arguments=["--ros-args", "--log-level", log_level],
+    )
+
+    configure_point_lio = RegisterEventHandler(
+        OnProcessStart(
+            target_action=start_point_lio_node,
+            on_start=[
+                EmitEvent(
+                    event=ChangeState(
+                        lifecycle_node_matcher=matches_action(start_point_lio_node),
+                        transition_id=Transition.TRANSITION_CONFIGURE,
+                    )
+                )
+            ],
+        )
+    )
+
+    activate_point_lio = RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=start_point_lio_node,
+            goal_state="inactive",
+            entities=[
+                EmitEvent(
+                    event=ChangeState(
+                        lifecycle_node_matcher=matches_action(start_point_lio_node),
+                        transition_id=Transition.TRANSITION_ACTIVATE,
+                    )
+                )
+            ],
+        )
     )
 
     start_static_transform_node = Node(
@@ -193,6 +228,8 @@ def generate_launch_description():
 
     ld.add_action(start_pointcloud_to_laserscan_node)
     ld.add_action(start_sync_slam_toolbox_node)
+    ld.add_action(configure_point_lio)
+    ld.add_action(activate_point_lio)
     ld.add_action(start_point_lio_node)
     ld.add_action(start_static_transform_node)
 

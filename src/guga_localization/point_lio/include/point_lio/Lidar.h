@@ -75,6 +75,7 @@ public:
   using Params = LidarParams;
 
   void configure(const Params& params);
+  void reset();
   [[nodiscard]] LidarMeasurementModel& measurementModel() {
     return measurement_model_;
   }
