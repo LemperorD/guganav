@@ -15,7 +15,6 @@
  */
 
 #pragma once
-#include <Python.h>
 #include <ivox/ivox3d.h>
 #include <cmath>
 #include <omp.h>
