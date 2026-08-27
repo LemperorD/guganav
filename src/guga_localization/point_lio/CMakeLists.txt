@@ -81,6 +81,7 @@ add_executable(pointlio_mapping
   src/parameters.cpp
   src/preprocess.cpp
   src/Lidar.cpp
+  src/Synchronizer.cpp
   src/Filter.cpp
   src/IMU_Processing.cpp
   src/Imu.cpp

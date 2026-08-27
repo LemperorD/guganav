@@ -21,6 +21,7 @@
 #include "point_lio/preprocess.h"
 #include "point_lio/common_lib.h"
 #include "point_lio/Imu.h"
+#include "point_lio/Synchronizer.h"
 
 /// @brief 最大缓冲区大小
 #define MAXN (720000)
@@ -82,26 +83,10 @@ public:
   bool syncPackages(Imu& imu, MeasureGroup& meas);
 
 private:
-  [[nodiscard]] int mergeFrameCount() const {
-    return params_.con_frame_num;
-  }
-  void getMeasurements(MeasureGroup& meas) const;
-  void popLidarFrame();
-  void appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
-                       std::deque<double>& timestamps);
-  void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
-
   Params params_;
   LidarMeasurementModel measurement_model_;
   Preprocess preprocess_;
-  PointCloudXYZI::Ptr ptr_con_{std::make_shared<PointCloudXYZI>()};
+  Synchronizer synchronizer_;
   int scan_count_{0};
-  int frame_ct_{0};
-  bool lidar_pushed_{false};
-  bool imu_pushed_{false};
-  std::deque<PointCloudXYZI::Ptr> lidar_buffer_;
-  std::deque<double> time_buffer_;
   double last_timestamp_lidar_{-1.0};
-  double time_con_{0.0};
-  bool lose_lid_{false};
 };
