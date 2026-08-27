@@ -81,10 +81,9 @@ link_directories(
 # Declare a ROS2 executable
 add_executable(pointlio_mapping
   src/laserMapping.cpp
-  src/li_initialization.cpp
   src/parameters.cpp
   src/preprocess.cpp
-  src/Estimator.cpp
+  src/Lidar.cpp
   src/Filter.cpp
   src/IMU_Processing.cpp
   src/Imu.cpp

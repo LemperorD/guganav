@@ -67,16 +67,7 @@ struct CommonParams {
   double gravity_magnitude{9.81};
 };
 
-struct EstimatorParams {
-  double gravity_magnitude{9.81};
-  bool extrinsic_estimation{true};
-  bool check_saturation{true};
-  double saturation_acc{3.0};
-  double saturation_gyro{35.0};
-  double acc_norm{1.0};
-  double laser_point_cov{0.1};
-  double match_s{81.0};
-  float plane_thr{0.05F};
+struct FilterParams {
   double acc_cov_input{0.1};
   double gyr_cov_input{0.1};
   double vel_cov{20.0};
@@ -84,14 +75,18 @@ struct EstimatorParams {
   double acc_cov_output{0.1};
   double b_gyr_cov{0.0001};
   double b_acc_cov{0.0001};
-  double imu_meas_acc_cov{0.1};
-  double imu_meas_omg_cov{0.1};
 };
 
 struct ImuParams {
   ImuProcessor::Params processor;
   double integration_interval{0.005};
   double timestamp_offset{0.0};
+  bool check_saturation{true};
+  double saturation_acc{3.0};
+  double saturation_gyro{35.0};
+  double acc_norm{1.0};
+  double measurement_acc_cov{0.1};
+  double measurement_gyro_cov{0.1};
 };
 
 struct PublishParams {
@@ -124,12 +119,16 @@ struct LidarParams {
   int cut_frame_num{1};
   double cut_frame_interval{0.1};
   double lidar_time_interval{0.1};
+  bool extrinsic_estimation{true};
+  double point_covariance{0.1};
+  double match_threshold{81.0};
+  float plane_threshold{0.05F};
 };
 
 struct PointLioParams {
   CommonParams common;
   MappingParams mapping;
-  EstimatorParams estimator;
+  FilterParams filter;
   PublishParams publish;
   SensorParams sensor;
   LidarParams lidar;
@@ -156,20 +155,3 @@ struct PointLioParams {
  * @return 3维欧拉角 [roll, pitch, yaw] (rad)
  */
 Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3& orient);
-
-/**
- * @brief 重置 IMU-as-input 模式的卡尔曼滤波协方差矩阵
- * @param[out] P_init 24x24 协方差矩阵
- *
- * 初始协方差设置:
- * - 位置/姿态/速度/外参: 0.1 * I
- * - 重力方向: 0.0001 * I
- * - 零偏: 0.001 * I
- */
-void reset_cov(Eigen::Matrix<double, 24, 24>& P_init);
-
-/**
- * @brief 重置 IMU-as-output 模式的卡尔曼滤波协方差矩阵
- * @param[out] P_init_output 30x30 协方差矩阵
- */
-void reset_cov_output(Eigen::Matrix<double, 30, 30>& P_init_output);

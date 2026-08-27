@@ -66,7 +66,7 @@ int LaserMappingNode::run() {
 
     // [Workflow 8][Workflow 10] 增量地图更新: 将已更新/未匹配的点加入 iVox
     // 地图。
-    if (estimator_state.feats_down_size > 4) {
+    if (lio_workspace.feats_down_size > 4) {
       if (config_.sensor.enable_prior_map) {
         state_.sleep_time++;
       }
@@ -93,14 +93,10 @@ int LaserMappingNode::run() {
 /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (原 run 前半段) */
 void LaserMappingNode::totalInitialize() {
   executor_.add_node(this->get_node_base_interface());
-
-  // shared_from_this() 要求对象由 shared_ptr 管理 (main 中以 make_shared
-  // 创建)。
   rclcpp::Node::SharedPtr self = this->shared_from_this();
 
   config_ = readParameters(self);
 
-  initializeEstimator();
   initializeSensors();
   initializeMappingState();
   initializeFilter();
@@ -110,17 +106,13 @@ void LaserMappingNode::totalInitialize() {
   signal(SIGINT, SigHandle);  // NOLINT
 }
 
-void LaserMappingNode::initializeEstimator() {
-  estimator_.configure(config_.estimator);
-}
-
 void LaserMappingNode::initializeMappingState() {
-  estimator_state.ivox_ = std::make_shared<IVoxType>(
+  lio_workspace.ivox_ = std::make_shared<IVoxType>(
       config_.mapping.ivox_options);
-  estimator_state.point_selected_surf.set();
+  lio_workspace.point_selected_surf.set();
 
-  estimator_state.Lidar_T_wrt_IMU = to_vec3d(config_.sensor.extrinsic_t);
-  estimator_state.Lidar_R_wrt_IMU = to_mat3d(config_.sensor.extrinsic_r);
+  lio_workspace.Lidar_T_wrt_IMU = to_vec3d(config_.sensor.extrinsic_t);
+  lio_workspace.Lidar_R_wrt_IMU = to_mat3d(config_.sensor.extrinsic_r);
 
   state_.downsize_filter_surf.setLeafSize(
       static_cast<float>(config_.mapping.filter_size_surf),
@@ -137,10 +129,30 @@ void LaserMappingNode::initializeMappingState() {
 }
 
 void LaserMappingNode::initializeFilter() {
-  filter_.initialize(estimator_);
-  if (config_.estimator.extrinsic_estimation) {
-    filter_.input().x_.offset_R_L_I = estimator_state.Lidar_R_wrt_IMU;
-    filter_.input().x_.offset_T_L_I = estimator_state.Lidar_T_wrt_IMU;
+  filter_.configure(config_.filter);
+  Filter::Models models;
+  models.input_measurement =
+      [this](state_input& state, Eigen::Matrix3d cov_p,
+             Eigen::Matrix3d cov_R,
+             esekfom::dyn_share_modified<double>& data) {
+        lidar_.measurementModel().hModelInput(state, cov_p, cov_R, data);
+      };
+  models.output_measurement =
+      [this](state_output& state, Eigen::Matrix3d cov_p,
+             Eigen::Matrix3d cov_R,
+             esekfom::dyn_share_modified<double>& data) {
+        lidar_.measurementModel().hModelOutput(state, cov_p, cov_R, data);
+      };
+  models.imu_measurement =
+      [this](state_output& state,
+             esekfom::dyn_share_modified<double>& data) {
+        imu_.measurementModel().hModelOutput(state, data);
+      };
+
+  filter_.initialize(std::move(models));
+  if (config_.lidar.extrinsic_estimation) {
+    filter_.input().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
+    filter_.input().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
   }
 }
 
@@ -169,7 +181,6 @@ void LaserMappingNode::initializeSensors() {
   }
   lidar_.configure(lidar_params);
 
-  config_.imu.processor.gravity_magnitude = config_.estimator.gravity_magnitude;
   config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
   imu_.configure(config_.imu);
 
@@ -219,9 +230,8 @@ bool LaserMappingNode::initializeIteration() {
   }
   lidar_end_time_ = measures_.lidar_last_time;
 
-  if (is_first_frame_) {
+  if (state_.flg_first_scan) {
     initScan();
-    is_first_frame_ = false;
   }
 
   // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
@@ -251,25 +261,25 @@ bool LaserMappingNode::prepareFrame() {
   // ---- 降采样 + 按时间戳排序 + 分组 ----
   if (config_.mapping.space_down_sample) {
     state_.downsize_filter_surf.setInputCloud(state_.feats_undistort);
-    state_.downsize_filter_surf.filter(*estimator_state.feats_down_body);
-    sort(estimator_state.feats_down_body->points.begin(),
-         estimator_state.feats_down_body->points.end(), time_list);
+    state_.downsize_filter_surf.filter(*lio_workspace.feats_down_body);
+    sort(lio_workspace.feats_down_body->points.begin(),
+         lio_workspace.feats_down_body->points.end(), time_list);
   } else {
-    estimator_state.feats_down_body = measures_.lidar;
-    sort(estimator_state.feats_down_body->points.begin(),
-         estimator_state.feats_down_body->points.end(), time_list);
+    lio_workspace.feats_down_body = measures_.lidar;
+    sort(lio_workspace.feats_down_body->points.begin(),
+         lio_workspace.feats_down_body->points.end(), time_list);
   }
-  estimator_state.time_seq = time_compressing<int>(
-      estimator_state.feats_down_body);
-  estimator_state.feats_down_size =
-      estimator_state.feats_down_body->points.size();
+  lio_workspace.time_seq = time_compressing<int>(
+      lio_workspace.feats_down_body);
+  lio_workspace.feats_down_size =
+      lio_workspace.feats_down_body->points.size();
 
   // ---- 量测准备 ----
-  estimator_state.normvec->resize(estimator_state.feats_down_size);
-  estimator_state.feats_down_world->resize(estimator_state.feats_down_size);
-  estimator_state.Nearest_Points.resize(estimator_state.feats_down_size);
-  estimator_state.crossmat_list.reserve(estimator_state.feats_down_size);
-  estimator_state.pbody_list.reserve(estimator_state.feats_down_size);
+  lio_workspace.normvec->resize(lio_workspace.feats_down_size);
+  lio_workspace.feats_down_world->resize(lio_workspace.feats_down_size);
+  lio_workspace.Nearest_Points.resize(lio_workspace.feats_down_size);
+  lio_workspace.crossmat_list.resize(lio_workspace.feats_down_size);
+  lio_workspace.pbody_list.resize(lio_workspace.feats_down_size);
   // [Workflow 3] 准备点量测: 将 LiDAR 点变换到 IMU 系并缓存反对称矩阵
   // (量测雅可比 A 块用)。点量测噪声为标量 laser_point_cov;
   // 伪代码步骤③的逐点协方差变换 (C_P) 本实现未启用 (cov_p/cov_R 传入未用)。
@@ -328,13 +338,13 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
                                            PointType* const po) const {
   V3D p_body_lidar(pi->x, pi->y, pi->z);  // NOLINT
   V3D p_body_imu;
-  if (config_.estimator.extrinsic_estimation) {
+  if (config_.lidar.extrinsic_estimation) {
     p_body_imu = filter_.input().x_.offset_R_L_I * p_body_lidar
                  + filter_.input().x_.offset_T_L_I;
 
   } else {
-    p_body_imu = estimator_state.Lidar_R_wrt_IMU * p_body_lidar
-                 + estimator_state.Lidar_T_wrt_IMU;
+    p_body_imu = lio_workspace.Lidar_R_wrt_IMU * p_body_lidar
+                 + lio_workspace.Lidar_T_wrt_IMU;
   }
   po->x = (float)p_body_imu(0);   // NOLINT
   po->y = (float)p_body_imu(1);   // NOLINT
@@ -344,14 +354,14 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
 
 void LaserMappingNode::mapIncremental() const {
   PointVector points_to_add;
-  auto cur_pts = estimator_state.feats_down_world->size();
+  auto cur_pts = lio_workspace.feats_down_world->size();
   points_to_add.reserve(cur_pts);
 
   for (int i = 0; i < cur_pts; ++i) {
     /* decide if need add to map */
-    PointType& point_world = estimator_state.feats_down_world->points[i];
-    if (!estimator_state.Nearest_Points[i].empty()) {
-      const PointVector& points_near = estimator_state.Nearest_Points[i];
+    PointType& point_world = lio_workspace.feats_down_world->points[i];
+    if (!lio_workspace.Nearest_Points[i].empty()) {
+      const PointVector& points_near = lio_workspace.Nearest_Points[i];
 
       Eigen::Vector3f center =
           ((point_world.getVector3fMap() / config_.mapping.filter_size_map)
@@ -377,7 +387,7 @@ void LaserMappingNode::mapIncremental() const {
       points_to_add.emplace_back(point_world);
     }
   }
-  estimator_state.ivox_->AddPoints(points_to_add);
+  lio_workspace.ivox_->AddPoints(points_to_add);
 }
 
 void LaserMappingNode::publishInitMap() {
@@ -393,7 +403,7 @@ void LaserMappingNode::publishInitMap() {
 void LaserMappingNode::publishFrameWorld() {
   if (config_.publish.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
-    pcl::toROSMsg(*estimator_state.feats_down_world, laser_cloud_msg);
+    pcl::toROSMsg(*lio_workspace.feats_down_world, laser_cloud_msg);
 
     laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time_);
     laser_cloud_msg.header.frame_id = "camera_init";
@@ -403,7 +413,7 @@ void LaserMappingNode::publishFrameWorld() {
     // 1. make sure you have enough memories
     // 2. noted that pcd save will influence the real-time performances
     if (config_.publish.pcd_save_enabled) {
-      *state_.pcl_wait_save += *estimator_state.feats_down_world;
+      *state_.pcl_wait_save += *lio_workspace.feats_down_world;
 
       static int scan_wait_num = 0;
       scan_wait_num++;
@@ -511,13 +521,13 @@ bool LaserMappingNode::initMapState() {
   if (state_.init_map) {
     return true;  // 已完成
   }
-  estimator_state.feats_down_world->resize(state_.feats_undistort->size());
+  lio_workspace.feats_down_world->resize(state_.feats_undistort->size());
   for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
-    estimator_.pointBodyToWorld(&(state_.feats_undistort->points[i]),
-                                &(estimator_state.feats_down_world->points[i]),
+    lidar_.measurementModel().pointBodyToWorld(&(state_.feats_undistort->points[i]),
+                                &(lio_workspace.feats_down_world->points[i]),
                                 filter_.input().x_);
   }
-  for (const auto& point : *estimator_state.feats_down_world) {
+  for (const auto& point : *lio_workspace.feats_down_world) {
     state_.init_feats_world->points.emplace_back(point);
   }
 
@@ -525,9 +535,9 @@ bool LaserMappingNode::initMapState() {
       >= (size_t)config_.mapping.init_map_size) {
     if (config_.sensor.enable_prior_map) {
       auto map_cloud = loadPointcloudFromPcd(config_.sensor.prior_map_path);
-      estimator_state.ivox_->AddPoints(map_cloud->points);
+      lio_workspace.ivox_->AddPoints(map_cloud->points);
     } else {
-      estimator_state.ivox_->AddPoints(state_.init_feats_world->points);
+      lio_workspace.ivox_->AddPoints(state_.init_feats_world->points);
     }
     publishInitMap();
     state_.init_feats_world.reset(new PointCloudXYZI());
@@ -538,18 +548,18 @@ bool LaserMappingNode::initMapState() {
 }
 
 void LaserMappingNode::preparePointMeasurements() const {
-  for (size_t i = 0; i < estimator_state.feats_down_body->size(); i++) {
-    V3D point_this(estimator_state.feats_down_body->points[i].x,   // NOLINT
-                   estimator_state.feats_down_body->points[i].y,   // NOLINT
-                   estimator_state.feats_down_body->points[i].z);  // NOLINT
+  for (size_t i = 0; i < lio_workspace.feats_down_body->size(); i++) {
+    V3D point_this(lio_workspace.feats_down_body->points[i].x,   // NOLINT
+                   lio_workspace.feats_down_body->points[i].y,   // NOLINT
+                   lio_workspace.feats_down_body->points[i].z);  // NOLINT
 
-    estimator_state.pbody_list[i] = point_this;
-    if (!config_.estimator.extrinsic_estimation) {
-      point_this = estimator_state.Lidar_R_wrt_IMU * point_this
-                   + estimator_state.Lidar_T_wrt_IMU;
+    lio_workspace.pbody_list[i] = point_this;
+    if (!config_.lidar.extrinsic_estimation) {
+      point_this = lio_workspace.Lidar_R_wrt_IMU * point_this
+                   + lio_workspace.Lidar_T_wrt_IMU;
       M3D point_crossmat;
       point_crossmat << SKEW_SYM_MATRX(point_this);
-      estimator_state.crossmat_list[i] = point_crossmat;
+      lio_workspace.crossmat_list[i] = point_crossmat;
     }
   }
 }
@@ -592,9 +602,9 @@ template <typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
-  estimator_state.effct_feat_num = 0;
+  lio_workspace.effct_feat_num = 0;
 
-  if (estimator_state.time_seq.empty()) {
+  if (lio_workspace.time_seq.empty()) {
     // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
     if (!imu_.empty()) {
       imu_.advanceCursor();
@@ -613,8 +623,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             }
           }
 
-          estimator_state.input_in = imu_.lastInput(
-              config_.estimator.gravity_magnitude / config_.estimator.acc_norm);
+          lio_workspace.input_in = imu_.lastInput(
+              config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
 
           last_time = time_current_;
           time_update_last_ = time_current_;
@@ -629,8 +639,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           time_update_last_ = get_time_sec(imu_next.header.stamp);
         }
         last_time = get_time_sec(imu_next.header.stamp);
-        estimator_state.input_in = imu_.nextInput(
-            config_.estimator.gravity_magnitude / config_.estimator.acc_norm);
+        lio_workspace.input_in = imu_.nextInput(
+            config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
 
         imu_.popAndAdvance();
         if (imu_.empty()) {
@@ -644,14 +654,14 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   // [Workflow 2] LiDAR 点输入分支: 逐时间组处理 (传播 → 平面更新 →
   // 世界变换)。
   double pcl_beg_time = measures_.lidar_start_time;
-  estimator_state.idx = -1;
-  for (estimator_state.k = 0;
-       estimator_state.k < (int)estimator_state.time_seq.size();
-       estimator_state.k++) {
+  lio_workspace.idx = -1;
+  for (lio_workspace.k = 0;
+       lio_workspace.k < (int)lio_workspace.time_seq.size();
+       lio_workspace.k++) {
     PointType& point_body =
-        estimator_state.feats_down_body
-            ->points[estimator_state.idx
-                     + estimator_state.time_seq[estimator_state.k]];
+        lio_workspace.feats_down_body
+            ->points[lio_workspace.idx
+                     + lio_workspace.time_seq[lio_workspace.k]];
     const double point_offset_ms = point_time_offset_ms(point_body);
     time_current_ = (point_offset_ms / 1000.0) + pcl_beg_time;
     if (is_first_frame_) {
@@ -661,8 +671,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           break;
         }
       }
-      estimator_state.input_in = imu_.lastInput(
-          config_.estimator.gravity_magnitude / config_.estimator.acc_norm);
+      lio_workspace.input_in = imu_.lastInput(
+          config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
 
       is_first_frame_ = false;
       last_time = time_current_;
@@ -673,17 +683,17 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
     while (time_current_ > get_time_sec(imu_next.header.stamp)) {
       imu_.popBuffer();
-      estimator_state.input_in = imu_.lastInput(
-          config_.estimator.gravity_magnitude / config_.estimator.acc_norm);
+      lio_workspace.input_in = imu_.lastInput(
+          config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
       double dt = get_time_sec(imu_last.header.stamp) - last_time;
       double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
 
       if (dt_cov > 0.0) {
-        kf.predict(dt_cov, q, estimator_state.input_in, false, true);
+        kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
         time_update_last_ = get_time_sec(imu_last.header.stamp);
       }
 
-      kf.predict(dt, q, estimator_state.input_in, true, false);
+      kf.predict(dt, q, lio_workspace.input_in, true, false);
       last_time = get_time_sec(imu_last.header.stamp);
 
       if (imu_.empty()) {
@@ -700,17 +710,17 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     if (!config_.mapping.propagate_at_imu_frequency) {
       double dt_cov = time_current_ - time_update_last_;
       if (dt_cov > 0.0) {
-        kf.predict(dt_cov, q, estimator_state.input_in, false, true);
+        kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
         time_update_last_ = time_current_;
       }
     }
-    kf.predict(dt, q, estimator_state.input_in, true, false);
+    kf.predict(dt, q, lio_workspace.input_in, true, false);
     last_time = time_current_;
 
-    if (estimator_state.feats_down_size < 1) {
+    if (lio_workspace.feats_down_size < 1) {
       RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
                   "No point, skip this scan!\n");
-      estimator_state.idx += estimator_state.time_seq[estimator_state.k];
+      lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
       continue;
     }
     // [Workflow 4] 判断是否存在有效平面对应。
@@ -719,8 +729,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
     if (!kf.update_iterated_dyn_share_modified()) {
       // [Workflow 9] 无有效平面对应时跳过当前点更新。
-      estimator_state.idx = estimator_state.idx
-                            + estimator_state.time_seq[estimator_state.k];
+      lio_workspace.idx = lio_workspace.idx
+                            + lio_workspace.time_seq[lio_workspace.k];
       continue;
     }
     if (config_.mapping.publish_odometry_without_downsample) {
@@ -738,15 +748,15 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     }
 
     // [Workflow 8] 将更新后的点变换到世界系。
-    for (int j = 0; j < estimator_state.time_seq[estimator_state.k]; j++) {
+    for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
       PointType& point_body_j =
-          estimator_state.feats_down_body->points[estimator_state.idx + j + 1];
+          lio_workspace.feats_down_body->points[lio_workspace.idx + j + 1];
       PointType& point_world_j =
-          estimator_state.feats_down_world->points[estimator_state.idx + j + 1];
-      estimator_.pointBodyToWorld(&point_body_j, &point_world_j, kf.x_);
+          lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1];
+      lidar_.measurementModel().pointBodyToWorld(&point_body_j, &point_world_j, kf.x_);
     }
 
-    estimator_state.idx += estimator_state.time_seq[estimator_state.k];
+    lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
   }
 }
 
@@ -768,11 +778,6 @@ void LaserMappingNode::initScan() {
     filter_.output().x_.acc = config_.imu.processor.gravity;
     filter_.output().x_.acc *= -1;
     imu_.setNeedInit(false);
-  }
-  if (config_.imu.processor.gravity.norm() > 0.0) {
-    config_.estimator.gravity_magnitude =
-        config_.imu.processor.gravity_magnitude;
-    estimator_.configure(config_.estimator);
   }
 }
 

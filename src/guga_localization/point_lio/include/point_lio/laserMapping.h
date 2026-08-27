@@ -10,7 +10,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 
-#include "point_lio/li_initialization.h"
+#include "point_lio/Lidar.h"
 #include "point_lio/Filter.h"
 
 struct MainLoopState {
@@ -53,7 +53,6 @@ private:
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
-  Estimator estimator_;
   Filter filter_;
   PointLioParams config_;
   bool is_first_frame_{true};
@@ -91,7 +90,6 @@ private:
 
   /** @brief 节点初始化: 参数 / 滤波器 / 日志 / 订阅发布 (由 run 调用) */
   void totalInitialize();
-  void initializeEstimator();
   void initializeSensors();
   void initializeMappingState();
   void initializeFilter();
