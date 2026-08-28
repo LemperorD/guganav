@@ -109,7 +109,7 @@ controller_server:
       vx_max: 2.5
       vx_min: -2.5
       vy_max: 2.5
-      wz_max: 6.0
+      wz_max: 3.0
 
       iteration_count: 1
       temperature: 0.3

@@ -7,7 +7,7 @@ controller_server:
   ros__parameters:
     use_sim_time: False
 
-    controller_frequency: 60.0
+    controller_frequency: 30.0
 
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
@@ -18,7 +18,7 @@ controller_server:
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.016666667   # 1/60，实车 60Hz
+      model_dt: 0.0333333333   # 1/60，实车 60Hz
       batch_size: 2000
       vx_std: 0.5
       vy_std: 0.5

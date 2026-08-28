@@ -37,7 +37,7 @@ add_executable(test_serial_driver
 
 target_link_libraries(test_serial_driver
   serial_driver_main
-  )
+)
 
 # ---- ROS2 节点层库 (lib) ----
 add_library(serial_driver_node SHARED
@@ -56,7 +56,7 @@ ament_target_dependencies(serial_driver_node
   guga_common
 )
 ament_target_dependencies(test_serial_driver
-geometry_msgs
+  geometry_msgs
 )
 # 注册为 rclcpp component，同时生成独立可执行文件
 rclcpp_components_register_node(serial_driver_node

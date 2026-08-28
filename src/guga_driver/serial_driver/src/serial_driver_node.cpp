@@ -30,7 +30,7 @@ namespace serial_driver {
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
-        "serial/gimbal_joint_state", 10);
+        "/serial/gimbal_joint_state", 10);
 
     const bool lidar_connected = false;
     std::cout << "Lidar connected: " << std::boolalpha << lidar_connected
@@ -40,6 +40,7 @@ namespace serial_driver {
         std::make_shared<RosToSerialBridge<geometry_msgs::msg::Twist>>(
             this, "/cmd_vel",
             [this](const geometry_msgs::msg::Twist& msg) {
+              std::cout << "123456789" << std::endl;
               return encodeTwist(msg);
             },
             [this](const uint8_t* data, size_t len) {
@@ -128,7 +129,7 @@ namespace serial_driver {
 
     auto vx_smoothed = slidingWindowFilter(vx, vx_que_, 15);
     auto vy_smoothed = slidingWindowFilter(vy, vy_que_, 15);
-    std::cout << CYAN_LIGHT << "vx: " << vx_smoothed << "vy: " << vy_smoothed << "wz: " << wz << RESET << "\n\n\n";
+    std::cout << CYAN_LIGHT << "vx: " << vx_smoothed << "vy: " << vy_smoothed << "wz: " << wz << RESET << std::endl;
 
     // const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
     // const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
@@ -213,9 +214,9 @@ namespace serial_driver {
     };
     joint_state.position = {
       0,
+      0,
+      0,
       yaw_diff_,
-      0,
-      0,
     };
     joint_state_pub_->publish(joint_state);
   }
