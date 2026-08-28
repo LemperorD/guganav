@@ -43,6 +43,7 @@ CONTROLLER_TYPE=$(ros2 param get "$DEFAULT_NODE" "FollowPath.plugin" 2>/dev/null
  awk '{print tolower($4)}' )
 
 if [[ -z "$CONTROLLER_TYPE" ]]; then
+  echo "未获取到仿真controller 参数, 尝试切换为实车"
   DEFAULT_NODE="/controller_server"
   set +e
   CONTROLLER_TYPE=$(ros2 param get "$DEFAULT_NODE" "FollowPath.plugin" 2>/dev/null |
