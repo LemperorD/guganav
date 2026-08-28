@@ -41,7 +41,15 @@ echo "默认节点: $DEFAULT_NODE"
 set +e
 CONTROLLER_TYPE=$(ros2 param get "$DEFAULT_NODE" "FollowPath.plugin" 2>/dev/null |
  awk '{print tolower($4)}' )
-set -e
+
+if [[ -z "$CONTROLLER_TYPE" ]]; then
+  DEFAULT_NODE="/controller_server"
+  set +e
+  CONTROLLER_TYPE=$(ros2 param get "$DEFAULT_NODE" "FollowPath.plugin" 2>/dev/null |
+ awk '{print tolower($4)}' )
+  set -e
+fi
+
 if [[ -z "$CONTROLLER_TYPE" ]]; then
   echo "⚠️ 未获取到 FollowPath.controller 参数，可能节点未启动或参数未声明"
   CONTROLLER_TYPE="unknown"
@@ -83,7 +91,7 @@ param_value() {
   local output
 
   if ! output=$(timeout 3 ros2 param get "$node" "$param" 2>&1); then
-    echo "获取失败 [$param#FollowPath.]:" >&2
+    echo "获取失败 [${param#FollowPath.}]:" >&2
     echo "$output" >&2
     printf '?\n'
     return 0
@@ -225,6 +233,7 @@ case "$cmd" in
       value=${line#*: }
       case "$name" in
         /red_standard_robot1/*) name=${name#/red_standard_robot1/} ;;
+        /*) name=${name#/} ;;
       esac
       ros2 param set "$node" "$name" "$value" >/dev/null 2>&1 && count=$((count+1)) || \
         echo "  ⚠️ 设置失败: $name" >&2
