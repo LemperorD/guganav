@@ -33,7 +33,9 @@
 /// 收到 SIGINT 时置位
 static volatile sig_atomic_t g_running{1};
 
-static void sigintHandler(int /*signum*/) { g_running = 0; }
+static void sigintHandler(int /*signum*/) {
+  g_running = 0;
+}
 
 // ==================== 主函数 ====================
 
@@ -57,17 +59,17 @@ int main(int argc, char* argv[]) {
 
   // ---- 2. 创建 Pangolin 窗口 ----
   // 注意：必须在任何 pangolin::default_font() 调用之前，否则会 abort。
-  pangolin::CreateWindowAndBind("GUGA Sentry UI", 1280, 800);
+  pangolin::CreateWindowAndBind("GUGA Sentry UI", 1920, 1200);
 
   // ---- 3. 布局 ----
   // 左侧为面板列（HUD 上 / 决策下），右侧为 3D 视图
   const int panel_width = UiPanelWidth();
-  guga_ui::CreatePanelHud(data_source);
+  guga_ui::PanelHud hud_panel;
+  hud_panel.init(data_source);
   guga_ui::CreatePanelDecision(data_source);
 
-  pangolin::View& view_3d =
-      pangolin::Display("view_3d")
-          .SetBounds(0.0, 1.0, pangolin::Attach::Pix(panel_width), 1.0);
+  pangolin::View& view_3d = pangolin::Display("view_3d").SetBounds(
+      0.0, 1.0, pangolin::Attach::Pix(panel_width), 1.0);
 
   GugaRender3D render_3d;
   render_3d.init(view_3d);
@@ -78,8 +80,9 @@ int main(int argc, char* argv[]) {
   std::cout << "[guga_ui] 进入渲染循环（ESC / Ctrl+C 退出）..." << std::endl;
 
   while (g_running && !pangolin::ShouldQuit()) {
-    data_source.update();  // 每帧刷新共享内存数据
-    pangolin::FinishFrame();  // 渲染所有视图并交换缓冲
+    data_source.update();           // 每帧刷新共享内存数据
+    hud_panel.update(data_source);  // 刷新 HUD 比赛时间
+    pangolin::FinishFrame();        // 渲染所有视图并交换缓冲
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 

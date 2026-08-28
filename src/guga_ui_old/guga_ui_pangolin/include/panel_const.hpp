@@ -9,10 +9,11 @@
 /// 面板宽度（像素）。
 ///
 /// 注意：必须延迟到 pangolin::CreateWindowAndBind() 之后调用，
-/// 因为 default_font() 依赖当前 GL context（Pangolin 内部 PANGO_ASSERT(context)）。
-/// 若作为全局变量初始化表达式调用，会在 main() 之前 abort。
+/// 因为 default_font() 依赖当前 GL context（Pangolin 内部
+/// PANGO_ASSERT(context)）。 若作为全局变量初始化表达式调用，会在 main() 之前
+/// abort。
 inline int UiPanelWidth() {
   return static_cast<int>(20 * pangolin::default_font().MaxWidth());
 }
 
-#endif // PANEL_CONST_HPP
+#endif  // PANEL_CONST_HPP

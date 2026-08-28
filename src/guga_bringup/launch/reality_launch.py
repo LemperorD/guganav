@@ -101,7 +101,7 @@ def generate_launch_description():
         description="Global planner: jps, smac2d, or smachybrid",
     )
     declare_controller_cmd = DeclareLaunchArgument(
-        "controller", default_value="pid", choices=["pid", "mppi", "mpc"],
+        "controller", default_value="mppi", choices=["pid", "mppi", "mpc"],
         description="Controller: pid (omni PID), mppi, or mpc",
     )
     def default_params_file(which):

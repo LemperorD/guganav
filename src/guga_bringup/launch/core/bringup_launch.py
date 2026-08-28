@@ -102,7 +102,7 @@ def generate_launch_description():
 
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
-        default_value="pid",
+        default_value="mppi",
         choices=["pid", "mppi", "mpc"],
         description="Controller profile, forwarded to navigation_launch for chassis mode",
     )
@@ -125,7 +125,7 @@ def generate_launch_description():
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
         "controller_params_file",
-        default_value=default_params_file("controller/pid.yaml"),
+        default_value=default_params_file("controller/mppi.yaml"),
         description="Controller-diff params file",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(

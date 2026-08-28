@@ -17,6 +17,7 @@
   <depend>tf2_ros</depend>
   <depend>guga_interfaces</depend>
   <depend>guga_common</depend>
+  <depend>guga_ui_common</depend>
 
 
   <test_depend>ament_lint_auto</test_depend>

@@ -103,6 +103,11 @@ namespace serial_driver {
   // ==================== 参数加载 ====================
 
   void SerialDriverNode::onConfigure() {
+    bool ok = shm_writer_.init("guga_shm", guga_ui::UiSlotId::GAME_STATUS);
+    if (!ok) {
+      RCLCPP_ERROR(logger_,
+                   "ShmWriter init failed, UI game status display unavailable");
+    }
     this->declare_parameter<std::string>("port_name", "/dev/ttyACM0");
     this->declare_parameter<int>("baud_rate", 115200);
     this->declare_parameter<double>("vel_trans_scale", 40.0);
@@ -116,7 +121,8 @@ namespace serial_driver {
     this->get_parameter("lidar_port", lidar_port_);
   }
 
-  MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
+  MotionPayload SerialDriverNode::encodeTwist(
+      const geometry_msgs::msg::Twist& msg) const {
     const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
     const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
     const auto wz = static_cast<float>(msg.angular.z);
@@ -130,12 +136,11 @@ namespace serial_driver {
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], wz);
 
     return payload;
-}
+  }
 
   std_msgs::msg::Float32 SerialDriverNode::decodeYaw(const uint8_t* payload) {
     std_msgs::msg::Float32 msg;
-    msg.data =
-        SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
+    msg.data = SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
     yaw_diff_ = static_cast<double>(msg.data);
     return msg;
   }
@@ -288,6 +293,10 @@ namespace serial_driver {
     std::memcpy(&game_progress, &payload[referee_offset::GAME_PROGRESS],
                 sizeof(uint8_t));
     game_progress = (game_progress >> 4);  // 取高 4 位
+    guga_ui::UiGameStatus gp{};
+    gp.elapsed_sec = this->now().seconds();
+    gp.game_progress = game_progress;
+    shm_writer_.write(&game_progress, sizeof(game_progress));
 
     // ---- 解析机器人状态 ----
     uint16_t current_hp{};
@@ -295,15 +304,13 @@ namespace serial_driver {
     uint16_t heat1{};
     std::memcpy(&current_hp, &payload[referee_offset::CURRENT_HP],
                 sizeof(uint16_t));
-    std::memcpy(&ammo17, &payload[referee_offset::AMMO_17MM],
-                sizeof(uint16_t));
+    std::memcpy(&ammo17, &payload[referee_offset::AMMO_17MM], sizeof(uint16_t));
     std::memcpy(&heat1, &payload[referee_offset::BARREL_HEAT],
                 sizeof(uint16_t));
 
     // ---- 解析 RFID ----
     uint32_t rfid{};
-    std::memcpy(&rfid, &payload[referee_offset::RFID_STATUS],
-                sizeof(uint32_t));
+    std::memcpy(&rfid, &payload[referee_offset::RFID_STATUS], sizeof(uint32_t));
 
     // ---- 发布机器人状态 ----
     guga_interfaces::msg::RobotStatus robot_status;

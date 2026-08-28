@@ -20,7 +20,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(guga_interfaces REQUIRED)
 find_package(guga_common REQUIRED)
-
+find_package(guga_ui_common REQUIRED)
 # ---- 串口底层库 (lib) ----
 add_library(serial_driver_main SHARED
   src/serial_driver_main.cpp)
@@ -42,7 +42,8 @@ target_link_libraries(test_serial_driver
 add_library(serial_driver_node SHARED
   src/serial_driver_node.cpp)
 target_link_libraries(serial_driver_node
-  serial_driver_main)
+  serial_driver_main
+  guga_ui_common::guga_ui_common)
 ament_target_dependencies(serial_driver_node
   rclcpp
   rclcpp_components

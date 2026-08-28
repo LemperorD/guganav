@@ -23,6 +23,10 @@
 #include "serial_driver/ros_serial_bridge.hpp"
 #include "serial_driver/serial_driver_main.hpp"
 
+#include "guga_ui_common/shm_writer.hpp"  // 写入端
+#include "guga_ui_common/shm_reader.hpp"  // 读取端
+#include "guga_ui_common/ui_types.hpp"    // 数据类型定义
+
 namespace serial_driver {
 
   /**
@@ -50,6 +54,8 @@ namespace serial_driver {
     ~SerialDriverNode() override;
 
   private:
+    guga_ui::ShmWriter shm_writer_;
+
     // ---- 参数加载 ----
     /** @brief 声明并从参数服务器加载所有运行参数。 */
     void onConfigure();
@@ -145,8 +151,7 @@ namespace serial_driver {
     // 四路消息桥接器
     std::shared_ptr<RosToSerialBridge<geometry_msgs::msg::Twist>>
         bridge_twist_pc_;
-    std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>>
-        bridge_yaw_mcu_;
+    std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>> bridge_yaw_mcu_;
     std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>>
         bridge_enemy_pos_mcu_;
 
@@ -166,7 +171,7 @@ namespace serial_driver {
         game_status_pub_;
     rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr
         rfid_status_pub_;
-
+    rclcpp::Logger logger_{this->get_logger()};
   };
 
 }  // namespace serial_driver
