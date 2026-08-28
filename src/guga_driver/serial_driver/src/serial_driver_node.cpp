@@ -108,6 +108,9 @@ namespace serial_driver {
       RCLCPP_ERROR(logger_,
                    "ShmWriter init failed, UI game status display unavailable");
     }
+    if (!shm_writer_yaw_.init("guga_shm", guga_ui::UiSlotId::YAW)) {
+      RCLCPP_ERROR(logger_, "ShmWriter init failed, UI yaw display unavailable");
+    }
     this->declare_parameter<std::string>("port_name", "/dev/ttyACM0");
     this->declare_parameter<int>("baud_rate", 115200);
     this->declare_parameter<double>("vel_trans_scale", 40.0);
@@ -142,6 +145,9 @@ namespace serial_driver {
     std_msgs::msg::Float32 msg;
     msg.data = SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
     yaw_diff_ = static_cast<double>(msg.data);
+    guga_ui::UiYaw ui_yaw{};
+    ui_yaw.yaw_diff = yaw_diff_;
+    shm_writer_yaw_.write(&ui_yaw, sizeof(ui_yaw));
     return msg;
   }
 

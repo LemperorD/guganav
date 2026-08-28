@@ -26,17 +26,13 @@ namespace guga_ui {
     /// 每帧调用，刷新比赛状态。
     void update(const UiDataSource& ui_data_source) {
       const auto& d = ui_data_source.data();
-      if (d.game_status_age > 0) {
-        match_status_ = std::to_string(d.game_status.game_progress);
-      } else {
-        match_status_ = "--";
+      // 云台-底盘 yaw 角差（弧度），来自 serial_driver 的 YAW 槽位
+      if (ui_data_source.isFresh(d.yaw_age, 60)) {
+        robot_yaw_ = FormatCoord(d.yaw.yaw_diff);
       }
-
       // 决策槽位从未写入时显示 "--"，避免把 0 误当成真实目标点。
-      if (d.decision_age > 0) {
+      if (ui_data_source.isFresh(d.decision_age, 60)) {
         target_x_ = FormatCoord(d.decision.target_x);
-      } else {
-        target_x_ = "--";
       }
     }
 
@@ -48,8 +44,8 @@ namespace guga_ui {
       return buf;
     }
 
-    pangolin::Var<std::string> match_status_{"HUD.Match Status", "0"};
     pangolin::Var<std::string> target_x_{"HUD.Target Position X", "--"};
+    pangolin::Var<std::string> robot_yaw_{"HUD.Robot Yaw", "--"};
   };
 }  // namespace guga_ui
 #endif  // GUGA_UI_PANGOLIN_PANEL_HUD_HPP

@@ -66,8 +66,9 @@ int main(int argc, char* argv[]) {
   const int panel_width = UiPanelWidth();
   guga_ui::PanelHud hud_panel;
   hud_panel.init(data_source);
-  guga_ui::CreatePanelDecision(data_source);
 
+  guga_ui::PanelDecision decision_panel;
+  decision_panel.init(data_source);
   pangolin::View& view_3d = pangolin::Display("view_3d").SetBounds(
       0.0, 1.0, pangolin::Attach::Pix(panel_width), 1.0);
 
@@ -82,7 +83,8 @@ int main(int argc, char* argv[]) {
   while (g_running && !pangolin::ShouldQuit()) {
     data_source.update();           // 每帧刷新共享内存数据
     hud_panel.update(data_source);  // 刷新 HUD 比赛时间
-    pangolin::FinishFrame();        // 渲染所有视图并交换缓冲
+    decision_panel.update(data_source);
+    pangolin::FinishFrame();  // 渲染所有视图并交换缓冲
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 

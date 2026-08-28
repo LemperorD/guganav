@@ -55,6 +55,7 @@ namespace serial_driver {
 
   private:
     guga_ui::ShmWriter shm_writer_;
+    guga_ui::ShmWriter shm_writer_yaw_;
 
     // ---- 参数加载 ----
     /** @brief 声明并从参数服务器加载所有运行参数。 */
