@@ -35,7 +35,7 @@ if [[ -z "${ROS_DISTRO:-}" ]]; then
 fi
 source_setup "$WS/install/setup.bash"
 
-DEFAULT_NODE="/red_standard_robot1/controller_server"
+DEFAULT_NODE="controller_server"
 # 常用关键参数（show 时展示）
 echo "默认节点: $DEFAULT_NODE"
 set +e
@@ -224,7 +224,7 @@ case "$cmd" in
       name=${line%%:*}
       value=${line#*: }
       case "$name" in
-        /red_standard_robot1/*) name=${name#/red_standard_robot1/} ;;
+        /*) name=${name#/} ;;
       esac
       ros2 param set "$node" "$name" "$value" >/dev/null 2>&1 && count=$((count+1)) || \
         echo "  ⚠️ 设置失败: $name" >&2

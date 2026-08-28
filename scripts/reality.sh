@@ -90,7 +90,7 @@ cleanup_reality_processes() {
       fi
     done < <(pgrep -f "$pattern" 2>/dev/null || true)
   done
-  mapfile -t all_pids < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
+  mapfile -t all_mppis < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
 
   if [ "${#all_pids[@]}" -gt 0 ]; then
     printf '%s\n' "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true

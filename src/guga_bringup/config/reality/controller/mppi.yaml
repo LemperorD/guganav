@@ -28,7 +28,7 @@ controller_server:
       ax_max: 5.0
       ay_max: 5.0
       vy_max: 2.5
-      wz_max: 6.0
+      wz_max: 1.0
 
       iteration_count: 1
       temperature: 0.3

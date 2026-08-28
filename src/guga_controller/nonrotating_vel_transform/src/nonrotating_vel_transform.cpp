@@ -307,7 +307,7 @@ void NonrotatingVelTransform::onConfigure()
   // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
   // 之后由 chassis_mode 话题（如 simple_decision）覆盖
   this->declare_parameter<int>("initial_chassis_mode", 1);
-  this->declare_parameter<float>("init_spin_speed", 6.28);
+  this->declare_parameter<float>("init_spin_speed", 3.14);
   this->declare_parameter<bool>("output_in_chassis_frame", false);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);

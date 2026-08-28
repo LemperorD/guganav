@@ -14,6 +14,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
+#include "sensor_msgs/msg/joint_state.hpp"
 
 #include "guga_interfaces/msg/game_status.hpp"
 #include "guga_interfaces/msg/rfid_status.hpp"
@@ -76,7 +77,11 @@ namespace serial_driver {
      */
     static geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
 
-    // ---- tf 广播 ----
+    /**
+     * @brief 广播Yaw轴的tf变换
+     */
+    void publishTransformGimbalYaw();
+    void publishGimbalYawJointState();
 
     /**
      * @brief 定时广播 gimbal_yaw_vision tf（30ms 周期）。
@@ -166,6 +171,9 @@ namespace serial_driver {
         game_status_pub_;
     rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr
         rfid_status_pub_;
+
+    
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
 
   };
 

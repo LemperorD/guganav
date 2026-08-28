@@ -77,6 +77,8 @@ namespace serial_driver {
         "/referee/game_status", 10);
     rfid_status_pub_ = this->create_publisher<guga_interfaces::msg::RfidStatus>(
         "/referee/rfid_status", 10);
+
+    joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("serial/gimbal_joint_state", 10);
   }
 
   SerialDriverNode::~SerialDriverNode() {
@@ -117,9 +119,14 @@ namespace serial_driver {
   }
 
   MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
-    const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
-    const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
-    const auto wz = static_cast<float>(msg.angular.z);
+    auto out = transformVelocityToChassis(msg, -yaw_diff_);
+
+    const auto vx = static_cast<float>(vel_trans_scale_ * out.linear.x);
+    const auto vy = static_cast<float>(vel_trans_scale_ * out.linear.y);
+    const auto wz = static_cast<float>(out.angular.z);
+    // const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
+    // const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
+    // const auto wz = static_cast<float>(msg.angular.z);
 
     MotionPayload payload{};
     payload.fill(0);  // 全部初始化为 0
@@ -130,13 +137,15 @@ namespace serial_driver {
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], wz);
 
     return payload;
-}
+  }
 
   std_msgs::msg::Float32 SerialDriverNode::decodeYaw(const uint8_t* payload) {
     std_msgs::msg::Float32 msg;
     msg.data =
         SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
     yaw_diff_ = static_cast<double>(msg.data);
+    // publishTransformGimbalYaw();
+    publishGimbalYawJointState();
     return msg;
   }
 
@@ -151,6 +160,44 @@ namespace serial_driver {
   }
 
   // ==================== tf 广播 ====================
+
+  void SerialDriverNode::publishTransformGimbalYaw() {
+    geometry_msgs::msg::TransformStamped gimbal_tf;
+
+    gimbal_tf.header.stamp = this->get_clock()->now();
+
+    // gimbal_yaw_odom -> gimbal_yaw
+    gimbal_tf.header.frame_id = "gimbal_yaw_odom";
+    gimbal_tf.child_frame_id = "gimbal_yaw";
+
+    // 如果两个坐标系原点相同，则平移为 0
+    gimbal_tf.transform.translation.x = 0.0;
+    gimbal_tf.transform.translation.y = 0.0;
+    gimbal_tf.transform.translation.z = 0.0;
+
+    // yaw_diff 就是两个 gimbal yaw 坐标系之间的旋转
+    tf2::Quaternion q;
+    q.setRPY(0.0, 0.0, yaw_diff_);
+
+    gimbal_tf.transform.rotation.x = q.x();
+    gimbal_tf.transform.rotation.y = q.y();
+    gimbal_tf.transform.rotation.z = q.z();
+    gimbal_tf.transform.rotation.w = q.w();
+
+    tf_broadcaster_->sendTransform(gimbal_tf);
+  }
+
+  void SerialDriverNode::publishGimbalYawJointState()
+{
+    sensor_msgs::msg::JointState joint_state;
+
+    joint_state.header.stamp = this->get_clock()->now();
+
+    joint_state.name.push_back("gimbal_yaw_joint");
+    joint_state.position.push_back(yaw_diff_);
+
+    joint_state_pub_->publish(joint_state);
+}
 
   void SerialDriverNode::publishTransformGimbalVision() {
     geometry_msgs::msg::TransformStamped transform_stamped;

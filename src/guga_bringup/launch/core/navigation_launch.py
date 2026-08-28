@@ -24,6 +24,7 @@ def generate_launch_description():
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
@@ -75,9 +76,13 @@ def generate_launch_description():
 
     # 控制器选择：pid/mppi/mpc。底盘模式（启动即小陀螺）由它推断，
     # 不再需要独立的 navigation_profile 参数。
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
-        default_value="pid",
+        default_value="mppi",
         choices=["pid", "mppi", "mpc"],
         description="Controller profile: pid (omni PID), mppi, or mpc",
     )
@@ -112,7 +117,7 @@ def generate_launch_description():
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
         "controller_params_file",
-        default_value=default_params_file("controller/pid.yaml"),
+        default_value=default_params_file("controller/mppi.yaml"),
         description="Controller-diff params file (overrides base)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
@@ -300,7 +305,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "6.28 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -427,7 +432,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "6.28 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -457,6 +462,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)

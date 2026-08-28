@@ -31,7 +31,6 @@ def generate_launch_description():
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
-    use_ui = LaunchConfiguration("use_ui")
     use_decision = LaunchConfiguration("use_decision")
     # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
     planner = LaunchConfiguration("planner")
@@ -101,9 +100,10 @@ def generate_launch_description():
         description="Global planner: jps, smac2d, or smachybrid",
     )
     declare_controller_cmd = DeclareLaunchArgument(
-        "controller", default_value="pid", choices=["pid", "mppi", "mpc"],
-        description="Controller: pid (omni PID), mppi, or mpc",
+        "controller", default_value="mppi", choices=["pid", "mppi", "mpc"],
+        description="Controller: pid, mppi, or mpc",
     )
+
     def default_params_file(which):
         return PythonExpression(
             [
@@ -111,22 +111,13 @@ def generate_launch_description():
                 "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
             ]
         )
+    params_file = ""
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file", default_value=default_params_file("base.yaml"),
         description="Common params file (merge base layer)",
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
-        "controller_params_file",
-        default_value=PythonExpression(
-            [
-                "'", params_file, "' != '' and '", params_file, "' or ('",
-                controller, "' == 'mppi' and '",
-                os.path.join(bringup_dir, "config", "reality", "controller", "mppi.yaml"),
-                "' or '",
-                os.path.join(bringup_dir, "config", "reality", "controller", "pid.yaml"),
-                "')",
-            ]
-        ),
+        "controller_params_file", default_value=default_params_file("controller/mppi.yaml"),
         description="Controller-diff params file (pid default, mppi available)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
@@ -174,12 +165,6 @@ def generate_launch_description():
         "use_communication",
         default_value="True",
         description="Whether to start the communication node",
-    )
-
-    declare_use_ui_cmd = DeclareLaunchArgument(
-        "use_ui",
-        default_value="False",
-        description="Whether to start the guga_ui_pangolin process",
     )
 
     declare_use_decision_cmd = DeclareLaunchArgument(
@@ -259,11 +244,12 @@ def generate_launch_description():
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
+            "controller": controller,
+            "planner": planner,
             "params_file": params_file,
             "base_params_file": base_params_file,
             "controller_params_file": controller_params_file,
             "planner_params_file": planner_params_file,
-            "controller": controller,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
@@ -279,13 +265,6 @@ def generate_launch_description():
             "namespace": namespace,
             "use_sim_time": use_sim_time,
         }.items(),
-    )
-
-    guga_ui_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(launch_dir, "support", "guga_ui_launch.py")
-        ),
-        condition=IfCondition(use_ui),
     )
 
     decision_cmd = IncludeLaunchDescription(
@@ -321,7 +300,6 @@ def generate_launch_description():
     ld.add_action(declare_use_robot_state_pub_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
-    ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_use_decision_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
@@ -332,7 +310,6 @@ def generate_launch_description():
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(communication_cmd)
-    ld.add_action(guga_ui_cmd)
     ld.add_action(decision_cmd)
 
     return ld
