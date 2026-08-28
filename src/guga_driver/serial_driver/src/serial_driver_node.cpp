@@ -23,12 +23,14 @@ namespace serial_driver {
       : Node("serial_driver_node", options) {
     onConfigure();
 
-    serial_driver_main_ = std::make_shared<SerialDriverMain>(port_name_,
-                                                             baud_rate_);
+    serial_driver_main_ = std::make_shared<SerialDriverMain>(port_name_, baud_rate_);
 
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+
+    joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
+        "serial/gimbal_joint_state", 10);
 
     const bool lidar_connected = false;
     std::cout << "Lidar connected: " << std::boolalpha << lidar_connected
@@ -77,8 +79,6 @@ namespace serial_driver {
         "/referee/game_status", 10);
     rfid_status_pub_ = this->create_publisher<guga_interfaces::msg::RfidStatus>(
         "/referee/rfid_status", 10);
-
-    joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("serial/gimbal_joint_state", 10);
   }
 
   SerialDriverNode::~SerialDriverNode() {
@@ -96,6 +96,7 @@ namespace serial_driver {
     robot_status_pub_.reset();
     game_status_pub_.reset();
     rfid_status_pub_.reset();
+    joint_state_pub_.reset();
 
     serial_driver_main_.reset();
 
@@ -118,12 +119,17 @@ namespace serial_driver {
     this->get_parameter("lidar_port", lidar_port_);
   }
 
-  MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
+  MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) {
     auto out = transformVelocityToChassis(msg, -yaw_diff_);
 
     const auto vx = static_cast<float>(vel_trans_scale_ * out.linear.x);
     const auto vy = static_cast<float>(vel_trans_scale_ * out.linear.y);
     const auto wz = static_cast<float>(out.angular.z);
+
+    auto vx_smoothed = slidingWindowFilter(vx, vx_que_, 15);
+    auto vy_smoothed = slidingWindowFilter(vy, vy_que_, 15);
+    std::cout << CYAN_LIGHT << "vx: " << vx_smoothed << "vy: " << vy_smoothed << "wz: " << wz << RESET << "\n\n\n";
+
     // const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
     // const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
     // const auto wz = static_cast<float>(msg.angular.z);
@@ -132,8 +138,8 @@ namespace serial_driver {
     payload.fill(0);  // 全部初始化为 0
 
     // 按头文件定义写入三个速度字段（VX=0, VY=4, WZ_NEG=8）
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx);
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx_smoothed);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy_smoothed);
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], wz);
 
     return payload;
@@ -187,17 +193,32 @@ namespace serial_driver {
     tf_broadcaster_->sendTransform(gimbal_tf);
   }
 
-  void SerialDriverNode::publishGimbalYawJointState()
-{
+  void SerialDriverNode::publishGimbalYawJointState() {
+    if (!joint_state_pub_) {
+      return;
+    }
+
     sensor_msgs::msg::JointState joint_state;
 
     joint_state.header.stamp = this->get_clock()->now();
+    // joint_state.header.frame_id = "gimbal_yaw";
 
-    joint_state.name.push_back("gimbal_yaw_joint");
-    joint_state.position.push_back(yaw_diff_);
-
+    // joint_state.name.push_back("gimbal_yaw_joint");
+    // joint_state.position.push_back(yaw_diff_);
+    joint_state.name = {
+      "gimbal_pitch_joint",
+      "gimbal_yaw_joint",
+      "gimbal_pitch_odom_joint",
+      "gimbal_yaw_odom_joint",
+    };
+    joint_state.position = {
+      0,
+      yaw_diff_,
+      0,
+      0,
+    };
     joint_state_pub_->publish(joint_state);
-}
+  }
 
   void SerialDriverNode::publishTransformGimbalVision() {
     geometry_msgs::msg::TransformStamped transform_stamped;

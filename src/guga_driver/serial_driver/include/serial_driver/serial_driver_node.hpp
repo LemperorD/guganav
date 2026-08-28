@@ -8,13 +8,15 @@
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/u_int8.hpp>
 
+#include "guga_common/common_libs.hpp"
+
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
-#include "sensor_msgs/msg/joint_state.hpp"
 
 #include "guga_interfaces/msg/game_status.hpp"
 #include "guga_interfaces/msg/rfid_status.hpp"
@@ -61,7 +63,7 @@ namespace serial_driver {
      * @param msg 输入速度指令。
      * @return 17 字节 payload，按值返回避免堆分配和悬垂指针。
      */
-    MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg) const;
+    MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg);
 
     /**
      * @brief 从运动帧 payload 解码 yaw 角度差。
@@ -172,9 +174,11 @@ namespace serial_driver {
     rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr
         rfid_status_pub_;
 
-    
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
 
+  private: // 速度滑动窗口滤波使用的deque队列
+    std::deque<float> vx_que_;
+    std::deque<float> vy_que_;
   };
 
 }  // namespace serial_driver
