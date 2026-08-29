@@ -235,7 +235,6 @@ case "$cmd" in
       case "$name" in
         /red_standard_robot1/*) name=${name#/red_standard_robot1/} ;;
         /*) name=${name#/} ;;
-        /*) name=${name#/} ;;
       esac
       ros2 param set "$node" "$name" "$value" >/dev/null 2>&1 && count=$((count+1)) || \
         echo "  ⚠️ 设置失败: $name" >&2
