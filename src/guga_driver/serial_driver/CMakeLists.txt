@@ -24,9 +24,11 @@ target_include_directories(${PROJECT_NAME}_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${guga_common_INCLUDE_DIRS}>
   $<INSTALL_INTERFACE:include>)
-rclcpp_components_register_node(${PROJECT_NAME}_node
-  PLUGIN "serial_driver::SerialDriverNode"
-  EXECUTABLE serial_driver_node_exe
+ament_auto_add_executable(${PROJECT_NAME}_node_exe
+  src/serial_driver_node_main.cpp
+)
+target_link_libraries(${PROJECT_NAME}_node_exe
+  ${PROJECT_NAME}_node
 )
 target_link_libraries(${PROJECT_NAME}_node 
   ${PROJECT_NAME}_main

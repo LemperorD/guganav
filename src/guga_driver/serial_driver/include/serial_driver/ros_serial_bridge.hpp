@@ -26,6 +26,9 @@ namespace serial_driver {
  * 设计思路：不持有串口对象的引用，而是通过 std::function 回调注入编码和
  * 发送逻辑，解耦 ROS 层与串口物理层。订阅回调只做编码和入队（微秒级），
  * 串口写入（可能阻塞）全部在独立发送线程上执行，不占用 executor 线程。
+ * 订阅挂在节点上一个独立的 MutuallyExclusive 回调组
+ * （automatically_add_to_executor_with_node=true，由节点的 executor 认领），
+ * 与默认回调组（定时器、tf）分属不同组，多线程执行器下可并行执行。
  *
  * @tparam RosMsgT ROS 消息类型，如 geometry_msgs::msg::Twist。
  */
@@ -56,9 +59,21 @@ public:
         serial_sender_(std::move(serial_sender)),
         queue_capacity_(std::max<size_t>(1, queue_capacity))
   {
+    // 专用回调组：auto_add=true，节点的 executor（多线程执行器）通过 add_node
+    // 认领它；与默认回调组（定时器、tf）分属不同组 → 组间可并行执行。
+    // 组内 MutuallyExclusive → 同一条订阅回调不会并发执行，保护 encodeTwist
+    // 的成员滤波缓冲不被并发访问。
+    recv_group_ = node_->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive,
+        true /* automatically_add_to_executor_with_node */);
+
+    rclcpp::SubscriptionOptions sub_opts;
+    sub_opts.callback_group = recv_group_;
+
     auto qos = rclcpp::QoS(10);
     sub_ = node_->template create_subscription<RosMsgT>(
-        ros_topic_name, qos, [this](const typename RosMsgT::SharedPtr msg) {
+        ros_topic_name, qos,
+        [this](const typename RosMsgT::SharedPtr msg) {
           if (stop_.load(std::memory_order_relaxed)) {
             return;  // 析构已开始，不再入队
           }
@@ -71,7 +86,8 @@ public:
             queue_.push_back(std::move(payload));
           }
           cv_.notify_one();
-        });
+        },
+        sub_opts);
     send_thread_ = std::thread([this]() {
       while (true) {
         MotionPayload payload;
@@ -112,6 +128,7 @@ private:
   std::mutex mutex_;
   std::condition_variable cv_;
   std::atomic<bool> stop_{false};
+  rclcpp::CallbackGroup::SharedPtr recv_group_;
   std::thread send_thread_;
 };
 

@@ -47,9 +47,9 @@ PC 到 MCU：
 
 ```text
 /cmd_vel: geometry_msgs/Twist
-  -> [专用回调组 executor 线程：编码 + 入队]   (独立于主 executor，接收即独立线程)
+  -> [MTE 池线程：专用回调组内编码 + 入队]   (与默认组定时器分属不同组，可并行)
   -> MotionPayload[17] -> [有界发送队列, 满丢最旧, 默认容量 1]
-  -> sendDataFrame()                          (独立发送线程：串口 I/O 与 ROS 层解耦)
+  -> sendDataFrame()                          (独立发送线程：串口 I/O 与 executor 解耦)
   -> BR frame[22]
   -> MCU
 ```
@@ -148,11 +148,12 @@ ros2 topic echo /referee/robot_status
 
 - 两个 MCU 到 ROS bridge 使用独立线程轮询同一运动帧快照，不能保证两个
   topic 总是来自同一次发布周期。
-- `RosToSerialBridge` 的订阅挂在独立 MutuallyExclusive 回调组上，由本类自建
-  `SingleThreadedExecutor` 线程接收（不占用主 executor，主 executor 卡住不影响
-  `/cmd_vel` 的接收与发送）；串口写入再经有界队列（默认容量 1，满丢最旧）由
-  独立发送线程执行。析构时先 `cancel()` 接收 executor 再排空发送队列，
-  `join` 时间受 `sendDataFrame` 100ms 写超时上限约束。
+- 节点以独立可执行文件运行（手写 main + MultiThreadedExecutor，2 线程），
+  不再注册为 component。`RosToSerialBridge` 的 `/cmd_vel` 订阅挂在专用
+  MutuallyExclusive 回调组（auto_add=true），与默认回调组（定时器、tf）分属
+  不同组，组间可并行执行、组内互斥；串口写入经有界队列（默认容量 1，满丢
+  最旧）由独立发送线程执行，写阻塞从不占用 executor 线程。析构时排空发送
+  队列，`join` 时间受 `sendDataFrame` 100ms 写超时上限约束。
 - 运动帧没有 new-frame 标志，MCU 停止发送后仍会重复发布最后一帧。
 - `SerialToRosBridge` 接收线程以 `rclcpp::ok()` 为退出条件，独立卸载 component
   时需要进一步验证析构行为。

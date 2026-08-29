@@ -291,6 +291,3 @@ guga_interfaces::msg::RfidStatus SerialDriverNode::rfid2ros(uint32_t rfid) {
 }
 
 }  // namespace serial_driver
-
-#include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(serial_driver::SerialDriverNode)
