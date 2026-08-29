@@ -35,6 +35,8 @@ public:
   bool syncPackages();
   void initScan();
   void preparePointMeasurements() const;
+  void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
+  void mapIncremental() const;
   bool initMapState(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
   void publishOdometry(
@@ -45,6 +47,10 @@ public:
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
   bool initializeIteration(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
+  void processIteration(
+      const std::function<void(const sensor_msgs::msg::PointCloud2&)>& publish_map,
+      const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
+      const std::function<void(const geometry_msgs::msg::TransformStamped&)>& publish_tf);
 
   template <bool ImuAsInput, typename KF>
   void processFramePoints(
@@ -57,6 +63,8 @@ public:
   double lidar_end_time_{0.0};
   bool is_first_frame_{true};
   double time_update_last_{0.0};
+  double last_time_input_{0.0};
+  double last_time_output_{0.0};
 
 private:
   Imu& imu_;

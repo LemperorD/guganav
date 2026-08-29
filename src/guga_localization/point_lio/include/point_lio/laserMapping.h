@@ -86,10 +86,6 @@ private:
    */
   
   
-  void pointBodyLidarToIMU(PointType const* pi, PointType* po) const;
-
-  void mapIncremental() const;
-
   void publishFrameWorld();
 
   void publishFrameBody();
@@ -107,16 +103,6 @@ private:
 
   /** @brief 帧尾: 发布输出 + 运行时位姿日志 */
   void publishFrameOutputs();
-
-  /** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
-   * @tparam ImuAsInput true = input filter (24维) / false = output filter
-   * (30维)
-   * @param kf        当前模式对应的滤波器
-   * @param last_time 传播时间基准 (t_last / time_predict_last_const)
-   * @param q         对应滤波器的过程噪声
-   */
-  template <bool ImuAsInput, typename KF>
-  void processFramePoints(KF& kf, double& last_time, auto& q);
 
   void savePendingPcd();
   void savePcd();

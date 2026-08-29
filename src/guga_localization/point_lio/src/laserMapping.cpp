@@ -54,62 +54,22 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_configure(
 }
 
 void LaserMappingNode::processIteration() {
-  if (!processor_.initializeIteration(
-          [this](const sensor_msgs::msg::PointCloud2& msg) {
-            if (pub_laser_cloud_map_) {
-              pub_laser_cloud_map_->publish(msg);
-            }
-          })) {
-    return;
-  }
-  if (config_.mapping.use_imu_as_input) {
-    processor_.processFramePoints<true>(
-        filter_.input(), t_last_, filter_.inputNoise(),
-        [this](const nav_msgs::msg::Odometry& msg) {
-          if (pub_odom_aft_mapped_) {
-            pub_odom_aft_mapped_->publish(msg);
-          }
-        },
-        [this](const geometry_msgs::msg::TransformStamped& transform) {
-          if (tf_broadcaster_) {
-            tf_broadcaster_->sendTransform(transform);
-          }
-        });
-  } else {
-    processor_.processFramePoints<false>(
-        filter_.output(), time_predict_last_const_, filter_.outputNoise(),
-        [this](const nav_msgs::msg::Odometry& msg) {
-          if (pub_odom_aft_mapped_) {
-            pub_odom_aft_mapped_->publish(msg);
-          }
-        },
-        [this](const geometry_msgs::msg::TransformStamped& transform) {
-          if (tf_broadcaster_) {
-            tf_broadcaster_->sendTransform(transform);
-          }
-        });
-  }
-  if (!config_.mapping.publish_odometry_without_downsample) {
-    processor_.publishOdometry(
-        [this](const nav_msgs::msg::Odometry& msg) {
-          if (pub_odom_aft_mapped_) {
-            pub_odom_aft_mapped_->publish(msg);
-          }
-        },
-        [this](const geometry_msgs::msg::TransformStamped& transform) {
-          if (tf_broadcaster_) {
-            tf_broadcaster_->sendTransform(transform);
-          }
-        });
-  }
-  if (lio_workspace.feats_down_size > 4) {
-    if (config_.sensor.enable_prior_map) {
-      state_.sleep_time++;
-    }
-    if (!config_.sensor.enable_prior_map || state_.sleep_time > 200) {
-      mapIncremental();
-    }
-  }
+  processor_.processIteration(
+      [this](const sensor_msgs::msg::PointCloud2& msg) {
+        if (pub_laser_cloud_map_) {
+          pub_laser_cloud_map_->publish(msg);
+        }
+      },
+      [this](const nav_msgs::msg::Odometry& msg) {
+        if (pub_odom_aft_mapped_) {
+          pub_odom_aft_mapped_->publish(msg);
+        }
+      },
+      [this](const geometry_msgs::msg::TransformStamped& msg) {
+        if (tf_broadcaster_) {
+          tf_broadcaster_->sendTransform(msg);
+        }
+      });
   publishFrameOutputs();
 }
 
@@ -278,65 +238,6 @@ LaserMappingNode::~LaserMappingNode() {
   }
 }
 
-void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
-                                           PointType* const po) const {
-  V3D p_body_lidar(pi->x, pi->y, pi->z);
-  V3D p_body_imu;
-  if (config_.lidar.extrinsic_estimation) {
-    if (config_.mapping.use_imu_as_input) {
-      p_body_imu = filter_.input().x_.offset_R_L_I * p_body_lidar
-                   + filter_.input().x_.offset_T_L_I;
-    } else {
-      p_body_imu = filter_.output().x_.offset_R_L_I * p_body_lidar
-                   + filter_.output().x_.offset_T_L_I;
-    }
-
-  } else {
-    p_body_imu = lio_workspace.Lidar_R_wrt_IMU * p_body_lidar
-                 + lio_workspace.Lidar_T_wrt_IMU;
-  }
-  po->x = (float)p_body_imu(0);
-  po->y = (float)p_body_imu(1);
-  po->z = (float)p_body_imu(2);
-  po->intensity = pi->intensity;
-}
-
-void LaserMappingNode::mapIncremental() const {
-  PointVector points_to_add;
-  auto cur_pts = lio_workspace.feats_down_world->size();
-  points_to_add.reserve(cur_pts);
-
-  for (std::size_t i = 0; i < cur_pts; ++i) {
-    PointType& point_world = lio_workspace.feats_down_world->points[i];
-    if (!lio_workspace.Nearest_Points[i].empty()) {
-      const PointVector& points_near = lio_workspace.Nearest_Points[i];
-
-      Eigen::Vector3f center =
-          ((point_world.getVector3fMap() / config_.mapping.filter_size_map)
-               .array()
-               .floor()
-           + 0.5)
-          * config_.mapping.filter_size_map;
-      bool need_add = true;
-      for (const auto x : points_near) {
-        Eigen::Vector3f dis_2_center = x.getVector3fMap() - center;
-        if (fabs(dis_2_center.x()) < 0.5 * config_.mapping.filter_size_map
-            && fabs(dis_2_center.y()) < 0.5 * config_.mapping.filter_size_map
-            && fabs(dis_2_center.z()) < 0.5 * config_.mapping.filter_size_map) {
-          need_add = false;
-          break;
-        }
-      }
-      if (need_add) {
-        points_to_add.emplace_back(point_world);
-      }
-    } else {
-      points_to_add.emplace_back(point_world);
-    }
-  }
-  lio_workspace.ivox_->AddPoints(points_to_add);
-}
-
 void LaserMappingNode::publishFrameWorld() {
   if (config_.publish.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
@@ -371,8 +272,8 @@ void LaserMappingNode::publishFrameBody() {
   PointCloudXYZI::Ptr lasercloud_imu_body(new PointCloudXYZI(size, 1));
 
   for (std::size_t i = 0; i < size; i++) {
-    pointBodyLidarToIMU(&state_.feats_undistort->points[i],
-                        &lasercloud_imu_body->points[i]);
+    processor_.pointBodyLidarToIMU(&state_.feats_undistort->points[i],
+                                   &lasercloud_imu_body->points[i]);
   }
 
   sensor_msgs::msg::PointCloud2 laser_cloud_msg;

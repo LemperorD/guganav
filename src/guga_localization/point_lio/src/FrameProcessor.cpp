@@ -52,6 +52,58 @@ bool FrameProcessor::syncPackages() {
   return synchronizer_.syncPackages(lidar_, imu_, measures_);
 }
 
+void FrameProcessor::pointBodyLidarToIMU(const PointType* pi, PointType* po) const {
+  const V3D p_body_lidar(pi->x, pi->y, pi->z);
+  V3D p_body_imu;
+  if (config_.lidar.extrinsic_estimation) {
+    if (config_.mapping.use_imu_as_input) {
+      p_body_imu = filter_.input().x_.offset_R_L_I * p_body_lidar
+                   + filter_.input().x_.offset_T_L_I;
+    } else {
+      p_body_imu = filter_.output().x_.offset_R_L_I * p_body_lidar
+                   + filter_.output().x_.offset_T_L_I;
+    }
+  } else {
+    p_body_imu = lio_workspace.Lidar_R_wrt_IMU * p_body_lidar
+                 + lio_workspace.Lidar_T_wrt_IMU;
+  }
+  po->x = static_cast<float>(p_body_imu(0));
+  po->y = static_cast<float>(p_body_imu(1));
+  po->z = static_cast<float>(p_body_imu(2));
+  po->intensity = pi->intensity;
+}
+
+void FrameProcessor::mapIncremental() const {
+  PointVector points_to_add;
+  const auto cur_pts = lio_workspace.feats_down_world->size();
+  points_to_add.reserve(cur_pts);
+  for (std::size_t i = 0; i < cur_pts; ++i) {
+    const PointType& point_world = lio_workspace.feats_down_world->points[i];
+    if (lio_workspace.Nearest_Points[i].empty()) {
+      points_to_add.emplace_back(point_world);
+      continue;
+    }
+    const auto& points_near = lio_workspace.Nearest_Points[i];
+    const Eigen::Vector3f center =
+        ((point_world.getVector3fMap() / config_.mapping.filter_size_map)
+             .array().floor() + 0.5f) * config_.mapping.filter_size_map;
+    bool need_add = true;
+    for (const auto& near : points_near) {
+      const Eigen::Vector3f delta = near.getVector3fMap() - center;
+      if (std::abs(delta.x()) < 0.5 * config_.mapping.filter_size_map &&
+          std::abs(delta.y()) < 0.5 * config_.mapping.filter_size_map &&
+          std::abs(delta.z()) < 0.5 * config_.mapping.filter_size_map) {
+        need_add = false;
+        break;
+      }
+    }
+    if (need_add) {
+      points_to_add.emplace_back(point_world);
+    }
+  }
+  lio_workspace.ivox_->AddPoints(points_to_add);
+}
+
 void FrameProcessor::publishOdometry(
     const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
     const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
@@ -207,6 +259,27 @@ bool FrameProcessor::initializeIteration(
   }
 
   return prepareFrame(publish);
+}
+
+void FrameProcessor::processIteration(
+    const std::function<void(const sensor_msgs::msg::PointCloud2&)>& publish_map,
+    const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
+    const std::function<void(const geometry_msgs::msg::TransformStamped&)>& publish_tf) {
+  if (!initializeIteration(publish_map)) return;
+  if (config_.mapping.use_imu_as_input) {
+    processFramePoints<true>(filter_.input(), last_time_input_, filter_.inputNoise(),
+                             publish_odom, publish_tf);
+  } else {
+    processFramePoints<false>(filter_.output(), last_time_output_, filter_.outputNoise(),
+                              publish_odom, publish_tf);
+  }
+  if (!config_.mapping.publish_odometry_without_downsample) {
+    publishOdometry(publish_odom, publish_tf);
+  }
+  if (lio_workspace.feats_down_size > 4 &&
+      (!config_.sensor.enable_prior_map || ++state_.sleep_time > 200)) {
+    mapIncremental();
+  }
 }
 
 template <bool ImuAsInput, typename KF>
