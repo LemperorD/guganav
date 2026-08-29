@@ -6,8 +6,6 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
-#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -27,7 +25,7 @@ enum class PointLioStage {
 class FrameProcessor {
 public:
   FrameProcessor(Imu& imu, PointLioStage& stage_, Lidar& lidar,
-                 PointLioParams& config, MainLoopState& state);
+                 const PointLioParams& config, MainLoopState& state);
   void initializeFilter();
   void setPose(geometry_msgs::msg::Pose& pose) const;
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
@@ -80,6 +78,6 @@ private:
   MeasureGroup measures_;
   PointLioStage& stage_;
   MainLoopState& state_;
-  PointLioParams& config_;
+  const PointLioParams& config_;
   Synchronizer synchronizer_;
 };

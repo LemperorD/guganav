@@ -3,7 +3,7 @@
 
 FrameProcessor::FrameProcessor(Imu& imu, PointLioStage& stage,
                                Lidar& lidar,
-                               PointLioParams& config, MainLoopState& state)
+                               const PointLioParams& config, MainLoopState& state)
     : imu_(imu),
       stage_(stage),
       lidar_(lidar),
@@ -339,8 +339,7 @@ void FrameProcessor::processFramePoints(
                 config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
           } else {
             const auto measurement = imu_.lastMeasurement();
-            lio_workspace.angvel_avr = measurement.angular_velocity;
-            lio_workspace.acc_avr = measurement.linear_acceleration;
+            imu_.setCurrentMeasurement(measurement);
           }
 
           last_time = time_current_;
@@ -368,8 +367,7 @@ void FrameProcessor::processFramePoints(
           kf.predict(dt, q, lio_workspace.input_in, true, false);
           last_time = time_current_;
           const auto measurement = imu_.nextMeasurement();
-          lio_workspace.angvel_avr = measurement.angular_velocity;
-          lio_workspace.acc_avr = measurement.linear_acceleration;
+          imu_.setCurrentMeasurement(measurement);
           kf.update_iterated_dyn_share_IMU();
         }
 
@@ -405,8 +403,7 @@ void FrameProcessor::processFramePoints(
             config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
       } else if (config_.imu.processor.enabled) {
         const auto measurement = imu_.lastMeasurement();
-        lio_workspace.angvel_avr = measurement.angular_velocity;
-        lio_workspace.acc_avr = measurement.linear_acceleration;
+        imu_.setCurrentMeasurement(measurement);
       }
 
       is_first_frame_ = false;
@@ -451,8 +448,7 @@ void FrameProcessor::processFramePoints(
       while (!imu_.empty()
              && time_current_ > get_time_sec(imu_next.header.stamp)) {
         const auto measurement = imu_.nextMeasurement();
-        lio_workspace.angvel_avr = measurement.angular_velocity;
-        lio_workspace.acc_avr = measurement.linear_acceleration;
+        imu_.setCurrentMeasurement(measurement);
 
         const double imu_time = get_time_sec(imu_next.header.stamp);
         double dt = imu_time - last_time;

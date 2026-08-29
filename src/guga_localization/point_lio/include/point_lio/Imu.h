@@ -11,18 +11,27 @@ struct ImuMeasurement {
   V3D linear_acceleration;
 };
 
+struct ImuMeasurementWorkspace {
+  V3D angular_velocity{V3D::Zero()};
+  V3D linear_acceleration{V3D::Zero()};
+};
+
 class ImuMeasurementModel {
 public:
+  explicit ImuMeasurementModel(ImuMeasurementWorkspace& workspace)
+      : workspace_(workspace) {}
   void configure(const ImuParams& params);
   void hModelOutput(state_output& state,
                     esekfom::dyn_share_modified<double>& data) const;
 
 private:
   ImuParams params_;
+  ImuMeasurementWorkspace& workspace_;
 };
 
 class Imu {
 public:
+  Imu();
   using Params = ImuParams;
 
   void configure(const Params& params);
@@ -30,6 +39,7 @@ public:
   [[nodiscard]] ImuMeasurementModel& measurementModel() {
     return measurement_model_;
   }
+  void setCurrentMeasurement(const ImuMeasurement& measurement);
 
   void onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
 
@@ -56,6 +66,7 @@ public:
 
 private:
   Params params_;
+  ImuMeasurementWorkspace measurement_workspace_;
   ImuMeasurementModel measurement_model_;
   std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> buffer_;
   sensor_msgs::msg::Imu last_;

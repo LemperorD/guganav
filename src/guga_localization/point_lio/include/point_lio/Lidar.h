@@ -36,8 +36,6 @@ struct LioWorkspace {
   int k{0};
   int idx{-1};
   input_ikfom input_in;
-  V3D angvel_avr;
-  V3D acc_avr;
   size_t feats_down_size{0};
   V3D Lidar_T_wrt_IMU{Zero3d};
   M3D Lidar_R_wrt_IMU{Eye3d};

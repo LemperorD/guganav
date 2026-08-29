@@ -2,6 +2,8 @@
 
 #include "point_lio/Lidar.h"
 
+Imu::Imu() : measurement_model_(measurement_workspace_) {}
+
 void ImuMeasurementModel::configure(const ImuParams& params) {
   params_ = params;
 }
@@ -11,9 +13,9 @@ void ImuMeasurementModel::hModelOutput(
     esekfom::dyn_share_modified<double>& data) const {
   std::memset(data.satu_check, false, 6);
   data.z_IMU.block<3, 1>(0, 0) =
-      lio_workspace.angvel_avr - state.omg - state.bg;
+      workspace_.angular_velocity - state.omg - state.bg;
   data.z_IMU.block<3, 1>(3, 0) =
-      lio_workspace.acc_avr * params_.processor.gravity_magnitude
+      workspace_.linear_acceleration * params_.processor.gravity_magnitude
           / params_.acc_norm
       - state.acc - state.ba;
   data.R_IMU << params_.measurement_gyro_cov, params_.measurement_gyro_cov,
@@ -24,12 +26,12 @@ void ImuMeasurementModel::hModelOutput(
     return;
   }
   for (int axis = 0; axis < 3; ++axis) {
-    if (std::abs(lio_workspace.angvel_avr(axis))
+    if (std::abs(workspace_.angular_velocity(axis))
         >= 0.99 * params_.saturation_gyro) {
       data.satu_check[axis] = true;
       data.z_IMU(axis) = 0.0;
     }
-    if (std::abs(lio_workspace.acc_avr(axis))
+    if (std::abs(workspace_.linear_acceleration(axis))
         >= 0.99 * params_.saturation_acc) {
       data.satu_check[axis + 3] = true;
       data.z_IMU(axis + 3) = 0.0;
@@ -41,6 +43,11 @@ void Imu::configure(const Params& params) {
   params_ = params;
   processor_->configure(params.processor);
   measurement_model_.configure(params_);
+}
+
+void Imu::setCurrentMeasurement(const ImuMeasurement& measurement) {
+  measurement_workspace_.angular_velocity = measurement.angular_velocity;
+  measurement_workspace_.linear_acceleration = measurement.linear_acceleration;
 }
 
 void Imu::reset() {
