@@ -28,8 +28,7 @@ Eigen::Matrix<double, 30, 30> EskfProcessModel::outputNoise() const {
 
 Eigen::Matrix<double, 24, 1> EskfProcessModel::getFInput(
     state_input& state, const input_ikfom& input) const {
-  Eigen::Matrix<double, 24, 1> result =
-      Eigen::Matrix<double, 24, 1>::Zero();
+  Eigen::Matrix<double, 24, 1> result = Eigen::Matrix<double, 24, 1>::Zero();
   vect3 omega;
   input.gyro.boxminus(omega, state.bg);
   const vect3 acceleration = state.rot * (input.acc - state.ba);
@@ -43,8 +42,7 @@ Eigen::Matrix<double, 24, 1> EskfProcessModel::getFInput(
 
 Eigen::Matrix<double, 30, 1> EskfProcessModel::getFOutput(
     state_output& state, const input_ikfom&) const {
-  Eigen::Matrix<double, 30, 1> result =
-      Eigen::Matrix<double, 30, 1>::Zero();
+  Eigen::Matrix<double, 30, 1> result = Eigen::Matrix<double, 30, 1>::Zero();
   const vect3 acceleration = state.rot * state.acc;
   for (int i = 0; i < 3; ++i) {
     result(i) = state.vel[i];
@@ -56,8 +54,7 @@ Eigen::Matrix<double, 30, 1> EskfProcessModel::getFOutput(
 
 Eigen::Matrix<double, 24, 24> EskfProcessModel::dfDxInput(
     state_input& state, const input_ikfom& input) const {
-  Eigen::Matrix<double, 24, 24> result =
-      Eigen::Matrix<double, 24, 24>::Zero();
+  Eigen::Matrix<double, 24, 24> result = Eigen::Matrix<double, 24, 24>::Zero();
   vect3 acceleration;
   input.acc.boxminus(acceleration, state.ba);
   result.block<3, 3>(0, 12) = Eigen::Matrix3d::Identity();
@@ -70,8 +67,7 @@ Eigen::Matrix<double, 24, 24> EskfProcessModel::dfDxInput(
 
 Eigen::Matrix<double, 30, 30> EskfProcessModel::dfDxOutput(
     state_output& state, const input_ikfom&) const {
-  Eigen::Matrix<double, 30, 30> result =
-      Eigen::Matrix<double, 30, 30>::Zero();
+  Eigen::Matrix<double, 30, 30> result = Eigen::Matrix<double, 30, 30>::Zero();
   result.block<3, 3>(0, 12) = Eigen::Matrix3d::Identity();
   result.block<3, 3>(12, 3) = -state.rot * MTK::hat(state.acc);
   result.block<3, 3>(12, 18) = state.rot;
@@ -98,9 +94,9 @@ void Filter::initialize(LidarMeasurementModel& lidar_model,
       [this](state_input& state, const input_ikfom& input) {
         return process_model_.dfDxInput(state, input);
       },
-      [model = &lidar_model](
-          state_input& state, Eigen::Matrix3d, Eigen::Matrix3d,
-          esekfom::dyn_share_modified<double>& data) {
+      [model = &lidar_model](state_input& state, Eigen::Matrix3d,
+                             Eigen::Matrix3d,
+                             esekfom::dyn_share_modified<double>& data) {
         model->hModelInput(state, data);
       });
 
@@ -111,28 +107,25 @@ void Filter::initialize(LidarMeasurementModel& lidar_model,
       [this](state_output& state, const input_ikfom& input) {
         return process_model_.dfDxOutput(state, input);
       },
-      [model = &lidar_model](
-          state_output& state, Eigen::Matrix3d, Eigen::Matrix3d,
-          esekfom::dyn_share_modified<double>& data) {
+      [model = &lidar_model](state_output& state, Eigen::Matrix3d,
+                             Eigen::Matrix3d,
+                             esekfom::dyn_share_modified<double>& data) {
         model->hModelOutput(state, data);
       },
-      [model = &imu_model](
-          state_output& state,
-          esekfom::dyn_share_modified<double>& data) {
+      [model = &imu_model](state_output& state,
+                           esekfom::dyn_share_modified<double>& data) {
         model->hModelOutput(state, data);
       });
 
   InputNoise input_covariance = InputNoise::Identity() * 0.1;
-  input_covariance.block<3, 3>(21, 21) =
-      Eigen::Matrix3d::Identity() * 0.0001;
-  input_covariance.block<6, 6>(15, 15) =
-      Eigen::Matrix<double, 6, 6>::Identity() * 0.001;
+  input_covariance.block<3, 3>(21, 21) = Eigen::Matrix3d::Identity() * 0.0001;
+  input_covariance.block<6, 6>(15, 15) = Eigen::Matrix<double, 6, 6>::Identity()
+                                         * 0.001;
   input_.change_P(input_covariance);
 
   OutputNoise output_covariance = OutputNoise::Identity() * 0.01;
-  output_covariance.block<3, 3>(21, 21) =
-      Eigen::Matrix3d::Identity() * 0.0001;
-  output_covariance.block<6, 6>(24, 24) =
-      Eigen::Matrix<double, 6, 6>::Identity() * 0.001;
+  output_covariance.block<3, 3>(21, 21) = Eigen::Matrix3d::Identity() * 0.0001;
+  output_covariance.block<6, 6>(
+      24, 24) = Eigen::Matrix<double, 6, 6>::Identity() * 0.001;
   output_.change_P(output_covariance);
 }

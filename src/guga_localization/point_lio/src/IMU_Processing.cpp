@@ -11,12 +11,7 @@
 
 #include "point_lio/IMU_Processing.h"
 
-/**
- * @brief 按点时间偏移升序排序
- *
- * PCL curvature 字段存储每个点的扫描偏移时间 (ms),
- * 排序后配合 time_compressing() 进行分组处理。
- */
+
 bool time_list(PointType& x, PointType& y) {
   return point_time_offset_ms(x) < point_time_offset_ms(y);
 };
@@ -42,54 +37,39 @@ void ImuProcessor::reset() {
   init_iter_num = 1;
 }
 
-/**
- * @brief 重力对齐: 计算初始姿态使估计重力与先验重力一致
- *
- * 算法:
- *   1. 构造 hat_grav = [gravity_]× (先验重力的反对称矩阵)
- *   2. 如果 hat_grav * tmp_gravity ≈ 0 (共线):
- *      - align_cos > 0: 方向相同, rot = I
- *      - align_cos < 0: 方向相反, rot = -I
- *   3. 否则:
- *      - 旋转轴: (hat_grav * tmp_gravity) / |hat_grav * tmp_gravity|
- *      - 旋转角: acos(gravity_·tmp_gravity / (|gravity_| * |tmp_gravity|))
- *      - rot = Exp(axis * angle)  (Rodrigues 公式)
- *
- * @param tmp_gravity 估计的重力方向 (如通过加速度均值估计)
- * @param[out] rot    输出的初始旋转矩阵 (使 rot*tmp_gravity ≈ gravity_)
- */
+
 void ImuProcessor::Set_init(Eigen::Vector3d& tmp_gravity,
                             Eigen::Matrix3d& rot) {
-  // 构造先验重力的反对称矩阵 [g_prior]×
+
   M3D hat_grav;
   hat_grav << 0.0, gravity_(2), -gravity_(1), -gravity_(2), 0.0, gravity_(0),
       gravity_(1), -gravity_(0), 0.0;
 
-  // |[g_prior]× * g_est| / (|g_prior||g_est|) 用于判断是否共线
+
   double align_norm = (hat_grav * tmp_gravity).norm() / gravity_.norm()
                       / tmp_gravity.norm();
 
-  // cosθ = g_prior·g_est / (|g_prior||g_est|)
+
   double align_cos = gravity_.transpose() * tmp_gravity;
   align_cos = align_cos / gravity_.norm() / tmp_gravity.norm();
 
   if (align_norm < 1e-6) {
-    // -- 共线情况: 两个重力方向平行 ----
+
     if (align_cos > 1e-6) {
-      rot = Eye3d;  // 同向: 无需旋转
+      rot = Eye3d;
     } else {
-      rot = -Eye3d;  // 反向: 180° 旋转
+      rot = -Eye3d;
     }
   } else {
-    // -- 非共线情况: 通过叉积求旋转轴, 点积求旋转角 ----
+
     V3D align_angle = hat_grav * tmp_gravity / (hat_grav * tmp_gravity).norm()
                       * acos(align_cos);
-    // Rodrigues 公式: axis * angle → SO(3)
+
     rot = Exp(align_angle(0), align_angle(1), align_angle(2));
   }
 }
 
-/** @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值 */
+
 void ImuProcessor::initState(state_input& input_state,
                              state_output& output_state) {
   V3D tmp_gravity;
@@ -105,53 +85,25 @@ void ImuProcessor::initState(state_input& input_state,
   output_state.acc = -rot_init.transpose() * output_state.gravity;
 }
 
-/**
- * @brief IMU 在线初始化: 累积加速度和角速度的滑动平均
- *
- * 累积 MAX_INI_COUNT 帧后:
- *   - mean_acc: 平均加速度 (≈ 重力方向，静止时)
- *   - mean_gyr: 平均角速度 (≈ 陀螺仪零偏)
- *
- * 滑动平均公式 (Welford 增量更新):
- *   mean_new = mean_old + (new_value - mean_old) / N
- *
- * @param meas 当前帧测量组
- * @param N    累积计数 (输入输出, 第一次传入1)
- */
+
 void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   RCLCPP_INFO(logger, "IMU Initializing: %.1f %%",
               double(N) / MAX_INI_COUNT * 100);
   V3D cur_acc;
 
-  // 遍历帧内所有 IMU 数据，更新滑动平均
+
   for (const auto& imu : meas.imu) {
     const auto& imu_acc = imu->linear_acceleration;
     cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
 
-    // 增量更新: mean += (cur - mean) / N
+
     mean_acc += (cur_acc - mean_acc) / N;
 
     N++;
   }
 }
 
-/**
- * @brief IMU 处理主入口
- *
- * 流程:
- *   if IMU 启用:
- *     if 需要初始化:
- *       IMU_init() 累积数据
- *       累积满 MAX_INI_COUNT 帧 → 进入 Ready 阶段
- *       返回 (初始化阶段不输出去畸变点云)
- *     else:
- *       初始化完成 → 直接复制原始点云 (去畸变未实现)
- *   else (IMU 禁用):
- *     直接复制原始点云
- *
- * @param meas 当前帧测量组
- * @param[out] cur_pcl_un_ 输出点云 (当前版本为原始点云副本)
- */
+
 void ImuProcessor::process(const MeasureGroup& meas,
                            PointCloudXYZI::Ptr cur_pcl_un_,
                            state_input& input_state,
@@ -162,23 +114,23 @@ void ImuProcessor::process(const MeasureGroup& meas,
     }
 
     if (stage_ == Stage::Initializing) {
-      // ---- IMU 初始化阶段 ----
+
       IMU_init(meas, init_iter_num);
       if (init_iter_num <= MAX_INI_COUNT) {
-        return;  // 初始化阶段不输出去畸变点云
+        return;
       }
-      // 初始化完成: 数据级累积 + 状态级初始化一步完成
+
       RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
       initState(input_state, output_state);
       stage_ = Stage::Ready;
     }
 
-    *cur_pcl_un_ = *(meas.lidar);  // 直接使用原始点云 (去畸变预留)
+    *cur_pcl_un_ = *(meas.lidar);
 
     // @todo: 实现 IMU 反向传播去畸变
-    // 可利用 IMU 预积分在点时间偏移上反向插值校正点坐标
+
   } else {
-    // ---- IMU 禁用: 直接使用原始点云 ----
+
     if (stage_ == Stage::Initializing) {
       initState(input_state, output_state);
       stage_ = Stage::Ready;

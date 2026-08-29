@@ -19,3 +19,5 @@ scripts/deepseek.sh
 
 # clangd/工具缓存
 .cache/
+
+.mcp.json

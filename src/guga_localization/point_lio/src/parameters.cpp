@@ -19,7 +19,7 @@
 PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
   PointLioParams params;
   try {
-    // ==================== 模式开关 ====================
+
     params.mapping.propagate_at_imu_frequency = nh->declare_parameter<bool>(
         "prop_at_freq_of_imu", true);
     params.mapping.use_imu_as_input = nh->declare_parameter<bool>(
@@ -31,7 +31,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.mapping.space_down_sample = nh->declare_parameter<bool>(
         "space_down_sample", true);
 
-    // ==================== mapping 参数 — IMU 饱和 ====================
+
     params.imu.saturation_acc = nh->declare_parameter<double>(
         "mapping.satu_acc", 3.0);
     params.imu.saturation_gyro = nh->declare_parameter<double>(
@@ -39,19 +39,19 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.imu.acc_norm = nh->declare_parameter<double>(
         "mapping.acc_norm", 1.0);
 
-    // ==================== mapping 参数 — 平面提取 ====================
+
     params.lidar.plane_threshold = static_cast<float>(
         nh->declare_parameter<double>("mapping.plane_thr", 0.05F));
     params.lidar.preprocess.point_filter_num = static_cast<int>(
         nh->declare_parameter<long>("point_filter_num", 2));
 
-    // ==================== common 参数 — 话题名 ====================
+
     params.sensor.lidar_topic = nh->declare_parameter<std::string>(
         "common.lid_topic", ".livox.lidar");
     params.sensor.imu_topic = nh->declare_parameter<std::string>(
         "common.imu_topic", ".livox.imu");
 
-    // ==================== common 参数 — 合帧/切帧 ====================
+
     params.lidar.con_frame = nh->declare_parameter<bool>(
         "common.con_frame", false);
     params.lidar.con_frame_num = static_cast<int>(
@@ -63,7 +63,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.sensor.lidar_to_imu_time = nh->declare_parameter<double>(
         "common.time_diff_lidar_to_imu", 0.0);
 
-    // ==================== prior_pcd 参数 — 先验地图 ====================
+
     params.sensor.enable_prior_map = nh->declare_parameter<bool>(
         "prior_pcd.enable", false);
     params.sensor.prior_map_path = nh->declare_parameter<string>(
@@ -71,7 +71,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.sensor.initial_pose = nh->declare_parameter<std::vector<double>>(
         "prior_pcd.init_pose", std::vector<double>());
 
-    // ==================== 滤波参数 ====================
+
     params.mapping.filter_size_surf = nh->declare_parameter<double>(
         "filter_size_surf", 0.5);
     params.mapping.filter_size_map = nh->declare_parameter<double>(
@@ -79,12 +79,12 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.mapping.det_range = static_cast<float>(
         nh->declare_parameter<double>("mapping.det_range", 300.F));
     params.lidar.preprocess.det_range = params.mapping.det_range;
-    // ==================== mapping 参数 — IMU 功能开关 ====================
+
     params.imu.processor.enabled = nh->declare_parameter<bool>(
         "mapping.imu_en", true);
     params.lidar.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
-    // ==================== mapping 参数 — 噪声协方差 ====================
+
     params.lidar.point_covariance = nh->declare_parameter<double>(
         "mapping.lidar_meas_cov", 0.1);
     params.filter.acc_cov_input = nh->declare_parameter<double>(
@@ -106,7 +106,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.imu.measurement_gyro_cov = nh->declare_parameter<double>(
         "mapping.imu_meas_omg_cov", 0.1);
 
-    // ==================== preprocess 参数 — 雷达配置 ====================
+
     params.lidar.preprocess.blind = nh->declare_parameter<double>(
         "preprocess.blind", 1.0);
     params.lidar.lidar_type = static_cast<int>(
@@ -122,7 +122,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.lidar.match_threshold = nh->declare_parameter<double>("mapping.match_s",
                                                              81);
 
-    // ==================== mapping 参数 — 重力 ====================
+
     const auto gravity = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity", std::vector<double>());
     const auto gravity_init = nh->declare_parameter<std::vector<double>>(
@@ -136,13 +136,13 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
           V3D(gravity_init[0], gravity_init[1], gravity_init[2]);
     }
 
-    // ==================== mapping 参数 — 外参 ====================
+
     params.sensor.extrinsic_t = nh->declare_parameter<std::vector<double>>(
         "mapping.extrinsic_T", std::vector<double>());
     params.sensor.extrinsic_r = nh->declare_parameter<std::vector<double>>(
         "mapping.extrinsic_R", std::vector<double>());
 
-    // ==================== odometry/publish 参数 ====================
+
     params.mapping.publish_odometry_without_downsample =
         nh->declare_parameter<bool>(
             "odometry.publish_odometry_without_downsample", false);
@@ -154,7 +154,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
         "publish.scan_bodyframe_pub_en", true);
     params.publish.tf_enabled = nh->declare_parameter<bool>(
         "publish.tf_send_en", true);
-    // ==================== pcd_save 参数 ====================
+
     params.publish.pcd_save_enabled = nh->declare_parameter<bool>(
         "pcd_save.pcd_save_en", false);
     params.publish.pcd_save_interval = static_cast<int>(
@@ -162,7 +162,7 @@ PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
     params.lidar.lidar_time_interval = nh->declare_parameter<double>(
         "mapping.lidar_time_inte", 0.1);
 
-    // ==================== iVox 网格参数 ====================
+
     params.mapping.ivox_options.resolution_ = static_cast<float>(
         nh->declare_parameter<double>("mapping.ivox_grid_resolution", 0.2));
     const int ivox_nearby_type = static_cast<int>(

@@ -51,6 +51,7 @@ add_executable(pointlio_mapping
   src/Filter.cpp
   src/IMU_Processing.cpp
   src/Imu.cpp
+  src/FrameProcessor.cpp
 )
 
 ament_target_dependencies(pointlio_mapping

@@ -27,6 +27,7 @@
  */
 
 #include "point_lio/laserMapping.h"
+#include "point_lio/FrameProcessor.h"
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
@@ -85,8 +86,8 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_activate(
   pub_path_->on_activate();
   createSensorSubscriptions();
   processing_timer_ = create_wall_timer(
-      std::chrono::milliseconds(2),
-      std::bind(&LaserMappingNode::processIteration, this), callback_group_);
+      std::chrono::milliseconds(2), [this]() { this->processIteration(); },
+      callback_group_);
   return CallbackReturn::SUCCESS;
 }
 
@@ -124,7 +125,7 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_cleanup(
   pcd_index_ = 0;
   pcd_scan_count_ = 0;
   time_update_last_ = 0.0;
-  time_current_ = 0.0;
+  processor_.time_current_ = 0.0;
   time_predict_last_const_ = 0.0;
   t_last_ = 0.0;
   pub_laser_cloud_full_res_.reset();
@@ -154,7 +155,7 @@ void LaserMappingNode::initializeSensors() {
 
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
-void LaserMappingNode::initializeMappingState() {  // TODO:公有数据存放位置待定
+void LaserMappingNode::initializeMappingState() {
   lio_workspace.ivox_ = std::make_shared<IVoxType>(
       config_.mapping.ivox_options);
   lio_workspace.point_selected_surf.set();
@@ -227,33 +228,27 @@ void LaserMappingNode::destroySensorSubscriptions() {
 }
 
 bool LaserMappingNode::initializeIteration() {
-  if (!synchronizer_.syncPackages(
-          lidar_, imu_, measures_)) {  // 存在同步的一帧,更新了最后时间(副作用)
+  if (!processor_.syncPackages()) {
     return false;
   }
   lidar_end_time_ = measures_.lidar_last_time;
 
   if (stage_ == PointLioStage::WAITINGFORDATA) {
-    initScan();
+    processor_.initScan();
     stage_ = imu_.needInit() ? PointLioStage::INITIALIZINGIMU
                              : PointLioStage::INITIALIZINGMAP;
   }
 
-  // 帧级初始化: 计时归零 / IMU 预处理 / 降采样分组 / 就绪检查 / 量测准备。
   return prepareFrame();
 }
-/** @brief 帧级初始化 (每轮主循环): 见类声明 */
+
 bool LaserMappingNode::prepareFrame() {
-  // IMU 预处理: 在线初始化 / 重力对齐 / 点云拷贝 (去畸变预留;
-  // 饱和检查不在本函数, 见 [Workflow 13] IMU 量测更新处)。
   imu_.process(measures_, state_.feats_undistort, filter_.input().x_,
                filter_.output().x_);
 
-  // ---- 就绪检查: IMU 初始化 / 地图初始化 ----
-
   if (imu_.needInit()) {
     stage_ = PointLioStage::INITIALIZINGIMU;
-    return false;  // IMU 初始化中
+    return false;
   }
   if (stage_ == PointLioStage::INITIALIZINGIMU) {
     stage_ = PointLioStage::INITIALIZINGMAP;
@@ -264,10 +259,9 @@ bool LaserMappingNode::prepareFrame() {
         get_logger(), *get_clock(), 2000, "Initializing map: %zu/%d points",
         state_.init_feats_world->size(), config_.mapping.init_map_size);
 
-    return false;  // 地图初始化中: 跳过本帧
+    return false;
   }
 
-  // ---- 降采样 + 按时间戳排序 + 分组 ----
   if (config_.mapping.space_down_sample) {
     state_.downsize_filter_surf.setInputCloud(state_.feats_undistort);
     state_.downsize_filter_surf.filter(*lio_workspace.feats_down_body);
@@ -281,22 +275,21 @@ bool LaserMappingNode::prepareFrame() {
   lio_workspace.time_seq = time_compressing(lio_workspace.feats_down_body);
   lio_workspace.feats_down_size = lio_workspace.feats_down_body->points.size();
 
-  // ---- 量测准备 ----
   lio_workspace.normvec->resize(lio_workspace.feats_down_size);
   lio_workspace.feats_down_world->resize(lio_workspace.feats_down_size);
   lio_workspace.Nearest_Points.resize(lio_workspace.feats_down_size);
   lio_workspace.crossmat_list.resize(lio_workspace.feats_down_size);
   lio_workspace.pbody_list.resize(lio_workspace.feats_down_size);
-  // [Workflow 3] 准备点量测: 将 LiDAR 点变换到 IMU 系并缓存反对称矩阵
-  // (量测雅可比 A 块用)。点量测噪声为标量 laser_point_cov;
-  // 伪代码步骤③的逐点协方差变换 (C_P) 本实现未启用 (cov_p/cov_R 传入未用)。
+
   preparePointMeasurements();
 
   return true;
 }
-/** @brief 节点构造: 初始化 rclcpp::Node 基类 ("laserMapping") */
+
 LaserMappingNode::LaserMappingNode()
-    : rclcpp_lifecycle::LifecycleNode("laserMapping") {
+    : rclcpp_lifecycle::LifecycleNode("laserMapping"),
+      processor_(imu_, filter_, stage_, synchronizer_, lidar_, measures_,
+                 config_) {
   callback_group_ = create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive);
 }
@@ -305,28 +298,17 @@ LaserMappingNode::~LaserMappingNode() {
   try {
     savePendingPcd();
   } catch (...) {
-    // Destructors must not propagate PCL I/O failures during shutdown.
   }
 }
 
 PointCloudXYZI::Ptr LaserMappingNode::loadPointcloudFromPcd(
     const std::string& file_path) {
-  auto pcd_ptr = std::make_shared<PointCloudXYZI>();
-
-  if (pcl::io::loadPCDFile(file_path, *pcd_ptr) == -1) {
-    RCLCPP_ERROR(rclcpp::get_logger("laserMapping"),
-                 "Couldn't read pcd file %s", file_path.c_str());
-    return nullptr;
-  }
-
-  RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "Loaded %zu points from %s",
-              pcd_ptr->size(), file_path.c_str());
-  return pcd_ptr;
+  return FrameProcessor::loadPointcloudFromPcd(file_path);
 }
 
 void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
                                            PointType* const po) const {
-  V3D p_body_lidar(pi->x, pi->y, pi->z);  // NOLINT
+  V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu;
   if (config_.lidar.extrinsic_estimation) {
     if (config_.mapping.use_imu_as_input) {
@@ -341,10 +323,10 @@ void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
     p_body_imu = lio_workspace.Lidar_R_wrt_IMU * p_body_lidar
                  + lio_workspace.Lidar_T_wrt_IMU;
   }
-  po->x = (float)p_body_imu(0);   // NOLINT
-  po->y = (float)p_body_imu(1);   // NOLINT
-  po->z = (float)p_body_imu(2);   // NOLINT
-  po->intensity = pi->intensity;  // NOLINT
+  po->x = (float)p_body_imu(0);
+  po->y = (float)p_body_imu(1);
+  po->z = (float)p_body_imu(2);
+  po->intensity = pi->intensity;
 }
 
 void LaserMappingNode::mapIncremental() const {
@@ -353,7 +335,6 @@ void LaserMappingNode::mapIncremental() const {
   points_to_add.reserve(cur_pts);
 
   for (std::size_t i = 0; i < cur_pts; ++i) {
-    /* decide if need add to map */
     PointType& point_world = lio_workspace.feats_down_world->points[i];
     if (!lio_workspace.Nearest_Points[i].empty()) {
       const PointVector& points_near = lio_workspace.Nearest_Points[i];
@@ -378,7 +359,6 @@ void LaserMappingNode::mapIncremental() const {
         points_to_add.emplace_back(point_world);
       }
     } else {
-      // [Workflow 10] 无有效平面对应: 将点直接加入地图。
       points_to_add.emplace_back(point_world);
     }
   }
@@ -404,9 +384,6 @@ void LaserMappingNode::publishFrameWorld() {
     laser_cloud_msg.header.frame_id = "camera_init";
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
 
-    //--------------------------save map-----------------------------------
-    // 1. make sure you have enough memories
-    // 2. noted that pcd save will influence the real-time performances
     if (config_.publish.pcd_save_enabled) {
       *state_.pcl_wait_save += *lio_workspace.feats_down_world;
 
@@ -467,7 +444,8 @@ void LaserMappingNode::publishOdometry() {
   state_.odom_aft_mapped.header.frame_id = "camera_init";
   state_.odom_aft_mapped.child_frame_id = "body";
   if (config_.mapping.publish_odometry_without_downsample) {
-    state_.odom_aft_mapped.header.stamp = get_ros_time(time_current_);
+    state_.odom_aft_mapped.header.stamp = get_ros_time(
+        processor_.time_current_);
   } else {
     state_.odom_aft_mapped.header.stamp = get_ros_time(lidar_end_time_);
   }
@@ -500,21 +478,16 @@ void LaserMappingNode::publishOdometry() {
 
 void LaserMappingNode::publishPath() {
   setPosestamp(state_.msg_body_pose.pose);
-  // state_.msg_body_pose.header.stamp = ros::Time::now();
+
   state_.msg_body_pose.header.stamp = get_ros_time(lidar_end_time_);
   state_.msg_body_pose.header.frame_id = "camera_init";
   state_.path.poses.emplace_back(state_.msg_body_pose);
   pub_path_->publish(state_.path);
 }
 
-/** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
- * (iVox/先验PCD)
- * @return true  地图已就绪, 本帧可继续正常处理
- *         false 初始化阶段 (本帧用于累积/建图, 调用方应跳过)
- */
 bool LaserMappingNode::initMapState() {
   if (stage_ == PointLioStage::TRACKING) {
-    return true;  // 已完成
+    return true;
   }
   lio_workspace.feats_down_world->resize(state_.feats_undistort->size());
   for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
@@ -545,14 +518,14 @@ bool LaserMappingNode::initMapState() {
     stage_ = PointLioStage::TRACKING;
     return true;
   }
-  return false;  // 仍在累积
+  return false;
 }
 
 void LaserMappingNode::preparePointMeasurements() const {
   for (size_t i = 0; i < lio_workspace.feats_down_body->size(); i++) {
-    V3D point_this(lio_workspace.feats_down_body->points[i].x,   // NOLINT
-                   lio_workspace.feats_down_body->points[i].y,   // NOLINT
-                   lio_workspace.feats_down_body->points[i].z);  // NOLINT
+    V3D point_this(lio_workspace.feats_down_body->points[i].x,
+                   lio_workspace.feats_down_body->points[i].y,
+                   lio_workspace.feats_down_body->points[i].z);
 
     lio_workspace.pbody_list[i] = point_this;
     if (!config_.lidar.extrinsic_estimation) {
@@ -565,7 +538,6 @@ void LaserMappingNode::preparePointMeasurements() const {
   }
 }
 
-/** @brief 发布当前帧输出。 */
 void LaserMappingNode::publishFrameOutputs() {
   if (config_.publish.path_enabled) {
     publishPath();
@@ -578,22 +550,15 @@ void LaserMappingNode::publishFrameOutputs() {
   }
 }
 
-/** @brief 帧内点处理 (2×2: 行=IMU 模式, 列=有无 LiDAR 点)
- * @tparam ImuAsInput true = input filter (24维) / false = output filter (30维)
- * @param kf        当前模式对应的滤波器
- * @param last_time 传播时间基准
- * @param q         对应滤波器持有的过程噪声
- */
 template <bool ImuAsInput, typename KF>
 void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
   if (lio_workspace.time_seq.empty()) {
-    // [Workflow 12] 否则如果 IMU 测量: 当前时间段没有 LiDAR 点, 仅处理 IMU。
     if (!imu_.empty()) {
       imu_.advanceCursor();
 
-      while (get_time_sec(imu_next.header.stamp) > time_current_
+      while (get_time_sec(imu_next.header.stamp) > processor_.time_current_
              && (get_time_sec(imu_next.header.stamp)
                  < measures_.lidar_start_time
                        + config_.lidar.lidar_time_interval)) {
@@ -609,23 +574,22 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
 
           if constexpr (ImuAsInput) {
             lio_workspace.input_in = imu_.lastInput(
-                config_.imu.processor.gravity_magnitude
-                / config_.imu.acc_norm);
+                config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
           } else {
             const auto measurement = imu_.lastMeasurement();
             lio_workspace.angvel_avr = measurement.angular_velocity;
             lio_workspace.acc_avr = measurement.linear_acceleration;
           }
 
-          last_time = time_current_;
-          time_update_last_ = time_current_;
+          last_time = processor_.time_current_;
+          time_update_last_ = processor_.time_current_;
           is_first_frame_ = false;
           break;
         }
-        time_current_ = get_time_sec(imu_next.header.stamp);
+        processor_.time_current_ = get_time_sec(imu_next.header.stamp);
 
         if constexpr (ImuAsInput) {
-          double dt_cov = time_current_ - time_update_last_;
+          double dt_cov = processor_.time_current_ - time_update_last_;
           if (dt_cov > 0.0) {
             time_update_last_ = get_time_sec(imu_next.header.stamp);
           }
@@ -633,14 +597,14 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
           lio_workspace.input_in = imu_.nextInput(
               config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
         } else {
-          double dt = time_current_ - last_time;
-          double dt_cov = time_current_ - time_update_last_;
+          double dt = processor_.time_current_ - last_time;
+          double dt_cov = processor_.time_current_ - time_update_last_;
           if (dt_cov > 0.0) {
             kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-            time_update_last_ = time_current_;
+            time_update_last_ = processor_.time_current_;
           }
           kf.predict(dt, q, lio_workspace.input_in, true, false);
-          last_time = time_current_;
+          last_time = processor_.time_current_;
           const auto measurement = imu_.nextMeasurement();
           lio_workspace.angvel_avr = measurement.angular_velocity;
           lio_workspace.acc_avr = measurement.linear_acceleration;
@@ -656,8 +620,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     return;
   }
 
-  // [Workflow 2] LiDAR 点输入分支: 逐时间组处理 (传播 → 平面更新 →
-  // 世界变换)。
   double pcl_beg_time = measures_.lidar_start_time;
   lio_workspace.idx = -1;
   for (lio_workspace.k = 0;
@@ -668,9 +630,9 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
             ->points[lio_workspace.idx
                      + lio_workspace.time_seq[lio_workspace.k]];
     const double point_offset_ms = point_time_offset_ms(point_body);
-    time_current_ = (point_offset_ms / 1000.0) + pcl_beg_time;
+    processor_.time_current_ = (point_offset_ms / 1000.0) + pcl_beg_time;
     if (is_first_frame_) {
-      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
+      while (processor_.time_current_ > get_time_sec(imu_next.header.stamp)) {
         imu_.popAndAdvance();
         if (imu_.empty()) {
           break;
@@ -686,20 +648,17 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       }
 
       is_first_frame_ = false;
-      last_time = time_current_;
-      time_update_last_ = time_current_;
+      last_time = processor_.time_current_;
+      time_update_last_ = processor_.time_current_;
     }
 
-    // [Workflow 1] 将状态传播到当前 LiDAR 点时间。
-
     if constexpr (ImuAsInput) {
-      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
+      while (processor_.time_current_ > get_time_sec(imu_next.header.stamp)) {
         imu_.popBuffer();
         lio_workspace.input_in = imu_.lastInput(
             config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
         double dt = get_time_sec(imu_last.header.stamp) - last_time;
-        double dt_cov =
-            get_time_sec(imu_last.header.stamp) - time_update_last_;
+        double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
 
         if (dt_cov > 0.0) {
           kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
@@ -716,8 +675,7 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       }
     } else if (config_.imu.processor.enabled && !imu_.empty()) {
       const bool last_imu = imu_.isSameStamp();
-      while (!imu_.empty()
-             && get_time_sec(imu_next.header.stamp) < last_time) {
+      while (!imu_.empty() && get_time_sec(imu_next.header.stamp) < last_time) {
         if (!last_imu) {
           imu_.advanceCursor();
           break;
@@ -729,7 +687,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       }
 
       while (!imu_.empty()
-             && time_current_ > get_time_sec(imu_next.header.stamp)) {
+             && processor_.time_current_
+                    > get_time_sec(imu_next.header.stamp)) {
         const auto measurement = imu_.nextMeasurement();
         lio_workspace.angvel_avr = measurement.angular_velocity;
         lio_workspace.acc_avr = measurement.linear_acceleration;
@@ -749,16 +708,16 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       }
     }
 
-    double dt = time_current_ - last_time;
+    double dt = processor_.time_current_ - last_time;
     if (!config_.mapping.propagate_at_imu_frequency) {
-      double dt_cov = time_current_ - time_update_last_;
+      double dt_cov = processor_.time_current_ - time_update_last_;
       if (dt_cov > 0.0) {
         kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-        time_update_last_ = time_current_;
+        time_update_last_ = processor_.time_current_;
       }
     }
     kf.predict(dt, q, lio_workspace.input_in, true, false);
-    last_time = time_current_;
+    last_time = processor_.time_current_;
 
     if (lio_workspace.feats_down_size < 1) {
       RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
@@ -766,12 +725,8 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
       continue;
     }
-    // [Workflow 4] 判断是否存在有效平面对应。
-    // [Workflow 5] 残差、雅可比和量测协方差在 EKF 更新函数内计算。
-    // [Workflow 6] 状态更新在 EKF 更新函数内完成。
-    // [Workflow 7] 协方差更新在 EKF 更新函数内完成。
+
     if (!kf.update_iterated_dyn_share_modified()) {
-      // [Workflow 9] 无有效平面对应时跳过当前点更新。
       lio_workspace.idx = lio_workspace.idx
                           + lio_workspace.time_seq[lio_workspace.k];
       continue;
@@ -780,7 +735,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
       publishOdometry();
     }
 
-    // [Workflow 8] 将更新后的点变换到世界系。
     for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
       PointType& point_body_j =
           lio_workspace.feats_down_body->points[lio_workspace.idx + j + 1];
@@ -791,24 +745,6 @@ void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
     }
 
     lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
-  }
-}
-
-void LaserMappingNode::initScan() {
-  const auto& imu_next = imu_.next();
-  std::cout << "first imu time: " << get_time_sec(imu_next.header.stamp)
-            << '\n';
-  time_current_ = 0.0;
-
-  if (config_.imu.processor.enabled) {
-    filter_.input().x_.gravity = config_.imu.processor.gravity;
-    filter_.output().x_.gravity = config_.imu.processor.gravity;
-    imu_.discardBefore(measures_.lidar_start_time);  // 去除起始时间之前的帧
-  } else {
-    filter_.input().x_.gravity = config_.imu.processor.gravity;
-    filter_.output().x_.gravity = config_.imu.processor.gravity;
-    filter_.output().x_.acc = config_.imu.processor.gravity;
-    filter_.output().x_.acc *= -1;
   }
 }
 
@@ -824,7 +760,7 @@ void LaserMappingNode::savePendingPcd() {
 void LaserMappingNode::savePcd() {
   auto t = std::chrono::system_clock::to_time_t(
       std::chrono::system_clock::now());
-  std::tm tm{};  // 栈上自己的 tm, 不碰静态缓冲
+  std::tm tm{};
   localtime_r(&t, &tm);
   std::stringstream ss;
   ss << std::put_time(&tm, "%Y_%m_%d-%H_%M_%S");

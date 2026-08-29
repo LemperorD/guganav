@@ -13,6 +13,7 @@
 #include "point_lio/Lidar.h"
 #include "point_lio/Synchronizer.h"
 #include "point_lio/Filter.h"
+#include "point_lio/FrameProcessor.h"
 
 struct MainLoopState {
   int sleep_time = 0;  ///< 等待计数
@@ -41,13 +42,6 @@ public:
 private:
   using CallbackReturn =
       rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
-  enum class PointLioStage {
-    WAITINGFORDATA,
-    INITIALIZINGIMU,
-    INITIALIZINGMAP,
-    TRACKING
-  };
-
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
@@ -61,11 +55,11 @@ private:
   int pcd_index_{0};
   int pcd_scan_count_{0};
   double time_update_last_{0.0};
-  double time_current_{0.0};
   double time_predict_last_const_{0.0};
   double t_last_{0.0};
   MeasureGroup measures_;
   MainLoopState state_;  ///< 主循环状态
+  FrameProcessor processor_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::TimerBase::SharedPtr processing_timer_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl_pc_;
@@ -111,8 +105,7 @@ private:
    */
   bool prepareFrame();
 
-  static PointCloudXYZI::Ptr loadPointcloudFromPcd(
-      const std::string& file_path);
+  PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string& file_path);
   void pointBodyLidarToIMU(PointType const* pi, PointType* po) const;
 
   void mapIncremental() const;

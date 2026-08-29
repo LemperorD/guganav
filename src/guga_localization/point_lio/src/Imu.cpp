@@ -134,7 +134,7 @@ namespace {
         msg.linear_acceleration.y, msg.linear_acceleration.z;
     return measurement;
   }
-}  // namespace
+}
 
 input_ikfom Imu::lastInput(double acc_scale) const {
   return makeInput(last_, acc_scale);
