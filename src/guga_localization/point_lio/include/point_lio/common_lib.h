@@ -23,6 +23,10 @@
 #include <rclcpp/time.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/filters/voxel_grid.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <point_lio/so3_math.h>
 #include <IKFoM/IKFoM_toolkit/esekfom/esekfom.hpp>
 #include <Eigen/Eigen>
@@ -104,6 +108,18 @@ using PointVector =
                 Eigen::aligned_allocator<PointType>>;  ///< 对齐点向量
 using V3D = Eigen::Vector3d;                           ///< 双精度3维向量
 using M3D = Eigen::Matrix3d;                           ///< 双精度3x3矩阵
+
+struct MainLoopState {
+  int sleep_time = 0;
+  pcl::VoxelGrid<PointType> downsize_filter_surf;
+  nav_msgs::msg::Path path;
+  nav_msgs::msg::Odometry odom_aft_mapped;
+  geometry_msgs::msg::PoseStamped msg_body_pose;
+  PointCloudXYZI::Ptr feats_undistort = std::make_shared<PointCloudXYZI>();
+  PointCloudXYZI::Ptr init_feats_world = std::make_shared<PointCloudXYZI>();
+  PointCloudXYZI::Ptr pcl_wait_save = std::make_shared<PointCloudXYZI>();
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+};
 
 // ==================== std::vector → Eigen 转换 ====================
 /** @brief std::vector<double> → Eigen::Vector3d (带长度校验) */

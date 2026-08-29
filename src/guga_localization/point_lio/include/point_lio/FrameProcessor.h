@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -27,40 +28,43 @@ class FrameProcessor {
 public:
   FrameProcessor(Imu& imu, Filter& filter, PointLioStage& stage_,
                  Synchronizer& synchronizer_, Lidar& lidar,
-                 MeasureGroup& measurement, PointLioParams& config);
+                 MeasureGroup& measurement, PointLioParams& config,
+                 MainLoopState& state);
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
   bool syncPackages();
   void initScan();
+  void preparePointMeasurements() const;
+  bool initMapState(
+      std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
+  void publishOdometry(
+      const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
+      const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
+          publish_tf);
+  bool prepareFrame(
+      std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
+  bool initializeIteration(
+      std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
+
+  template <bool ImuAsInput, typename KF>
+  void processFramePoints(
+      KF& kf, double& last_time, auto& q,
+      const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
+      const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
+          publish_tf);
+
   double time_current_{0.0};
+  double lidar_end_time_{0.0};
+  bool is_first_frame_{true};
+  double time_update_last_{0.0};
 
 private:
-  struct MainLoopState {
-    int sleep_time = 0;  ///< 等待计数
-
-    // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
-    pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
-    nav_msgs::msg::Path path;                        ///< 轨迹消息
-    nav_msgs::msg::Odometry odom_aft_mapped;         ///< 里程计消息
-    geometry_msgs::msg::PoseStamped msg_body_pose;   ///< 位姿消息
-    PointCloudXYZI::Ptr feats_undistort =
-        std::make_shared<PointCloudXYZI>();  ///< 去畸变特征点云
-    PointCloudXYZI::Ptr init_feats_world =
-        std::make_shared<PointCloudXYZI>();  ///< 初始化世界系点云
-    PointCloudXYZI::Ptr pcl_wait_save =
-        std::make_shared<PointCloudXYZI>();  ///< 待保存点云
-
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  };
-
-  double lidar_end_time_{0.0};
-
   Imu& imu_;
   Lidar& lidar_;
   Filter& filter_;
   MeasureGroup& measures_;
   PointLioStage& stage_;
-  MainLoopState state_;  ///< 主循环状态
+  MainLoopState& state_;
   PointLioParams& config_;
   Synchronizer& synchronizer_;
 };

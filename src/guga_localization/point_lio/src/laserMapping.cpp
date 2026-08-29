@@ -54,17 +54,53 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_configure(
 }
 
 void LaserMappingNode::processIteration() {
-  if (!initializeIteration()) {
+  if (!processor_.initializeIteration(
+          [this](const sensor_msgs::msg::PointCloud2& msg) {
+            if (pub_laser_cloud_map_) {
+              pub_laser_cloud_map_->publish(msg);
+            }
+          })) {
     return;
   }
   if (config_.mapping.use_imu_as_input) {
-    processFramePoints<true>(filter_.input(), t_last_, filter_.inputNoise());
+    processor_.processFramePoints<true>(
+        filter_.input(), t_last_, filter_.inputNoise(),
+        [this](const nav_msgs::msg::Odometry& msg) {
+          if (pub_odom_aft_mapped_) {
+            pub_odom_aft_mapped_->publish(msg);
+          }
+        },
+        [this](const geometry_msgs::msg::TransformStamped& transform) {
+          if (tf_broadcaster_) {
+            tf_broadcaster_->sendTransform(transform);
+          }
+        });
   } else {
-    processFramePoints<false>(filter_.output(), time_predict_last_const_,
-                              filter_.outputNoise());
+    processor_.processFramePoints<false>(
+        filter_.output(), time_predict_last_const_, filter_.outputNoise(),
+        [this](const nav_msgs::msg::Odometry& msg) {
+          if (pub_odom_aft_mapped_) {
+            pub_odom_aft_mapped_->publish(msg);
+          }
+        },
+        [this](const geometry_msgs::msg::TransformStamped& transform) {
+          if (tf_broadcaster_) {
+            tf_broadcaster_->sendTransform(transform);
+          }
+        });
   }
   if (!config_.mapping.publish_odometry_without_downsample) {
-    publishOdometry();
+    processor_.publishOdometry(
+        [this](const nav_msgs::msg::Odometry& msg) {
+          if (pub_odom_aft_mapped_) {
+            pub_odom_aft_mapped_->publish(msg);
+          }
+        },
+        [this](const geometry_msgs::msg::TransformStamped& transform) {
+          if (tf_broadcaster_) {
+            tf_broadcaster_->sendTransform(transform);
+          }
+        });
   }
   if (lio_workspace.feats_down_size > 4) {
     if (config_.sensor.enable_prior_map) {
@@ -120,11 +156,11 @@ LaserMappingNode::CallbackReturn LaserMappingNode::on_cleanup(
   state_.odom_aft_mapped = nav_msgs::msg::Odometry{};
   state_.msg_body_pose = geometry_msgs::msg::PoseStamped{};
   stage_ = PointLioStage::WAITINGFORDATA;
-  is_first_frame_ = true;
-  lidar_end_time_ = 0.0;
+  processor_.is_first_frame_ = true;
+  processor_.lidar_end_time_ = 0.0;
   pcd_index_ = 0;
   pcd_scan_count_ = 0;
-  time_update_last_ = 0.0;
+  processor_.time_update_last_ = 0.0;
   processor_.time_current_ = 0.0;
   time_predict_last_const_ = 0.0;
   t_last_ = 0.0;
@@ -168,7 +204,7 @@ void LaserMappingNode::initializeMappingState() {
       static_cast<float>(config_.mapping.filter_size_surf),
       static_cast<float>(config_.mapping.filter_size_surf));
 
-  state_.path.header.stamp = get_ros_time(lidar_end_time_);
+  state_.path.header.stamp = get_ros_time(processor_.lidar_end_time_);
   state_.path.header.frame_id = "camera_init";
 }
 void LaserMappingNode::initializeFilter() {
@@ -227,69 +263,10 @@ void LaserMappingNode::destroySensorSubscriptions() {
   sub_imu_.reset();
 }
 
-bool LaserMappingNode::initializeIteration() {
-  if (!processor_.syncPackages()) {
-    return false;
-  }
-  lidar_end_time_ = measures_.lidar_last_time;
-
-  if (stage_ == PointLioStage::WAITINGFORDATA) {
-    processor_.initScan();
-    stage_ = imu_.needInit() ? PointLioStage::INITIALIZINGIMU
-                             : PointLioStage::INITIALIZINGMAP;
-  }
-
-  return prepareFrame();
-}
-
-bool LaserMappingNode::prepareFrame() {
-  imu_.process(measures_, state_.feats_undistort, filter_.input().x_,
-               filter_.output().x_);
-
-  if (imu_.needInit()) {
-    stage_ = PointLioStage::INITIALIZINGIMU;
-    return false;
-  }
-  if (stage_ == PointLioStage::INITIALIZINGIMU) {
-    stage_ = PointLioStage::INITIALIZINGMAP;
-  }
-
-  if (!initMapState()) {
-    RCLCPP_INFO_THROTTLE(
-        get_logger(), *get_clock(), 2000, "Initializing map: %zu/%d points",
-        state_.init_feats_world->size(), config_.mapping.init_map_size);
-
-    return false;
-  }
-
-  if (config_.mapping.space_down_sample) {
-    state_.downsize_filter_surf.setInputCloud(state_.feats_undistort);
-    state_.downsize_filter_surf.filter(*lio_workspace.feats_down_body);
-    sort(lio_workspace.feats_down_body->points.begin(),
-         lio_workspace.feats_down_body->points.end(), time_list);
-  } else {
-    lio_workspace.feats_down_body = measures_.lidar;
-    sort(lio_workspace.feats_down_body->points.begin(),
-         lio_workspace.feats_down_body->points.end(), time_list);
-  }
-  lio_workspace.time_seq = time_compressing(lio_workspace.feats_down_body);
-  lio_workspace.feats_down_size = lio_workspace.feats_down_body->points.size();
-
-  lio_workspace.normvec->resize(lio_workspace.feats_down_size);
-  lio_workspace.feats_down_world->resize(lio_workspace.feats_down_size);
-  lio_workspace.Nearest_Points.resize(lio_workspace.feats_down_size);
-  lio_workspace.crossmat_list.resize(lio_workspace.feats_down_size);
-  lio_workspace.pbody_list.resize(lio_workspace.feats_down_size);
-
-  preparePointMeasurements();
-
-  return true;
-}
-
 LaserMappingNode::LaserMappingNode()
     : rclcpp_lifecycle::LifecycleNode("laserMapping"),
       processor_(imu_, filter_, stage_, synchronizer_, lidar_, measures_,
-                 config_) {
+                 config_, state_) {
   callback_group_ = create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive);
 }
@@ -299,11 +276,6 @@ LaserMappingNode::~LaserMappingNode() {
     savePendingPcd();
   } catch (...) {
   }
-}
-
-PointCloudXYZI::Ptr LaserMappingNode::loadPointcloudFromPcd(
-    const std::string& file_path) {
-  return FrameProcessor::loadPointcloudFromPcd(file_path);
 }
 
 void LaserMappingNode::pointBodyLidarToIMU(PointType const* const pi,
@@ -365,22 +337,12 @@ void LaserMappingNode::mapIncremental() const {
   lio_workspace.ivox_->AddPoints(points_to_add);
 }
 
-void LaserMappingNode::publishInitMap() {
-  sensor_msgs::msg::PointCloud2 laser_cloudmsg;
-
-  pcl::toROSMsg(*state_.init_feats_world, laser_cloudmsg);
-
-  laser_cloudmsg.header.stamp = get_ros_time(lidar_end_time_);
-  laser_cloudmsg.header.frame_id = "camera_init";
-  pub_laser_cloud_map_->publish(laser_cloudmsg);
-}
-
 void LaserMappingNode::publishFrameWorld() {
   if (config_.publish.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
     pcl::toROSMsg(*lio_workspace.feats_down_world, laser_cloud_msg);
 
-    laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time_);
+    laser_cloud_msg.header.stamp = get_ros_time(processor_.lidar_end_time_);
     laser_cloud_msg.header.frame_id = "camera_init";
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
 
@@ -415,7 +377,7 @@ void LaserMappingNode::publishFrameBody() {
 
   sensor_msgs::msg::PointCloud2 laser_cloud_msg;
   pcl::toROSMsg(*lasercloud_imu_body, laser_cloud_msg);
-  laser_cloud_msg.header.stamp = get_ros_time(lidar_end_time_);
+  laser_cloud_msg.header.stamp = get_ros_time(processor_.lidar_end_time_);
   laser_cloud_msg.header.frame_id = "body";
   pub_laser_cloud_full_res_body_->publish(laser_cloud_msg);
 }
@@ -440,102 +402,13 @@ void LaserMappingNode::setPosestamp(T& out) {
   }
 }
 
-void LaserMappingNode::publishOdometry() {
-  state_.odom_aft_mapped.header.frame_id = "camera_init";
-  state_.odom_aft_mapped.child_frame_id = "body";
-  if (config_.mapping.publish_odometry_without_downsample) {
-    state_.odom_aft_mapped.header.stamp = get_ros_time(
-        processor_.time_current_);
-  } else {
-    state_.odom_aft_mapped.header.stamp = get_ros_time(lidar_end_time_);
-  }
-  setPosestamp(state_.odom_aft_mapped.pose.pose);
-
-  pub_odom_aft_mapped_->publish(state_.odom_aft_mapped);
-
-  if (config_.publish.tf_enabled) {
-    geometry_msgs::msg::TransformStamped transform;
-    transform.header.frame_id = "camera_init";
-    transform.child_frame_id = "aft_mapped";
-    transform.transform.translation.x =
-        state_.odom_aft_mapped.pose.pose.position.x;
-    transform.transform.translation.y =
-        state_.odom_aft_mapped.pose.pose.position.y;
-    transform.transform.translation.z =
-        state_.odom_aft_mapped.pose.pose.position.z;
-    transform.transform.rotation.w =
-        state_.odom_aft_mapped.pose.pose.orientation.w;
-    transform.transform.rotation.x =
-        state_.odom_aft_mapped.pose.pose.orientation.x;
-    transform.transform.rotation.y =
-        state_.odom_aft_mapped.pose.pose.orientation.y;
-    transform.transform.rotation.z =
-        state_.odom_aft_mapped.pose.pose.orientation.z;
-    transform.header.stamp = state_.odom_aft_mapped.header.stamp;
-    tf_broadcaster_->sendTransform(transform);
-  }
-}
-
 void LaserMappingNode::publishPath() {
   setPosestamp(state_.msg_body_pose.pose);
 
-  state_.msg_body_pose.header.stamp = get_ros_time(lidar_end_time_);
+  state_.msg_body_pose.header.stamp = get_ros_time(processor_.lidar_end_time_);
   state_.msg_body_pose.header.frame_id = "camera_init";
   state_.path.poses.emplace_back(state_.msg_body_pose);
   pub_path_->publish(state_.path);
-}
-
-bool LaserMappingNode::initMapState() {
-  if (stage_ == PointLioStage::TRACKING) {
-    return true;
-  }
-  lio_workspace.feats_down_world->resize(state_.feats_undistort->size());
-  for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
-    if (config_.mapping.use_imu_as_input) {
-      lidar_.measurementModel().pointBodyToWorld(
-          &(state_.feats_undistort->points[i]),
-          &(lio_workspace.feats_down_world->points[i]), filter_.input().x_);
-    } else {
-      lidar_.measurementModel().pointBodyToWorld(
-          &(state_.feats_undistort->points[i]),
-          &(lio_workspace.feats_down_world->points[i]), filter_.output().x_);
-    }
-  }
-  for (const auto& point : *lio_workspace.feats_down_world) {
-    state_.init_feats_world->points.emplace_back(point);
-  }
-
-  if (state_.init_feats_world->size()
-      >= (size_t)config_.mapping.init_map_size) {
-    if (config_.sensor.enable_prior_map) {
-      auto map_cloud = loadPointcloudFromPcd(config_.sensor.prior_map_path);
-      lio_workspace.ivox_->AddPoints(map_cloud->points);
-    } else {
-      lio_workspace.ivox_->AddPoints(state_.init_feats_world->points);
-    }
-    publishInitMap();
-    state_.init_feats_world.reset(new PointCloudXYZI());
-    stage_ = PointLioStage::TRACKING;
-    return true;
-  }
-  return false;
-}
-
-void LaserMappingNode::preparePointMeasurements() const {
-  for (size_t i = 0; i < lio_workspace.feats_down_body->size(); i++) {
-    V3D point_this(lio_workspace.feats_down_body->points[i].x,
-                   lio_workspace.feats_down_body->points[i].y,
-                   lio_workspace.feats_down_body->points[i].z);
-
-    lio_workspace.pbody_list[i] = point_this;
-    if (!config_.lidar.extrinsic_estimation) {
-      point_this = lio_workspace.Lidar_R_wrt_IMU * point_this
-                   + lio_workspace.Lidar_T_wrt_IMU;
-      M3D point_crossmat;
-      point_crossmat << SKEW_SYM_MATRX(point_this);
-      lio_workspace.crossmat_list[i] = point_crossmat;
-    }
-  }
 }
 
 void LaserMappingNode::publishFrameOutputs() {
@@ -547,204 +420,6 @@ void LaserMappingNode::publishFrameOutputs() {
   }
   if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
     publishFrameBody();
-  }
-}
-
-template <bool ImuAsInput, typename KF>
-void LaserMappingNode::processFramePoints(KF& kf, double& last_time, auto& q) {
-  const auto& imu_last = imu_.last();
-  const auto& imu_next = imu_.next();
-  if (lio_workspace.time_seq.empty()) {
-    if (!imu_.empty()) {
-      imu_.advanceCursor();
-
-      while (get_time_sec(imu_next.header.stamp) > processor_.time_current_
-             && (get_time_sec(imu_next.header.stamp)
-                 < measures_.lidar_start_time
-                       + config_.lidar.lidar_time_interval)) {
-        if (is_first_frame_) {
-          while (get_time_sec(imu_next.header.stamp)
-                 < measures_.lidar_start_time
-                       + config_.lidar.lidar_time_interval) {
-            imu_.popAndAdvance();
-            if (imu_.empty()) {
-              break;
-            }
-          }
-
-          if constexpr (ImuAsInput) {
-            lio_workspace.input_in = imu_.lastInput(
-                config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
-          } else {
-            const auto measurement = imu_.lastMeasurement();
-            lio_workspace.angvel_avr = measurement.angular_velocity;
-            lio_workspace.acc_avr = measurement.linear_acceleration;
-          }
-
-          last_time = processor_.time_current_;
-          time_update_last_ = processor_.time_current_;
-          is_first_frame_ = false;
-          break;
-        }
-        processor_.time_current_ = get_time_sec(imu_next.header.stamp);
-
-        if constexpr (ImuAsInput) {
-          double dt_cov = processor_.time_current_ - time_update_last_;
-          if (dt_cov > 0.0) {
-            time_update_last_ = get_time_sec(imu_next.header.stamp);
-          }
-          last_time = get_time_sec(imu_next.header.stamp);
-          lio_workspace.input_in = imu_.nextInput(
-              config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
-        } else {
-          double dt = processor_.time_current_ - last_time;
-          double dt_cov = processor_.time_current_ - time_update_last_;
-          if (dt_cov > 0.0) {
-            kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-            time_update_last_ = processor_.time_current_;
-          }
-          kf.predict(dt, q, lio_workspace.input_in, true, false);
-          last_time = processor_.time_current_;
-          const auto measurement = imu_.nextMeasurement();
-          lio_workspace.angvel_avr = measurement.angular_velocity;
-          lio_workspace.acc_avr = measurement.linear_acceleration;
-          kf.update_iterated_dyn_share_IMU();
-        }
-
-        imu_.popAndAdvance();
-        if (imu_.empty()) {
-          break;
-        }
-      }
-    }
-    return;
-  }
-
-  double pcl_beg_time = measures_.lidar_start_time;
-  lio_workspace.idx = -1;
-  for (lio_workspace.k = 0;
-       lio_workspace.k < (int)lio_workspace.time_seq.size();
-       lio_workspace.k++) {
-    PointType& point_body =
-        lio_workspace.feats_down_body
-            ->points[lio_workspace.idx
-                     + lio_workspace.time_seq[lio_workspace.k]];
-    const double point_offset_ms = point_time_offset_ms(point_body);
-    processor_.time_current_ = (point_offset_ms / 1000.0) + pcl_beg_time;
-    if (is_first_frame_) {
-      while (processor_.time_current_ > get_time_sec(imu_next.header.stamp)) {
-        imu_.popAndAdvance();
-        if (imu_.empty()) {
-          break;
-        }
-      }
-      if constexpr (ImuAsInput) {
-        lio_workspace.input_in = imu_.lastInput(
-            config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
-      } else if (config_.imu.processor.enabled) {
-        const auto measurement = imu_.lastMeasurement();
-        lio_workspace.angvel_avr = measurement.angular_velocity;
-        lio_workspace.acc_avr = measurement.linear_acceleration;
-      }
-
-      is_first_frame_ = false;
-      last_time = processor_.time_current_;
-      time_update_last_ = processor_.time_current_;
-    }
-
-    if constexpr (ImuAsInput) {
-      while (processor_.time_current_ > get_time_sec(imu_next.header.stamp)) {
-        imu_.popBuffer();
-        lio_workspace.input_in = imu_.lastInput(
-            config_.imu.processor.gravity_magnitude / config_.imu.acc_norm);
-        double dt = get_time_sec(imu_last.header.stamp) - last_time;
-        double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
-
-        if (dt_cov > 0.0) {
-          kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-          time_update_last_ = get_time_sec(imu_last.header.stamp);
-        }
-
-        kf.predict(dt, q, lio_workspace.input_in, true, false);
-        last_time = get_time_sec(imu_last.header.stamp);
-
-        if (imu_.empty()) {
-          break;
-        }
-        imu_.advanceCursor();
-      }
-    } else if (config_.imu.processor.enabled && !imu_.empty()) {
-      const bool last_imu = imu_.isSameStamp();
-      while (!imu_.empty() && get_time_sec(imu_next.header.stamp) < last_time) {
-        if (!last_imu) {
-          imu_.advanceCursor();
-          break;
-        }
-        imu_.popAndAdvance();
-        if (imu_.empty()) {
-          break;
-        }
-      }
-
-      while (!imu_.empty()
-             && processor_.time_current_
-                    > get_time_sec(imu_next.header.stamp)) {
-        const auto measurement = imu_.nextMeasurement();
-        lio_workspace.angvel_avr = measurement.angular_velocity;
-        lio_workspace.acc_avr = measurement.linear_acceleration;
-
-        const double imu_time = get_time_sec(imu_next.header.stamp);
-        double dt = imu_time - last_time;
-        kf.predict(dt, q, lio_workspace.input_in, true, false);
-        last_time = imu_time;
-
-        double dt_cov = imu_time - time_update_last_;
-        if (dt_cov > 0.0) {
-          kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-          time_update_last_ = imu_time;
-          kf.update_iterated_dyn_share_IMU();
-        }
-        imu_.popAndAdvance();
-      }
-    }
-
-    double dt = processor_.time_current_ - last_time;
-    if (!config_.mapping.propagate_at_imu_frequency) {
-      double dt_cov = processor_.time_current_ - time_update_last_;
-      if (dt_cov > 0.0) {
-        kf.predict(dt_cov, q, lio_workspace.input_in, false, true);
-        time_update_last_ = processor_.time_current_;
-      }
-    }
-    kf.predict(dt, q, lio_workspace.input_in, true, false);
-    last_time = processor_.time_current_;
-
-    if (lio_workspace.feats_down_size < 1) {
-      RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
-                  "No point, skip this scan!\n");
-      lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
-      continue;
-    }
-
-    if (!kf.update_iterated_dyn_share_modified()) {
-      lio_workspace.idx = lio_workspace.idx
-                          + lio_workspace.time_seq[lio_workspace.k];
-      continue;
-    }
-    if (config_.mapping.publish_odometry_without_downsample) {
-      publishOdometry();
-    }
-
-    for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
-      PointType& point_body_j =
-          lio_workspace.feats_down_body->points[lio_workspace.idx + j + 1];
-      PointType& point_world_j =
-          lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1];
-      lidar_.measurementModel().pointBodyToWorld(&point_body_j, &point_world_j,
-                                                 kf.x_);
-    }
-
-    lio_workspace.idx += lio_workspace.time_seq[lio_workspace.k];
   }
 }
 

@@ -15,24 +15,6 @@
 #include "point_lio/Filter.h"
 #include "point_lio/FrameProcessor.h"
 
-struct MainLoopState {
-  int sleep_time = 0;  ///< 等待计数
-
-  // ---- 工作缓存 (滤波器 / 消息 / 点云) ----
-  pcl::VoxelGrid<PointType> downsize_filter_surf;  ///< 配准后降采样
-  nav_msgs::msg::Path path;                        ///< 轨迹消息
-  nav_msgs::msg::Odometry odom_aft_mapped;         ///< 里程计消息
-  geometry_msgs::msg::PoseStamped msg_body_pose;   ///< 位姿消息
-  PointCloudXYZI::Ptr feats_undistort =
-      std::make_shared<PointCloudXYZI>();  ///< 去畸变特征点云
-  PointCloudXYZI::Ptr init_feats_world =
-      std::make_shared<PointCloudXYZI>();  ///< 初始化世界系点云
-  PointCloudXYZI::Ptr pcl_wait_save =
-      std::make_shared<PointCloudXYZI>();  ///< 待保存点云
-
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
-
 class LaserMappingNode : public rclcpp_lifecycle::LifecycleNode {
 public:
   /** @brief 节点构造: 以 "laserMapping" 为节点名初始化基类 */
@@ -96,21 +78,17 @@ private:
    * @return true 当前轮次已准备好进入 ESKF 处理
    *         false 尚未同步到数据或 IMU/地图仍在初始化
    */
-  bool initializeIteration();
 
   /** @brief 帧级初始化 (每轮主循环): 计时归零 + IMU 预处理 + 降采样/排序/分组
    *         + 地图就绪检查 + 量测准备
    * @return true  本帧可继续正常处理
    *         false IMU 初始化中或地图未就绪, 调用方应跳过本帧
    */
-  bool prepareFrame();
-
-  PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string& file_path);
+  
+  
   void pointBodyLidarToIMU(PointType const* pi, PointType* po) const;
 
   void mapIncremental() const;
-
-  void publishInitMap();
 
   void publishFrameWorld();
 
@@ -119,8 +97,6 @@ private:
   template <typename T>
   void setPosestamp(T& out);
 
-  void publishOdometry();
-
   void publishPath();
 
   /** @brief 初始化地图: 累积世界系点云, 达到 init_map_size 后建图
@@ -128,9 +104,6 @@ private:
    * @return true  地图已就绪, 本帧可继续正常处理
    *         false 初始化阶段 (本帧用于累积/建图, 调用方应跳过)
    */
-  bool initMapState();
-
-  void preparePointMeasurements() const;
 
   /** @brief 帧尾: 发布输出 + 运行时位姿日志 */
   void publishFrameOutputs();
@@ -144,8 +117,6 @@ private:
    */
   template <bool ImuAsInput, typename KF>
   void processFramePoints(KF& kf, double& last_time, auto& q);
-
-  void initScan();
 
   void savePendingPcd();
   void savePcd();
