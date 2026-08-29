@@ -39,106 +39,21 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-LaserMappingNode::CallbackReturn LaserMappingNode::on_configure(
-    const rclcpp_lifecycle::State&) {
-  if (!parameters_loaded_) {
-    config_ = readParameters(this);
-    parameters_loaded_ = true;
-  }
+LaserMappingNode::LaserMappingNode()
+    : rclcpp::Node("laserMapping"),
+      processor_(imu_, filter_, stage_, synchronizer_, lidar_, measures_,
+                 config_, state_) {
+  callback_group_ = create_callback_group(
+      rclcpp::CallbackGroupType::MutuallyExclusive);
+  config_ = readParameters(this);
   initializeSensors();
   initializeMappingState();
   initializeFilter();
   initializeRos2Interfaces();
-  stage_ = PointLioStage::WAITINGFORDATA;
-  return CallbackReturn::SUCCESS;
-}
-
-void LaserMappingNode::processIteration() {
-  processor_.processIteration(
-      [this](const sensor_msgs::msg::PointCloud2& msg) {
-        if (pub_laser_cloud_map_) {
-          pub_laser_cloud_map_->publish(msg);
-        }
-      },
-      [this](const nav_msgs::msg::Odometry& msg) {
-        if (pub_odom_aft_mapped_) {
-          pub_odom_aft_mapped_->publish(msg);
-        }
-      },
-      [this](const geometry_msgs::msg::TransformStamped& msg) {
-        if (tf_broadcaster_) {
-          tf_broadcaster_->sendTransform(msg);
-        }
-      });
-  publishFrameOutputs();
-}
-
-LaserMappingNode::CallbackReturn LaserMappingNode::on_activate(
-    const rclcpp_lifecycle::State&) {
-  pub_laser_cloud_full_res_->on_activate();
-  pub_laser_cloud_full_res_body_->on_activate();
-  pub_laser_cloud_map_->on_activate();
-  pub_odom_aft_mapped_->on_activate();
-  pub_path_->on_activate();
   createSensorSubscriptions();
   processing_timer_ = create_wall_timer(
-      std::chrono::milliseconds(2), [this]() { this->processIteration(); },
+      std::chrono::milliseconds(2), [this]() { processIteration(); },
       callback_group_);
-  return CallbackReturn::SUCCESS;
-}
-
-LaserMappingNode::CallbackReturn LaserMappingNode::on_deactivate(
-    const rclcpp_lifecycle::State&) {
-  processing_timer_.reset();
-  destroySensorSubscriptions();
-  pub_laser_cloud_full_res_->on_deactivate();
-  pub_laser_cloud_full_res_body_->on_deactivate();
-  pub_laser_cloud_map_->on_deactivate();
-  pub_odom_aft_mapped_->on_deactivate();
-  pub_path_->on_deactivate();
-  return CallbackReturn::SUCCESS;
-}
-
-LaserMappingNode::CallbackReturn LaserMappingNode::on_cleanup(
-    const rclcpp_lifecycle::State&) {
-  processing_timer_.reset();
-  destroySensorSubscriptions();
-  savePendingPcd();
-  lidar_.reset();
-  imu_.reset();
-  measures_ = MeasureGroup{};
-  lio_workspace = LioWorkspace{};
-  state_.sleep_time = 0;
-  state_.init_feats_world->clear();
-  state_.feats_undistort->clear();
-  state_.pcl_wait_save->clear();
-  state_.path = nav_msgs::msg::Path{};
-  state_.odom_aft_mapped = nav_msgs::msg::Odometry{};
-  state_.msg_body_pose = geometry_msgs::msg::PoseStamped{};
-  stage_ = PointLioStage::WAITINGFORDATA;
-  processor_.is_first_frame_ = true;
-  processor_.lidar_end_time_ = 0.0;
-  pcd_index_ = 0;
-  pcd_scan_count_ = 0;
-  processor_.time_update_last_ = 0.0;
-  processor_.time_current_ = 0.0;
-  time_predict_last_const_ = 0.0;
-  t_last_ = 0.0;
-  pub_laser_cloud_full_res_.reset();
-  pub_laser_cloud_full_res_body_.reset();
-  pub_laser_cloud_map_.reset();
-  pub_odom_aft_mapped_.reset();
-  pub_path_.reset();
-  tf_broadcaster_.reset();
-  return CallbackReturn::SUCCESS;
-}
-
-LaserMappingNode::CallbackReturn LaserMappingNode::on_shutdown(
-    const rclcpp_lifecycle::State&) {
-  processing_timer_.reset();
-  destroySensorSubscriptions();
-  savePendingPcd();
-  return CallbackReturn::SUCCESS;
 }
 
 void LaserMappingNode::initializeSensors() {
@@ -190,7 +105,6 @@ void LaserMappingNode::initializeRos2Interfaces() {
   pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 }
-
 void LaserMappingNode::createSensorSubscriptions() {
   rclcpp::SubscriptionOptions options;
   options.callback_group = callback_group_;
@@ -217,18 +131,24 @@ void LaserMappingNode::createSensorSubscriptions() {
       options);
 }
 
-void LaserMappingNode::destroySensorSubscriptions() {
-  sub_pcl_pc_.reset();
-  sub_pcl_livox_.reset();
-  sub_imu_.reset();
-}
-
-LaserMappingNode::LaserMappingNode()
-    : rclcpp_lifecycle::LifecycleNode("laserMapping"),
-      processor_(imu_, filter_, stage_, synchronizer_, lidar_, measures_,
-                 config_, state_) {
-  callback_group_ = create_callback_group(
-      rclcpp::CallbackGroupType::MutuallyExclusive);
+void LaserMappingNode::processIteration() {
+  processor_.processIteration(
+      [this](const sensor_msgs::msg::PointCloud2& msg) {
+        if (pub_laser_cloud_map_) {
+          pub_laser_cloud_map_->publish(msg);
+        }
+      },
+      [this](const nav_msgs::msg::Odometry& msg) {
+        if (pub_odom_aft_mapped_) {
+          pub_odom_aft_mapped_->publish(msg);
+        }
+      },
+      [this](const geometry_msgs::msg::TransformStamped& msg) {
+        if (tf_broadcaster_) {
+          tf_broadcaster_->sendTransform(msg);
+        }
+      });
+  publishFrameOutputs();
 }
 
 LaserMappingNode::~LaserMappingNode() {
@@ -236,6 +156,11 @@ LaserMappingNode::~LaserMappingNode() {
     savePendingPcd();
   } catch (...) {
   }
+}
+void LaserMappingNode::destroySensorSubscriptions() {
+  sub_pcl_pc_.reset();
+  sub_pcl_livox_.reset();
+  sub_imu_.reset();
 }
 
 void LaserMappingNode::publishFrameWorld() {
@@ -266,7 +191,6 @@ void LaserMappingNode::publishFrameWorld() {
     }
   }
 }
-
 void LaserMappingNode::publishFrameBody() {
   size_t size = state_.feats_undistort->points.size();
   PointCloudXYZI::Ptr lasercloud_imu_body(new PointCloudXYZI(size, 1));
@@ -281,6 +205,25 @@ void LaserMappingNode::publishFrameBody() {
   laser_cloud_msg.header.stamp = get_ros_time(processor_.lidar_end_time_);
   laser_cloud_msg.header.frame_id = "body";
   pub_laser_cloud_full_res_body_->publish(laser_cloud_msg);
+}
+void LaserMappingNode::publishPath() {
+  setPosestamp(state_.msg_body_pose.pose);
+
+  state_.msg_body_pose.header.stamp = get_ros_time(processor_.lidar_end_time_);
+  state_.msg_body_pose.header.frame_id = "camera_init";
+  state_.path.poses.emplace_back(state_.msg_body_pose);
+  pub_path_->publish(state_.path);
+}
+void LaserMappingNode::publishFrameOutputs() {
+  if (config_.publish.path_enabled) {
+    publishPath();
+  }
+  if (config_.publish.scan_enabled || config_.publish.pcd_save_enabled) {
+    publishFrameWorld();
+  }
+  if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
+    publishFrameBody();
+  }
 }
 
 template <typename T>
@@ -303,27 +246,6 @@ void LaserMappingNode::setPosestamp(T& out) {
   }
 }
 
-void LaserMappingNode::publishPath() {
-  setPosestamp(state_.msg_body_pose.pose);
-
-  state_.msg_body_pose.header.stamp = get_ros_time(processor_.lidar_end_time_);
-  state_.msg_body_pose.header.frame_id = "camera_init";
-  state_.path.poses.emplace_back(state_.msg_body_pose);
-  pub_path_->publish(state_.path);
-}
-
-void LaserMappingNode::publishFrameOutputs() {
-  if (config_.publish.path_enabled) {
-    publishPath();
-  }
-  if (config_.publish.scan_enabled || config_.publish.pcd_save_enabled) {
-    publishFrameWorld();
-  }
-  if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
-    publishFrameBody();
-  }
-}
-
 void LaserMappingNode::savePendingPcd() {
   if (state_.pcl_wait_save->empty() || !config_.publish.pcd_save_enabled) {
     return;
@@ -332,7 +254,6 @@ void LaserMappingNode::savePendingPcd() {
   state_.pcl_wait_save->clear();
   pcd_scan_count_ = 0;
 }
-
 void LaserMappingNode::savePcd() {
   auto t = std::chrono::system_clock::to_time_t(
       std::chrono::system_clock::now());

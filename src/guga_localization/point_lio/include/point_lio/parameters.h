@@ -25,8 +25,8 @@
 #include "point_lio/IMU_Processing.h"
 #include "point_lio/preprocess.h"
 
-namespace rclcpp_lifecycle {
-class LifecycleNode;
+namespace rclcpp {
+class Node;
 }
 
 // 选择 iVox 节点类型: PHC (Plane-Histogram-Coplanarity) 或 DEFAULT
@@ -134,7 +134,7 @@ struct PointLioParams {
  * @return 完整的只读配置值
  */
 [[nodiscard]] PointLioParams readParameters(
-    rclcpp_lifecycle::LifecycleNode* n);
+    rclcpp::Node* n);
 
 /**
  * @brief SO(3) → ZYX 欧拉角

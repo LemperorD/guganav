@@ -4,8 +4,7 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
-#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -15,15 +14,13 @@
 #include "point_lio/Filter.h"
 #include "point_lio/FrameProcessor.h"
 
-class LaserMappingNode : public rclcpp_lifecycle::LifecycleNode {
+class LaserMappingNode : public rclcpp::Node {
 public:
   /** @brief 节点构造: 以 "laserMapping" 为节点名初始化基类 */
   LaserMappingNode();
   ~LaserMappingNode() override;
 
 private:
-  using CallbackReturn =
-      rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
@@ -48,23 +45,18 @@ private:
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr
       sub_pcl_livox_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
-  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_;
-  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_body_;
-  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_map_;
-  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Odometry>::SharedPtr
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr
       pub_odom_aft_mapped_;
-  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr
       pub_path_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-  CallbackReturn on_configure(const rclcpp_lifecycle::State&) override;
-  CallbackReturn on_activate(const rclcpp_lifecycle::State&) override;
-  CallbackReturn on_deactivate(const rclcpp_lifecycle::State&) override;
-  CallbackReturn on_cleanup(const rclcpp_lifecycle::State&) override;
-  CallbackReturn on_shutdown(const rclcpp_lifecycle::State&) override;
   void processIteration();
   void createSensorSubscriptions();
   void destroySensorSubscriptions();

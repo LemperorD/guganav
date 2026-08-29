@@ -14,9 +14,9 @@
 
 #include "point_lio/parameters.h"
 #include <memory>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <rclcpp/node.hpp>
 
-PointLioParams readParameters(rclcpp_lifecycle::LifecycleNode* nh) {
+PointLioParams readParameters(rclcpp::Node* nh) {
   PointLioParams params;
   try {
 
