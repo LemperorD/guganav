@@ -1,3 +1,8 @@
+> 测试使用的命令
+```
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
+```
+
 # serial_driver
 
 ROS 2 与 MCU 之间的 BR 二进制串口协议驱动。该包负责串口收发、BR

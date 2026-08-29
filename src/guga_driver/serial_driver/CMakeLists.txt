@@ -11,75 +11,24 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # ---- 依赖 ----
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_components REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(guga_interfaces REQUIRED)
-find_package(guga_common REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
 
 # ---- 串口底层库 (lib) ----
-add_library(serial_driver_main SHARED
-  src/serial_driver_main.cpp)
-target_include_directories(serial_driver_main PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(serial_driver_main
-  rclcpp)
-# 链接系统库: 串口 和 文件系统
-add_executable(test_serial_driver
-  src/test.cpp
+ament_auto_add_library(${PROJECT_NAME}_main SHARED
+  src/serial_driver_main.cpp
 )
-
-target_link_libraries(test_serial_driver
-  serial_driver_main
-  )
 
 # ---- ROS2 节点层库 (lib) ----
-add_library(serial_driver_node SHARED
-  src/serial_driver_node.cpp)
-target_link_libraries(serial_driver_node
-  serial_driver_main)
-ament_target_dependencies(serial_driver_node
-  rclcpp
-  rclcpp_components
-  std_msgs
-  geometry_msgs
-  tf2
-  tf2_ros
-  guga_interfaces
-  guga_common
+ament_auto_add_library(${PROJECT_NAME}_node SHARED
+  src/serial_driver_node.cpp
 )
-ament_target_dependencies(test_serial_driver
-geometry_msgs
-)
-# 注册为 rclcpp component，同时生成独立可执行文件
-rclcpp_components_register_node(serial_driver_node
+rclcpp_components_register_node(${PROJECT_NAME}_node
   PLUGIN "serial_driver::SerialDriverNode"
   EXECUTABLE serial_driver_node_exe
 )
-
-# ---- 安装 ----
-install(TARGETS
-  serial_driver_main
-  serial_driver_node
-  test_serial_driver
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY include/
-  DESTINATION include/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY config launch
-  DESTINATION share/${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME}_node 
+  ${PROJECT_NAME}_main
 )
 
 # ---- 测试 ----
@@ -90,4 +39,10 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-ament_package()
+ament_auto_package(
+  USE_SCOPED_HEADER_INSTALL_DIR
+  INSTALL_TO_SHARE
+    launch
+    config
+)
+

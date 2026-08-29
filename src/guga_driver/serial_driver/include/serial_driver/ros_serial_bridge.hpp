@@ -62,6 +62,7 @@ namespace serial_driver {
     EncoderFunc encoder_;
     SerialSendFunc serial_sender_;
     typename rclcpp::Subscription<RosMsgT>::SharedPtr sub_;
+    std::thread send_thread_;
   };
 
   /**
