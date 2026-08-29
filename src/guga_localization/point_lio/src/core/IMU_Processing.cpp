@@ -9,7 +9,7 @@
  * - Process: 主入口 (初始化分发)
  */
 
-#include "point_lio/IMU_Processing.h"
+#include "point_lio/core/IMU_Processing.h"
 
 
 bool time_list(PointType& x, PointType& y) {

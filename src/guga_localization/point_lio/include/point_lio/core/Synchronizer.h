@@ -1,8 +1,9 @@
 #pragma once
 
+#include "point_lio/core/Measurement.h"
+
 class Lidar;
 class Imu;
-struct MeasureGroup;
 
 class Synchronizer {
 public:

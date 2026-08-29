@@ -16,7 +16,8 @@
 #include <cmath>
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
-#include <point_lio/common_lib.h>
+#include <point_lio/core/common_lib.h>
+#include <point_lio/core/Measurement.h>
 
 // ==================== 预配置 ====================
 

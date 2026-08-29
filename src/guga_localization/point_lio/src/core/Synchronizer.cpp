@@ -1,6 +1,6 @@
-#include "point_lio/Synchronizer.h"
-#include "point_lio/Imu.h"
-#include "point_lio/Lidar.h"
+#include "point_lio/core/Synchronizer.h"
+#include "point_lio/core/Imu.h"
+#include "point_lio/core/Lidar.h"
 #include <algorithm>
 
 namespace {

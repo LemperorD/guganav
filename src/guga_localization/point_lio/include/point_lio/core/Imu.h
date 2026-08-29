@@ -2,9 +2,10 @@
 
 #include <deque>
 
-#include "point_lio/IMU_Processing.h"
-#include "point_lio/parameters.h"
-#include "point_lio/preprocess.h"
+#include "point_lio/core/IMU_Processing.h"
+#include "point_lio/core/parameters.h"
+#include "point_lio/core/preprocess.h"
+#include "point_lio/core/Measurement.h"
 
 struct ImuMeasurement {
   V3D angular_velocity;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "point_lio/common_lib.h"
-#include "point_lio/parameters.h"
+#include "point_lio/core/common_lib.h"
+#include "point_lio/core/parameters.h"
 
 class ImuMeasurementModel;
 class LidarMeasurementModel;
@@ -35,12 +35,43 @@ public:
   void initialize(LidarMeasurementModel& lidar_model,
                   ImuMeasurementModel& imu_model);
 
-  [[nodiscard]] InputFilter& input() { return input_; }
-  [[nodiscard]] OutputFilter& output() { return output_; }
-  [[nodiscard]] const InputFilter& input() const { return input_; }
-  [[nodiscard]] const OutputFilter& output() const { return output_; }
-  [[nodiscard]] auto& inputNoise() { return input_noise_; }
-  [[nodiscard]] auto& outputNoise() { return output_noise_; }
+  [[nodiscard]] InputFilter& input() {
+    return input_;
+  }
+  [[nodiscard]] OutputFilter& output() {
+    return output_;
+  }
+  [[nodiscard]] const InputFilter& input() const {
+    return input_;
+  }
+  [[nodiscard]] const OutputFilter& output() const {
+    return output_;
+  }
+  [[nodiscard]] auto& inputNoise() {
+    return input_noise_;
+  }
+  [[nodiscard]] auto& outputNoise() {
+    return output_noise_;
+  }
+  void updateOutputImu() {
+    output_.update_iterated_dyn_share_IMU();
+  }
+  void predict(InputFilter& filter, double dt, InputNoise& noise,
+               const input_ikfom& input, bool update_covariance,
+               bool propagate) {
+    filter.predict(dt, noise, input, update_covariance, propagate);
+  }
+  void predict(OutputFilter& filter, double dt, OutputNoise& noise,
+               const input_ikfom& input, bool update_covariance,
+               bool propagate) {
+    filter.predict(dt, noise, input, update_covariance, propagate);
+  }
+  bool updateLidar(InputFilter& filter) {
+    return filter.update_iterated_dyn_share_modified();
+  }
+  bool updateLidar(OutputFilter& filter) {
+    return filter.update_iterated_dyn_share_modified();
+  }
 
 private:
   InputFilter input_;

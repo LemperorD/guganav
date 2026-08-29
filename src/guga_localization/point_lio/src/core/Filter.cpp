@@ -1,7 +1,7 @@
-#include "point_lio/Filter.h"
+#include "point_lio/core/Filter.h"
 
-#include "point_lio/Imu.h"
-#include "point_lio/Lidar.h"
+#include "point_lio/core/Imu.h"
+#include "point_lio/core/Lidar.h"
 
 void EskfProcessModel::configure(const FilterParams& params) {
   params_ = params;

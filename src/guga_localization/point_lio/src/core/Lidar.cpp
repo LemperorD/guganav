@@ -5,11 +5,9 @@
  * 包含点云接入、切帧/合帧、LiDAR-IMU 同步、点面残差和坐标变换。
  */
 
-#include "point_lio/Lidar.h"
+#include "point_lio/core/Lidar.h"
 
 #include <algorithm>
-
-LioWorkspace lio_workspace;
 
 void LidarMeasurementModel::configure(const LidarParams& params) {
   params_ = params;
@@ -23,36 +21,36 @@ void LidarMeasurementModel::hModelInput(
     esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;
   pabcd.setZero();
-  lio_workspace.normvec->resize(
-      lio_workspace.time_seq[lio_workspace.k]);
+  (*workspace_).normvec->resize(
+      (*workspace_).time_seq[(*workspace_).k]);
   int effect_num_k = 0;
 
 
-  for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
+  for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
     PointType& point_body_j =
-        lio_workspace.feats_down_body->points[lio_workspace.idx + j + 1];
+        (*workspace_).feats_down_body->points[(*workspace_).idx + j + 1];
     PointType& point_world_j =
-        lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1];
+        (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1];
 
 
     this->pointBodyToWorld(&point_body_j, &point_world_j, s);
 
     V3D p_body =
-        lio_workspace.pbody_list[lio_workspace.idx + j + 1];
+        (*workspace_).pbody_list[(*workspace_).idx + j + 1];
     double p_norm = p_body.norm();
     {
       auto& points_near =
-          lio_workspace.Nearest_Points[lio_workspace.idx + j + 1];
+          (*workspace_).Nearest_Points[(*workspace_).idx + j + 1];
 
 
-      lio_workspace.ivox_->GetClosestPoint(point_world_j, points_near,
+      (*workspace_).ivox_->GetClosestPoint(point_world_j, points_near,
                                            NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
 
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
+        (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
       } else {
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
+        (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
 
 
         if (esti_plane(pabcd, points_near, params_.plane_threshold)) {
@@ -64,12 +62,12 @@ void LidarMeasurementModel::hModelInput(
 
 
           if (p_norm > params_.match_threshold * pd2 * pd2) {
-            lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = true;
+            (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = true;
 
-            lio_workspace.normvec->points[j].x = pabcd(0);
-            lio_workspace.normvec->points[j].y = pabcd(1);
-            lio_workspace.normvec->points[j].z = pabcd(2);
-            lio_workspace.normvec->points[j].intensity = pabcd(3);
+            (*workspace_).normvec->points[j].x = pabcd(0);
+            (*workspace_).normvec->points[j].y = pabcd(1);
+            (*workspace_).normvec->points[j].z = pabcd(2);
+            (*workspace_).normvec->points[j].intensity = pabcd(3);
             effect_num_k++;
           }
         }
@@ -90,16 +88,16 @@ void LidarMeasurementModel::hModelInput(
   ekfom_data.z.resize(effect_num_k);
   int m = 0;
 
-  for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
-    if (lio_workspace.point_selected_surf[lio_workspace.idx + j + 1]) {
+  for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
+    if ((*workspace_).point_selected_surf[(*workspace_).idx + j + 1]) {
 
-      V3D norm_vec(lio_workspace.normvec->points[j].x,
-                   lio_workspace.normvec->points[j].y,
-                   lio_workspace.normvec->points[j].z);
+      V3D norm_vec((*workspace_).normvec->points[j].x,
+                   (*workspace_).normvec->points[j].y,
+                   (*workspace_).normvec->points[j].z);
 
       if (params_.extrinsic_estimation) {
 
-        V3D p_body = lio_workspace.pbody_list[lio_workspace.idx + j + 1];
+        V3D p_body = (*workspace_).pbody_list[(*workspace_).idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
 
         p_crossmat << SKEW_SYM_MATRX(p_body);
@@ -120,8 +118,8 @@ void LidarMeasurementModel::hModelInput(
       } else {
 
         M3D point_crossmat =
-            lio_workspace
-                .crossmat_list[lio_workspace.idx + j
+            (*workspace_)
+                .crossmat_list[(*workspace_).idx + j
                                + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
@@ -134,15 +132,15 @@ void LidarMeasurementModel::hModelInput(
 
       ekfom_data.z(m) =
           (-norm_vec(0)
-           * lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1]
+           * (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1]
                  .x)
           - (norm_vec(1)
-             * lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1]
+             * (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1]
                    .y)
           - (norm_vec(2)
-             * lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1]
+             * (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1]
                    .z)
-          - lio_workspace.normvec->points[j].intensity;
+          - (*workspace_).normvec->points[j].intensity;
       m++;
     }
   }
@@ -154,29 +152,29 @@ void LidarMeasurementModel::hModelOutput(
     esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;
   pabcd.setZero();
-  lio_workspace.normvec->resize(lio_workspace.time_seq[lio_workspace.k]);
+  (*workspace_).normvec->resize((*workspace_).time_seq[(*workspace_).k]);
   int effect_num_k = 0;
 
 
-  for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
+  for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
     PointType& point_body_j =
-        lio_workspace.feats_down_body->points[lio_workspace.idx + j + 1];
+        (*workspace_).feats_down_body->points[(*workspace_).idx + j + 1];
     PointType& point_world_j =
-        lio_workspace.feats_down_world->points[lio_workspace.idx + j + 1];
+        (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1];
     this->pointBodyToWorld(&point_body_j, &point_world_j, s);
-    V3D p_body = lio_workspace.pbody_list[lio_workspace.idx + j + 1];
+    V3D p_body = (*workspace_).pbody_list[(*workspace_).idx + j + 1];
     double p_norm = p_body.norm();
     {
       auto& points_near =
-          lio_workspace.Nearest_Points[lio_workspace.idx + j + 1];
+          (*workspace_).Nearest_Points[(*workspace_).idx + j + 1];
 
-      lio_workspace.ivox_->GetClosestPoint(point_world_j, points_near,
+      (*workspace_).ivox_->GetClosestPoint(point_world_j, points_near,
                                            NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
+        (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
       } else {
-        lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = false;
+        (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
         if (esti_plane(pabcd, points_near, params_.plane_threshold)) {
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
@@ -184,11 +182,11 @@ void LidarMeasurementModel::hModelOutput(
 
 
           if (p_norm > params_.match_threshold * pd2 * pd2) {
-            lio_workspace.point_selected_surf[lio_workspace.idx + j + 1] = true;
-            lio_workspace.normvec->points[j].x = pabcd(0);
-            lio_workspace.normvec->points[j].y = pabcd(1);
-            lio_workspace.normvec->points[j].z = pabcd(2);
-            lio_workspace.normvec->points[j].intensity = pabcd(3);
+            (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = true;
+            (*workspace_).normvec->points[j].x = pabcd(0);
+            (*workspace_).normvec->points[j].y = pabcd(1);
+            (*workspace_).normvec->points[j].z = pabcd(2);
+            (*workspace_).normvec->points[j].intensity = pabcd(3);
             effect_num_k++;
           }
         }
@@ -208,13 +206,13 @@ void LidarMeasurementModel::hModelOutput(
   ekfom_data.z.resize(effect_num_k);
   int m = 0;
 
-  for (int j = 0; j < lio_workspace.time_seq[lio_workspace.k]; j++) {
-    if (lio_workspace.point_selected_surf[lio_workspace.idx + j + 1]) {
-      V3D norm_vec(lio_workspace.normvec->points[j].x,
-                   lio_workspace.normvec->points[j].y,
-                   lio_workspace.normvec->points[j].z);
+  for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
+    if ((*workspace_).point_selected_surf[(*workspace_).idx + j + 1]) {
+      V3D norm_vec((*workspace_).normvec->points[j].x,
+                   (*workspace_).normvec->points[j].y,
+                   (*workspace_).normvec->points[j].z);
       if (params_.extrinsic_estimation) {
-        V3D p_body = lio_workspace.pbody_list[lio_workspace.idx + j + 1];
+        V3D p_body = (*workspace_).pbody_list[(*workspace_).idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
         p_crossmat << SKEW_SYM_MATRX(p_body);
         V3D point_imu = s.offset_R_L_I * p_body + s.offset_T_L_I;
@@ -226,25 +224,25 @@ void LidarMeasurementModel::hModelOutput(
             A.transpose(), B.transpose(), C.transpose();
       } else {
         M3D point_crossmat =
-            lio_workspace.crossmat_list[lio_workspace.idx + j + 1];
+            (*workspace_).crossmat_list[(*workspace_).idx + j + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
       ekfom_data.z(m) = -norm_vec(0)
-                            * lio_workspace.feats_down_world
-                                  ->points[lio_workspace.idx + j + 1]
+                            * (*workspace_).feats_down_world
+                                  ->points[(*workspace_).idx + j + 1]
                                   .x
                         - norm_vec(1)
-                              * lio_workspace.feats_down_world
-                                    ->points[lio_workspace.idx + j + 1]
+                              * (*workspace_).feats_down_world
+                                    ->points[(*workspace_).idx + j + 1]
                                     .y
                         - norm_vec(2)
-                              * lio_workspace.feats_down_world
-                                    ->points[lio_workspace.idx + j + 1]
+                              * (*workspace_).feats_down_world
+                                    ->points[(*workspace_).idx + j + 1]
                                     .z
-                        - lio_workspace.normvec->points[j].intensity;
+                        - (*workspace_).normvec->points[j].intensity;
 
       m++;
     }
@@ -267,8 +265,8 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
 
 
     p_global = state.rot
-                   * (lio_workspace.Lidar_R_wrt_IMU * p_body
-                      + lio_workspace.Lidar_T_wrt_IMU)
+                   * ((*lidar_rotation_) * p_body
+                      + (*lidar_translation_))
                + state.pos;
   }
 
@@ -287,8 +285,8 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
                + state.pos;
   } else {
     p_global = state.rot
-                   * (lio_workspace.Lidar_R_wrt_IMU * p_body
-                      + lio_workspace.Lidar_T_wrt_IMU)
+                   * ((*lidar_rotation_) * p_body
+                      + (*lidar_translation_))
                + state.pos;
   }
   po->x = p_global(0);

@@ -27,7 +27,7 @@
  */
 
 #include "point_lio/laserMapping.h"
-#include "point_lio/FrameProcessor.h"
+#include "point_lio/core/FrameProcessor.h"
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
@@ -65,12 +65,12 @@ void LaserMappingNode::initializeSensors() {
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
 void LaserMappingNode::initializeMappingState() {
-  lio_workspace.ivox_ = std::make_shared<IVoxType>(
+  lidar_.workspace().ivox_ = std::make_shared<IVoxType>(
       config_.mapping.ivox_options);
-  lio_workspace.point_selected_surf.set();
+  lidar_.workspace().point_selected_surf.set();
 
-  lio_workspace.Lidar_T_wrt_IMU = to_vec3d(config_.sensor.extrinsic_t);
-  lio_workspace.Lidar_R_wrt_IMU = to_mat3d(config_.sensor.extrinsic_r);
+  lidar_.setExtrinsics(to_vec3d(config_.sensor.extrinsic_t),
+                       to_mat3d(config_.sensor.extrinsic_r));
 
   state_.downsize_filter_surf.setLeafSize(
       static_cast<float>(config_.mapping.filter_size_surf),
@@ -164,14 +164,14 @@ void LaserMappingNode::setPosestamp(T& out) {
 void LaserMappingNode::publishFrameWorld() {
   if (config_.publish.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
-    pcl::toROSMsg(*lio_workspace.feats_down_world, laser_cloud_msg);
+    pcl::toROSMsg(*lidar_.workspace().feats_down_world, laser_cloud_msg);
 
     laser_cloud_msg.header.stamp = get_ros_time(processor_.lidarEndTime());
     laser_cloud_msg.header.frame_id = "camera_init";
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
 
     if (config_.publish.pcd_save_enabled) {
-      *state_.pcl_wait_save += *lio_workspace.feats_down_world;
+      *state_.pcl_wait_save += *lidar_.workspace().feats_down_world;
 
       pcd_scan_count_++;
       if (!state_.pcl_wait_save->empty()

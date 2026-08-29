@@ -22,8 +22,8 @@
 
 #include <ivox/ivox3d.h>
 
-#include "point_lio/IMU_Processing.h"
-#include "point_lio/preprocess.h"
+#include "point_lio/core/IMU_Processing.h"
+#include "point_lio/core/preprocess.h"
 
 namespace rclcpp {
 class Node;

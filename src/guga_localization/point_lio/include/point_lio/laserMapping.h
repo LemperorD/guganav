@@ -9,9 +9,10 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 
-#include "point_lio/Lidar.h"
-#include "point_lio/Filter.h"
-#include "point_lio/FrameProcessor.h"
+#include "point_lio/core/Lidar.h"
+#include "point_lio/core/Filter.h"
+#include "point_lio/core/FrameProcessor.h"
+#include "point_lio/core/ProcessingState.h"
 
 class LaserMappingNode : public rclcpp::Node {
 public:

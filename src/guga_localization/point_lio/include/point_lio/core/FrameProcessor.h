@@ -10,10 +10,12 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 
-#include "point_lio/Lidar.h"
-#include "point_lio/Synchronizer.h"
-#include "point_lio/Filter.h"
-#include "point_lio/common_lib.h"
+#include "point_lio/core/Lidar.h"
+#include "point_lio/core/Synchronizer.h"
+#include "point_lio/core/Filter.h"
+#include "point_lio/core/common_lib.h"
+#include "point_lio/core/ProcessingState.h"
+#include "point_lio/core/Measurement.h"
 
 enum class PointLioStage {
   WAITINGFORDATA,
@@ -47,6 +49,7 @@ private:
   double time_update_last_{0.0};
   double last_time_input_{0.0};
   double last_time_output_{0.0};
+  input_ikfom input_in_;
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);

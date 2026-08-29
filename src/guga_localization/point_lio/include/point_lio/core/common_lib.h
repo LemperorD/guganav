@@ -27,65 +27,12 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
-#include <point_lio/so3_math.h>
-#include <IKFoM/IKFoM_toolkit/esekfom/esekfom.hpp>
+#include <point_lio/core/StateTypes.h>
 #include <Eigen/Eigen>
 #include <sensor_msgs/msg/imu.hpp>
 
 using namespace std;
 using namespace Eigen;
-
-// ==================== MTK 流形类型别名 ====================
-using vect3 = MTK::vect<3, double>;
-using SO3 = MTK::SO3<double>;
-
-/**
- * @defgroup manifold_defs 状态流形定义 (MTK_BUILD_MANIFOLD)
- *
- * IMU 数据作为系统输入 (控制量), 类似于 FAST-LIO 经典模式
- * 角速度和加速度被估计而非输入
- *
- * 两种模式共用相同的 input_ikfom 输入流形 (3维加速度 + 3维角速度)
- * @{
- */
-
-/** @brief 24维状态流形 — IMU-as-input 模式
- *
- * 状态分量 (索引):
- *   0-2:   pos          — 位置 (世界坐标系)
- *   3-5:   rot          — 姿态 SO(3)
- *   6-8:   offset_R_L_I — 雷达→IMU 外参旋转
- *   9-11:  offset_T_L_I — 雷达→IMU 外参平移
- *   12-14: vel          — 速度 (世界坐标系)
- *   15-17: bg           — 陀螺仪零偏
- *   18-20: ba           — 加速度计零偏
- *   21-23: gravity      — 重力向量 (世界坐标系)
- */
-MTK_BUILD_MANIFOLD(state_input, ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))(
-                                    (vect3, offset_T_L_I))((vect3, vel))((
-                                    vect3, bg))((vect3, ba))((vect3, gravity)));
-
-/** @brief 30维状态流形 — IMU-as-output 模式
- *
- * 相比 input 模式额外包含:
- *   12-14: omg          — 角速度 (被估计)
- *   15-17: acc          — 加速度 (被估计)
- *   重力索引变为 21-23, 零偏索引变为 24-29
- */
-MTK_BUILD_MANIFOLD(state_output,
-                   ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))(
-                       (vect3, offset_T_L_I))((vect3, vel))((vect3, omg))(
-                       (vect3, acc))((vect3, gravity))((vect3, bg))((vect3,
-                                                                     ba)));
-
-/** @brief 6维输入流形 — IMU 测量值 (两者共用) */
-MTK_BUILD_MANIFOLD(input_ikfom, ((vect3, acc))((vect3, gyro)));
-
-/** @brief 12维过程噪声流形 — IMU-as-input 模式
- *  ng: 陀螺仪白噪声, na: 加速度计白噪声,
- *  nbg: 陀螺仪零偏随机游走, nba: 加速度计零偏随机游走
- */
-/** @} */  // manifold_defs
 
 #define NUM_MATCH_POINTS (5)  ///< 点到面匹配所需的最小近邻点数
 
@@ -109,18 +56,6 @@ using PointVector =
 using V3D = Eigen::Vector3d;                           ///< 双精度3维向量
 using M3D = Eigen::Matrix3d;                           ///< 双精度3x3矩阵
 
-struct MainLoopState {
-  int sleep_time = 0;
-  pcl::VoxelGrid<PointType> downsize_filter_surf;
-  nav_msgs::msg::Path path;
-  nav_msgs::msg::Odometry odom_aft_mapped;
-  geometry_msgs::msg::PoseStamped msg_body_pose;
-  PointCloudXYZI::Ptr feats_undistort = std::make_shared<PointCloudXYZI>();
-  PointCloudXYZI::Ptr init_feats_world = std::make_shared<PointCloudXYZI>();
-  PointCloudXYZI::Ptr pcl_wait_save = std::make_shared<PointCloudXYZI>();
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
-
 // ==================== std::vector → Eigen 转换 ====================
 /** @brief std::vector<double> → Eigen::Vector3d (带长度校验) */
 inline V3D to_vec3d(const std::vector<double>& v) {
@@ -143,23 +78,6 @@ inline M3D to_mat3d(const std::vector<double>& v) {
 /** @brief 预定义的常用常量矩阵 */
 const M3D Eye3d(M3D::Identity());  ///< 3x3 单位阵 (double)
 const V3D Zero3d(0, 0, 0);         ///< 3维零向量 (double)
-
-/**
- * @brief 当前处理帧的雷达+IMU数据组合
- *
- * 由 sync_packages() 函数填充:
- * - lidar: 降采样后的当前帧点云
- * - imu: 两帧之间的 IMU 测量队列
- * - lidar_beg_time: 当前帧起始时间 (秒)
- * - lidar_last_time: 当前帧结束时间 (秒)
- */
-struct MeasureGroup {
-  double lidar_start_time{0.0};  ///< 当前帧起始时间戳
-  double lidar_last_time{0.0};   ///< 当前帧最后一个点的时间戳
-  PointCloudXYZI::Ptr lidar;     ///< 降采样后的点云
-  deque<sensor_msgs::msg::Imu::ConstSharedPtr>
-      imu;  ///< 该帧时间范围内的IMU数据
-};
 
 // ==================== 工具函数 ====================
 
