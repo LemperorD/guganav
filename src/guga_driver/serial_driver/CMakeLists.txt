@@ -10,19 +10,20 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# ---- 依赖 ----
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
-# ---- 串口底层库 (lib) ----
 ament_auto_add_library(${PROJECT_NAME}_main SHARED
   src/serial_driver_main.cpp
 )
 
-# ---- ROS2 节点层库 (lib) ----
 ament_auto_add_library(${PROJECT_NAME}_node SHARED
   src/serial_driver_node.cpp
 )
+target_include_directories(${PROJECT_NAME}_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${guga_common_INCLUDE_DIRS}>
+  $<INSTALL_INTERFACE:include>)
 rclcpp_components_register_node(${PROJECT_NAME}_node
   PLUGIN "serial_driver::SerialDriverNode"
   EXECUTABLE serial_driver_node_exe

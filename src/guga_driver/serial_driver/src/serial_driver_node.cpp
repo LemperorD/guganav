@@ -34,6 +34,7 @@ SerialDriverNode::SerialDriverNode(const rclcpp::NodeOptions& options)
   robot_status_pub_ = this->create_publisher<guga_interfaces::msg::RobotStatus>("/referee/robot_status", 10);
   game_status_pub_ = this->create_publisher<guga_interfaces::msg::GameStatus>("/referee/game_status", 10);
   rfid_status_pub_ = this->create_publisher<guga_interfaces::msg::RfidStatus>("/referee/rfid_status", 10);
+  joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("/serial/gimbal_joint_state", 10);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -101,17 +102,20 @@ void SerialDriverNode::onConfigure() {
   this->get_parameter("vel_trans_scale", vel_trans_scale_);
 }
 
-MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) const {
+MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) {
   const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
   const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
   const auto wz = static_cast<float>(msg.angular.z);
+
+  auto vx_smoothed = slidingWindowFilter(vx, vx_buffer_, filter_window_size_);
+  auto vy_smoothed = slidingWindowFilter(vy, vy_buffer_, filter_window_size_);
 
   MotionPayload payload{};
   payload.fill(0);  // 全部初始化为 0
 
   // 按头文件定义写入三个速度字段（VX=0, VY=4, WZ_NEG=8）
-  SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx);
-  SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy);
+  SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx_smoothed);
+  SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy_smoothed);
   SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], wz);
 
   return payload;
@@ -119,14 +123,27 @@ MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg
 
 std_msgs::msg::Float32 SerialDriverNode::decodeYaw(const uint8_t* payload) {
   std_msgs::msg::Float32 msg;
-  msg.data =
-      SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
+  msg.data = SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
   yaw_diff_ = static_cast<double>(msg.data);
+
+  sensor_msgs::msg::JointState joint_msg;
+  joint_msg.name = {
+    "gimbal_pitch_joint",
+    "gimbal_yaw_joint",
+    "gimbal_pitch_odom_joint",
+    "gimbal_yaw_odom_joint",
+  };
+  joint_msg.position = {
+    0,
+    0,
+    0,
+    -yaw_diff_,
+  };
+  joint_state_pub_->publish(joint_msg);
   return msg;
 }
 
-geometry_msgs::msg::Point SerialDriverNode::decodeEnemyPos(
-    const uint8_t* payload) {
+geometry_msgs::msg::Point SerialDriverNode::decodeEnemyPos(const uint8_t* payload) {
   geometry_msgs::msg::Point msg;
   msg.x = static_cast<double>(
       SerialDriverMain::readFloatLE(&payload[uplink_offset::ENEMY_X]));
@@ -139,13 +156,12 @@ geometry_msgs::msg::Point SerialDriverNode::decodeEnemyPos(
 
 void SerialDriverNode::publishTransformGimbalVision() {
   geometry_msgs::msg::TransformStamped transform_stamped;
-
   try {
     transform_stamped = tf_buffer_->lookupTransform("odom", "base_footprint",
                                                     tf2::TimePointZero);
   } catch (tf2::TransformException& ex) {
-      std::cerr << "Could not get transform: " << ex.what() << '\n';
-      return;
+    std::cerr << "Could not get transform: " << ex.what() << '\n';
+    return;
   }
 
   // 提取 yaw 角
@@ -182,8 +198,7 @@ void SerialDriverNode::publishTransformGimbalVision() {
 
 // ==================== 工具方法 ====================
 
-geometry_msgs::msg::Twist SerialDriverNode::transformVelocityToChassis(
-    const geometry_msgs::msg::Twist& twist_in, double yaw_diff) {
+geometry_msgs::msg::Twist SerialDriverNode::transformVelocityToChassis(const geometry_msgs::msg::Twist& twist_in, double yaw_diff) {
   geometry_msgs::msg::Twist out;
   double cos = std::cos(yaw_diff);
   double sin = std::sin(yaw_diff);
@@ -197,8 +212,7 @@ geometry_msgs::msg::Twist SerialDriverNode::transformVelocityToChassis(
 // ==================== 裁判系统 ====================
 
 void SerialDriverNode::publishRefereeData() {
-  const auto payload_snapshot =
-      serial_driver_main_->takeRefereeFrameSnapshot();
+  const auto payload_snapshot = serial_driver_main_->takeRefereeFrameSnapshot();
   if (!payload_snapshot.has_value()) {
     return;
   }

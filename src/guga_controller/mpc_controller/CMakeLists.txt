@@ -58,6 +58,10 @@ target_link_libraries(mpc_wrapper
 ament_auto_add_library(${PROJECT_NAME}_node SHARED
   src/mpc_controller_node.cpp
 )
+target_include_directories(${PROJECT_NAME}_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${guga_common_INCLUDE_DIRS}>
+  $<INSTALL_INTERFACE:include>)
 rclcpp_components_register_node(${PROJECT_NAME}_node
   PLUGIN "mpc_controller::MpcControllerNode"
   EXECUTABLE ${PROJECT_NAME}_node_exe

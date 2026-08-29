@@ -8,6 +8,8 @@
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/u_int8.hpp>
 
+#include <sensor_msgs/msg/joint_state.hpp>
+
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
@@ -18,6 +20,8 @@
 #include "guga_interfaces/msg/game_status.hpp"
 #include "guga_interfaces/msg/rfid_status.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
+
+#include "guga_common/filter.hpp"
 
 #include "serial_driver/br_protocol_types.hpp"
 #include "serial_driver/ros_serial_bridge.hpp"
@@ -64,7 +68,7 @@ private:
    * @param msg 输入速度指令。
    * @return 17 字节 payload，按值返回避免堆分配和悬垂指针。
    */
-  MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg) const;
+  MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg);
 
   /**
    * @brief 从运动帧 payload 解码 yaw 角度差。
@@ -123,8 +127,10 @@ private:
   // MCU 上传的云台 yaw 差值
   double yaw_diff_{};
 
-  // 速度变换
-  double vel_trans_scale_{40.0};
+  double vel_trans_scale_{40.0}; // 速度指令缩放系数（m/s → mm/s）,理论值为1000但可以被调参
+  std::deque<float> vx_buffer_; // x速度指令滤波缓存
+  std::deque<float> vy_buffer_; // y速度指令滤波缓存
+  size_t filter_window_size_{10}; // 滤波窗口大小
 
   // 串口底层
   std::shared_ptr<SerialDriverMain> serial_driver_main_;
@@ -147,6 +153,7 @@ private:
   rclcpp::Publisher<guga_interfaces::msg::RobotStatus>::SharedPtr robot_status_pub_;
   rclcpp::Publisher<guga_interfaces::msg::GameStatus>::SharedPtr game_status_pub_;
   rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr rfid_status_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
 
 };
 
