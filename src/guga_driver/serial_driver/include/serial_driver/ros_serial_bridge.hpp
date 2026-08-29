@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <iostream>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -46,6 +47,7 @@ namespace serial_driver {
       auto qos = rclcpp::QoS(10);
       sub_ = node_->template create_subscription<RosMsgT>(
           ros_topic_name, qos, [this](const typename RosMsgT::SharedPtr msg) {
+            std::printf("serial start com vel\n");
             const auto payload = encoder_(*msg);
             serial_sender_(payload.data(), payload.size());
           });

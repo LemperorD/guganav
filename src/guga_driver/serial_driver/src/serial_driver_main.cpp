@@ -212,6 +212,9 @@ namespace serial_driver {
       return;
     }
 
+    std::cout << "serial 987654321" << std::endl;
+    std::printf("serial 987654321\n");
+
     // 组装帧：SOF(2) + CMD(1) + LEN(1) + PAYLOAD(len) + CRC8(1)
     const size_t frame_len = len + FRAME_MIN_SIZE;
     std::vector<uint8_t> frame(frame_len);

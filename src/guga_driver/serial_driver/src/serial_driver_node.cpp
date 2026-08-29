@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <cmath>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -23,29 +24,29 @@ namespace serial_driver {
       : Node("serial_driver_node", options) {
     onConfigure();
 
+    std::cout << "Initializing SerialDriverNode..." << std::endl;
     serial_driver_main_ = std::make_shared<SerialDriverMain>(port_name_, baud_rate_);
+    std::cout << "SerialDriverMain initialized." << std::endl;
 
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
-
+    cmd_vel_transformed_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel_transformed",10);
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
         "/serial/gimbal_joint_state", 10);
 
-    const bool lidar_connected = false;
-    std::cout << "Lidar connected: " << std::boolalpha << lidar_connected
-              << '\n';
-
+    std::cout << "twist bridge initialized." << std::endl;
     bridge_twist_pc_ =
         std::make_shared<RosToSerialBridge<geometry_msgs::msg::Twist>>(
             this, "/cmd_vel",
             [this](const geometry_msgs::msg::Twist& msg) {
-              std::cout << "123456789" << std::endl;
+              std::printf("serial start com vel\n");
               return encodeTwist(msg);
             },
             [this](const uint8_t* data, size_t len) {
               serial_driver_main_->sendDataFrame(data, len);
             });
+    std::cout << "twist bridge initialized." << std::endl;
 
     bridge_yaw_mcu_ =
         std::make_shared<SerialToRosBridge<std_msgs::msg::Float32>>(
@@ -121,6 +122,7 @@ namespace serial_driver {
   }
 
   MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) {
+    std::printf("serial start com vel\n");
     auto out = transformVelocityToChassis(msg, -yaw_diff_);
 
     const auto vx = static_cast<float>(vel_trans_scale_ * out.linear.x);
@@ -129,7 +131,18 @@ namespace serial_driver {
 
     auto vx_smoothed = slidingWindowFilter(vx, vx_que_, 15);
     auto vy_smoothed = slidingWindowFilter(vy, vy_que_, 15);
-    std::cout << CYAN_LIGHT << "vx: " << vx_smoothed << "vy: " << vy_smoothed << "wz: " << wz << RESET << std::endl;
+
+    geometry_msgs::msg::Twist tmsg;
+    tmsg.linear.x = vx;
+    tmsg.linear.y = vy;
+    tmsg.linear.z = 0;
+    tmsg.angular.x = 0;
+    tmsg.angular.y = 0;
+    tmsg.angular.z = wz;
+    
+    cmd_vel_transformed_pub_->publish(tmsg);
+
+    std::printf("serial debug!!!\n");
 
     // const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
     // const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
@@ -150,7 +163,7 @@ namespace serial_driver {
     std_msgs::msg::Float32 msg;
     msg.data =
         SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
-    yaw_diff_ = static_cast<double>(msg.data);
+    yaw_diff_ = static_cast<double>(msg.data) / 180 * M_PI;
     // publishTransformGimbalYaw();
     publishGimbalYawJointState();
     return msg;
@@ -216,7 +229,7 @@ namespace serial_driver {
       0,
       0,
       0,
-      yaw_diff_,
+      -yaw_diff_,
     };
     joint_state_pub_->publish(joint_state);
   }

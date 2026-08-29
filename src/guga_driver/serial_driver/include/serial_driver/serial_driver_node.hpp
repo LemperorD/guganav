@@ -176,6 +176,8 @@ namespace serial_driver {
 
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
 
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_transformed_pub_;
+
   private: // 速度滑动窗口滤波使用的deque队列
     std::deque<float> vx_que_;
     std::deque<float> vy_que_;

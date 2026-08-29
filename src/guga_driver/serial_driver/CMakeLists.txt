@@ -11,16 +11,17 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # ---- 依赖 ----
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_components REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(guga_interfaces REQUIRED)
-find_package(guga_common REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
+# find_package(rclcpp REQUIRED)
+# find_package(rclcpp_components REQUIRED)
+# find_package(std_msgs REQUIRED)
+# find_package(geometry_msgs REQUIRED)
+# find_package(sensor_msgs REQUIRED)
+# find_package(tf2 REQUIRED)
+# find_package(tf2_ros REQUIRED)
+# find_package(guga_interfaces REQUIRED)
+# find_package(guga_common REQUIRED)
+ament_auto_find_build_dependencies()
 
 # ---- 串口底层库 (lib) ----
 add_library(serial_driver_main SHARED
@@ -34,34 +35,25 @@ ament_target_dependencies(serial_driver_main
 add_executable(test_serial_driver
   src/test.cpp
 )
-
 target_link_libraries(test_serial_driver
   serial_driver_main
 )
 
 # ---- ROS2 节点层库 (lib) ----
-add_library(serial_driver_node SHARED
+ament_auto_add_library(serial_driver_node SHARED
   src/serial_driver_node.cpp)
-target_link_libraries(serial_driver_node
-  serial_driver_main)
-ament_target_dependencies(serial_driver_node
-  rclcpp
-  rclcpp_components
-  std_msgs
-  geometry_msgs
-  sensor_msgs
-  tf2
-  tf2_ros
-  guga_interfaces
-  guga_common
-)
-ament_target_dependencies(test_serial_driver
-  geometry_msgs
-)
 # 注册为 rclcpp component，同时生成独立可执行文件
 rclcpp_components_register_node(serial_driver_node
   PLUGIN "serial_driver::SerialDriverNode"
   EXECUTABLE serial_driver_node_exe
+)
+target_link_libraries(serial_driver_node
+  serial_driver_main
+  ${guga_common_LIBRARIES}
+)
+
+ament_target_dependencies(test_serial_driver
+  geometry_msgs
 )
 
 # ---- 安装 ----
