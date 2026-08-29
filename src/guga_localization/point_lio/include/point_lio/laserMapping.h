@@ -10,7 +10,6 @@
 #include "nav_msgs/msg/path.hpp"
 
 #include "point_lio/Lidar.h"
-#include "point_lio/Synchronizer.h"
 #include "point_lio/Filter.h"
 #include "point_lio/FrameProcessor.h"
 
@@ -24,19 +23,10 @@ private:
   // ==================== 成员变量 (原 main 局部) ====================
   Imu imu_;
   Lidar lidar_;
-  Synchronizer synchronizer_;
-  Filter filter_;
   PointLioParams config_;
-  bool parameters_loaded_{false};
   PointLioStage stage_{PointLioStage::WAITINGFORDATA};
-  bool is_first_frame_{true};
-  double lidar_end_time_{0.0};
   int pcd_index_{0};
   int pcd_scan_count_{0};
-  double time_update_last_{0.0};
-  double time_predict_last_const_{0.0};
-  double t_last_{0.0};
-  MeasureGroup measures_;
   MainLoopState state_;  ///< 主循环状态
   FrameProcessor processor_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -59,11 +49,9 @@ private:
 
   void processIteration();
   void createSensorSubscriptions();
-  void destroySensorSubscriptions();
 
   void initializeSensors();
   void initializeMappingState();
-  void initializeFilter();
   void initializeRos2Interfaces();
 
   /** @brief 轮次初始化: 同步传感器数据、处理首帧并准备当前帧

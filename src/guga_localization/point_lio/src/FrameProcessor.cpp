@@ -1,18 +1,40 @@
 #include "point_lio/FrameProcessor.h"
 #include "point_lio/Synchronizer.h"
 
-FrameProcessor::FrameProcessor(Imu& imu, Filter& filter, PointLioStage& stage,
-                               Synchronizer& synchronizer, Lidar& lidar,
-                               MeasureGroup& measurement,
+FrameProcessor::FrameProcessor(Imu& imu, PointLioStage& stage,
+                               Lidar& lidar,
                                PointLioParams& config, MainLoopState& state)
     : imu_(imu),
-      filter_(filter),
       stage_(stage),
-      synchronizer_(synchronizer),
       lidar_(lidar),
-      measures_(measurement),
       config_(config),
       state_(state) {
+}
+
+void FrameProcessor::initializeFilter() {
+  filter_.configure(config_.filter);
+  filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());
+  if (config_.lidar.extrinsic_estimation) {
+    filter_.input().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
+    filter_.input().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
+    filter_.output().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
+    filter_.output().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
+  }
+}
+
+void FrameProcessor::setPose(geometry_msgs::msg::Pose& pose) const {
+  const auto set_from_filter = [&](const auto& kf) {
+    pose.position.x = kf.x_.pos(0);
+    pose.position.y = kf.x_.pos(1);
+    pose.position.z = kf.x_.pos(2);
+    Eigen::Quaterniond q(kf.x_.rot);
+    pose.orientation.x = q.coeffs()[0];
+    pose.orientation.y = q.coeffs()[1];
+    pose.orientation.z = q.coeffs()[2];
+    pose.orientation.w = q.coeffs()[3];
+  };
+  if (config_.mapping.use_imu_as_input) set_from_filter(filter_.input());
+  else set_from_filter(filter_.output());
 }
 
 PointCloudXYZI::Ptr FrameProcessor::loadPointcloudFromPcd(
@@ -50,6 +72,10 @@ void FrameProcessor::initScan() {
 
 bool FrameProcessor::syncPackages() {
   return synchronizer_.syncPackages(lidar_, imu_, measures_);
+}
+
+void FrameProcessor::configureSynchronizer(double lidar_time_interval) {
+  synchronizer_.configure(lidar_time_interval);
 }
 
 void FrameProcessor::pointBodyLidarToIMU(const PointType* pi, PointType* po) const {

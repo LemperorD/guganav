@@ -26,16 +26,35 @@ enum class PointLioStage {
 
 class FrameProcessor {
 public:
-  FrameProcessor(Imu& imu, Filter& filter, PointLioStage& stage_,
-                 Synchronizer& synchronizer_, Lidar& lidar,
-                 MeasureGroup& measurement, PointLioParams& config,
-                 MainLoopState& state);
+  FrameProcessor(Imu& imu, PointLioStage& stage_, Lidar& lidar,
+                 PointLioParams& config, MainLoopState& state);
+  void initializeFilter();
+  void setPose(geometry_msgs::msg::Pose& pose) const;
+  void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
+  void configureSynchronizer(double lidar_time_interval);
+  void processIteration(
+      const std::function<void(const sensor_msgs::msg::PointCloud2&)>&
+          publish_map,
+      const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
+      const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
+          publish_tf);
+  [[nodiscard]] double lidarEndTime() const {
+    return lidar_end_time_;
+  }
+
+private:
+  double time_current_{0.0};
+  double lidar_end_time_{0.0};
+  bool is_first_frame_{true};
+  double time_update_last_{0.0};
+  double last_time_input_{0.0};
+  double last_time_output_{0.0};
+
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
   bool syncPackages();
   void initScan();
   void preparePointMeasurements() const;
-  void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
   void mapIncremental() const;
   bool initMapState(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
@@ -47,10 +66,6 @@ public:
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
   bool initializeIteration(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
-  void processIteration(
-      const std::function<void(const sensor_msgs::msg::PointCloud2&)>& publish_map,
-      const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
-      const std::function<void(const geometry_msgs::msg::TransformStamped&)>& publish_tf);
 
   template <bool ImuAsInput, typename KF>
   void processFramePoints(
@@ -59,20 +74,12 @@ public:
       const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
           publish_tf);
 
-  double time_current_{0.0};
-  double lidar_end_time_{0.0};
-  bool is_first_frame_{true};
-  double time_update_last_{0.0};
-  double last_time_input_{0.0};
-  double last_time_output_{0.0};
-
-private:
   Imu& imu_;
   Lidar& lidar_;
-  Filter& filter_;
-  MeasureGroup& measures_;
+  Filter filter_;
+  MeasureGroup measures_;
   PointLioStage& stage_;
   MainLoopState& state_;
   PointLioParams& config_;
-  Synchronizer& synchronizer_;
+  Synchronizer synchronizer_;
 };

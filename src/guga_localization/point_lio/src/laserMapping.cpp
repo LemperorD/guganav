@@ -41,24 +41,22 @@ int main(int argc, char** argv) {
 
 LaserMappingNode::LaserMappingNode()
     : rclcpp::Node("laserMapping"),
-      processor_(imu_, filter_, stage_, synchronizer_, lidar_, measures_,
+      processor_(imu_, stage_, lidar_,
                  config_, state_) {
   callback_group_ = create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive);
   config_ = readParameters(this);
   initializeSensors();
   initializeMappingState();
-  initializeFilter();
+  processor_.initializeFilter();
   initializeRos2Interfaces();
-  createSensorSubscriptions();
   processing_timer_ = create_wall_timer(
       std::chrono::milliseconds(2), [this]() { processIteration(); },
       callback_group_);
 }
-
 void LaserMappingNode::initializeSensors() {
   lidar_.configure(config_.lidar);
-  synchronizer_.configure(config_.lidar.lidar_time_interval);
+  processor_.configureSynchronizer(config_.lidar.lidar_time_interval);
 
   auto imu_params = config_.imu;
   imu_params.timestamp_offset = config_.sensor.lidar_to_imu_time;
@@ -79,18 +77,8 @@ void LaserMappingNode::initializeMappingState() {
       static_cast<float>(config_.mapping.filter_size_surf),
       static_cast<float>(config_.mapping.filter_size_surf));
 
-  state_.path.header.stamp = get_ros_time(processor_.lidar_end_time_);
+  state_.path.header.stamp = get_ros_time(processor_.lidarEndTime());
   state_.path.header.frame_id = "camera_init";
-}
-void LaserMappingNode::initializeFilter() {
-  filter_.configure(config_.filter);
-  filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());
-  if (config_.lidar.extrinsic_estimation) {
-    filter_.input().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
-    filter_.input().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
-    filter_.output().x_.offset_R_L_I = lio_workspace.Lidar_R_wrt_IMU;
-    filter_.output().x_.offset_T_L_I = lio_workspace.Lidar_T_wrt_IMU;
-  }
 }
 void LaserMappingNode::initializeRos2Interfaces() {
   pub_laser_cloud_full_res_ = create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -104,6 +92,7 @@ void LaserMappingNode::initializeRos2Interfaces() {
       "aft_mapped_to_init", 20);
   pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+  createSensorSubscriptions();
 }
 void LaserMappingNode::createSensorSubscriptions() {
   rclcpp::SubscriptionOptions options;
@@ -130,7 +119,6 @@ void LaserMappingNode::createSensorSubscriptions() {
       },
       options);
 }
-
 void LaserMappingNode::processIteration() {
   processor_.processIteration(
       [this](const sensor_msgs::msg::PointCloud2& msg) {
@@ -150,25 +138,35 @@ void LaserMappingNode::processIteration() {
       });
   publishFrameOutputs();
 }
-
-LaserMappingNode::~LaserMappingNode() {
-  try {
-    savePendingPcd();
-  } catch (...) {
+void LaserMappingNode::publishFrameOutputs() {
+  if (config_.publish.path_enabled) {
+    publishPath();
+  }
+  if (config_.publish.scan_enabled || config_.publish.pcd_save_enabled) {
+    publishFrameWorld();
+  }
+  if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
+    publishFrameBody();
   }
 }
-void LaserMappingNode::destroySensorSubscriptions() {
-  sub_pcl_pc_.reset();
-  sub_pcl_livox_.reset();
-  sub_imu_.reset();
-}
+void LaserMappingNode::publishPath() {
+  setPosestamp(state_.msg_body_pose.pose);
 
+  state_.msg_body_pose.header.stamp = get_ros_time(processor_.lidarEndTime());
+  state_.msg_body_pose.header.frame_id = "camera_init";
+  state_.path.poses.emplace_back(state_.msg_body_pose);
+  pub_path_->publish(state_.path);
+}
+template <typename T>
+void LaserMappingNode::setPosestamp(T& out) {
+  processor_.setPose(out);
+}
 void LaserMappingNode::publishFrameWorld() {
   if (config_.publish.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
     pcl::toROSMsg(*lio_workspace.feats_down_world, laser_cloud_msg);
 
-    laser_cloud_msg.header.stamp = get_ros_time(processor_.lidar_end_time_);
+    laser_cloud_msg.header.stamp = get_ros_time(processor_.lidarEndTime());
     laser_cloud_msg.header.frame_id = "camera_init";
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
 
@@ -202,50 +200,17 @@ void LaserMappingNode::publishFrameBody() {
 
   sensor_msgs::msg::PointCloud2 laser_cloud_msg;
   pcl::toROSMsg(*lasercloud_imu_body, laser_cloud_msg);
-  laser_cloud_msg.header.stamp = get_ros_time(processor_.lidar_end_time_);
+  laser_cloud_msg.header.stamp = get_ros_time(processor_.lidarEndTime());
   laser_cloud_msg.header.frame_id = "body";
   pub_laser_cloud_full_res_body_->publish(laser_cloud_msg);
 }
-void LaserMappingNode::publishPath() {
-  setPosestamp(state_.msg_body_pose.pose);
 
-  state_.msg_body_pose.header.stamp = get_ros_time(processor_.lidar_end_time_);
-  state_.msg_body_pose.header.frame_id = "camera_init";
-  state_.path.poses.emplace_back(state_.msg_body_pose);
-  pub_path_->publish(state_.path);
-}
-void LaserMappingNode::publishFrameOutputs() {
-  if (config_.publish.path_enabled) {
-    publishPath();
-  }
-  if (config_.publish.scan_enabled || config_.publish.pcd_save_enabled) {
-    publishFrameWorld();
-  }
-  if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
-    publishFrameBody();
+LaserMappingNode::~LaserMappingNode() {
+  try {
+    savePendingPcd();
+  } catch (...) {
   }
 }
-
-template <typename T>
-void LaserMappingNode::setPosestamp(T& out) {
-  auto set_output_from_kf = [&](const auto& kf) {
-    out.position.x = kf.x_.pos(0);
-    out.position.y = kf.x_.pos(1);
-    out.position.z = kf.x_.pos(2);
-    Eigen::Quaterniond q(kf.x_.rot);
-    out.orientation.x = q.coeffs()[0];
-    out.orientation.y = q.coeffs()[1];
-    out.orientation.z = q.coeffs()[2];
-    out.orientation.w = q.coeffs()[3];
-  };
-
-  if (config_.mapping.use_imu_as_input) {
-    set_output_from_kf(filter_.input());
-  } else {
-    set_output_from_kf(filter_.output());
-  }
-}
-
 void LaserMappingNode::savePendingPcd() {
   if (state_.pcl_wait_save->empty() || !config_.publish.pcd_save_enabled) {
     return;
