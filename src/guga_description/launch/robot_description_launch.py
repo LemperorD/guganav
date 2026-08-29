@@ -31,6 +31,13 @@ def launch_setup(context: LaunchContext) -> list:
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
+    params_file2 = context.launch_configurations["params_file"]
+    print("=" * 60)
+    print("[DEBUG] namespace      =", namespace)
+    print("[DEBUG] params_file    =", params_file2)
+    print("[DEBUG] use_sim_time   =", use_sim_time)
+    print("=" * 60)
+
     # Load the robot xmacro file from the launch configuration
     xmacro = XMLMacro4sdf()
     xmacro.set_xml_file(context.launch_configurations["robot_xmacro_file"])
@@ -73,6 +80,7 @@ def launch_setup(context: LaunchContext) -> list:
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params],
+                # parameters=[params_file],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(

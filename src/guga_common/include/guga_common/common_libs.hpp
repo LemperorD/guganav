@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <string>
+#include <deque>
 
 // color
 const std::string RED = "\033[1;31m";
@@ -27,5 +28,28 @@ const std::string BOLD = "\033[1m";
 const std::string UNDERLINE = "\033[4m";
 
 double unwarp_angle(double current, const double previous);
+
+template <typename T>
+T slidingWindowFilter(const T& current_value, std::deque<T>& window, std::size_t window_size)
+{
+    // 加入当前值
+    window.push_back(current_value);
+
+    // 超过窗口大小，删除最旧的数据
+    if (window.size() > window_size)
+    {
+        window.pop_front();
+    }
+
+    // 计算窗口均值
+    T sum{};
+
+    for (const auto& value : window)
+    {
+        sum += value;
+    }
+
+    return sum / static_cast<T>(window.size());
+}
 
 #endif // GUGA_COMMON_COMMON_LIBS_HPP

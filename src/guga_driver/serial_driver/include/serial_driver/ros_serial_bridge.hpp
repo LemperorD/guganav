@@ -11,6 +11,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <iostream>
 
 #include <rclcpp/rclcpp.hpp>
 
