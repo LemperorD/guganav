@@ -20,4 +20,6 @@ rosbag/
 *.pcd
 *.pyc
 .cache/*
+.cache
+.agents
 .mcp.json
