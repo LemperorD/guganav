@@ -45,6 +45,17 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | `scripts/pre-commit/run_jps_tests.sh`              | pre-commit/CI 使用的 `jps_planner` 快速测试入口。      |
 | `scripts/pre-commit/run_mppi_tests.sh`             | pre-commit/CI 使用的 `nav2_mppi_controller` 快速测试入口。 |
 
+## 无实车 UI 测试（假串口）
+
+不需要实车即可验证 UI 标签能否更新：用虚拟串口向 `serial_driver` 喂 BR 协议帧。
+
+| 文件 | 用途 |
+| ---- | ---- |
+| `scripts/fake_mcu.py` | 假下位机，创建虚拟串口并持续发送运动帧/裁判帧。 |
+| `scripts/shm_yaw_probe.py` | 读取 YAW 共享内存槽，判断是写端还是 UI 端的问题。 |
+
+完整步骤、预期效果和常见问题见 [`scripts/fake_serial_test.md`](fake_serial_test.md)。
+
 ## 手动覆盖率
 
 覆盖率脚本用于本地阶段性检查，不作为默认 pre-commit/CI 流程。

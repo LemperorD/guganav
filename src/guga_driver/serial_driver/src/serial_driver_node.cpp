@@ -147,6 +147,11 @@ namespace serial_driver {
     yaw_diff_ = static_cast<double>(msg.data) / 180 * M_PI;
     std::cout << "yaw: " << yaw_diff_ << std::endl;
 
+    // 写入 UI 共享内存 YAW 槽位，供 guga_ui_pangolin 实时显示
+    guga_ui::UiYaw ui_yaw{};
+    ui_yaw.yaw_diff = yaw_diff_;
+    shm_writer_yaw_.write(&ui_yaw, sizeof(ui_yaw));
+
     sensor_msgs::msg::JointState joint_msg;
     joint_msg.name = {
         "gimbal_pitch_joint",
