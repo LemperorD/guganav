@@ -30,31 +30,12 @@
 #include <point_lio/core/StateTypes.h>
 #include <Eigen/Eigen>
 #include <sensor_msgs/msg/imu.hpp>
+#include <point_lio/core/PointTypes.h>
 
 using namespace std;
 using namespace Eigen;
 
 #define NUM_MATCH_POINTS (5)  ///< 点到面匹配所需的最小近邻点数
-
-// ==================== PCL/Eigen 类型别名 ====================
-using PointType =
-    pcl::PointXYZINormal;  ///< PCL curvature 字段存储点时间偏移 (ms)
-
-// PCL 固定字段名为 curvature；Point-LIO 通过语义化访问器将其作为时间偏移使用。
-inline float point_time_offset_ms(const PointType& point) {
-  return point.curvature;
-}
-
-inline void set_point_time_offset_ms(PointType& point, float offset_ms) {
-  point.curvature = offset_ms;
-}
-
-using PointCloudXYZI = pcl::PointCloud<PointType>;  ///< 常用点云类型
-using PointVector =
-    std::vector<PointType,
-                Eigen::aligned_allocator<PointType>>;  ///< 对齐点向量
-using V3D = Eigen::Vector3d;                           ///< 双精度3维向量
-using M3D = Eigen::Matrix3d;                           ///< 双精度3x3矩阵
 
 // ==================== std::vector → Eigen 转换 ====================
 /** @brief std::vector<double> → Eigen::Vector3d (带长度校验) */

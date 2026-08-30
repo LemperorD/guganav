@@ -28,7 +28,7 @@ class FrameProcessor {
 public:
   FrameProcessor(Imu& imu, PointLioStage& stage_, Lidar& lidar,
                  const PointLioParams& config, MainLoopState& state);
-  void initializeFilter();
+  void initialize();
   void setPose(geometry_msgs::msg::Pose& pose) const;
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
   void configureSynchronizer(double lidar_time_interval);
@@ -53,6 +53,7 @@ private:
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
+  void initializeFilter();
   bool syncPackages();
   void initScan();
   void preparePointMeasurements() const;

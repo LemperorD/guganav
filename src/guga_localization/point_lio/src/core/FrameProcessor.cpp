@@ -7,6 +7,10 @@ FrameProcessor::FrameProcessor(Imu& imu, PointLioStage& stage, Lidar& lidar,
     : imu_(imu), stage_(stage), lidar_(lidar), config_(config), state_(state) {
 }
 
+void FrameProcessor::initialize() {
+  initializeFilter();
+}
+
 void FrameProcessor::initializeFilter() {
   filter_.configure(config_.filter);
   filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());

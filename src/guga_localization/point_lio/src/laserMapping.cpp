@@ -48,7 +48,7 @@ LaserMappingNode::LaserMappingNode()
   config_ = readParameters(this);
   initializeSensors();
   initializeMappingState();
-  processor_.initializeFilter();
+  processor_.initialize();
   initializeRos2Interfaces();
   processing_timer_ = create_wall_timer(
       std::chrono::milliseconds(2), [this]() { processIteration(); },
