@@ -104,9 +104,13 @@ void SerialDriverNode::onConfigure() {
 }
 
 MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg) {
-  const auto vx = static_cast<float>(vel_trans_scale_ * msg.linear.x);
-  const auto vy = static_cast<float>(vel_trans_scale_ * msg.linear.y);
-  const auto wz = static_cast<float>(msg.angular.z);
+  
+  geometry_msgs::msg::Twist msg_1;
+  msg_1 = transformVelocityToChassis(msg, yaw_diff_);
+
+  const auto vx = static_cast<float>(vel_trans_scale_ * msg_1.linear.x);
+  const auto vy = static_cast<float>(vel_trans_scale_ * msg_1.linear.y);
+  const auto wz = static_cast<float>(msg_1.angular.z);
 
   auto vx_smoothed = slidingWindowFilter(vx, vx_buffer_, filter_window_size_);
   auto vy_smoothed = slidingWindowFilter(vy, vy_buffer_, filter_window_size_);
@@ -125,7 +129,8 @@ MotionPayload SerialDriverNode::encodeTwist(const geometry_msgs::msg::Twist& msg
 std_msgs::msg::Float32 SerialDriverNode::decodeYaw(const uint8_t* payload) {
   std_msgs::msg::Float32 msg;
   msg.data = SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
-  yaw_diff_ = static_cast<double>(msg.data);
+  yaw_diff_ = static_cast<double>(msg.data) / 180 * M_PI;
+  std::cout << "yaw: " << yaw_diff_ << std::endl;
 
   sensor_msgs::msg::JointState joint_msg;
   joint_msg.name = {
