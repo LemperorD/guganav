@@ -19,3 +19,5 @@ scripts/deepseek.sh
 rosbag/
 *.pcd
 *.pyc
+.cache/*
+.mcp.json
