@@ -58,7 +58,7 @@ Related issue: [Switch from Twist to TwistStamped for cmd_vel #1594](https://git
 * `initial_chassis_mode` (`int`, default: `1`) - **启动时的底盘模式，默认 littleTES（导航启动即小陀螺）**；之后由 `chassis_mode_topic`（如 `simple_decision`）覆盖。launch 中按 `navigation_profile` 区分：`2d_mppi`/`jps_mpc` 为 1，`jps_pid` 为 0（其 costmap 走旋转的 base_footprint，不能自旋）
 * `input_cmd_vel_topic` (`string`, default: `""`) - 输入速度指令的话题（launch 中通常为 `cmd_vel_smoothed`）
 * `output_cmd_vel_topic` (`string`, default: `""`) - 输出速度指令的话题（launch 中通常为 `cmd_vel`）
-* `init_spin_speed` (`float`, default: `6.28`) - 若没有接收 `cmd_spin_topic`，则使用该值作为固定旋转速度（rad/s，约每秒一圈）
+* `init_spin_speed` (`float`, default: `3.14`) - 若没有接收 `cmd_spin_topic`，则使用该值作为固定旋转速度（rad/s，约每秒一圈）
 * `output_in_chassis_frame` (`bool`, default: `false`) - 输出是否直接变换到 `chassis_frame`（默认 false，输出到 `robot_base_frame`）
 * `vis_cmd_vel_topic` (`string`, default: `cmd_vel_marker`) - 速度可视化 Marker 话题
 * `vis_frame_id` (`string`, default: `base_link`) - 可视化参考坐标系

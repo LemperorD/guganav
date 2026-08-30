@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <string>
+#include <deque>
 
 // color
 const std::string RED = "\033[1;31m";
@@ -26,6 +27,6 @@ const std::string RESET = "\033[0m";
 const std::string BOLD = "\033[1m";
 const std::string UNDERLINE = "\033[4m";
 
-double unwrap_angle(double current, const double previous);
+double unwarp_angle(double current, const double previous);
 
 #endif // GUGA_COMMON_COMMON_LIBS_HPP

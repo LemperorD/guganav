@@ -8,8 +8,11 @@
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/u_int8.hpp>
 
+#include <sensor_msgs/msg/joint_state.hpp>
+
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -19,154 +22,140 @@
 #include "guga_interfaces/msg/rfid_status.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
 
+#include "guga_common/filter.hpp"
+
 #include "serial_driver/br_protocol_types.hpp"
 #include "serial_driver/ros_serial_bridge.hpp"
 #include "serial_driver/serial_driver_main.hpp"
 
 namespace serial_driver {
 
+/**
+ * @brief ROS2 节点层，封装 SerialDriverMain
+ * 并向上提供话题桥接、裁判数据发布、 tf 广播等能力。
+ *
+ * 职责：
+ *  - 从参数服务器读取串口配置（port_name, baud_rate 等）。
+ *  - 持有并管理 SerialDriverMain 实例的生命周期。
+ *  - 创建 3 路桥接通道（/cmd_vel, /serial/Yaw, /serial/EnemyPos），分别使用
+ *    RosToSerialBridge 和 SerialToRosBridge。
+ *  - 定时发布裁判系统数据（RobotStatus, GameStatus, RfidStatus）。
+ *  - 广播 gimbal_yaw_vision tf（由 odom→base_footprint 推导）。
+ *  - 提供速度坐标系变换工具方法（transformVelocityToChassis）。
+ */
+class SerialDriverNode : public rclcpp::Node
+{
+public:
+  /** @brief 构造函数，声明参数、打开串口、创建桥接器和定时器。 */
+  explicit SerialDriverNode(const rclcpp::NodeOptions& options);
+
+  SerialDriverNode(const SerialDriverNode&) = delete;
+  SerialDriverNode(SerialDriverNode&&) = delete;
+
+  SerialDriverNode& operator=(const SerialDriverNode&) = delete;
+  SerialDriverNode& operator=(SerialDriverNode&&) = delete;
+
+  /** @brief 析构函数，清理所有桥接器和串口资源。 */
+  ~SerialDriverNode() override;
+
+private:
+  // ---- 参数加载 ----
+  /** @brief 声明并从参数服务器加载所有运行参数。 */
+  void onConfigure();
+
+  // ---- 编解码（供桥接器回调使用） ----
   /**
-   * @brief ROS2 节点层，封装 SerialDriverMain
-   * 并向上提供话题桥接、裁判数据发布、 tf 广播等能力。
-   *
-   * 职责：
-   *  - 从参数服务器读取串口配置（port_name, baud_rate 等）。
-   *  - 持有并管理 SerialDriverMain 实例的生命周期。
-   *  - 创建 3 路桥接通道（/cmd_vel, /serial/Yaw, /serial/EnemyPos），分别使用
-   *    RosToSerialBridge 和 SerialToRosBridge。
-   *  - 定时发布裁判系统数据（RobotStatus, GameStatus, RfidStatus）。
-   *  - 广播 gimbal_yaw_vision tf（由 odom→base_footprint 推导）。
-   *  - 提供速度坐标系变换工具方法（transformVelocityToChassis）。
+   * @brief 将 Twist 消息编码为 17 字节运动帧 payload。
+   * @param msg 输入速度指令。
+   * @return 17 字节 payload，按值返回避免堆分配和悬垂指针。
    */
-  class SerialDriverNode : public rclcpp::Node {
-  public:
-    /** @brief 构造函数，声明参数、打开串口、创建桥接器和定时器。 */
-    explicit SerialDriverNode(const rclcpp::NodeOptions& options);
-    SerialDriverNode(const SerialDriverNode&) = delete;
-    SerialDriverNode(SerialDriverNode&&) = delete;
-    SerialDriverNode& operator=(const SerialDriverNode&) = delete;
-    SerialDriverNode& operator=(SerialDriverNode&&) = delete;
-    /** @brief 析构函数，清理所有桥接器和串口资源。 */
-    ~SerialDriverNode() override;
+  MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg);
 
-  private:
-    // ---- 参数加载 ----
-    /** @brief 声明并从参数服务器加载所有运行参数。 */
-    void onConfigure();
+  /**
+   * @brief 从运动帧 payload 解码 yaw 角度差。
+   * @param payload 运动帧 payload 指针。
+   * @return 包含 yaw 角度差（弧度）的 Float32 消息。
+   */
+  std_msgs::msg::Float32 decodeYaw(const uint8_t* payload);
 
-    // ---- 编解码（供桥接器回调使用） ----
-    /**
-     * @brief 将 Twist 消息编码为 17 字节运动帧 payload。
-     * @param msg 输入速度指令。
-     * @return 17 字节 payload，按值返回避免堆分配和悬垂指针。
-     */
-    MotionPayload encodeTwist(const geometry_msgs::msg::Twist& msg) const;
+  /**
+   * @brief 从运动帧 payload 解码敌方位置坐标。
+   * @param payload 运动帧 payload 指针。
+   * @return 包含 x, y 坐标的 Point 消息。
+   */
+  static geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
 
-    /**
-     * @brief 从运动帧 payload 解码 yaw 角度差。
-     * @param payload 运动帧 payload 指针。
-     * @return 包含 yaw 角度差（弧度）的 Float32 消息。
-     */
-    std_msgs::msg::Float32 decodeYaw(const uint8_t* payload);
+  // ---- tf 广播 ----
 
-    /**
-     * @brief 从运动帧 payload 解码敌方位置坐标。
-     * @param payload 运动帧 payload 指针。
-     * @return 包含 x, y 坐标的 Point 消息。
-     */
-    static geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
+  /**
+   * @brief 定时广播 gimbal_yaw_vision tf（30ms 周期）。
+   *
+   * 从 tf_buffer 查询 odom→base_footprint 变换，取 yaw 角后发布
+   * base_footprint→gimbal_yaw_vision 的纯旋转 tf。
+   */
+  void publishTransformGimbalVision();
 
-    // ---- tf 广播 ----
+  // ---- 工具方法 ----
 
-    /**
-     * @brief 定时广播 gimbal_yaw_vision tf（30ms 周期）。
-     *
-     * 从 tf_buffer 查询 odom→base_footprint 变换，取 yaw 角后发布
-     * base_footprint→gimbal_yaw_vision 的纯旋转 tf。
-     */
-    void publishTransformGimbalVision();
+  /**
+   * @brief 将速度从 gimbal_yaw 坐标系变换到 chassis 坐标系。
+   * @param twist_in gimbal_yaw 系下的速度指令。
+   * @param yaw_diff gimbal_yaw 与 chassis 之间的 yaw 角度差（弧度）。
+   * @return chassis 系下的速度指令。
+   */
+  static geometry_msgs::msg::Twist transformVelocityToChassis(
+      const geometry_msgs::msg::Twist& twist_in, double yaw_diff);
 
-    // ---- 工具方法 ----
+  // ---- 裁判系统 ----
+  /**
+   * @brief 定时（20ms）从串口读取裁判系统帧并发布
+   * RobotStatus/GameStatus/RfidStatus。
+   */
+  void publishRefereeData();
 
-    /**
-     * @brief 将速度从 gimbal_yaw 坐标系变换到 chassis 坐标系。
-     * @param twist_in gimbal_yaw 系下的速度指令。
-     * @param yaw_diff gimbal_yaw 与 chassis 之间的 yaw 角度差（弧度）。
-     * @return chassis 系下的速度指令。
-     */
-    static geometry_msgs::msg::Twist transformVelocityToChassis(
-        const geometry_msgs::msg::Twist& twist_in, double yaw_diff);
+  /**
+   * @brief 将裁判系统 RFID 原始 uint32_t 解析为 RfidStatus 消息。
+   * @param rfid 裁判系统协议中的 rfid_status 字段。
+   * @return 解析后的 RfidStatus 消息。
+   */
+  static guga_interfaces::msg::RfidStatus rfid2ros(uint32_t rfid);
 
-    // ---- 裁判系统 ----
-    /**
-     * @brief 定时（20ms）从串口读取裁判系统帧并发布
-     * RobotStatus/GameStatus/RfidStatus。
-     */
-    void publishRefereeData();
+private:
+  // 串口参数
+  std::string port_name_{"/dev/ttyACM0"};
+  int baud_rate_{115200};
 
-    /**
-     * @brief 将裁判系统 RFID 原始 uint32_t 解析为 RfidStatus 消息。
-     * @param rfid 裁判系统协议中的 rfid_status 字段。
-     * @return 解析后的 RfidStatus 消息。
-     */
-    static guga_interfaces::msg::RfidStatus rfid2ros(uint32_t rfid);
+  // MCU 上传的云台 yaw 差值
+  double yaw_diff_{};
 
-    // ---- 雷达检测 ----
+  double vel_trans_scale_{40.0}; // 速度指令缩放系数（m/s → mm/s）,理论值为1000但可以被调参
+  std::deque<float> vx_buffer_; // x速度指令滤波缓存
+  std::deque<float> vy_buffer_; // y速度指令滤波缓存
+  size_t filter_window_size_{10}; // 滤波窗口大小
 
-    /**
-     * @brief 通过 TCP 连接检测 Livox MID360 雷达是否在线。
-     * @return true 表示雷达可达。
-     *
-     * 使用参数 lidar_ip / lidar_port 尝试 TCP connect（0.5 秒超时）。
-     */
-    [[nodiscard]] bool isLidarConnected() const;
+  // 串口底层
+  std::shared_ptr<SerialDriverMain> serial_driver_main_;
 
-    // 串口参数
-    std::string port_name_{"/dev/ttyACM0"};
-    int baud_rate_{115200};
+  // 消息桥接器
+  std::shared_ptr<RosToSerialBridge<geometry_msgs::msg::Twist>> bridge_twist_pc_;
+  std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>> bridge_yaw_mcu_;
+  std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>> bridge_enemy_pos_mcu_;
 
-    // MCU 上传的云台 yaw 差值
-    double yaw_diff_{};
+  // 定时器
+  rclcpp::TimerBase::SharedPtr gimbal_vision_timer_;
+  rclcpp::TimerBase::SharedPtr referee_rx_timer_;
 
-    // 速度变换
-    double vel_trans_scale_{40.0};
-    // double angle_init_{};
+  // tf
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-    // // 底盘模式
-    // uint8_t chassis_mode_{1};  // 默认 chassisFollowed
+  // 裁判系统发布者
+  rclcpp::Publisher<guga_interfaces::msg::RobotStatus>::SharedPtr robot_status_pub_;
+  rclcpp::Publisher<guga_interfaces::msg::GameStatus>::SharedPtr game_status_pub_;
+  rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr rfid_status_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
 
-    // 雷达连接参数
-    std::string lidar_ip_{"192.168.1.2"};
-    int lidar_port_{56360};
-
-    // 串口底层
-    std::shared_ptr<SerialDriverMain> serial_driver_main_;
-
-    // 四路消息桥接器
-    std::shared_ptr<RosToSerialBridge<geometry_msgs::msg::Twist>>
-        bridge_twist_pc_;
-    std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>>
-        bridge_yaw_mcu_;
-    std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>>
-        bridge_enemy_pos_mcu_;
-
-    // 定时器
-    rclcpp::TimerBase::SharedPtr gimbal_vision_timer_;
-    rclcpp::TimerBase::SharedPtr referee_rx_timer_;
-
-    // tf
-    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-
-    // 裁判系统发布者
-    rclcpp::Publisher<guga_interfaces::msg::RobotStatus>::SharedPtr
-        robot_status_pub_;
-    rclcpp::Publisher<guga_interfaces::msg::GameStatus>::SharedPtr
-        game_status_pub_;
-    rclcpp::Publisher<guga_interfaces::msg::RfidStatus>::SharedPtr
-        rfid_status_pub_;
-
-  };
+};
 
 }  // namespace serial_driver

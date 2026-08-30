@@ -35,7 +35,7 @@ if [[ -z "${ROS_DISTRO:-}" ]]; then
 fi
 source_setup "$WS/install/setup.bash"
 
-DEFAULT_NODE="/red_standard_robot1/controller_server"
+DEFAULT_NODE="controller_server"
 # 常用关键参数（show 时展示）
 echo "默认节点: $DEFAULT_NODE"
 set +e

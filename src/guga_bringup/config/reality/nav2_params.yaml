@@ -385,7 +385,7 @@ local_costmap:
       width: 5
       height: 5
       resolution: 0.05
-      robot_radius: 0.2
+      robot_radius: 0.4
       plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
@@ -444,7 +444,7 @@ global_costmap:
       publish_frequency: 2.0
       global_frame: map
       robot_base_frame: base_footprint
-      robot_radius: 0.2
+      robot_radius: 0.4
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
@@ -592,3 +592,15 @@ velocity_smoother:
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
+
+joint_state_publisher:
+  ros__parameters:
+    use_sim_time: true
+    rate: 200
+    source_list: ["/serial/gimbal_joint_state",]
+    offset_timestamp: 0.0
+
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: false
+    publish_frequency: 200.0
