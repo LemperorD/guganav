@@ -158,7 +158,6 @@ cd "$WS" || exit 1
 export MAKEFLAGS='-j1 -l1'
 
 colcon build \
-    --packages-ignore $PACKAGES_SELECT \
     --symlink-install \
     --parallel-workers 4 \
     --cmake-args \

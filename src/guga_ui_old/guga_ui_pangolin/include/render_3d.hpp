@@ -2,7 +2,8 @@
 #define GUGA_UI_PANGOLIN_RENDER_3D_HPP
 /**
  * @file render_3d.hpp
- * @brief 3D 场景渲染：机器人位姿、导航路径/目标点、敌方标记、坐标轴、地面参考网格。
+ * @brief 3D
+ * 场景渲染：机器人位姿、导航路径/目标点、敌方标记、坐标轴、地面参考网格。
  */
 
 #include <string>
@@ -24,7 +25,7 @@
  * 支持顶视图（top-down）和跟随机器人两种模式。
  */
 class GugaRender3D {
- public:
+public:
   /// 视图模式
   enum class ViewMode {
     TOP_DOWN,  // 俯视顶视图
@@ -44,8 +45,8 @@ class GugaRender3D {
         pangolin::ProjectionMatrix(w, h, 500, 500, w / 2.0, h / 2.0, 0.1,
                                    100.0),
         pangolin::ModelViewLookAt(0.0, 0.0, 15.0,   // 相机位置
-                                   0.0, 0.0, 0.0,    // 看向
-                                   pangolin::AxisY)  // 上方为 Y
+                                  0.0, 0.0, 0.0,    // 看向
+                                  pangolin::AxisX)  // 上方为 Y
     );
 
     // 设置交互 handler（鼠标拖拽旋转/缩放/平移）
@@ -58,11 +59,9 @@ class GugaRender3D {
    * @param ds 数据源。
    */
   void draw(pangolin::View& view, const UiDataSource& ds) {
-    view.Activate(s_cam_);
-
-    // 清除背景为深灰
+    // 只清除本视图区域（scissor），避免整窗 glClear 覆盖左侧面板
     glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    view.ActivateScissorAndClear(s_cam_);
 
     const auto& d = ds.data();
 
@@ -98,10 +97,10 @@ class GugaRender3D {
   /// 切换视图模式
   void toggleViewMode() {
     mode_ = (mode_ == ViewMode::TOP_DOWN) ? ViewMode::FOLLOW
-                                           : ViewMode::TOP_DOWN;
+                                          : ViewMode::TOP_DOWN;
   }
 
- private:
+private:
   // ---- 地面参考网格 ----
 
   void drawGroundGrid() {
@@ -160,7 +159,7 @@ class GugaRender3D {
 
     glColor4f(0.2f, 0.7f, 1.0f, 1.0f);  // 浅蓝色三角
     glBegin(GL_TRIANGLES);
-    glVertex3f(x + cx * size,        y + sy * size,        0.02f);
+    glVertex3f(x + cx * size, y + sy * size, 0.02f);
     glVertex3f(x - cx * size * 0.5f + sy * size * 0.5f,
                y - sy * size * 0.5f - cx * size * 0.5f, 0.02f);
     glVertex3f(x - cx * size * 0.5f - sy * size * 0.5f,
@@ -176,7 +175,8 @@ class GugaRender3D {
   // ---- 导航目标点 ----
 
   void drawNavGoal(const guga_ui::UiDecision& dec) {
-    if (!dec.should_publish_goal) return;
+    if (!dec.should_publish_goal)
+      return;
 
     // 目标点十字
     const float rad{0.3f};
@@ -207,8 +207,7 @@ class GugaRender3D {
     glLineWidth(2.0f);
 
     glBegin(GL_LINE_STRIP);
-    for (size_t i = 0; i < path.count && i < guga_ui::UI_PATH_MAX_POINTS;
-         ++i) {
+    for (size_t i = 0; i < path.count && i < guga_ui::UI_PATH_MAX_POINTS; ++i) {
       glVertex3f(path.x[i], path.y[i], 0.02f);
     }
     glEnd();
@@ -244,10 +243,10 @@ class GugaRender3D {
     glBegin(GL_LINE_LOOP);
     for (int i = 0; i < segments; ++i) {
       const float angle = 2.0f * static_cast<float>(M_PI)
-                        * static_cast<float>(i)
-                        / static_cast<float>(segments);
-      glVertex3f(cx + radius * std::cos(angle),
-                 cy + radius * std::sin(angle), 0.03f);
+                          * static_cast<float>(i)
+                          / static_cast<float>(segments);
+      glVertex3f(cx + radius * std::cos(angle), cy + radius * std::sin(angle),
+                 0.03f);
     }
     glEnd();
   }

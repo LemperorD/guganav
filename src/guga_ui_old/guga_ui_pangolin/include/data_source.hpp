@@ -155,6 +155,7 @@ public:
    */
   [[nodiscard]] bool isFresh(uint64_t age_field,
                               uint64_t max_age = 60) const {
+    if (frame_count_ == 0) return false;  // 尚无任何数据被读取
     if (frame_count_ < age_field) return false;
     return (frame_count_ - age_field) <= max_age;
   }
