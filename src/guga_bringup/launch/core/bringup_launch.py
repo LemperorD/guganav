@@ -109,6 +109,7 @@ def generate_launch_description():
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
         default_value="mppi",
+        default_value="mppi",
         choices=["pid", "mppi", "mpc"],
         description="Controller profile, forwarded to navigation_launch for chassis mode",
     )
