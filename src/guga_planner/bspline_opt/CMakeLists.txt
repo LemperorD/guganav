@@ -21,7 +21,13 @@ find_package(Eigen3 REQUIRED)
 
 # ── Core library (static, NO external deps beyond Eigen3) ──
 add_library(bspline_opt_core STATIC
-  src/bspline_optimizer.cpp)
+  src/bspline_optimizer.cpp
+  src/detail/grid_utils.cpp
+  src/detail/esdf_utils.cpp
+  src/detail/basis.cpp
+  src/detail/cost_cache.cpp
+  src/detail/cost_function.cpp
+  src/detail/gradient_descent.cpp)
 target_include_directories(bspline_opt_core
   PUBLIC
     include
