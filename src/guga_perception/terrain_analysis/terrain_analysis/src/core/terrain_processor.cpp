@@ -174,7 +174,6 @@ namespace terrain_analysis {
   void TerrainProcessor::estimateTerrainGround() {
     resetPlanarVoxels();
 
-    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
@@ -199,27 +198,7 @@ namespace terrain_analysis {
       if (!grid_index.valid) {
         continue;
       }
-
-      const int row = grid_index.row;
-      const int col = grid_index.col;
-
-      size_t base = TerrainGrid::planarVoxelIndex(row, col);
-      static constexpr int PLANAR_VOXEL_WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
-      for (int delta_row = -1; delta_row <= 1; delta_row++) {
-        int neighbor_row = row + delta_row;
-        if (neighbor_row < 0 || neighbor_row >= planar_width) {
-          continue;
-        }
-        for (int delta_col = -1; delta_col <= 1; delta_col++) {
-          int neighbor_col = col + delta_col;
-          if (neighbor_col >= 0 && neighbor_col < planar_width) {
-            int index = static_cast<int>(base)
-                        + (delta_row * PLANAR_VOXEL_WIDTH) + delta_col;
-            state_.planar_point_elev[static_cast<size_t>(index)].push_back(
-                point.z);
-          }
-        }
-      }
+      addToPlanarNeighborhood(grid_index.row, grid_index.col, point.z);
     }
   }
 
@@ -434,6 +413,27 @@ namespace terrain_analysis {
     state_.planar_voxel_dy_obs.fill(0);
     for (auto& point_elevations : state_.planar_point_elev) {
       point_elevations.clear();
+    }
+  }
+
+  void TerrainProcessor::addToPlanarNeighborhood(int row, int col, double z) {
+    constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
+
+    for (int delta_row = -1; delta_row <= 1; delta_row++) {
+      const int neighbor_row = row + delta_row;
+      if (neighbor_row < 0 || neighbor_row >= width) {
+        continue;
+      }
+      for (int delta_col = -1; delta_col <= 1; delta_col++) {
+        const int neighbor_col = col + delta_col;
+        if (neighbor_col < 0 || neighbor_col >= width) {
+          continue;
+        }
+        // 行偏移按整行换算（乘网格宽度），列偏移直接相加
+        const size_t index = TerrainGrid::planarVoxelIndex(neighbor_row,
+                                                           neighbor_col);
+        state_.planar_point_elev[index].push_back(z);
+      }
     }
   }
 
