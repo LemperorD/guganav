@@ -59,8 +59,8 @@ namespace terrain_analysis {
       }
     }
 
-    bool shouldPruneVoxel(const TerrainConfig& config,
-                          const TerrainState& state, int cell) {
+    bool shouldPruneTerrainVoxel(const TerrainConfig& config,
+                                 const TerrainState& state, int cell) {
       if (state.terrain_voxel_update_num[cell]
           >= config.voxel_point_update_thre) {
         return true;
@@ -70,9 +70,9 @@ namespace terrain_analysis {
       return elapsed >= config.voxel_time_update_thre;
     }
 
-    bool keepVoxelPoint(double relative_z, double distance, double point_time,
-                        const TerrainConfig& config,
-                        const TerrainState& state) {
+    bool keepTerrainVoxelPoint(double relative_z, double distance,
+                               double point_time, const TerrainConfig& config,
+                               const TerrainState& state) {
       const double z_margin = config.distance_ratio_z * distance;
       if (relative_z <= config.min_relative_z - z_margin) {
         return false;
@@ -206,12 +206,12 @@ namespace terrain_analysis {
   void TerrainProcessor::run() {
     state_.new_laser_cloud = false;
 
-    rolloverVoxels();
-    voxelize();
-    updateVoxels();
+    rolloverTerrainVoxels();
+    voxelizeTerrain();
+    updateTerrainVoxels();
     collectTerrainCloud();
 
-    estimateGround();
+    estimateTerrainGround();
 
     detectDynamicObstacles();
     filterDynamicObstaclePoints();
@@ -222,45 +222,46 @@ namespace terrain_analysis {
 
   // ── 管线阶段（私有）──
 
-  void TerrainProcessor::rolloverVoxels() {
-    const double voxel_size = config_.terrain_voxel_size;
-    double center_x = voxel_size * state_.terrain_voxel_shift_x;
-    double center_y = voxel_size * state_.terrain_voxel_shift_y;
+  void TerrainProcessor::rolloverTerrainVoxels() {
+    const double terrain_voxel_size = config_.terrain_voxel_size;
+    double center_x = terrain_voxel_size * state_.terrain_voxel_shift_x;
+    double center_y = terrain_voxel_size * state_.terrain_voxel_shift_y;
 
-    while (state_.vehicle_x - center_x < -voxel_size) {
+    while (state_.vehicle_x - center_x < -terrain_voxel_size) {
       shiftGrid(state_, Axis::X, false);
-      center_x = voxel_size * --state_.terrain_voxel_shift_x;
+      center_x = terrain_voxel_size * --state_.terrain_voxel_shift_x;
     }
 
-    while (state_.vehicle_x - center_x > voxel_size) {
+    while (state_.vehicle_x - center_x > terrain_voxel_size) {
       shiftGrid(state_, Axis::X, true);
-      center_x = voxel_size * ++state_.terrain_voxel_shift_x;
+      center_x = terrain_voxel_size * ++state_.terrain_voxel_shift_x;
     }
 
-    while (state_.vehicle_y - center_y < -voxel_size) {
+    while (state_.vehicle_y - center_y < -terrain_voxel_size) {
       shiftGrid(state_, Axis::Y, false);
-      center_y = voxel_size * --state_.terrain_voxel_shift_y;
+      center_y = terrain_voxel_size * --state_.terrain_voxel_shift_y;
     }
 
-    while (state_.vehicle_y - center_y > voxel_size) {
+    while (state_.vehicle_y - center_y > terrain_voxel_size) {
       shiftGrid(state_, Axis::Y, true);
-      center_y = voxel_size * ++state_.terrain_voxel_shift_y;
+      center_y = terrain_voxel_size * ++state_.terrain_voxel_shift_y;
     }
   }
 
-  void TerrainProcessor::voxelize() {
-    const double voxel_size = config_.terrain_voxel_size;
-    constexpr int voxel_half_width = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH;
-    constexpr int voxel_width = TerrainGrid::TERRAIN_VOXEL_WIDTH;
+  void TerrainProcessor::voxelizeTerrain() {
+    const double terrain_voxel_size = config_.terrain_voxel_size;
+    constexpr int terrain_half_width = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH;
+    constexpr int terrain_width = TerrainGrid::TERRAIN_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
 
     for (const auto& point : state_.laser_cloud_crop->points) {
-      int row = toVoxelIndex(point.x, vehicle_x, voxel_size, voxel_half_width);
-      int column = toVoxelIndex(point.y, vehicle_y, voxel_size,
-                                voxel_half_width);
-      if (row < 0 || row >= voxel_width || column < 0
-          || column >= voxel_width) {
+      int row = toVoxelIndex(point.x, vehicle_x, terrain_voxel_size,
+                             terrain_half_width);
+      int column = toVoxelIndex(point.y, vehicle_y, terrain_voxel_size,
+                                terrain_half_width);
+      if (row < 0 || row >= terrain_width || column < 0
+          || column >= terrain_width) {
         continue;
       }
       size_t cell = TerrainGrid::terrainVoxelIndex(row, column);
@@ -269,7 +270,7 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::updateVoxels() {
+  void TerrainProcessor::updateTerrainVoxels() {
     const double laser_time = state_.laser_cloud_time;
     const double init_time = state_.system_init_time;
     const double vehicle_z = state_.vehicle_z;
@@ -281,7 +282,7 @@ namespace terrain_analysis {
     pcl::PointCloud<pcl::PointXYZI> downsampled;
 
     for (int cell = 0; cell < TerrainGrid::TERRAIN_VOXEL_NUM; cell++) {
-      if (!shouldPruneVoxel(config_, state_, cell)) {
+      if (!shouldPruneTerrainVoxel(config_, state_, cell)) {
         continue;
       }
       auto& cell_cloud = *state_.terrain_voxel_cloud[cell];
@@ -293,8 +294,8 @@ namespace terrain_analysis {
 
       for (const auto& point : downsampled.points) {
         double distance = horizontalDistanceTo(point.x, point.y, state_);
-        if (keepVoxelPoint(point.z - vehicle_z, distance, point.intensity,
-                           config_, state_)) {
+        if (keepTerrainVoxelPoint(point.z - vehicle_z, distance,
+                                  point.intensity, config_, state_)) {
           cell_cloud.push_back(point);
         }
       }
@@ -322,21 +323,23 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::estimateGround() {
+  void TerrainProcessor::estimateTerrainGround() {
     resetPlanarVoxels(state_);
 
-    const double voxel_size = config_.planar_voxel_size;
-    constexpr int half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
+    const double planar_voxel_size = config_.planar_voxel_size;
+    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
+    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
-      int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
+      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
+                             planar_half_width);
+      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
+                             planar_half_width);
       double relative_z = point.z - vehicle_z;
-      if (col < 0 || col >= width || row < 0 || row >= width) {
+      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
         continue;
       }
       if (relative_z <= config_.min_relative_z
@@ -354,12 +357,12 @@ namespace terrain_analysis {
       static constexpr int PLANAR_VOXEL_WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
       for (int delta_row = -1; delta_row <= 1; delta_row++) {
         int neighbor_row = row + delta_row;
-        if (neighbor_row < 0 || neighbor_row >= width) {
+        if (neighbor_row < 0 || neighbor_row >= planar_width) {
           continue;
         }
         for (int delta_col = -1; delta_col <= 1; delta_col++) {
           int neighbor_col = col + delta_col;
-          if (neighbor_col >= 0 && neighbor_col < width) {
+          if (neighbor_col >= 0 && neighbor_col < planar_width) {
             int index = static_cast<int>(base)
                         + (delta_row * PLANAR_VOXEL_WIDTH) + delta_col;
             state_.planar_point_elev[static_cast<size_t>(index)].push_back(
@@ -371,17 +374,19 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::detectDynamicObstacles() {
-    const double voxel_size = config_.planar_voxel_size;
-    constexpr int half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
+    const double planar_voxel_size = config_.planar_voxel_size;
+    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
+    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
-      int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
-      if (col < 0 || col >= width || row < 0 || row >= width) {
+      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
+                             planar_half_width);
+      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
+                             planar_half_width);
+      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
         continue;
       }
       size_t cell = TerrainGrid::planarVoxelIndex(row, col);
@@ -417,17 +422,19 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::filterDynamicObstaclePoints() {
-    const double voxel_size = config_.planar_voxel_size;
-    constexpr int half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
+    const double planar_voxel_size = config_.planar_voxel_size;
+    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
+    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.laser_cloud_crop->points) {
-      int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
-      if (col < 0 || col >= width || row < 0 || row >= width) {
+      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
+                             planar_half_width);
+      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
+                             planar_half_width);
+      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
         continue;
       }
       size_t cell = TerrainGrid::planarVoxelIndex(row, col);
@@ -458,9 +465,9 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::computeHeightMap() {
-    const double voxel_size = config_.planar_voxel_size;
-    constexpr int half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
+    const double planar_voxel_size = config_.planar_voxel_size;
+    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
+    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
@@ -478,9 +485,11 @@ namespace terrain_analysis {
       if (relative_z >= config_.ceiling_clearance) {
         continue;
       }
-      int col = toVoxelIndex(point.x, vehicle_x, voxel_size, half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, voxel_size, half_width);
-      if (col < 0 || col >= width || row < 0 || row >= width) {
+      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
+                             planar_half_width);
+      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
+                             planar_half_width);
+      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
         continue;
       }
       size_t cell = TerrainGrid::planarVoxelIndex(row, col);

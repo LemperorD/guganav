@@ -12,8 +12,9 @@ namespace terrain_analysis {
    * @brief 地形分析处理器：拥有算法状态、对外只暴露"一件事"一个入口。
    *
    * 设计意图（可见性契约）：
-   *   - 管线各阶段（voxelize / updateVoxels / estimateGround /
-   * …）是**实现细节**， 一律 private，可自由重构签名而不影响任何外部调用方。
+   *   - 管线各阶段（voxelizeTerrain / updateTerrainVoxels /
+   * estimateTerrainGround / …）是**实现细节**， 一律
+   * private，可自由重构签名而不影响任何外部调用方。
    *   - 外部只能通过四个语义入口驱动：ingestOdometry / ingestLaserCloud /
    *     ingestClearing / run，并读取 terrainCloudElev()。
    *   - 需要白盒验证各阶段的测试通过 `friend` 显式获得访问权（见下），
@@ -87,11 +88,11 @@ namespace terrain_analysis {
 
   private:
     // ── 管线阶段（实现细节，见类注释的可见性契约）──
-    void rolloverVoxels();
-    void voxelize();
-    void updateVoxels();
+    void rolloverTerrainVoxels();
+    void voxelizeTerrain();
+    void updateTerrainVoxels();
     void collectTerrainCloud();
-    void estimateGround();
+    void estimateTerrainGround();
     void detectDynamicObstacles();
     void filterDynamicObstaclePoints();
     void computeElevation();

@@ -14,9 +14,9 @@ namespace stage {
   enum class Id {
     Rollover,
     Voxelize,
-    UpdateVoxels,
+    UpdateTerrainVoxels,
     Collect,
-    EstimateGround,
+    EstimateTerrainGround,
     DetectDynamic,
     FilterDynamic,
     Elevation,
@@ -50,19 +50,19 @@ namespace terrain_analysis {
     void runStage(stage::Id id) {
       switch (id) {
         case stage::Id::Rollover:
-          processor_.rolloverVoxels();
+          processor_.rolloverTerrainVoxels();
           break;
         case stage::Id::Voxelize:
-          processor_.voxelize();
+          processor_.voxelizeTerrain();
           break;
-        case stage::Id::UpdateVoxels:
-          processor_.updateVoxels();
+        case stage::Id::UpdateTerrainVoxels:
+          processor_.updateTerrainVoxels();
           break;
         case stage::Id::Collect:
           processor_.collectTerrainCloud();
           break;
-        case stage::Id::EstimateGround:
-          processor_.estimateGround();
+        case stage::Id::EstimateTerrainGround:
+          processor_.estimateTerrainGround();
           break;
         case stage::Id::DetectDynamic:
           processor_.detectDynamicObstacles();
@@ -123,7 +123,7 @@ namespace terrain_analysis {
       state.terrain_voxel_update_num[center_cell] =
           config.voxel_point_update_thre;
 
-      proc.updateVoxels();
+      proc.updateTerrainVoxels();
       return static_cast<int>(
           state.terrain_voxel_cloud[center_cell]->points.size());
     }
@@ -135,7 +135,7 @@ namespace terrain_analysis {
 using terrain_analysis::AlgorithmTest;
 
 // 车辆未移动时，体素网格不发生滚动
-TEST_F(AlgorithmTest, RolloverVoxels_Stationary_NoShift) {
+TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   int sx = state().terrain_voxel_shift_x;
@@ -148,7 +148,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_Stationary_NoShift) {
 }
 
 // 车辆向左超出 voxel 范围时，沿 X 负向滚动一格
-TEST_F(AlgorithmTest, RolloverVoxels_LeftOfCenter_ShiftsXNegative) {
+TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
   state().vehicle_x = -2.0;
   int sx = state().terrain_voxel_shift_x;
 
@@ -158,7 +158,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_LeftOfCenter_ShiftsXNegative) {
 }
 
 // 车辆向右超出 voxel 范围时，沿 X 正向滚动一格
-TEST_F(AlgorithmTest, RolloverVoxels_RightOfCenter_ShiftsXPositive) {
+TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
   state().vehicle_x = 2.0;
   int sx = state().terrain_voxel_shift_x;
 
@@ -168,7 +168,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_RightOfCenter_ShiftsXPositive) {
 }
 
 // 车辆向下超出 voxel 范围时，沿 Y 负向滚动一格
-TEST_F(AlgorithmTest, RolloverVoxels_BelowCenter_ShiftsYNegative) {
+TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
   state().vehicle_y = -2.0;
   int sy = state().terrain_voxel_shift_y;
 
@@ -178,7 +178,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_BelowCenter_ShiftsYNegative) {
 }
 
 // 车辆向上超出 voxel 范围时，沿 Y 正向滚动一格
-TEST_F(AlgorithmTest, RolloverVoxels_AboveCenter_ShiftsYPositive) {
+TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
   state().vehicle_y = 2.0;
   int sy = state().terrain_voxel_shift_y;
 
@@ -188,7 +188,8 @@ TEST_F(AlgorithmTest, RolloverVoxels_AboveCenter_ShiftsYPositive) {
 }
 
 // 滚动后目标 cell 被清空，原有数据随 shift 迁移
-TEST_F(AlgorithmTest, RolloverVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
+TEST_F(AlgorithmTest,
+       RolloverTerrainVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
   state().vehicle_x = -2.0;
   state().terrain_voxel_cloud[0]->clear();
   pcl::PointXYZI p{0, 0, 0, 0};
@@ -201,7 +202,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
 }
 
 // 车辆同时向左下方移动，X 和 Y 各滚动一格
-TEST_F(AlgorithmTest, RolloverVoxels_LeftAndDown_ShiftsBothAxes) {
+TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
   state().vehicle_x = -2.0;
   state().vehicle_y = -2.0;
   int sx = state().terrain_voxel_shift_x;
@@ -213,7 +214,7 @@ TEST_F(AlgorithmTest, RolloverVoxels_LeftAndDown_ShiftsBothAxes) {
   EXPECT_EQ(state().terrain_voxel_shift_y, sy - 1);
 }
 
-// ── voxelize ──
+// ── voxelizeTerrain ──
 // 原点处的单个点被分配到网格正中的 cell
 TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
   state().vehicle_x = 0;
@@ -433,10 +434,10 @@ TEST_F(AlgorithmTest,
   EXPECT_EQ(state().planar_voxel_dy_obs[cell], 10);
 }
 
-// ── estimateGround ──
+// ── estimateTerrainGround ──
 
 // 栅格边缘点触发射线邻居越界检查，不崩溃
-TEST_F(AlgorithmTest, EstimateGround_EdgePoint_HandlesOobNeighbors) {
+TEST_F(AlgorithmTest, EstimateTerrainGround_EdgePoint_HandlesOobNeighbors) {
   constexpr double SZ = 0.2;
   double edge = SZ * (25 - 1);  // ~4.8m, column=49, delta_col+1=50 in bounds
   state().vehicle_x = 0;
@@ -450,20 +451,20 @@ TEST_F(AlgorithmTest, EstimateGround_EdgePoint_HandlesOobNeighbors) {
   pt.intensity = 0;
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::EstimateGround);
+  runStage(stage::Id::EstimateTerrainGround);
   // No crash = pass; point Z=0 is within min/max relative_z range
   EXPECT_TRUE(true);
 }
 
 // 超出 planar grid 的点被跳过，避免在计算 base index 时越界
-TEST_F(AlgorithmTest, EstimateGround_PointOutsidePlanarGrid_Ignored) {
+TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({6.0F, 0.0F, 0.0F, 0.0F});
 
-  runStage(stage::Id::EstimateGround);
+  runStage(stage::Id::EstimateTerrainGround);
 
   for (const auto& elevations : state().planar_point_elev) {
     EXPECT_TRUE(elevations.empty());
@@ -562,7 +563,8 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
 
 // 车顶上方超过安全间隙的点（天花板）不参与地面估计，防止 elev 被抬高后
 // 地面点高度差变负、天花板点高度差落入障碍区间（窄隧道场景）
-TEST_F(AlgorithmTest, EstimateGround_CeilingPoint_ExcludedFromElevation) {
+TEST_F(AlgorithmTest,
+       EstimateTerrainGround_CeilingPoint_ExcludedFromElevation) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
@@ -571,7 +573,7 @@ TEST_F(AlgorithmTest, EstimateGround_CeilingPoint_ExcludedFromElevation) {
   // 天花板点：相对车高 0.26m（模拟 260mm 顶隙的隧道），位于车辆正上方
   state().terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
-  runStage(stage::Id::EstimateGround);
+  runStage(stage::Id::EstimateTerrainGround);
 
   size_t center = TerrainGrid::planarVoxelIndex(
       TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
@@ -580,7 +582,8 @@ TEST_F(AlgorithmTest, EstimateGround_CeilingPoint_ExcludedFromElevation) {
 }
 
 // 车顶下方/间隙内的点仍正常参与地面估计
-TEST_F(AlgorithmTest, EstimateGround_BelowCeilingClearance_Participates) {
+TEST_F(AlgorithmTest,
+       EstimateTerrainGround_BelowCeilingClearance_Participates) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
@@ -588,7 +591,7 @@ TEST_F(AlgorithmTest, EstimateGround_BelowCeilingClearance_Participates) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({0.0F, 0.0F, -0.1F, 0.0F});
 
-  runStage(stage::Id::EstimateGround);
+  runStage(stage::Id::EstimateTerrainGround);
 
   size_t center = TerrainGrid::planarVoxelIndex(
       TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
@@ -661,7 +664,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.1F, 1e-6);
 }
 
-// ── keepVoxelPoint boundary tests (via updateVoxels) ──
+// ── keepTerrainVoxelPoint boundary tests (via updateTerrainVoxels) ──
 
 // 略高于下限边界的点被保留
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
@@ -724,7 +727,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   state().terrain_voxel_update_num[center_cell] =
       config().voxel_point_update_thre;
 
-  runStage(stage::Id::UpdateVoxels);
+  runStage(stage::Id::UpdateTerrainVoxels);
   EXPECT_TRUE(state().terrain_voxel_cloud[center_cell]->points.empty());
 }
 
@@ -757,11 +760,11 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   state().terrain_voxel_update_num[center_cell] =
       config().voxel_point_update_thre;
 
-  runStage(stage::Id::UpdateVoxels);
+  runStage(stage::Id::UpdateTerrainVoxels);
   EXPECT_EQ(state().terrain_voxel_cloud[center_cell]->points.size(), 1U);
 }
 
-// ── shouldPruneVoxel (via updateVoxels) ──
+// ── shouldPruneTerrainVoxel (via updateTerrainVoxels) ──
 
 // update_num 未达阈值且时间未到 → 不修剪
 TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
@@ -776,7 +779,7 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
   state().terrain_voxel_update_num[center_cell] = 5;
   state().terrain_voxel_update_time[center_cell] = 0.0;
 
-  runStage(stage::Id::UpdateVoxels);
+  runStage(stage::Id::UpdateTerrainVoxels);
   EXPECT_NE(state().terrain_voxel_cloud[center_cell], nullptr);
 }
 
@@ -805,7 +808,7 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
   state().terrain_voxel_update_num[center_cell] =
       config().voxel_point_update_thre;
 
-  runStage(stage::Id::UpdateVoxels);
+  runStage(stage::Id::UpdateTerrainVoxels);
   EXPECT_EQ(cell.points.size(), 1U);
 }
 
