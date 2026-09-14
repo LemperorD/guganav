@@ -1,5 +1,4 @@
 #include "terrain_analysis/terrain_analysis_node.hpp"
-#include "terrain_analysis/core/algorithm.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
 
@@ -24,14 +23,12 @@ namespace terrain_analysis {
     }
 
     void sendOdom(double x, double y, double z, double yaw) {
-      terrain_analysis::algorithm::ingestOdometry(
-          terrain_->config(), terrain_->state(), x, y, z, 0.0, 0.0, yaw);
+      terrain_->processor().ingestOdometry(x, y, z, 0.0, 0.0, yaw);
     }
 
     void sendCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                    double timestamp_sec) {
-      terrain_analysis::algorithm::ingestLaserCloud(
-          terrain_->config(), terrain_->state(), cloud, timestamp_sec);
+      terrain_->processor().ingestLaserCloud(cloud, timestamp_sec);
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;
@@ -43,12 +40,12 @@ namespace terrain_analysis {
 
     auto cloud = MakeGroundCloud(21, 0.1, 0.01);
     sendCloud(cloud, 100.0);
-    terrain_analysis::algorithm::run(terrain_->config(), terrain_->state());
+    terrain_->processor().run();
 
-    EXPECT_GT(terrain_->state().terrain_cloud_elev->points.size(), 0U);
+    EXPECT_GT(terrain_->processor().terrainCloudElev().points.size(), 0U);
 
     float max_intensity = 0;
-    for (const auto& p : terrain_->state().terrain_cloud_elev->points) {
+    for (const auto& p : terrain_->processor().terrainCloudElev().points) {
       max_intensity = std::max(max_intensity, p.intensity);
     }
     EXPECT_LT(max_intensity, 0.5F)
@@ -61,12 +58,12 @@ namespace terrain_analysis {
 
     auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.15);
     sendCloud(cloud, 100.0);
-    terrain_analysis::algorithm::run(terrain_->config(), terrain_->state());
+    terrain_->processor().run();
 
-    EXPECT_GT(terrain_->state().terrain_cloud_elev->points.size(), 0U);
+    EXPECT_GT(terrain_->processor().terrainCloudElev().points.size(), 0U);
 
     float max_intensity = 0;
-    for (const auto& p : terrain_->state().terrain_cloud_elev->points) {
+    for (const auto& p : terrain_->processor().terrainCloudElev().points) {
       max_intensity = std::max(max_intensity, p.intensity);
     }
     EXPECT_GT(max_intensity, 0.05F)
@@ -82,10 +79,10 @@ namespace terrain_analysis {
     pcl::PointXYZI obs{3.0F, 3.0F, 0.3F, 0};
     cloud->push_back(obs);
     sendCloud(cloud, 100.0);
-    terrain_analysis::algorithm::run(terrain_->config(), terrain_->state());
+    terrain_->processor().run();
 
     bool found_isolated = false;
-    for (const auto& p : terrain_->state().terrain_cloud_elev->points) {
+    for (const auto& p : terrain_->processor().terrainCloudElev().points) {
       if (p.x > 2.5F && p.intensity > 0.1F) {
         found_isolated = true;
         break;

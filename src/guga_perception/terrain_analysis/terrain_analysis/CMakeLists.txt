@@ -34,7 +34,7 @@ find_package(pcl_ros REQUIRED)
 # Library（组件库必须 SHARED，plugin 动态加载）
 add_library(terrain_analysis_lib SHARED
   src/terrain_analysis_node.cpp
-  src/core/algorithm.cpp)
+  src/core/terrain_processor.cpp)
 
 target_include_directories(terrain_analysis_lib PUBLIC include)
 ament_target_dependencies(
@@ -66,12 +66,6 @@ install(TARGETS terrain_analysis_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME})
-
-# ── 性能微基准（Google Benchmark）：-DBUILD_BENCHMARK=ON 开启 ──
-option(BUILD_BENCHMARK "Build terrain_analysis benchmarks" OFF)
-if(BUILD_BENCHMARK)
-  add_subdirectory(benchmark)
-endif()
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

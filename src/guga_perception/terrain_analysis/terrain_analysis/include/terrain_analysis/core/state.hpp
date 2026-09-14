@@ -2,7 +2,6 @@
 
 #include "terrain_analysis/core/grid.hpp"
 
-#include <pcl/filters/voxel_grid.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
@@ -41,14 +40,8 @@ struct TerrainState {
   double sin_vehicle_yaw = 0.0, cos_vehicle_yaw = 0.0;
 
   // ---- 点云和网格 ----
-  /** @brief 最近接收到的原始点云。 */
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud =
-      std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   /** @brief 按高度和距离预过滤后的当前帧点云。 */
   pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_crop =
-      std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  /** @brief 体素重建过程中使用的临时降采样点云。 */
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_downsampled =
       std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   /** @brief 从历史体素提取的局部地形点云。 */
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud =
@@ -72,9 +65,6 @@ struct TerrainState {
   /** @brief 每个 Planar voxel 收集到的地面高度候选值。 */
   std::array<std::vector<double>, TerrainGrid::PLANAR_VOXEL_NUM>
       planar_point_elev;
-
-  /** @brief PCL 点云降采样器。 */
-  pcl::VoxelGrid<pcl::PointXYZI> down_size_filter;
 
   // ---- Terrain voxel 滚动偏移 ----
   /** @brief Terrain voxel 网格相对初始中心的 x 方向偏移。 */
