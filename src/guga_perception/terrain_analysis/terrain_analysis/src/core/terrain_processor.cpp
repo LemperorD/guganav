@@ -18,10 +18,21 @@
 namespace terrain_analysis {
 
   namespace {
+
     [[nodiscard]] double horizontalDistanceTo(double px, double py,
                                               const TerrainState& state) {
       return sqrt(((px - state.vehicle_x) * (px - state.vehicle_x))
                   + ((py - state.vehicle_y) * (py - state.vehicle_y)));
+    }
+
+    int toVoxelIndex(double point_cloud, double vehicle_cloud,
+                     double voxel_size, int half_width) {
+      const double half_voxel_size = voxel_size / 2;
+      int cell = static_cast<int>(
+                     std::floor((point_cloud - vehicle_cloud + half_voxel_size)
+                                / voxel_size))
+                 + half_width;
+      return cell;
     }
 
     enum class Axis : uint8_t { X, Y };
@@ -46,16 +57,6 @@ namespace terrain_analysis {
         dst_cell = ptr;
         dst_cell->clear();
       }
-    }
-
-    int toVoxelIndex(double point_cloud, double vehicle_cloud,
-                     double voxel_size, int half_width) {
-      const double half_voxel_size = voxel_size / 2;
-      int cell = static_cast<int>(
-                     std::floor((point_cloud - vehicle_cloud + half_voxel_size)
-                                / voxel_size))
-                 + half_width;
-      return cell;
     }
 
     bool shouldPruneVoxel(const TerrainConfig& config,
@@ -115,6 +116,14 @@ namespace terrain_analysis {
       return {pitched_x, rolled_y, rolled_z};
     }
 
+    void resetPlanarVoxels(TerrainState& state) {
+      state.planar_voxel_elev.fill(0);
+      state.planar_voxel_dy_obs.fill(0);
+      for (auto& point_elevations : state.planar_point_elev) {
+        point_elevations.clear();
+      }
+    }
+
     void elevateByQuantile(const TerrainConfig& config, TerrainState& state,
                            int cell) {
       auto& elevations = state.planar_point_elev[cell];
@@ -146,13 +155,6 @@ namespace terrain_analysis {
                                                         elevations.end());
     }
 
-    void resetPlanarVoxels(TerrainState& state) {
-      state.planar_voxel_elev.fill(0);
-      state.planar_voxel_dy_obs.fill(0);
-      for (auto& point_elevations : state.planar_point_elev) {
-        point_elevations.clear();
-      }
-    }
   }  // namespace
 
   // ── 公开入口 ──
