@@ -216,7 +216,7 @@ namespace terrain_analysis {
     detectDynamicObstacles();
     filterDynamicObstaclePoints();
 
-    computeElevation();
+    computePlanarElevation();
     computeHeightMap();
   }
 
@@ -452,7 +452,7 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::computeElevation() {
+  void TerrainProcessor::computePlanarElevation() {
     if (config_.use_sorting) {
       for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
         elevateByQuantile(config_, state_, i);

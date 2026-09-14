@@ -95,7 +95,7 @@ namespace terrain_analysis {
     void estimateTerrainGround();
     void detectDynamicObstacles();
     void filterDynamicObstaclePoints();
-    void computeElevation();
+    void computePlanarElevation();
     void computeHeightMap();
 
     TerrainConfig config_;

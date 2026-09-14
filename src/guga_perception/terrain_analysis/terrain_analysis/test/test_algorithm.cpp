@@ -19,7 +19,7 @@ namespace stage {
     EstimateTerrainGround,
     DetectDynamic,
     FilterDynamic,
-    Elevation,
+    PlanarElevation,
     HeightMap
   };
 }  // namespace stage
@@ -70,8 +70,8 @@ namespace terrain_analysis {
         case stage::Id::FilterDynamic:
           processor_.filterDynamicObstaclePoints();
           break;
-        case stage::Id::Elevation:
-          processor_.computeElevation();
+        case stage::Id::PlanarElevation:
+          processor_.computePlanarElevation();
           break;
         case stage::Id::HeightMap:
           processor_.computeHeightMap();
@@ -242,7 +242,7 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
   }
 }
 
-// ── computeElevation ──
+// ── computePlanarElevation ──
 // 排序模式下取指定分位数作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   config().use_sorting = true;
@@ -253,7 +253,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   state().planar_voxel_elev.fill(999);
   state().planar_point_elev[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
 
-  runStage(stage::Id::Elevation);
+  runStage(stage::Id::PlanarElevation);
 
   // sorted: 0.1, 0.2, 0.3, 0.4, 0.5. quantile 0.5*(5) = 2 → index 2 → 0.3
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.3F);
@@ -268,7 +268,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   state().planar_voxel_elev.fill(999);
   state().planar_point_elev[cell] = {1.5, 0.5, 1.0};
 
-  runStage(stage::Id::Elevation);
+  runStage(stage::Id::PlanarElevation);
 
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.5F);
 }
@@ -287,7 +287,7 @@ TEST_F(AlgorithmTest,
   // sorted: 0.5, 1.0, 2.0. quantile 0.5*3 = 1 → 1.0. diff 1.0-0.5=0.5 > 0.3
   state().planar_point_elev[cell] = {0.5, 2.0, 1.0};
 
-  runStage(stage::Id::Elevation);
+  runStage(stage::Id::PlanarElevation);
 
   // lift limited → 0.5 + 0.3 = 0.8
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.8F);
@@ -305,7 +305,7 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
   // 3 points: sorted 0.1, 0.3, 0.9. quantile 1.0*3 = 3 >= 3 → clamp to 2 → 0.9
   state().planar_point_elev[cell] = {0.1, 0.9, 0.3};
 
-  runStage(stage::Id::Elevation);
+  runStage(stage::Id::PlanarElevation);
 
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.9F);
 }
