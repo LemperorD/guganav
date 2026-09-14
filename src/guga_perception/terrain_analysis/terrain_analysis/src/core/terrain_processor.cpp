@@ -17,134 +17,6 @@
 
 namespace terrain_analysis {
 
-  int TerrainProcessor::toVoxelIndex(double coordinate,
-                                     double vehicle_coordinate,
-                                     double voxel_size, int half_width) {
-    const double half_voxel_size = voxel_size / 2;
-    int cell =
-        static_cast<int>(std::floor(
-            (coordinate - vehicle_coordinate + half_voxel_size) / voxel_size))
-        + half_width;
-    return cell;
-  }
-
-  double TerrainProcessor::horizontalDistanceTo(double px, double py) const {
-    return sqrt(((px - state_.vehicle_x) * (px - state_.vehicle_x))
-                + ((py - state_.vehicle_y) * (py - state_.vehicle_y)));
-  }
-
-  void TerrainProcessor::shiftGrid(Axis axis, ShiftDirection direction) {
-    static constexpr int WIDTH = TerrainGrid::TERRAIN_VOXEL_WIDTH;
-    const bool toward_positive = direction == ShiftDirection::TOWARD_POSITIVE;
-    const int src = toward_positive ? 0 : WIDTH - 1;
-    const int dst = toward_positive ? WIDTH - 1 : 0;
-    const int step = toward_positive ? 1 : -1;
-
-    for (int fixed = 0; fixed < WIDTH; fixed++) {
-      auto cell = [&](int m) {
-        return axis == Axis::AXIS_X ? TerrainGrid::terrainVoxelIndex(m, fixed)
-                                    : TerrainGrid::terrainVoxelIndex(fixed, m);
-      };
-      auto ptr = state_.terrain_voxel_cloud[cell(src)];
-      for (int m = src; m != dst; m += step) {
-        state_.terrain_voxel_cloud[cell(m)] =
-            state_.terrain_voxel_cloud[cell(m + step)];
-      }
-      auto& dst_cell = state_.terrain_voxel_cloud[cell(dst)];
-      dst_cell = ptr;
-      dst_cell->clear();
-    }
-  }
-
-  bool TerrainProcessor::shouldPruneTerrainVoxel(int cell) const {
-    if (state_.terrain_voxel_update_num[cell]
-        >= config_.voxel_point_update_thre) {
-      return true;
-    }
-    double elapsed = state_.laser_cloud_time - state_.system_init_time
-                     - state_.terrain_voxel_update_time[cell];
-    return elapsed >= config_.voxel_time_update_thre;
-  }
-
-  bool TerrainProcessor::keepTerrainVoxelPoint(double relative_z,
-                                               double distance,
-                                               double point_time) const {
-    const double z_margin = config_.distance_ratio_z * distance;
-    if (relative_z <= config_.min_relative_z - z_margin) {
-      return false;
-    }
-    if (relative_z >= config_.max_relative_z + z_margin) {
-      return false;
-    }
-    bool near = distance < config_.no_decay_distance;
-    bool decayed = (state_.laser_cloud_time - state_.system_init_time
-                    - point_time)
-                   >= config_.decay_time;
-    if (decayed && !near) {
-      return false;
-    }
-    return true;
-  }
-
-  TerrainProcessor::SensorPoint TerrainProcessor::transformToSensorFrame(
-      double x, double y, double z) const {
-    double rotated_x = (x * state_.cos_vehicle_yaw)
-                       + (y * state_.sin_vehicle_yaw);
-    double rotated_y = -(x * state_.sin_vehicle_yaw)
-                       + (y * state_.cos_vehicle_yaw);
-
-    double pitched_x = (rotated_x * state_.cos_vehicle_pitch)
-                       - (z * state_.sin_vehicle_pitch);
-    double pitched_z = (rotated_x * state_.sin_vehicle_pitch)
-                       + (z * state_.cos_vehicle_pitch);
-
-    double rolled_y = (rotated_y * state_.cos_vehicle_roll)
-                      + (pitched_z * state_.sin_vehicle_roll);
-    double rolled_z = -(rotated_y * state_.sin_vehicle_roll)
-                      + (pitched_z * state_.cos_vehicle_roll);
-
-    return {pitched_x, rolled_y, rolled_z};
-  }
-
-  void TerrainProcessor::resetPlanarVoxels() {
-    state_.planar_voxel_elev.fill(0);
-    state_.planar_voxel_dy_obs.fill(0);
-    for (auto& point_elevations : state_.planar_point_elev) {
-      point_elevations.clear();
-    }
-  }
-
-  void TerrainProcessor::elevateByQuantile(int cell) {
-    auto& elevations = state_.planar_point_elev[cell];
-    int point_count = static_cast<int>(elevations.size());
-    if (point_count == 0) {
-      return;
-    }
-    sort(elevations.begin(), elevations.end());
-
-    int quantile_index = static_cast<int>(config_.quantile_z * point_count);
-    if (quantile_index >= point_count) {
-      quantile_index = point_count - 1;
-    }
-    double minimum_z = elevations[0];
-    double quantile_z = elevations[quantile_index];
-    state_.planar_voxel_elev[cell] =
-        config_.limit_ground_lift
-            ? std::min(quantile_z, minimum_z + config_.max_ground_lift)
-            : quantile_z;
-  }
-
-  void TerrainProcessor::elevateByMinimum(int cell) {
-    auto& elevations = state_.planar_point_elev[cell];
-    if (elevations.empty()) {
-      return;
-    }
-    state_.planar_voxel_elev[cell] = *std::min_element(elevations.begin(),
-                                                       elevations.end());
-  }
-
-  // ── 公开入口 ──
-
   void TerrainProcessor::ingestOdometry(double x, double y, double z,
                                         double roll, double pitch, double yaw) {
     state_.vehicle_x = x;
@@ -206,8 +78,6 @@ namespace terrain_analysis {
     computeHeightMap();
   }
 
-  // ── 管线阶段（私有）──
-
   void TerrainProcessor::rolloverTerrainVoxels() {
     const double terrain_voxel_size = config_.terrain_voxel_size;
     double center_x = terrain_voxel_size * state_.terrain_voxel_shift_x;
@@ -235,22 +105,17 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::voxelizeTerrain() {
-    const double terrain_voxel_size = config_.terrain_voxel_size;
-    constexpr int terrain_half_width = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH;
-    constexpr int terrain_width = TerrainGrid::TERRAIN_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
 
     for (const auto& point : state_.laser_cloud_crop->points) {
-      int row = toVoxelIndex(point.x, vehicle_x, terrain_voxel_size,
-                             terrain_half_width);
-      int column = toVoxelIndex(point.y, vehicle_y, terrain_voxel_size,
-                                terrain_half_width);
-      if (row < 0 || row >= terrain_width || column < 0
-          || column >= terrain_width) {
+      const GridIndex grid_index = voxelIndexOf(VoxelGrid::TERRAIN, point.x,
+                                                point.y, vehicle_x, vehicle_y);
+      if (!grid_index.valid) {
         continue;
       }
-      size_t cell = TerrainGrid::terrainVoxelIndex(row, column);
+      size_t cell = TerrainGrid::terrainVoxelIndex(grid_index.row,
+                                                   grid_index.col);
       state_.terrain_voxel_cloud[cell]->push_back(point);
       state_.terrain_voxel_update_num[cell]++;
     }
@@ -312,32 +177,32 @@ namespace terrain_analysis {
   void TerrainProcessor::estimateTerrainGround() {
     resetPlanarVoxels();
 
-    const double planar_voxel_size = config_.planar_voxel_size;
-    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
     constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
-      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
-                             planar_half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
-                             planar_half_width);
-      double relative_z = point.z - vehicle_z;
-      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
-        continue;
-      }
-      if (relative_z <= config_.min_relative_z
-          || relative_z >= config_.max_relative_z) {
+      // 候选筛选改用绝对高度（odom z）判断：与存入 planar_point_elev 的
+      // point.z 同参考系，避免"索引一个系、数值另一个系"的混用。
+      if (point.z <= vehicle_z + config_.min_relative_z
+          || point.z >= vehicle_z + config_.max_relative_z) {
         continue;
       }
       // 车顶上方超过安全间隙的点（天花板/横梁）不参与地面估计：
       // 窄隧道里这类点占比大，混入分位数会抬高 elev，导致真实地面点
       // 高度差变为负值丢失、天花板点高度差落入障碍区间。
-      if (relative_z >= config_.ceiling_clearance) {
+      if (point.z >= vehicle_z + config_.ceiling_clearance) {
         continue;
       }
+      const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
+                                                point.y, vehicle_x, vehicle_y);
+      if (!grid_index.valid) {
+        continue;
+      }
+
+      const int row = grid_index.row;
+      const int col = grid_index.col;
 
       size_t base = TerrainGrid::planarVoxelIndex(row, col);
       static constexpr int PLANAR_VOXEL_WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
@@ -360,22 +225,18 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::detectDynamicObstacles() {
-    const double planar_voxel_size = config_.planar_voxel_size;
-    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
-      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
-                             planar_half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
-                             planar_half_width);
-      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
+      const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
+                                                point.y, vehicle_x, vehicle_y);
+      if (!grid_index.valid) {
         continue;
       }
-      size_t cell = TerrainGrid::planarVoxelIndex(row, col);
+      size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
+                                                  grid_index.col);
 
       double relative_x = point.x - vehicle_x;
       double relative_y = point.y - vehicle_y;
@@ -407,22 +268,18 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::filterDynamicObstaclePoints() {
-    const double planar_voxel_size = config_.planar_voxel_size;
-    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.laser_cloud_crop->points) {
-      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
-                             planar_half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
-                             planar_half_width);
-      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
+      const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
+                                                point.y, vehicle_x, vehicle_y);
+      if (!grid_index.valid) {
         continue;
       }
-      size_t cell = TerrainGrid::planarVoxelIndex(row, col);
+      size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
+                                                  grid_index.col);
 
       double relative_x = point.x - vehicle_x;
       double relative_y = point.y - vehicle_y;
@@ -450,9 +307,6 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::computeHeightMap() {
-    const double planar_voxel_size = config_.planar_voxel_size;
-    constexpr int planar_half_width = TerrainGrid::PLANAR_VOXEL_HALF_WIDTH;
-    constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
     const double vehicle_x = state_.vehicle_x;
     const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
@@ -470,14 +324,13 @@ namespace terrain_analysis {
       if (relative_z >= config_.ceiling_clearance) {
         continue;
       }
-      int col = toVoxelIndex(point.x, vehicle_x, planar_voxel_size,
-                             planar_half_width);
-      int row = toVoxelIndex(point.y, vehicle_y, planar_voxel_size,
-                             planar_half_width);
-      if (col < 0 || col >= planar_width || row < 0 || row >= planar_width) {
+      const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
+                                                point.y, vehicle_x, vehicle_y);
+      if (!grid_index.valid) {
         continue;
       }
-      size_t cell = TerrainGrid::planarVoxelIndex(row, col);
+      size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
+                                                  grid_index.col);
       if (state_.planar_voxel_dy_obs[cell] >= config_.min_dy_obs_point_num) {
         continue;
       }
@@ -495,6 +348,149 @@ namespace terrain_analysis {
         elevations->back().intensity = static_cast<float>(height_above_ground);
       }
     }
+  }
+
+  double TerrainProcessor::horizontalDistanceTo(double px, double py) const {
+    return sqrt(((px - state_.vehicle_x) * (px - state_.vehicle_x))
+                + ((py - state_.vehicle_y) * (py - state_.vehicle_y)));
+  }
+
+  bool TerrainProcessor::shouldPruneTerrainVoxel(int cell) const {
+    if (state_.terrain_voxel_update_num[cell]
+        >= config_.voxel_point_update_thre) {
+      return true;
+    }
+    double elapsed = state_.laser_cloud_time - state_.system_init_time
+                     - state_.terrain_voxel_update_time[cell];
+    return elapsed >= config_.voxel_time_update_thre;
+  }
+
+  bool TerrainProcessor::keepTerrainVoxelPoint(double relative_z,
+                                               double distance,
+                                               double point_time) const {
+    const double z_margin = config_.distance_ratio_z * distance;
+    if (relative_z <= config_.min_relative_z - z_margin) {
+      return false;
+    }
+    if (relative_z >= config_.max_relative_z + z_margin) {
+      return false;
+    }
+    bool near = distance < config_.no_decay_distance;
+    bool decayed = (state_.laser_cloud_time - state_.system_init_time
+                    - point_time)
+                   >= config_.decay_time;
+    if (decayed && !near) {
+      return false;
+    }
+    return true;
+  }
+
+  TerrainProcessor::SensorPoint TerrainProcessor::transformToSensorFrame(
+      double x, double y, double z) const {
+    double rotated_x = (x * state_.cos_vehicle_yaw)
+                       + (y * state_.sin_vehicle_yaw);
+    double rotated_y = -(x * state_.sin_vehicle_yaw)
+                       + (y * state_.cos_vehicle_yaw);
+
+    double pitched_x = (rotated_x * state_.cos_vehicle_pitch)
+                       - (z * state_.sin_vehicle_pitch);
+    double pitched_z = (rotated_x * state_.sin_vehicle_pitch)
+                       + (z * state_.cos_vehicle_pitch);
+
+    double rolled_y = (rotated_y * state_.cos_vehicle_roll)
+                      + (pitched_z * state_.sin_vehicle_roll);
+    double rolled_z = -(rotated_y * state_.sin_vehicle_roll)
+                      + (pitched_z * state_.cos_vehicle_roll);
+
+    return {pitched_x, rolled_y, rolled_z};
+  }
+
+  void TerrainProcessor::shiftGrid(Axis axis, ShiftDirection direction) {
+    static constexpr int WIDTH = TerrainGrid::TERRAIN_VOXEL_WIDTH;
+    const bool toward_positive = direction == ShiftDirection::TOWARD_POSITIVE;
+    const int src = toward_positive ? 0 : WIDTH - 1;
+    const int dst = toward_positive ? WIDTH - 1 : 0;
+    const int step = toward_positive ? 1 : -1;
+
+    for (int fixed = 0; fixed < WIDTH; fixed++) {
+      auto cell = [&](int m) {
+        return axis == Axis::AXIS_X ? TerrainGrid::terrainVoxelIndex(m, fixed)
+                                    : TerrainGrid::terrainVoxelIndex(fixed, m);
+      };
+      auto ptr = state_.terrain_voxel_cloud[cell(src)];
+      for (int m = src; m != dst; m += step) {
+        state_.terrain_voxel_cloud[cell(m)] =
+            state_.terrain_voxel_cloud[cell(m + step)];
+      }
+      auto& dst_cell = state_.terrain_voxel_cloud[cell(dst)];
+      dst_cell = ptr;
+      dst_cell->clear();
+    }
+  }
+
+  void TerrainProcessor::resetPlanarVoxels() {
+    state_.planar_voxel_elev.fill(0);
+    state_.planar_voxel_dy_obs.fill(0);
+    for (auto& point_elevations : state_.planar_point_elev) {
+      point_elevations.clear();
+    }
+  }
+
+  void TerrainProcessor::elevateByQuantile(int cell) {
+    auto& elevations = state_.planar_point_elev[cell];
+    int point_count = static_cast<int>(elevations.size());
+    if (point_count == 0) {
+      return;
+    }
+    sort(elevations.begin(), elevations.end());
+
+    int quantile_index = static_cast<int>(config_.quantile_z * point_count);
+    if (quantile_index >= point_count) {
+      quantile_index = point_count - 1;
+    }
+    double minimum_z = elevations[0];
+    double quantile_z = elevations[quantile_index];
+    state_.planar_voxel_elev[cell] =
+        config_.limit_ground_lift
+            ? std::min(quantile_z, minimum_z + config_.max_ground_lift)
+            : quantile_z;
+  }
+
+  void TerrainProcessor::elevateByMinimum(int cell) {
+    auto& elevations = state_.planar_point_elev[cell];
+    if (elevations.empty()) {
+      return;
+    }
+    state_.planar_voxel_elev[cell] = *std::min_element(elevations.begin(),
+                                                       elevations.end());
+  }
+
+  TerrainProcessor::GridIndex TerrainProcessor::voxelIndexOf(
+      VoxelGrid grid, double x, double y, double vehicle_x,
+      double vehicle_y) const {
+    // 一维坐标 → 网格下标：半格偏移使格心对齐整数下标
+    const auto axis_index = [](double coordinate, double vehicle_coordinate,
+                               double voxel_size, int half_width) {
+      const double half_voxel_size = voxel_size / 2;
+      return static_cast<int>(
+                 std::floor((coordinate - vehicle_coordinate + half_voxel_size)
+                            / voxel_size))
+             + half_width;
+    };
+
+    const bool terrain = grid == VoxelGrid::TERRAIN;
+    const double voxel_size = terrain ? config_.terrain_voxel_size
+                                      : config_.planar_voxel_size;
+    const int width = terrain ? TerrainGrid::TERRAIN_VOXEL_WIDTH
+                              : TerrainGrid::PLANAR_VOXEL_WIDTH;
+    const int half_width = (width - 1) / 2;
+
+    GridIndex out;
+    out.row = axis_index(y, vehicle_y, voxel_size, half_width);
+    out.col = axis_index(x, vehicle_x, voxel_size, half_width);
+    out.valid = out.row >= 0 && out.row < width && out.col >= 0
+                && out.col < width;
+    return out;
   }
 
 }  // namespace terrain_analysis

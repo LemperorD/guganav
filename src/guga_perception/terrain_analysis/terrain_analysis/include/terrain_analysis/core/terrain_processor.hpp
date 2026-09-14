@@ -89,26 +89,24 @@ namespace terrain_analysis {
     }
 
   private:
-    // ── 无状态工具（不依赖 config_/state_，故为静态成员）──
-    /**
-     * @brief 把一维坐标换算成网格下标（terrain / planar 两种网格共用）。
-     * @param coordinate 待换算的坐标。
-     * @param vehicle_coordinate 车辆在同一轴上的坐标。
-     * @param voxel_size 对应网格的体素边长。
-     * @param half_width 对应网格的半边长（格）。
-     * @return 网格下标；越界判定由调用方负责。
-     */
-    [[nodiscard]] static int toVoxelIndex(double coordinate,
-                                          double vehicle_coordinate,
-                                          double voxel_size, int half_width);
-
-    // ── 网格操作私有类型 ──
-    /** @brief 网格轴向。 */
+    // ── 私有类型 ──
+    /** @brief 网格轴向（仅 shiftGrid 搬运方向需要区分轴）。 */
     enum class Axis : uint8_t { AXIS_X, AXIS_Y };
     /** @brief 网格内容搬运方向：沿索引增大 / 减小，即世界坐标正向 / 负向。 */
     enum class ShiftDirection : uint8_t {
       TOWARD_NEGATIVE,
       TOWARD_POSITIVE,
+    };
+    /** @brief 要换算到的网格种类。 */
+    enum class VoxelGrid : uint8_t {
+      TERRAIN,  ///< 跨帧累积的 terrain voxel 网格。
+      PLANAR,   ///< 逐帧重建的 planar voxel 网格。
+    };
+    /** @brief 平面点所属的网格下标；越界时 valid 为 false，row/col 无意义。 */
+    struct GridIndex {
+      int row = 0;
+      int col = 0;
+      bool valid = false;
     };
     /** @brief 点转换到传感器系后的坐标。 */
     struct SensorPoint {
@@ -157,6 +155,20 @@ namespace terrain_analysis {
     void filterDynamicObstaclePoints();
     void computePlanarElevation();
     void computeHeightMap();
+
+    // ── 无状态工具（不依赖 config_/state_，故为静态成员，置于末尾）──
+    /**
+     * @brief 把一个平面点换算成指定网格的行列下标，越界时返回 invalid。
+     * @param grid 目标网格种类。
+     * @param x 点在 odom 坐标系下的 x。
+     * @param y 点在 odom 坐标系下的 y。
+     * @param vehicle_x 车辆在 odom 坐标系下的 x。
+     * @param vehicle_y 车辆在 odom 坐标系下的 y。
+     * @return 行列下标；越界时 GridIndex::valid 为 false。
+     */
+    [[nodiscard]] GridIndex voxelIndexOf(VoxelGrid grid, double x, double y,
+                                         double vehicle_x,
+                                         double vehicle_y) const;
 
     TerrainConfig config_;
     TerrainState state_;
