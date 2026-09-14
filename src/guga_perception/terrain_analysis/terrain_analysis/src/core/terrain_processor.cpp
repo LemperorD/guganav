@@ -105,12 +105,9 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::voxelizeTerrain() {
-    const double vehicle_x = state_.vehicle_x;
-    const double vehicle_y = state_.vehicle_y;
-
     for (const auto& point : state_.laser_cloud_crop->points) {
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::TERRAIN, point.x,
-                                                point.y, vehicle_x, vehicle_y);
+                                                point.y);
       if (!grid_index.valid) {
         continue;
       }
@@ -178,8 +175,6 @@ namespace terrain_analysis {
     resetPlanarVoxels();
 
     constexpr int planar_width = TerrainGrid::PLANAR_VOXEL_WIDTH;
-    const double vehicle_x = state_.vehicle_x;
-    const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
@@ -196,7 +191,7 @@ namespace terrain_analysis {
         continue;
       }
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
-                                                point.y, vehicle_x, vehicle_y);
+                                                point.y);
       if (!grid_index.valid) {
         continue;
       }
@@ -231,7 +226,7 @@ namespace terrain_analysis {
 
     for (const auto& point : state_.terrain_cloud->points) {
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
-                                                point.y, vehicle_x, vehicle_y);
+                                                point.y);
       if (!grid_index.valid) {
         continue;
       }
@@ -274,7 +269,7 @@ namespace terrain_analysis {
 
     for (const auto& point : state_.laser_cloud_crop->points) {
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
-                                                point.y, vehicle_x, vehicle_y);
+                                                point.y);
       if (!grid_index.valid) {
         continue;
       }
@@ -307,8 +302,6 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::computeHeightMap() {
-    const double vehicle_x = state_.vehicle_x;
-    const double vehicle_y = state_.vehicle_y;
     const double vehicle_z = state_.vehicle_z;
     auto& elevations = state_.terrain_cloud_elev;
     elevations->clear();
@@ -325,7 +318,7 @@ namespace terrain_analysis {
         continue;
       }
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
-                                                point.y, vehicle_x, vehicle_y);
+                                                point.y);
       if (!grid_index.valid) {
         continue;
       }
@@ -465,9 +458,9 @@ namespace terrain_analysis {
                                                        elevations.end());
   }
 
-  TerrainProcessor::GridIndex TerrainProcessor::voxelIndexOf(
-      VoxelGrid grid, double x, double y, double vehicle_x,
-      double vehicle_y) const {
+  TerrainProcessor::GridIndex TerrainProcessor::voxelIndexOf(VoxelGrid grid,
+                                                             double x,
+                                                             double y) const {
     // 一维坐标 → 网格下标：半格偏移使格心对齐整数下标
     const auto axis_index = [](double coordinate, double vehicle_coordinate,
                                double voxel_size, int half_width) {
@@ -486,8 +479,8 @@ namespace terrain_analysis {
     const int half_width = (width - 1) / 2;
 
     GridIndex out;
-    out.row = axis_index(y, vehicle_y, voxel_size, half_width);
-    out.col = axis_index(x, vehicle_x, voxel_size, half_width);
+    out.row = axis_index(y, state_.vehicle_y, voxel_size, half_width);
+    out.col = axis_index(x, state_.vehicle_x, voxel_size, half_width);
     out.valid = out.row >= 0 && out.row < width && out.col >= 0
                 && out.col < width;
     return out;

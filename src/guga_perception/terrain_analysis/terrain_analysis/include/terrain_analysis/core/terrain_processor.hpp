@@ -159,16 +159,16 @@ namespace terrain_analysis {
     // ── 无状态工具（不依赖 config_/state_，故为静态成员，置于末尾）──
     /**
      * @brief 把一个平面点换算成指定网格的行列下标，越界时返回 invalid。
+     *
+     * 车辆位置由 state_ 读取，不由调用方传入——网格索引的基准始终是"当前
+     * 车辆位置"，避免调用点各自快照位姿造成同帧内基准不一致。
      * @param grid 目标网格种类。
      * @param x 点在 odom 坐标系下的 x。
      * @param y 点在 odom 坐标系下的 y。
-     * @param vehicle_x 车辆在 odom 坐标系下的 x。
-     * @param vehicle_y 车辆在 odom 坐标系下的 y。
      * @return 行列下标；越界时 GridIndex::valid 为 false。
      */
-    [[nodiscard]] GridIndex voxelIndexOf(VoxelGrid grid, double x, double y,
-                                         double vehicle_x,
-                                         double vehicle_y) const;
+    [[nodiscard]] GridIndex voxelIndexOf(VoxelGrid grid, double x,
+                                         double y) const;
 
     TerrainConfig config_;
     TerrainState state_;
