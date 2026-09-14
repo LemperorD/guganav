@@ -16,8 +16,6 @@ struct TerrainConfig {
   double decay_time = 2.0;
   /** @brief 在该距离内不执行时间衰减。 */
   double no_decay_distance = 4.0;
-  /** @brief 清除请求影响的最大距离。 */
-  double clearing_distance = 8.0;
 
   // 地面高度估计
   /** @brief 是否使用分位数估计地面高度，否则使用最小值。 */
@@ -50,10 +48,6 @@ struct TerrainConfig {
   int min_dy_obs_point_num = 1;
 
   // 无数据区域和障碍高度过滤
-  /** @brief 是否将无数据区域发布为虚拟障碍。 */
-  bool no_data_obstacle = false;
-  /** @brief 无数据边缘标签向外扩展的迭代次数。 */
-  int no_data_block_skip_num = 0;
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;
   /** @brief 高度小于该值的障碍点才会输出。 */

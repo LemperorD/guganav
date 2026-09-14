@@ -13,9 +13,8 @@ namespace terrain_analysis {
   };  // namespace testing::Test
 
   // ── Construction ──
-  // 默认构造后 no_data_inited 未初始化，system_inited 为 false
-  TEST_F(StateIngestTest, DefaultState_NoDataNotInited) {
-    EXPECT_EQ(state_.no_data_inited, TerrainState::NoDataState::UNINITIALIZED);
+  // 默认构造后 system_inited 为 false
+  TEST_F(StateIngestTest, DefaultState_SystemNotInited) {
     EXPECT_FALSE(state_.system_inited);
   }
 
@@ -41,44 +40,6 @@ namespace terrain_analysis {
     EXPECT_NEAR(state_.cos_vehicle_pitch, cos(0), 1e-9);
   }
 
-  // 首次调用 odom 后进入 RECORDING 状态，记录初始位置
-  TEST_F(StateIngestTest, IngestOdometry_FirstCall_TransitionsToRecording) {
-    terrain_analysis::algorithm::ingestOdometry(config_, state_, 1.0, 2.0, 0, 0,
-                                                0, 0);
-
-    EXPECT_EQ(state_.no_data_inited, TerrainState::NoDataState::RECORDING);
-    EXPECT_DOUBLE_EQ(state_.vehicle_x_initial, 1.0);
-    EXPECT_DOUBLE_EQ(state_.vehicle_y_initial, 2.0);
-  }
-
-  // 移动距离超过 no_decay_distance 后转为 ACTIVE 状态
-  TEST_F(StateIngestTest, IngestOdometry_MovedFarEnough_TransitionsToActive) {
-    state_.no_data_inited = TerrainState::NoDataState::RECORDING;
-    state_.vehicle_x_initial = 0;
-    state_.vehicle_y_initial = 0;
-    config_.no_decay_distance = 4.0;
-
-    terrain_analysis::algorithm::ingestOdometry(config_, state_, 3.0, 4.0, 0, 0,
-                                                0,
-                                                0);  // distance = 5.0 > 4.0
-
-    EXPECT_EQ(state_.no_data_inited, TerrainState::NoDataState::ACTIVE);
-  }
-
-  // 移动距离不足时保持 RECORDING 状态不变
-  TEST_F(StateIngestTest, IngestOdometry_NotFarEnough_StaysRecording) {
-    state_.no_data_inited = TerrainState::NoDataState::RECORDING;
-    state_.vehicle_x_initial = 0;
-    state_.vehicle_y_initial = 0;
-    config_.no_decay_distance = 4.0;
-
-    terrain_analysis::algorithm::ingestOdometry(config_, state_, 2.0, 2.0, 0, 0,
-                                                0,
-                                                0);  // distance ≈ 2.8 < 4.0
-
-    EXPECT_EQ(state_.no_data_inited, TerrainState::NoDataState::RECORDING);
-  }
-
   // ── ingestLaserCloud ──
   // 首次接收点云时记录 system_init_time
   TEST_F(StateIngestTest, IngestLaserCloud_FirstCall_SetsInitTime) {
@@ -102,15 +63,5 @@ namespace terrain_analysis {
                                                   100.0);
 
     EXPECT_EQ(state_.laser_cloud_crop->points.size(), 1U);
-  }
-
-  // ── ingestClearing ──
-  // 接收清除距离后更新 clearing_distance 并触发清除标志
-  TEST_F(StateIngestTest, IngestClearing_SetsDistanceAndTriggersClearing) {
-    terrain_analysis::algorithm::ingestClearing(state_, 10.5);
-
-    EXPECT_DOUBLE_EQ(state_.clearing_distance, 10.5);
-    EXPECT_TRUE(state_.clearing_cloud);
-    EXPECT_EQ(state_.no_data_inited, TerrainState::NoDataState::UNINITIALIZED);
   }
 }  // namespace terrain_analysis

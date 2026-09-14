@@ -77,12 +77,9 @@ namespace {
       config.scan_voxel_size = 0.05;
       config.decay_time = 2.0;
       config.no_decay_distance = 4.0;
-      config.clearing_distance = 8.0;
       config.use_sorting = true;
       config.quantile_z = 0.2;
       config.clear_dy_obs = true;
-      config.no_data_obstacle = true;
-      config.no_data_block_skip_num = 1;
       config.min_block_point_num = 10;
       config.vehicle_height = 0.5;
       config.ceiling_clearance = 0.2;
@@ -144,10 +141,10 @@ namespace {
     }
   }
 
-  void BM_TerrainAnalysis_ExtractTerrainCloud(benchmark::State& state) {
+  void BM_TerrainAnalysis_CollectTerrainCloud(benchmark::State& state) {
     BenchContext ctx;
     for (auto _ : state) {
-      terrain_analysis::algorithm::extractTerrainCloud(ctx.state);
+      terrain_analysis::algorithm::collectTerrainCloud(ctx.state);
     }
   }
 
@@ -158,7 +155,7 @@ BENCHMARK(BM_TerrainAnalysis_RunOnly)->Unit(benchmark::kMicrosecond);
 BENCHMARK(BM_TerrainAnalysis_Voxelize)->Unit(benchmark::kMicrosecond);
 BENCHMARK(BM_TerrainAnalysis_EstimateGround)->Unit(benchmark::kMicrosecond);
 BENCHMARK(BM_TerrainAnalysis_ComputeHeightMap)->Unit(benchmark::kMicrosecond);
-BENCHMARK(BM_TerrainAnalysis_ExtractTerrainCloud)
+BENCHMARK(BM_TerrainAnalysis_CollectTerrainCloud)
     ->Unit(benchmark::kMicrosecond);
 
 BENCHMARK_MAIN();

@@ -4,7 +4,6 @@
     <param name="scanVoxelSize" value="0.05" />
     <param name="decayTime" value="1.0" />
     <param name="noDecayDis" value="1.75" />
-    <param name="clearingDis" value="8.0" />
     <param name="useSorting" value="true" />
     <param name="quantileZ" value="0.25" />
     <param name="considerDrop" value="false" />
@@ -18,8 +17,6 @@
     <param name="minDyObsVFOV" value="-28.0" />
     <param name="maxDyObsVFOV" value="33.0" />
     <param name="minDyObsPointNum" value="1" />
-    <param name="noDataObstacle" value="false" />
-    <param name="noDataBlockSkipNum" value="0" />
     <param name="minBlockPointNum" value="10" />
     <param name="vehicleHeight" value="1.5" />
     <param name="voxelPointUpdateThre" value="100" />

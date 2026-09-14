@@ -358,44 +358,6 @@ TEST_F(AlgorithmTest,
   EXPECT_EQ(state_.planar_voxel_dy_obs[cell], 10);
 }
 
-// ── addNoDataObstacles ──
-// 数据稀疏区域生成虚拟障碍点，防止无数据区域的路径规划
-TEST_F(AlgorithmTest,
-       AddNoDataObstacles_EmptyPlanarVoxels_CreatesObstaclePoints) {
-  state_.vehicle_x = 0;
-  state_.vehicle_y = 0;
-  state_.vehicle_z = 0;
-  config_.no_data_block_skip_num = 1;
-  config_.min_block_point_num = 5;
-  config_.vehicle_height = 1.5;
-  state_.planar_voxel_edge.fill(0);
-  for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-    state_.planar_point_elev[i].clear();
-  }
-  state_.terrain_cloud_elev->clear();
-
-  terrain_analysis::algorithm::addNoDataObstacles(config_, state_);
-
-  EXPECT_GT(state_.terrain_cloud_elev->points.size(), 0U);
-}
-
-// 所有 voxel 点数充足时不生成任何虚拟障碍
-TEST_F(AlgorithmTest,
-       AddNoDataObstacles_AllVoxelsHaveEnoughPoints_NoObstaclesCreated) {
-  state_.vehicle_x = 0;
-  state_.vehicle_y = 0;
-  config_.min_block_point_num = 5;
-  state_.planar_voxel_edge.fill(0);
-  for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-    state_.planar_point_elev[i] = {0.1, 0.2, 0.3, 0.4, 0.5};
-  }
-  state_.terrain_cloud_elev->clear();
-
-  terrain_analysis::algorithm::addNoDataObstacles(config_, state_);
-
-  EXPECT_EQ(state_.terrain_cloud_elev->points.size(), 0U);
-}
-
 // ── estimateGround ──
 
 // 栅格边缘点触发射线邻居越界检查，不崩溃
@@ -645,8 +607,6 @@ namespace {
     state.vehicle_x = 0;
     state.vehicle_y = 0;
     state.vehicle_z = 0.0;
-    state.clearing_cloud = false;
-    state.clearing_distance = 0.0;
     state.laser_cloud_time = 1.0;
     state.system_init_time = 0.0;
 
@@ -769,41 +729,6 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   EXPECT_EQ(state_.terrain_voxel_cloud[center_cell]->points.size(), 1U);
 }
 
-// 清除模式下距离范围内的点被排除
-TEST_F(AlgorithmTest, KeepVoxelPoint_WithinClearingDistance_Excluded) {
-  config_.min_relative_z = -10.0;
-  config_.max_relative_z = 10.0;
-  config_.decay_time = 999.0;
-  config_.no_decay_distance = 999.0;
-  config_.voxel_point_update_thre = 1;
-
-  state_.vehicle_x = 0;
-  state_.vehicle_y = 0;
-  state_.vehicle_z = 0.0;
-  state_.laser_cloud_time = 1.0;
-  state_.system_init_time = 0.0;
-  state_.clearing_cloud = true;
-  state_.clearing_distance = 2.0;
-
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
-  auto& cell = *state_.terrain_voxel_cloud[center_cell];
-  cell.clear();
-  pcl::PointXYZI point;
-  point.x = 1.0F;
-  point.y = 0.0F;
-  point.z = 0.0F;
-  point.intensity = 1.0F;
-  cell.push_back(point);
-
-  state_.terrain_voxel_update_num[center_cell] =
-      config_.voxel_point_update_thre;
-
-  terrain_analysis::algorithm::updateVoxels(config_, state_);
-  EXPECT_TRUE(state_.terrain_voxel_cloud[center_cell]->points.empty());
-}
-
 // ── shouldPruneVoxel (via updateVoxels) ──
 
 // update_num 未达阈值且时间未到 → 不修剪
@@ -812,7 +737,6 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
   config_.voxel_time_update_thre = 10.0;
   state_.laser_cloud_time = 1.0;
   state_.system_init_time = 0.0;
-  state_.clearing_cloud = false;
 
   int center_cell = TerrainGrid::terrainVoxelIndex(
       TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
@@ -822,35 +746,6 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
 
   terrain_analysis::algorithm::updateVoxels(config_, state_);
   EXPECT_NE(state_.terrain_voxel_cloud[center_cell], nullptr);
-}
-
-// clearing_cloud 模式触发强制修剪
-TEST_F(AlgorithmTest, ShouldPruneVoxel_ClearingCloud_Pruned) {
-  config_.voxel_point_update_thre = 100;
-  config_.voxel_time_update_thre = 10.0;
-  config_.min_relative_z = -10.0;
-  config_.max_relative_z = 10.0;
-  config_.decay_time = 999.0;
-  config_.no_decay_distance = 999.0;
-  state_.laser_cloud_time = 1.0;
-  state_.system_init_time = 0.0;
-  state_.clearing_cloud = true;
-
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
-  auto& cell = *state_.terrain_voxel_cloud[center_cell];
-  cell.clear();
-  pcl::PointXYZI point;
-  point.x = 0.1F;
-  point.y = 0.0F;
-  point.z = 0.0F;
-  point.intensity = 1.0F;
-  cell.push_back(point);
-  state_.terrain_voxel_update_num[center_cell] = 5;
-
-  terrain_analysis::algorithm::updateVoxels(config_, state_);
-  EXPECT_EQ(cell.points.size(), 0U);
 }
 
 // update_num 达到阈值 → 触发修剪
@@ -863,7 +758,6 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
   config_.no_decay_distance = 999.0;
   state_.laser_cloud_time = 1.0;
   state_.system_init_time = 0.0;
-  state_.clearing_cloud = false;
 
   int center_cell = TerrainGrid::terrainVoxelIndex(
       TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,

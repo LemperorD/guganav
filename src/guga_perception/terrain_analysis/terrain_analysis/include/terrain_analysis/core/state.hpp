@@ -7,7 +7,6 @@
 #include <pcl/point_types.h>
 
 #include <array>
-#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -31,18 +30,9 @@ makeTerrainVoxelClouds() {
  * 坐标系；输出点云的 intensity 表示点相对估计地面的高度。
  */
 struct TerrainState {
-  /** @brief 无数据障碍物状态机。 */
-  enum class NoDataState : uint8_t {
-    UNINITIALIZED = 0,
-    RECORDING = 1,
-    ACTIVE = 2
-  };
-
   // ---- 车辆位姿 ----
   /** @brief 车辆在 odom 坐标系下的位置。 */
   double vehicle_x = 0.0, vehicle_y = 0.0, vehicle_z = 0.0;
-  /** @brief 无数据状态机记录的初始位置。 */
-  double vehicle_x_initial = 0.0, vehicle_y_initial = 0.0;
   /** @brief 车辆 roll 的正弦和余弦。 */
   double sin_vehicle_roll = 0.0, cos_vehicle_roll = 0.0;
   /** @brief 车辆 pitch 的正弦和余弦。 */
@@ -77,8 +67,6 @@ struct TerrainState {
       terrain_voxel_update_time{};
   /** @brief 每个 Planar voxel 的估计地面高度。 */
   std::array<double, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_elev{};
-  /** @brief 每个 Planar voxel 的无数据边缘标签。 */
-  std::array<int, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_edge{};
   /** @brief 每个 Planar voxel 的动态障碍计数。 */
   std::array<int, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_dy_obs{};
   /** @brief 每个 Planar voxel 收集到的地面高度候选值。 */
@@ -105,12 +93,4 @@ struct TerrainState {
   double system_init_time = 0.0;
   /** @brief 是否已经接收到首帧点云。 */
   bool system_inited = false;
-  /** @brief 无数据障碍物状态机当前状态。 */
-  NoDataState no_data_inited = NoDataState::UNINITIALIZED;
-
-  // ---- 回调控制状态 ----
-  /** @brief 是否正在执行清除请求。 */
-  bool clearing_cloud = false;
-  /** @brief 当前清除请求的距离，单位为米。 */
-  double clearing_distance = 8.0;
 };

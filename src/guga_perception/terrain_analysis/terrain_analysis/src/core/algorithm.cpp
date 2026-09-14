@@ -23,6 +23,8 @@ namespace terrain_analysis::algorithm {
   void ingestOdometry(const TerrainConfig& config, TerrainState& state,
                       double x, double y, double z, double roll, double pitch,
                       double yaw) {
+    (void)config;
+
     state.vehicle_x = x;
     state.vehicle_y = y;
     state.vehicle_z = z;
@@ -33,19 +35,6 @@ namespace terrain_analysis::algorithm {
     state.cos_vehicle_pitch = cos(pitch);
     state.sin_vehicle_yaw = sin(yaw);
     state.cos_vehicle_yaw = cos(yaw);
-
-    if (state.no_data_inited == TerrainState::NoDataState::UNINITIALIZED) {
-      state.vehicle_x_initial = state.vehicle_x;
-      state.vehicle_y_initial = state.vehicle_y;
-      state.no_data_inited = TerrainState::NoDataState::RECORDING;
-    }
-    if (state.no_data_inited == TerrainState::NoDataState::RECORDING) {
-      double distance = horizontalDistanceTo(state.vehicle_x_initial,
-                                             state.vehicle_y_initial, state);
-      if (distance >= config.no_decay_distance) {
-        state.no_data_inited = TerrainState::NoDataState::ACTIVE;
-      }
-    }
   }
 
   void ingestLaserCloud(const TerrainConfig& config, TerrainState& state,
@@ -81,19 +70,13 @@ namespace terrain_analysis::algorithm {
     state.new_laser_cloud = true;
   }
 
-  void ingestClearing(TerrainState& state, double distance_clearing) {
-    state.no_data_inited = TerrainState::NoDataState::UNINITIALIZED;
-    state.clearing_distance = distance_clearing;
-    state.clearing_cloud = true;
-  }
-
   void run(const TerrainConfig& config, TerrainState& state) {
     state.new_laser_cloud = false;
 
     rolloverVoxels(config, state);
     voxelize(config, state);
     updateVoxels(config, state);
-    extractTerrainCloud(state);
+    collectTerrainCloud(state);
 
     estimateGround(config, state);
 
@@ -105,13 +88,6 @@ namespace terrain_analysis::algorithm {
     computeElevation(config, state);
 
     computeHeightMap(config, state);
-
-    if (config.no_data_obstacle
-        && state.no_data_inited == TerrainState::NoDataState::ACTIVE) {
-      addNoDataObstacles(config, state);
-    }
-
-    state.clearing_cloud = false;
   }
 
   namespace {
@@ -151,9 +127,6 @@ namespace terrain_analysis::algorithm {
 
     bool shouldPruneVoxel(const TerrainConfig& config,
                           const TerrainState& state, int cell) {
-      if (state.clearing_cloud) {
-        return true;
-      }
       if (state.terrain_voxel_update_num[cell]
           >= config.voxel_point_update_thre) {
         return true;
@@ -178,9 +151,6 @@ namespace terrain_analysis::algorithm {
                       - point_time)
                      >= config.decay_time;
       if (decayed && !near) {
-        return false;
-      }
-      if (distance < state.clearing_distance && state.clearing_cloud) {
         return false;
       }
       return true;
@@ -245,94 +215,8 @@ namespace terrain_analysis::algorithm {
                                                         elevations.end());
     }
 
-    void markDataGapCells(const TerrainConfig& config, TerrainState& state) {
-      for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-        if (state.planar_point_elev[i].size()
-            < static_cast<size_t>(config.min_block_point_num)) {
-          state.planar_voxel_edge[i] = 1;
-        }
-      }
-    }
-
-    bool hasLowerNeighbor(const TerrainState& state, int i, int row,
-                          int column) {
-      static constexpr int WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
-      for (int delta_row = -1; delta_row <= 1; delta_row++) {
-        for (int delta_col = -1; delta_col <= 1; delta_col++) {
-          int neighbor_row = row + delta_row;
-          int neighbor_col = column + delta_col;
-          if (neighbor_row >= 0 && neighbor_row < WIDTH && neighbor_col >= 0
-              && neighbor_col < WIDTH) {
-            size_t neighbor_index = TerrainGrid::planarVoxelIndex(neighbor_row,
-                                                                  neighbor_col);
-            if (state.planar_voxel_edge[neighbor_index]
-                < state.planar_voxel_edge[i]) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    }
-
-    void expandEdgeLabels(const TerrainConfig& config, TerrainState& state) {
-      static constexpr int WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
-      for (int iteration = 0; iteration < config.no_data_block_skip_num;
-           iteration++) {
-        for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-          if (state.planar_voxel_edge[i] < 1) {
-            continue;
-          }
-          int row = i / WIDTH;
-          int column = i % WIDTH;
-          if (!hasLowerNeighbor(state, i, row, column)) {
-            state.planar_voxel_edge[i]++;
-          }
-        }
-      }
-    }
-
-    void emitObstacleCloud(const TerrainConfig& config, TerrainState& state) {
-      const double vehicle_x = state.vehicle_x;
-      const double vehicle_y = state.vehicle_y;
-      const double vehicle_z = state.vehicle_z;
-      pcl::PointXYZI point;
-      for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-        if (state.planar_voxel_edge[i] <= config.no_data_block_skip_num) {
-          continue;
-        }
-        int row = i / TerrainGrid::PLANAR_VOXEL_WIDTH;
-        int column = i % TerrainGrid::PLANAR_VOXEL_WIDTH;
-
-        point.x = static_cast<float>(
-            (config.planar_voxel_size
-             * (row - TerrainGrid::PLANAR_VOXEL_HALF_WIDTH))
-            + vehicle_x);
-        point.y = static_cast<float>(
-            (config.planar_voxel_size
-             * (column - TerrainGrid::PLANAR_VOXEL_HALF_WIDTH))
-            + vehicle_y);
-        point.z = static_cast<float>(vehicle_z);
-        point.intensity = static_cast<float>(config.vehicle_height);
-
-        point.x -= static_cast<float>(config.planar_voxel_size / 4.0);
-        point.y -= static_cast<float>(config.planar_voxel_size / 4.0);
-        state.terrain_cloud_elev->push_back(point);
-
-        point.x += static_cast<float>(config.planar_voxel_size / 2.0);
-        state.terrain_cloud_elev->push_back(point);
-
-        point.y += static_cast<float>(config.planar_voxel_size / 2.0);
-        state.terrain_cloud_elev->push_back(point);
-
-        point.x -= static_cast<float>(config.planar_voxel_size / 2.0);
-        state.terrain_cloud_elev->push_back(point);
-      }
-    }
-
     void resetPlanarVoxels(TerrainState& state) {
       state.planar_voxel_elev.fill(0);
-      state.planar_voxel_edge.fill(0);
       state.planar_voxel_dy_obs.fill(0);
       for (auto& point_elevations : state.planar_point_elev) {
         point_elevations.clear();
@@ -349,14 +233,17 @@ namespace terrain_analysis::algorithm {
       shiftGrid(state, Axis::X, false);
       center_x = voxel_size * --state.terrain_voxel_shift_x;
     }
+
     while (state.vehicle_x - center_x > voxel_size) {
       shiftGrid(state, Axis::X, true);
       center_x = voxel_size * ++state.terrain_voxel_shift_x;
     }
+
     while (state.vehicle_y - center_y < -voxel_size) {
       shiftGrid(state, Axis::Y, false);
       center_y = voxel_size * --state.terrain_voxel_shift_y;
     }
+
     while (state.vehicle_y - center_y > voxel_size) {
       shiftGrid(state, Axis::Y, true);
       center_y = voxel_size * ++state.terrain_voxel_shift_y;
@@ -398,8 +285,8 @@ namespace terrain_analysis::algorithm {
       state.laser_cloud_downsampled->clear();
       state.down_size_filter.setInputCloud(state.terrain_voxel_cloud[cell]);
       state.down_size_filter.filter(*state.laser_cloud_downsampled);
-
       cell_cloud.clear();
+
       for (const auto& point : state.laser_cloud_downsampled->points) {
         double distance = horizontalDistanceTo(point.x, point.y, state);
         if (keepVoxelPoint(point.z - vehicle_z, distance, point.intensity,
@@ -413,7 +300,7 @@ namespace terrain_analysis::algorithm {
     }
   }
 
-  void extractTerrainCloud(TerrainState& state) {
+  void collectTerrainCloud(TerrainState& state) {
     static constexpr int EXTRACT_HALF_WINDOW = 5;
     state.terrain_cloud->clear();
     for (int row = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH - EXTRACT_HALF_WINDOW;
@@ -458,6 +345,7 @@ namespace terrain_analysis::algorithm {
       if (relative_z >= config.ceiling_clearance) {
         continue;
       }
+
       size_t base = TerrainGrid::planarVoxelIndex(row, col);
       static constexpr int PLANAR_VOXEL_WIDTH = TerrainGrid::PLANAR_VOXEL_WIDTH;
       for (int delta_row = -1; delta_row <= 1; delta_row++) {
@@ -612,12 +500,6 @@ namespace terrain_analysis::algorithm {
         elevations->back().intensity = static_cast<float>(height_above_ground);
       }
     }
-  }
-
-  void addNoDataObstacles(const TerrainConfig& config, TerrainState& state) {
-    markDataGapCells(config, state);
-    expandEdgeLabels(config, state);
-    emitObstacleCloud(config, state);
   }
 
 }  // namespace terrain_analysis::algorithm

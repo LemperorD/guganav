@@ -12,47 +12,54 @@
 #include <cmath>
 
 namespace terrain_analysis {
-  namespace {
-
-    template <typename T>
-    void declareAndGet(rclcpp::Node* node, const char* name, T& value) {
-      node->declare_parameter<T>(name, value);
-      node->get_parameter(name, value);
-    }
-
-  }  // namespace
 
   TerrainAnalysis::TerrainAnalysis(const rclcpp::NodeOptions& options)
       : Node("terrain_analysis", options) {
-    declareAndGet(this, "scanVoxelSize", config_.scan_voxel_size);
-    declareAndGet(this, "decayTime", config_.decay_time);
-    declareAndGet(this, "noDecayDis", config_.no_decay_distance);
-    declareAndGet(this, "clearingDis", config_.clearing_distance);
-    declareAndGet(this, "useSorting", config_.use_sorting);
-    declareAndGet(this, "quantileZ", config_.quantile_z);
-    declareAndGet(this, "considerDrop", config_.consider_drop);
-    declareAndGet(this, "limitGroundLift", config_.limit_ground_lift);
-    declareAndGet(this, "maxGroundLift", config_.max_ground_lift);
-    declareAndGet(this, "clearDyObs", config_.clear_dy_obs);
-    declareAndGet(this, "minDyObsDis", config_.min_dy_obs_distance);
-    declareAndGet(this, "minDyObsAngle", config_.min_dy_obs_angle);
-    declareAndGet(this, "minDyObsRelZ", config_.min_dy_obs_relative_z);
-    declareAndGet(this, "absDyObsRelZThre",
-                  config_.abs_dy_obs_relative_z_threshold);
-    declareAndGet(this, "minDyObsVFOV", config_.min_dy_obs_vfov);
-    declareAndGet(this, "maxDyObsVFOV", config_.max_dy_obs_vfov);
-    declareAndGet(this, "minDyObsPointNum", config_.min_dy_obs_point_num);
-    declareAndGet(this, "noDataObstacle", config_.no_data_obstacle);
-    declareAndGet(this, "noDataBlockSkipNum", config_.no_data_block_skip_num);
-    declareAndGet(this, "minBlockPointNum", config_.min_block_point_num);
-    declareAndGet(this, "vehicleHeight", config_.vehicle_height);
-    declareAndGet(this, "ceilingClearance", config_.ceiling_clearance);
-    declareAndGet(this, "voxelPointUpdateThre",
-                  config_.voxel_point_update_thre);
-    declareAndGet(this, "voxelTimeUpdateThre", config_.voxel_time_update_thre);
-    declareAndGet(this, "minRelZ", config_.min_relative_z);
-    declareAndGet(this, "maxRelZ", config_.max_relative_z);
-    declareAndGet(this, "disRatioZ", config_.distance_ratio_z);
+    config_.scan_voxel_size = declare_parameter("scanVoxelSize",
+                                                config_.scan_voxel_size);
+    config_.decay_time = declare_parameter("decayTime", config_.decay_time);
+    config_.no_decay_distance = declare_parameter("noDecayDis",
+                                                  config_.no_decay_distance);
+    config_.use_sorting = declare_parameter("useSorting", config_.use_sorting);
+    config_.quantile_z = declare_parameter("quantileZ", config_.quantile_z);
+    config_.consider_drop = declare_parameter("considerDrop",
+                                              config_.consider_drop);
+    config_.limit_ground_lift = declare_parameter("limitGroundLift",
+                                                  config_.limit_ground_lift);
+    config_.max_ground_lift = declare_parameter("maxGroundLift",
+                                                config_.max_ground_lift);
+    config_.clear_dy_obs = declare_parameter("clearDyObs",
+                                             config_.clear_dy_obs);
+    config_.min_dy_obs_distance = declare_parameter(
+        "minDyObsDis", config_.min_dy_obs_distance);
+    config_.min_dy_obs_angle = declare_parameter("minDyObsAngle",
+                                                 config_.min_dy_obs_angle);
+    config_.min_dy_obs_relative_z = declare_parameter(
+        "minDyObsRelZ", config_.min_dy_obs_relative_z);
+    config_.abs_dy_obs_relative_z_threshold = declare_parameter(
+        "absDyObsRelZThre", config_.abs_dy_obs_relative_z_threshold);
+    config_.min_dy_obs_vfov = declare_parameter("minDyObsVFOV",
+                                                config_.min_dy_obs_vfov);
+    config_.max_dy_obs_vfov = declare_parameter("maxDyObsVFOV",
+                                                config_.max_dy_obs_vfov);
+    config_.min_dy_obs_point_num = declare_parameter(
+        "minDyObsPointNum", config_.min_dy_obs_point_num);
+    config_.min_block_point_num = declare_parameter(
+        "minBlockPointNum", config_.min_block_point_num);
+    config_.vehicle_height = declare_parameter("vehicleHeight",
+                                               config_.vehicle_height);
+    config_.ceiling_clearance = declare_parameter("ceilingClearance",
+                                                  config_.ceiling_clearance);
+    config_.voxel_point_update_thre = declare_parameter(
+        "voxelPointUpdateThre", config_.voxel_point_update_thre);
+    config_.voxel_time_update_thre = declare_parameter(
+        "voxelTimeUpdateThre", config_.voxel_time_update_thre);
+    config_.min_relative_z = declare_parameter("minRelZ",
+                                               config_.min_relative_z);
+    config_.max_relative_z = declare_parameter("maxRelZ",
+                                               config_.max_relative_z);
+    config_.distance_ratio_z = declare_parameter("disRatioZ",
+                                                 config_.distance_ratio_z);
 
     config_.min_dy_obs_angle *= M_PI / 180.0;
     config_.min_dy_obs_vfov *= M_PI / 180.0;
@@ -85,11 +92,6 @@ namespace terrain_analysis {
           terrain_analysis::algorithm::ingestLaserCloud(
               config_, state_, cloud,
               rclcpp::Time(msg->header.stamp).seconds());
-        });
-
-    sub_clearing_ = this->create_subscription<std_msgs::msg::Float32>(
-        "map_clearing", 5, [this](std_msgs::msg::Float32::ConstSharedPtr msg) {
-          terrain_analysis::algorithm::ingestClearing(state_, msg->data);
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(

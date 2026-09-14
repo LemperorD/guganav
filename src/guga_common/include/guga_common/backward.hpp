@@ -243,14 +243,14 @@
 #endif
 
 #if BACKWARD_HAS_DW == 1
-#include <libdwarf/dwarf.h>
+#include <dwarf.h>
 #include <elfutils/libdw.h>
 #include <elfutils/libdwfl.h>
 #endif
 
 #if BACKWARD_HAS_DWARF == 1
 #include <algorithm>
-#include <libdwarf/dwarf.h>
+#include <dwarf.h>
 #include <libdwarf.h>
 #include <libelf.h>
 #include <map>

@@ -108,7 +108,6 @@ terrain_analysis:
     scanVoxelSize: 0.05                 # 点云下采样
     decayTime: 0.5                      # 点云时间差阈值 大于则不会被处理
     noDecayDis: 0.0                     # 点云距离阈值 小于该阈值不考虑时间差
-    clearingDis: 0.0                    # 该距离外的点会被清除
     useSorting: True                    # 这个参数开起来就能上坡了；如果 use_sorting,那么就以周围点中的分位点作为地面点，否则以最低点作为地面点；周围其余点相对于地面点的高度作为通过代价，所以对于坡面，有的点的代价是正，有的是负，就相互抵消了；不要与 consider_drop 同时开启，计算上会有冲突
     quantileZ: 0.2                      # useful if use_sorting is enabled.
     considerDrop: False                 # 考虑凹下去的地面,开启则将相对于地面点的高度取绝对值
@@ -122,8 +121,6 @@ terrain_analysis:
     minDyObsVFOV: -28.0
     maxDyObsVFOV: 33.0
     minDyObsPointNum: 1
-    noDataObstacle: False               # treat no data as obstacle
-    noDataBlockSkipNum: 0
     minBlockPointNum: 10
     vehicleHeight: 0.5                  # 小于车辆高度的点才会进行处理
     ceilingClearance: 0.2               # 车顶上方安全间隙(m)：相对车高达到该值的点(天花板/横梁)不算障碍且不参与地面估计；需 < 实测隧道顶隙(260mm→0.2)，开阔地保守可调回 0.3
@@ -135,22 +132,6 @@ terrain_analysis:
 
 terrain_analysis_ext:
   ros__parameters:
-    scanVoxelSize: 0.1
-    decayTime: 0.2
-    noDecayDis: 0.0
-    clearingDis: 20.0
-    useSorting: true
-    quantileZ: 0.2
-    vehicleHeight: 1.0
-    voxelPointUpdateThre: 100
-    voxelTimeUpdateThre: 2.0
-    lowerBoundZ: -1.5
-    upperBoundZ: 0.5
-    disRatioZ: 0.2
-    checkTerrainConn: False
-    terrainUnderVehicle: -0.75
-    terrainConnThre: 0.5
-    ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0
 
 small_gicp_relocalization:

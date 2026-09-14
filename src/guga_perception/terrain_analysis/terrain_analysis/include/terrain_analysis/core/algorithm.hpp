@@ -34,13 +34,6 @@ namespace terrain_analysis::algorithm {
                         const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud,
                         double timestamp_sec);
 
-  /**
-   * @brief 请求清除指定距离内的历史地形体素。
-   * @param state 地形分析运行时状态。
-   * @param distance_clearing 清除半径，单位为米。
-   */
-  void ingestClearing(TerrainState& state, double distance_clearing);
-
   /** @brief 执行完整的地形分析管线。 */
   void run(const TerrainConfig& config, TerrainState& state);
   /** @brief 根据车辆位移滚动以车辆为中心的地形体素网格。 */
@@ -49,8 +42,8 @@ namespace terrain_analysis::algorithm {
   void voxelize(const TerrainConfig& config, TerrainState& state);
   /** @brief 对地形体素执行降采样、衰减、清除和高度范围过滤。 */
   void updateVoxels(const TerrainConfig& config, TerrainState& state);
-  /** @brief 提取车辆周边窗口内的累积地形点云。 */
-  void extractTerrainCloud(TerrainState& state);
+  /** @brief 收集车辆周边窗口内的累积地形点云。 */
+  void collectTerrainCloud(TerrainState& state);
   /** @brief 将地形点膨胀到 planar voxel，收集地面高度候选值。 */
   void estimateGround(const TerrainConfig& config, TerrainState& state);
   /** @brief 根据仰角和传感器视场统计潜在动态障碍点。 */
@@ -62,7 +55,5 @@ namespace terrain_analysis::algorithm {
   void computeElevation(const TerrainConfig& config, TerrainState& state);
   /** @brief 计算点相对地面的高度并生成输出地形点云。 */
   void computeHeightMap(const TerrainConfig& config, TerrainState& state);
-  /** @brief 为无数据或数据稀疏区域生成虚拟障碍点。 */
-  void addNoDataObstacles(const TerrainConfig& config, TerrainState& state);
 
 }  // namespace terrain_analysis::algorithm

@@ -16,7 +16,7 @@ ROS2 消息 → TerrainBlackboard → TerrainAlgorithm.run() → publish → ROS
 ## 管线
 
 ```
-rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
+rolloverVoxels → voxelize → updateVoxels → collectTerrainCloud
                                                     ↓
                                               estimateGround
                                                     ↓
@@ -25,7 +25,6 @@ rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
                                                     ↓
                                             computeElevation
                                             computeHeightMap
-                                            addNoDataObstacles
 ```
 
 | 阶段                          | 职责                                               |
@@ -33,13 +32,12 @@ rolloverVoxels → voxelize → updateVoxels → extractTerrainCloud
 | `rolloverVoxels`              | 车辆移动时滚动体素网格，维持以车辆为中心的滑动窗口 |
 | `voxelize`                    | 当前帧点云按空间位置分配到地形体素格子             |
 | `updateVoxels`                | 逐个格子降采样 + 时间衰减 + 空间过滤               |
-| `extractTerrainCloud`         | 提取车辆周边 11×11 格子的累积地形点                |
+| `collectTerrainCloud`         | 收集车辆周边 11×11 格子的累积地形点                |
 | `estimateGround`              | 点云膨胀到 planar voxel，为后续高度估算准备；越界点跳过 |
 | `detectDynamicObstacles`      | 用仰角 + 传感器 FOV 检测潜在动态障碍               |
 | `filterDynamicObstaclePoints` | 当前帧高角度点反向印证，清除头顶固定结构的误报     |
 | `computeElevation`            | 对每个 planar voxel 估算地面高度（分位数或最小值） |
 | `computeHeightMap`            | 计算每个点离地高度，生成输出点云                   |
-| `addNoDataObstacles`          | 为数据稀疏区域生成虚拟障碍物                       |
 
 ## 测试
 
@@ -79,7 +77,6 @@ scripts/test/test_terrain_analysis_coverage.sh
 | -------------------- | ----------------- | ------------------------- | ---------------------------- |
 | `terrainAnalysis`    | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
 | `terrainAnalysis`    | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
-| `terrainAnalysis`    | `map_clearing`    | `std_msgs/Float32`        | 调试用（清除距离）           |
 | `terrainAnalysisExt` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
 | `terrainAnalysisExt` | `terrain_map`     | `sensor_msgs/PointCloud2` | `terrainAnalysis` (本包)     |
 
