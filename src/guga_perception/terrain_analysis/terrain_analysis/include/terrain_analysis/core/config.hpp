@@ -52,7 +52,11 @@ struct TerrainConfig {
   double vehicle_height = 1.5;
   /** @brief 车顶上方安全间隙：相对车高达到该值的点（天花板/横梁）不作为
    *  障碍输出，也不参与地面高度估计。需小于实测隧道顶隙（如 260mm →
-   *  0.2），否则低矮隧道仍会被判为不可通过。 */
+   *  0.2），否则低矮隧道仍会被判为不可通过。
+   *
+   *  注意它同时是**地面候选的有效上界**：当小于 max_relative_z 时（当前
+   *  0.2 < 0.5），estimateTerrainGround 的上界由它决定，max_relative_z 在
+   *  该阶段不生效。调大它到超过 max_relative_z 会使上界归属静默反转。 */
   double ceiling_clearance = 0.3;
 
   // 体素更新和点云范围
@@ -60,9 +64,13 @@ struct TerrainConfig {
   int voxel_point_update_thre = 100;
   /** @brief 触发体素重建的时间阈值。 */
   double voxel_time_update_thre = 2.0;
-  /** @brief 点云相对车辆高度下限。 */
+  /** @brief 有效点云相对车辆的高度下限（相对 vehicle_z 的偏移量）。
+   *  三处共用：ingestLaserCloud 的裁剪带、estimateTerrainGround 的地面候选
+   *  地板、keepTerrainVoxelPoint 的体素点保留判定。 */
   double min_relative_z = -1.5;
-  /** @brief 点云相对车辆高度上限。 */
+  /** @brief 有效点云相对车辆的高度上限（相对 vehicle_z 的偏移量）。
+   *  同为三处共用；但在 estimateTerrainGround 中会被更小的
+   *  ceiling_clearance 遮蔽而不生效。 */
   double max_relative_z = 0.2;
   /** @brief 随水平距离放宽高度范围的比例。 */
   double distance_ratio_z = 0.2;

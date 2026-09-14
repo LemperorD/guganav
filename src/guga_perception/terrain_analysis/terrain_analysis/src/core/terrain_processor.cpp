@@ -178,16 +178,18 @@ namespace terrain_analysis {
     const double vehicle_z = state_.vehicle_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
-      // 候选筛选改用绝对高度（odom z）判断：与存入 planar_point_elev 的
-      // point.z 同参考系，避免"索引一个系、数值另一个系"的混用。
-      if (point.z <= vehicle_z + config_.min_relative_z
-          || point.z >= vehicle_z + config_.max_relative_z) {
+      const double relative_z = point.z - vehicle_z;
+      // 下界：地面候选的地板（挡掉地面以下/穿透点）。
+      if (relative_z <= config_.min_relative_z) {
         continue;
       }
-      // 车顶上方超过安全间隙的点（天花板/横梁）不参与地面估计：
+      // 上界：车顶上方超过安全间隙的点（天花板/横梁）不参与地面估计——
       // 窄隧道里这类点占比大，混入分位数会抬高 elev，导致真实地面点
       // 高度差变为负值丢失、天花板点高度差落入障碍区间。
-      if (point.z >= vehicle_z + config_.ceiling_clearance) {
+      // 注意 ceiling_clearance(0.2) < max_relative_z(0.5)，故此处上界归前者，
+      // max_relative_z 在本阶段不生效（它在 ingestLaserCloud 与
+      // keepTerrainVoxelPoint 中仍然是有效上界）。
+      if (relative_z >= config_.ceiling_clearance) {
         continue;
       }
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
