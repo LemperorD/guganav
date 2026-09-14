@@ -198,7 +198,8 @@ namespace terrain_analysis {
       if (!grid_index.valid) {
         continue;
       }
-      addToPlanarNeighborhood(grid_index.row, grid_index.col, point.z);
+
+      addToPlanarNeighborhood3x3(grid_index.row, grid_index.col, point.z);
     }
   }
 
@@ -416,7 +417,8 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::addToPlanarNeighborhood(int row, int col, double z) {
+  void TerrainProcessor::addToPlanarNeighborhood3x3(int row, int col,
+                                                    double z) {
     constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
 
     for (int delta_row = -1; delta_row <= 1; delta_row++) {

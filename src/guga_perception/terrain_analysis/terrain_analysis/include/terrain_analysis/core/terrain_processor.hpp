@@ -151,7 +151,7 @@ namespace terrain_analysis {
      * @param col 中心格的列下标（必须已在网格范围内）。
      * @param z 要加入候选的高度值（odom 绝对 z）。
      */
-    void addToPlanarNeighborhood(int row, int col, double z);
+    void addToPlanarNeighborhood3x3(int row, int col, double z);
     /** @brief 用分位数估计指定 planar voxel 的地面高度。 */
     void elevateByQuantile(int cell);
     /** @brief 用最低点估计指定 planar voxel 的地面高度。 */
