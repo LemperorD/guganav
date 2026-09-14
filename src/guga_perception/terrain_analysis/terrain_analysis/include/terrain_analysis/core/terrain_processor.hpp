@@ -6,6 +6,8 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+#include <cstdint>
+
 namespace terrain_analysis {
 
   /**
@@ -87,6 +89,49 @@ namespace terrain_analysis {
     }
 
   private:
+    // ── 网格操作私有类型 ──
+    /** @brief 网格轴向。 */
+    enum class Axis : uint8_t { AXIS_X, AXIS_Y };
+    /** @brief 网格内容搬运方向：沿索引增大 / 减小，即世界坐标正向 / 负向。 */
+    enum class ShiftDirection : uint8_t {
+      TOWARD_NEGATIVE,
+      TOWARD_POSITIVE,
+    };
+    /** @brief 点转换到传感器系后的坐标。 */
+    struct SensorPoint {
+      double x;
+      double y;
+      double z;
+    };
+
+    /**
+     * @brief 将整张 terrain voxel 网格沿指定轴搬运一格，腾出的新格清空。
+     * @param axis 搬运轴向。
+     * @param direction 搬运方向。
+     */
+    void shiftGrid(Axis axis, ShiftDirection direction);
+
+    // ── 内部判定与运算（读写 config_/state_，故为成员而非自由函数）──
+    /** @brief 该 terrain voxel 本轮是否需要降采样/衰减重建。 */
+    [[nodiscard]] bool shouldPruneTerrainVoxel(int cell) const;
+    /**
+     * @brief 该点是否应保留在该 terrain voxel 中。
+     * @param relative_z 点相对车辆的高度。
+     * @param distance 点相对车辆的水平距离。
+     * @param point_time 点的采集时刻（相对首帧，单位秒）。
+     */
+    [[nodiscard]] bool keepTerrainVoxelPoint(double relative_z, double distance,
+                                             double point_time) const;
+    /** @brief 把相对车辆的坐标变换到传感器坐标系。 */
+    [[nodiscard]] SensorPoint transformToSensorFrame(double x, double y,
+                                                     double z) const;
+    /** @brief 清空 planar voxel 的地面候选、高程估计与动态障碍计数。 */
+    void resetPlanarVoxels();
+    /** @brief 用分位数估计指定 planar voxel 的地面高度。 */
+    void elevateByQuantile(int cell);
+    /** @brief 用最低点估计指定 planar voxel 的地面高度。 */
+    void elevateByMinimum(int cell);
+
     // ── 管线阶段（实现细节，见类注释的可见性契约）──
     void rolloverTerrainVoxels();
     void voxelizeTerrain();

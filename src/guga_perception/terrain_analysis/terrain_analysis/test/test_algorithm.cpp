@@ -12,15 +12,15 @@
 // 因此把这类调用收在它以内的分发器里。
 namespace stage {
   enum class Id {
-    Rollover,
-    Voxelize,
-    UpdateTerrainVoxels,
-    Collect,
-    EstimateTerrainGround,
-    DetectDynamic,
-    FilterDynamic,
-    PlanarElevation,
-    HeightMap
+    ROLLOVER,
+    VOXELIZE,
+    UPDATE_TERRAIN_VOXELS,
+    COLLECT,
+    ESTIMATE_TERRAIN_GROUND,
+    DETECT_DYNAMIC,
+    FILTER_DYNAMIC,
+    PLANAR_ELEVATION,
+    HEIGHT_MAP
   };
 }  // namespace stage
 
@@ -49,31 +49,31 @@ namespace terrain_analysis {
 
     void runStage(stage::Id id) {
       switch (id) {
-        case stage::Id::Rollover:
+        case stage::Id::ROLLOVER:
           processor_.rolloverTerrainVoxels();
           break;
-        case stage::Id::Voxelize:
+        case stage::Id::VOXELIZE:
           processor_.voxelizeTerrain();
           break;
-        case stage::Id::UpdateTerrainVoxels:
+        case stage::Id::UPDATE_TERRAIN_VOXELS:
           processor_.updateTerrainVoxels();
           break;
-        case stage::Id::Collect:
+        case stage::Id::COLLECT:
           processor_.collectTerrainCloud();
           break;
-        case stage::Id::EstimateTerrainGround:
+        case stage::Id::ESTIMATE_TERRAIN_GROUND:
           processor_.estimateTerrainGround();
           break;
-        case stage::Id::DetectDynamic:
+        case stage::Id::DETECT_DYNAMIC:
           processor_.detectDynamicObstacles();
           break;
-        case stage::Id::FilterDynamic:
+        case stage::Id::FILTER_DYNAMIC:
           processor_.filterDynamicObstaclePoints();
           break;
-        case stage::Id::PlanarElevation:
+        case stage::Id::PLANAR_ELEVATION:
           processor_.computePlanarElevation();
           break;
-        case stage::Id::HeightMap:
+        case stage::Id::HEIGHT_MAP:
           processor_.computeHeightMap();
           break;
       }
@@ -141,7 +141,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
   int sx = state().terrain_voxel_shift_x;
   int sy = state().terrain_voxel_shift_y;
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   EXPECT_EQ(state().terrain_voxel_shift_x, sx);
   EXPECT_EQ(state().terrain_voxel_shift_y, sy);
@@ -152,7 +152,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
   state().vehicle_x = -2.0;
   int sx = state().terrain_voxel_shift_x;
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   EXPECT_EQ(state().terrain_voxel_shift_x, sx - 1);
 }
@@ -162,7 +162,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
   state().vehicle_x = 2.0;
   int sx = state().terrain_voxel_shift_x;
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   EXPECT_EQ(state().terrain_voxel_shift_x, sx + 1);
 }
@@ -172,7 +172,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
   state().vehicle_y = -2.0;
   int sy = state().terrain_voxel_shift_y;
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   EXPECT_EQ(state().terrain_voxel_shift_y, sy - 1);
 }
@@ -182,7 +182,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
   state().vehicle_y = 2.0;
   int sy = state().terrain_voxel_shift_y;
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   EXPECT_EQ(state().terrain_voxel_shift_y, sy + 1);
 }
@@ -195,7 +195,7 @@ TEST_F(AlgorithmTest,
   pcl::PointXYZI p{0, 0, 0, 0};
   state().terrain_voxel_cloud[0]->push_back(p);
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   // After shift-left, voxel(0,0) becomes the destination cell and gets cleared
   EXPECT_TRUE(state().terrain_voxel_cloud[0]->points.empty());
@@ -208,7 +208,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
   int sx = state().terrain_voxel_shift_x;
   int sy = state().terrain_voxel_shift_y;
 
-  runStage(stage::Id::Rollover);
+  runStage(stage::Id::ROLLOVER);
 
   EXPECT_EQ(state().terrain_voxel_shift_x, sx - 1);
   EXPECT_EQ(state().terrain_voxel_shift_y, sy - 1);
@@ -222,7 +222,7 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
   state().laser_cloud_crop->clear();
   state().laser_cloud_crop->push_back({0, 0, 0, 0});
 
-  runStage(stage::Id::Voxelize);
+  runStage(stage::Id::VOXELIZE);
 
   size_t center = TerrainGrid::terrainVoxelIndex(
       TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
@@ -235,7 +235,7 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
 TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
   state().laser_cloud_crop->clear();
 
-  runStage(stage::Id::Voxelize);
+  runStage(stage::Id::VOXELIZE);
 
   for (int i = 0; i < TerrainGrid::TERRAIN_VOXEL_NUM; i++) {
     EXPECT_EQ(state().terrain_voxel_update_num[i], 0);
@@ -253,7 +253,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   state().planar_voxel_elev.fill(999);
   state().planar_point_elev[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
 
-  runStage(stage::Id::PlanarElevation);
+  runStage(stage::Id::PLANAR_ELEVATION);
 
   // sorted: 0.1, 0.2, 0.3, 0.4, 0.5. quantile 0.5*(5) = 2 → index 2 → 0.3
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.3F);
@@ -268,7 +268,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   state().planar_voxel_elev.fill(999);
   state().planar_point_elev[cell] = {1.5, 0.5, 1.0};
 
-  runStage(stage::Id::PlanarElevation);
+  runStage(stage::Id::PLANAR_ELEVATION);
 
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.5F);
 }
@@ -287,7 +287,7 @@ TEST_F(AlgorithmTest,
   // sorted: 0.5, 1.0, 2.0. quantile 0.5*3 = 1 → 1.0. diff 1.0-0.5=0.5 > 0.3
   state().planar_point_elev[cell] = {0.5, 2.0, 1.0};
 
-  runStage(stage::Id::PlanarElevation);
+  runStage(stage::Id::PLANAR_ELEVATION);
 
   // lift limited → 0.5 + 0.3 = 0.8
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.8F);
@@ -305,7 +305,7 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
   // 3 points: sorted 0.1, 0.3, 0.9. quantile 1.0*3 = 3 >= 3 → clamp to 2 → 0.9
   state().planar_point_elev[cell] = {0.1, 0.9, 0.3};
 
-  runStage(stage::Id::PlanarElevation);
+  runStage(stage::Id::PLANAR_ELEVATION);
 
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.9F);
 }
@@ -321,7 +321,7 @@ TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({0.1F, 0, 0, 0});
 
-  runStage(stage::Id::DetectDynamic);
+  runStage(stage::Id::DETECT_DYNAMIC);
 
   int total = 0;
   for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
@@ -355,7 +355,7 @@ TEST_F(AlgorithmTest,
   config().max_dy_obs_vfov = 0.5;
   config().abs_dy_obs_relative_z_threshold = 0.01;  // tiny → rely on VFOV
 
-  runStage(stage::Id::DetectDynamic);
+  runStage(stage::Id::DETECT_DYNAMIC);
 
   int total = 0;
   for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
@@ -388,7 +388,7 @@ TEST_F(AlgorithmTest, DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
   config().max_dy_obs_vfov = 0.2;
   config().abs_dy_obs_relative_z_threshold = 0.0;  // off
 
-  runStage(stage::Id::DetectDynamic);
+  runStage(stage::Id::DETECT_DYNAMIC);
 
   int total = 0;
   for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
@@ -411,7 +411,7 @@ TEST_F(AlgorithmTest,
   // high relative_z → angle close to 90° > 10°
   state().laser_cloud_crop->push_back({0.05F, 0, 2.0F, 0});
 
-  runStage(stage::Id::FilterDynamic);
+  runStage(stage::Id::FILTER_DYNAMIC);
 
   EXPECT_EQ(state().planar_voxel_dy_obs[cell], 0);
 }
@@ -429,7 +429,7 @@ TEST_F(AlgorithmTest,
   state().laser_cloud_crop->clear();
   state().laser_cloud_crop->push_back({0.05F, 0, 0, 0});
 
-  runStage(stage::Id::FilterDynamic);
+  runStage(stage::Id::FILTER_DYNAMIC);
 
   EXPECT_EQ(state().planar_voxel_dy_obs[cell], 10);
 }
@@ -451,7 +451,7 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_EdgePoint_HandlesOobNeighbors) {
   pt.intensity = 0;
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::EstimateTerrainGround);
+  runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
   // No crash = pass; point Z=0 is within min/max relative_z range
   EXPECT_TRUE(true);
 }
@@ -464,7 +464,7 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({6.0F, 0.0F, 0.0F, 0.0F});
 
-  runStage(stage::Id::EstimateTerrainGround);
+  runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
   for (const auto& elevations : state().planar_point_elev) {
     EXPECT_TRUE(elevations.empty());
@@ -497,7 +497,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::HeightMap);
+  runStage(stage::Id::HEIGHT_MAP);
   EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
 }
 
@@ -526,7 +526,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::HeightMap);
+  runStage(stage::Id::HEIGHT_MAP);
   EXPECT_EQ(state().terrain_cloud_elev->points.size(), 1U);
   // height = abs(0 - 0.3) = 0.3 < 1.0 → accepted
 }
@@ -556,7 +556,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::HeightMap);
+  runStage(stage::Id::HEIGHT_MAP);
   // height = 0.5 - 0 = 0.5 >= 0.1 → filtered
   EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
 }
@@ -573,7 +573,7 @@ TEST_F(AlgorithmTest,
   // 天花板点：相对车高 0.26m（模拟 260mm 顶隙的隧道），位于车辆正上方
   state().terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
-  runStage(stage::Id::EstimateTerrainGround);
+  runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
   size_t center = TerrainGrid::planarVoxelIndex(
       TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
@@ -591,7 +591,7 @@ TEST_F(AlgorithmTest,
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({0.0F, 0.0F, -0.1F, 0.0F});
 
-  runStage(stage::Id::EstimateTerrainGround);
+  runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
   size_t center = TerrainGrid::planarVoxelIndex(
       TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
@@ -627,7 +627,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::HeightMap);
+  runStage(stage::Id::HEIGHT_MAP);
   EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
 }
 
@@ -658,7 +658,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::HeightMap);
+  runStage(stage::Id::HEIGHT_MAP);
   ASSERT_EQ(state().terrain_cloud_elev->points.size(), 1U);
   // height_above_ground = 0.1 - 0 = 0.1，写入 intensity
   EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.1F, 1e-6);
@@ -727,7 +727,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   state().terrain_voxel_update_num[center_cell] =
       config().voxel_point_update_thre;
 
-  runStage(stage::Id::UpdateTerrainVoxels);
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_TRUE(state().terrain_voxel_cloud[center_cell]->points.empty());
 }
 
@@ -760,7 +760,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   state().terrain_voxel_update_num[center_cell] =
       config().voxel_point_update_thre;
 
-  runStage(stage::Id::UpdateTerrainVoxels);
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_EQ(state().terrain_voxel_cloud[center_cell]->points.size(), 1U);
 }
 
@@ -779,7 +779,7 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
   state().terrain_voxel_update_num[center_cell] = 5;
   state().terrain_voxel_update_time[center_cell] = 0.0;
 
-  runStage(stage::Id::UpdateTerrainVoxels);
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_NE(state().terrain_voxel_cloud[center_cell], nullptr);
 }
 
@@ -808,7 +808,7 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
   state().terrain_voxel_update_num[center_cell] =
       config().voxel_point_update_thre;
 
-  runStage(stage::Id::UpdateTerrainVoxels);
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_EQ(cell.points.size(), 1U);
 }
 
@@ -843,6 +843,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
-  runStage(stage::Id::HeightMap);
+  runStage(stage::Id::HEIGHT_MAP);
   EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
 }
