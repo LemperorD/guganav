@@ -569,8 +569,8 @@ TEST_F(AlgorithmTest,
   state().vehicle_y = 0;
   state().vehicle_z = 0;
   state().terrain_cloud->clear();
-  // 天花板点：相对车高 0.26m（模拟 260mm 顶隙的隧道），高于固定的
-  // CEILING_CLEARANCE(0.1)，位于车辆正上方
+  // 天花板点：距地面 0.26m（模拟 260mm 顶隙的隧道；测试中 planar_voxel_elev
+  // 为 0，故等于其 z），高于固定的 CEILING_CLEARANCE(0.1)，位于车辆正上方
   state().terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
@@ -588,7 +588,8 @@ TEST_F(AlgorithmTest,
   state().vehicle_y = 0;
   state().vehicle_z = 0;
   state().terrain_cloud->clear();
-  // 点相对车高 -0.1m：在断言的固定阈值区间内（>0 之上、< CEILING_CLEARANCE）
+  // 点距地面 -0.1m（planar_voxel_elev 为 0）：在地板之上、低于
+  // CEILING_CLEARANCE
   state().terrain_cloud->push_back({0.0F, 0.0F, -0.1F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
@@ -617,7 +618,8 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   config().max_relative_z = 10.0;
   config().consider_drop = false;
 
-  // 天花板点：相对车高 0.26m，高于固定的 CEILING_CLEARANCE(0.1)
+  // 天花板点：距地面 0.26m（planar_voxel_elev=0），高于固定的
+  // CEILING_CLEARANCE(0.1)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
@@ -647,7 +649,8 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   config().max_relative_z = 10.0;
   config().consider_drop = false;
 
-  // 低矮障碍点：相对车高 0.05m，低于固定的 CEILING_CLEARANCE(0.1)
+  // 低矮障碍点：距地面 0.05m（planar_voxel_elev=0），低于固定的
+  // CEILING_CLEARANCE(0.1)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;

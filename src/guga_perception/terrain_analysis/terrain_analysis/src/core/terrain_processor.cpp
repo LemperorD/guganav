@@ -311,40 +311,42 @@ namespace terrain_analysis {
     elevations->clear();
 
     for (const auto& point : state_.terrain_cloud->points) {
-      const double relative_z = point.z - vehicle_z;
-      // 下界：地板过滤（挡掉地面以下/穿透点）。
-      if (relative_z <= config_.min_relative_z) {
-        continue;
-      }
-      // 上界：车顶上方达到安全间隙的点（天花板/横梁）不输出为障碍——
-      // 只要顶隙 >= CEILING_CLEARANCE，车辆即可从下方通过（隧道场景）。
-      // 与 estimateTerrainGround 同理，max_relative_z(0.5) 是更松的上界，
-      // 被此处更紧的 CEILING_CLEARANCE(0.1) 遮蔽，故不参与判定。
-      if (relative_z >= TerrainGrid::CEILING_CLEARANCE) {
-        continue;
-      }
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
                                                 point.y);
       if (!grid_index.valid) {
         continue;
       }
-      size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
-                                                  grid_index.col);
+      const size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
+                                                        grid_index.col);
+      // 该点所在处的地面高度（本帧估计值），下面所有高度判据都以它为基准。
+      const double ground_z = state_.planar_voxel_elev[cell];
+      const double height_above_ground = point.z - ground_z;
+
+      // 下界：地板过滤（挡掉地面以下/穿透点）。此处用**相对车辆**的高度，
+      // 因为要挡的是"远低于车"的穿透点，与地形无关。
+      if (point.z - vehicle_z <= config_.min_relative_z) {
+        continue;
+      }
+      // 上界：距地面达到安全间隙的点（天花板/横梁）不输出为障碍——
+      // 净空足够时车辆可从下方通过（隧道场景）。以**局部地面**为基准：
+      // 净空是"地面到障碍下沿"的距离，这也使判据在坡面上保持一致。
+      if (height_above_ground >= TerrainGrid::CEILING_CLEARANCE) {
+        continue;
+      }
       if (state_.planar_voxel_dy_obs[cell] >= config_.min_dy_obs_point_num) {
         continue;
       }
 
-      double height_above_ground = point.z - state_.planar_voxel_elev[cell];
+      double height = height_above_ground;
       if (config_.consider_drop) {
-        height_above_ground = std::abs(height_above_ground);
+        height = std::abs(height);
       }
 
       auto point_count = state_.planar_point_elev[cell].size();
-      if (height_above_ground >= 0
-          && height_above_ground < config_.vehicle_height
+      if (height >= 0 && height < config_.vehicle_height
           && point_count >= static_cast<size_t>(config_.min_block_point_num)) {
         elevations->push_back(point);
-        elevations->back().intensity = static_cast<float>(height_above_ground);
+        elevations->back().intensity = static_cast<float>(height);
       }
     }
   }
