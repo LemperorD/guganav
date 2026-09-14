@@ -112,6 +112,8 @@ namespace terrain_analysis {
     void shiftGrid(Axis axis, ShiftDirection direction);
 
     // ── 内部判定与运算（读写 config_/state_，故为成员而非自由函数）──
+    /** @brief 该点相对车辆的水平距离。 */
+    [[nodiscard]] double horizontalDistanceTo(double px, double py) const;
     /** @brief 该 terrain voxel 本轮是否需要降采样/衰减重建。 */
     [[nodiscard]] bool shouldPruneTerrainVoxel(int cell) const;
     /**

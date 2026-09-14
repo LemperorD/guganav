@@ -19,12 +19,6 @@ namespace terrain_analysis {
 
   namespace {
 
-    [[nodiscard]] double horizontalDistanceTo(double px, double py,
-                                              const TerrainState& state) {
-      return sqrt(((px - state.vehicle_x) * (px - state.vehicle_x))
-                  + ((py - state.vehicle_y) * (py - state.vehicle_y)));
-    }
-
     int toVoxelIndex(double point_cloud, double vehicle_cloud,
                      double voxel_size, int half_width) {
       const double half_voxel_size = voxel_size / 2;
@@ -36,6 +30,11 @@ namespace terrain_analysis {
     }
 
   }  // namespace
+
+  double TerrainProcessor::horizontalDistanceTo(double px, double py) const {
+    return sqrt(((px - state_.vehicle_x) * (px - state_.vehicle_x))
+                + ((py - state_.vehicle_y) * (py - state_.vehicle_y)));
+  }
 
   void TerrainProcessor::shiftGrid(Axis axis, ShiftDirection direction) {
     static constexpr int WIDTH = TerrainGrid::TERRAIN_VOXEL_WIDTH;
@@ -178,7 +177,7 @@ namespace terrain_analysis {
     state_.laser_cloud_crop->clear();
     for (const auto& point : cloud->points) {
       double relative_z = point.z - vehicle_z;
-      double distance = horizontalDistanceTo(point.x, point.y, state_);
+      double distance = horizontalDistanceTo(point.x, point.y);
       const double z_margin = config_.distance_ratio_z * distance;
       if (relative_z > config_.min_relative_z - z_margin
           && relative_z < config_.max_relative_z + z_margin
@@ -283,7 +282,7 @@ namespace terrain_analysis {
       cell_cloud.clear();
 
       for (const auto& point : downsampled.points) {
-        double distance = horizontalDistanceTo(point.x, point.y, state_);
+        double distance = horizontalDistanceTo(point.x, point.y);
         if (keepTerrainVoxelPoint(point.z - vehicle_z, distance,
                                   point.intensity)) {
           cell_cloud.push_back(point);
