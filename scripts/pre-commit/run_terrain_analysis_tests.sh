@@ -44,6 +44,15 @@ colcon build \
 
 source_setup "$WS/install/setup.bash"
 
+# test_terrain_analysis 会 rclcpp::init 并构造节点，rclcpp 需要一个可写目录
+# 放日志/参数文件。若 $HOME 或 ~/.ros 不可写（只读挂载、受限沙箱），会直接
+# 段错误，看起来像测试失败。这里在需要时回退到临时目录。
+if [ ! -w "${ROS_HOME:-$HOME/.ros}" ] 2>/dev/null; then
+  ROS_HOME="$(mktemp -d)"
+  export ROS_HOME
+  echo "note: ROS_HOME 不可写，回退到 $ROS_HOME"
+fi
+
 cd "$WS/build/terrain_analysis"
 for t in test_terrain_analysis test_state_ingest test_algorithm; do
   ./$t >/dev/null 2>&1 || { echo "FAILED: $t"; exit 1; }
