@@ -311,13 +311,15 @@ namespace terrain_analysis {
     elevations->clear();
 
     for (const auto& point : state_.terrain_cloud->points) {
-      double relative_z = point.z - vehicle_z;
-      if (relative_z <= config_.min_relative_z
-          || relative_z >= config_.max_relative_z) {
+      const double relative_z = point.z - vehicle_z;
+      // 下界：地板过滤（挡掉地面以下/穿透点）。
+      if (relative_z <= config_.min_relative_z) {
         continue;
       }
-      // 车顶上方达到安全间隙的点（天花板/横梁）不输出为障碍：
+      // 上界：车顶上方达到安全间隙的点（天花板/横梁）不输出为障碍——
       // 只要顶隙 >= CEILING_CLEARANCE，车辆即可从下方通过（隧道场景）。
+      // 与 estimateTerrainGround 同理，max_relative_z(0.5) 是更松的上界，
+      // 被此处更紧的 CEILING_CLEARANCE(0.1) 遮蔽，故不参与判定。
       if (relative_z >= TerrainGrid::CEILING_CLEARANCE) {
         continue;
       }

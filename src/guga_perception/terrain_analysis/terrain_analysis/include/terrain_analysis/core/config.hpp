@@ -57,12 +57,13 @@ struct TerrainConfig {
   double voxel_time_update_thre = 2.0;
   /** @brief 有效点云相对车辆的高度下限（相对 vehicle_z 的偏移量）。
    *  两处共用：ingestLaserCloud 的裁剪带、keepTerrainVoxelPoint 的体素点
-   *  保留判定。estimateTerrainGround 不用它——那里的地板是绝对高度
-   *  ground_floor_z。 */
+   *  保留判定。地面候选的地板不用它——那是绝对高度 ground_floor_z。 */
   double min_relative_z = -1.5;
   /** @brief 有效点云相对车辆的高度上限（相对 vehicle_z 的偏移量）。
-   *  仅由 ingestLaserCloud 裁剪带与 keepTerrainVoxelPoint 使用；
-   *  estimateTerrainGround 的上界由 TerrainGrid::CEILING_CLEARANCE 固定。 */
+   *  **仅由 ingestLaserCloud 的裁剪带与 keepTerrainVoxelPoint 使用**。
+   *  地面候选（estimateTerrainGround）与障碍输出（computeHeightMap）的上界
+   *  都由更紧的 TerrainGrid::CEILING_CLEARANCE(0.1) 决定，本参数在这两处
+   *  不参与判定。 */
   double max_relative_z = 0.2;
   /** @brief 随水平距离放宽高度范围的比例。 */
   double distance_ratio_z = 0.2;
