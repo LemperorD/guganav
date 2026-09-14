@@ -65,15 +65,23 @@ struct TerrainConfig {
   /** @brief 触发体素重建的时间阈值。 */
   double voxel_time_update_thre = 2.0;
   /** @brief 有效点云相对车辆的高度下限（相对 vehicle_z 的偏移量）。
-   *  三处共用：ingestLaserCloud 的裁剪带、estimateTerrainGround 的地面候选
-   *  地板、keepTerrainVoxelPoint 的体素点保留判定。 */
+   *  两处共用：ingestLaserCloud 的裁剪带、keepTerrainVoxelPoint 的体素点
+   *  保留判定。estimateTerrainGround 不用它——那里的地板是绝对高度
+   *  ground_floor_z。 */
   double min_relative_z = -1.5;
   /** @brief 有效点云相对车辆的高度上限（相对 vehicle_z 的偏移量）。
-   *  同为三处共用；但在 estimateTerrainGround 中会被更小的
-   *  ceiling_clearance 遮蔽而不生效。 */
+   *  两处共用同上；但在这两处都会被更小的 ceiling_clearance 遮蔽而不生效
+   *  （当前 0.2 < 0.5）。 */
   double max_relative_z = 0.2;
   /** @brief 随水平距离放宽高度范围的比例。 */
   double distance_ratio_z = 0.2;
+
+  // 地面估计
+  /** @brief 地面候选的绝对高度地板（odom z）：低于该值的点不参与地面估计。
+   *
+   *  用绝对量而非"相对车辆"：地面在 odom 中大体水平，且该阈值不应随车体
+   *  俯仰/上下抖动而移动。仅由 estimateTerrainGround 使用。 */
+  double ground_floor_z = -2.0;
 
   // 网格分辨率
   /** @brief 地形体素边长。 */

@@ -126,6 +126,7 @@ terrain_analysis:
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 1.0
     minRelZ: -1.5                       # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理
+    groundFloorZ: -2.0                 # 地面候选的绝对高度地板(odom z)：低于此值的点不参与地面估计；用绝对量以免随车体俯仰/上下抖动移动
     maxRelZ: 0.5
     disRatioZ: 0.2                      # Z 值的最大最小范围由这两个值决定，但是并不等于这两个值，是有一个比例关系的，距离机器人越远，限定范围就越大，这其中考虑了坡度
 

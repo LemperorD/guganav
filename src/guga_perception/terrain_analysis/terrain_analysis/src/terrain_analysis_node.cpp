@@ -54,6 +54,8 @@ namespace terrain_analysis {
         "voxelTimeUpdateThre", config.voxel_time_update_thre);
     config.min_relative_z = declare_parameter("minRelZ", config.min_relative_z);
     config.max_relative_z = declare_parameter("maxRelZ", config.max_relative_z);
+    config.ground_floor_z = declare_parameter("groundFloorZ",
+                                              config.ground_floor_z);
     config.distance_ratio_z = declare_parameter("disRatioZ",
                                                 config.distance_ratio_z);
 
