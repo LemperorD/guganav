@@ -52,11 +52,13 @@ namespace terrain_analysis {
         << "Flat ground should produce small heights";
   }
 
-  // 地面上方有障碍点时，输出点云包含非零离地高度
+  // 地面上方有障碍点时，输出点云包含非零离地高度。
+  // 障碍高度需低于固定的 TerrainGrid::CEILING_CLEARANCE(0.1)——相对车高达到
+  // 该值的点会被当作天花板（可从下方通过）而不输出，故此处取 0.06。
   TEST_F(TerrainAnalysisTest, Run_ObstacleAboveGround_OutputsNonZeroIntensity) {
     sendOdom(0, 0, 0, 0);
 
-    auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.15);
+    auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.06);
     sendCloud(cloud, 100.0);
     terrain_->processor().run();
 

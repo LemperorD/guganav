@@ -46,8 +46,6 @@ namespace terrain_analysis {
                                                    config.min_block_point_num);
     config.vehicle_height = declare_parameter("vehicleHeight",
                                               config.vehicle_height);
-    config.ceiling_clearance = declare_parameter("ceilingClearance",
-                                                 config.ceiling_clearance);
     config.voxel_point_update_thre = declare_parameter(
         "voxelPointUpdateThre", config.voxel_point_update_thre);
     config.voxel_time_update_thre = declare_parameter(

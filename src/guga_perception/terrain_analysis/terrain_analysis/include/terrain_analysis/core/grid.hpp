@@ -26,6 +26,23 @@ struct TerrainGrid {
                                           * PLANAR_VOXEL_WIDTH;
 
   /**
+   * @brief 车顶上方安全间隙，单位为米（固定 10 cm，不对外暴露为参数）。
+   *
+   * 两处使用，语义一致——"比车顶高出一个安全间隙"：
+   *   - estimateTerrainGround：相对车高达到该值的点（天花板/横梁）不参与地面
+   *     估计。窄隧道里这类点占比大，混入分位数会抬高 elev，导致真实地面点
+   *     高度差变为负值丢失、天花板点高度差落入障碍区间；
+   *   - computeHeightMap：相对车高达到该值的点不作为障碍输出（车辆可从下方
+   *     通过）。
+   *
+   * 固定为常量而非 ROS 参数：它同时是地面候选的有效上界，而该上界还会与
+   * max_relative_z 竞争——0.1 < max_relative_z(默认 0.5) 由本常量保证，
+   * 故上界恒归它，不存在被遮蔽而语义静默反转的可能。若需按实车隧道顶隙调整，
+   * 改此处并重新编译，同时确认仍小于 max_relative_z。
+   */
+  static constexpr double CEILING_CLEARANCE = 0.1;
+
+  /**
    * @brief 将 Terrain voxel 的行列坐标转换为线性索引。
    * @param row 行坐标。
    * @param col 列坐标。

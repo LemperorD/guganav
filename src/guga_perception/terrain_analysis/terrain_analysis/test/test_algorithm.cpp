@@ -568,9 +568,9 @@ TEST_F(AlgorithmTest,
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
-  config().ceiling_clearance = 0.2;
   state().terrain_cloud->clear();
-  // 天花板点：相对车高 0.26m（模拟 260mm 顶隙的隧道），位于车辆正上方
+  // 天花板点：相对车高 0.26m（模拟 260mm 顶隙的隧道），高于固定的
+  // CEILING_CLEARANCE(0.1)，位于车辆正上方
   state().terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
@@ -587,8 +587,8 @@ TEST_F(AlgorithmTest,
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
-  config().ceiling_clearance = 0.2;
   state().terrain_cloud->clear();
+  // 点相对车高 -0.1m：在断言的固定阈值区间内（>0 之上、< CEILING_CLEARANCE）
   state().terrain_cloud->push_back({0.0F, 0.0F, -0.1F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
@@ -613,12 +613,11 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   }
   config().min_block_point_num = 5;
   config().vehicle_height = 1.0;  // 旧逻辑下 0.26 < 1.0 会被输出为障碍
-  config().ceiling_clearance = 0.2;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
 
-  // 天花板点：相对车高 0.26m，高于 ceiling_clearance(0.2)
+  // 天花板点：相对车高 0.26m，高于固定的 CEILING_CLEARANCE(0.1)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
@@ -644,24 +643,23 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   }
   config().min_block_point_num = 5;
   config().vehicle_height = 1.0;
-  config().ceiling_clearance = 0.2;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
 
-  // 低矮障碍点：相对车高 0.1m，低于 ceiling_clearance(0.2)
+  // 低矮障碍点：相对车高 0.05m，低于固定的 CEILING_CLEARANCE(0.1)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
-  pt.z = 0.1F;
+  pt.z = 0.05F;
   pt.intensity = 0;
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
   ASSERT_EQ(state().terrain_cloud_elev->points.size(), 1U);
-  // height_above_ground = 0.1 - 0 = 0.1，写入 intensity
-  EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.1F, 1e-6);
+  // height_above_ground = 0.05 - 0 = 0.05，写入 intensity
+  EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.05F, 1e-6);
 }
 
 // ── keepTerrainVoxelPoint boundary tests (via updateTerrainVoxels) ──
@@ -838,7 +836,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
   pcl::PointXYZI pt;
   pt.x = 0.0F;
   pt.y = 0;
-  pt.z = 0.1F;
+  pt.z = 0.05F;
   pt.intensity = 0;
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);

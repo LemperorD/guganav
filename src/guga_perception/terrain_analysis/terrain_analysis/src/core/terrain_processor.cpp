@@ -187,10 +187,13 @@ namespace terrain_analysis {
       // 上界用**相对车高**：天花板/横梁是否妨碍通行取决于车顶净空，故与
       // 车顶挂钩。窄隧道里这类点占比大，混入分位数会抬高 elev，导致真实
       // 地面点高度差变为负值丢失、天花板点高度差落入障碍区间。
+      // 该上界由 TerrainGrid::CEILING_CLEARANCE 固定（0.1 < max_relative_z），
+      // 故 max_relative_z 在本阶段不参与。
       const double relative_z = point.z - vehicle_z;
-      if (relative_z >= config_.ceiling_clearance) {
+      if (relative_z >= TerrainGrid::CEILING_CLEARANCE) {
         continue;
       }
+
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
                                                 point.y);
       if (!grid_index.valid) {
@@ -314,8 +317,8 @@ namespace terrain_analysis {
         continue;
       }
       // 车顶上方达到安全间隙的点（天花板/横梁）不输出为障碍：
-      // 只要顶隙 >= ceiling_clearance，车辆即可从下方通过（隧道场景）。
-      if (relative_z >= config_.ceiling_clearance) {
+      // 只要顶隙 >= CEILING_CLEARANCE，车辆即可从下方通过（隧道场景）。
+      if (relative_z >= TerrainGrid::CEILING_CLEARANCE) {
         continue;
       }
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
