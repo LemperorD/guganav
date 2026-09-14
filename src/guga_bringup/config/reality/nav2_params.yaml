@@ -111,8 +111,7 @@ terrain_analysis:
     considerDrop: False                 # 考虑凹下去的地面,开启则将相对于地面点的高度取绝对值
     limitGroundLift: False
     maxGroundLift: 0.3
-    clearDyObs: True                    # 清除动态物体的话，有动态物体走过的地方就走不了了
-    minDyObsDis: 0.3                    # 以下参数都是在 clear_dy_obs 的情况下才有用的
+    minDyObsDis: 0.3
     minDyObsAngle: 0.0
     minDyObsRelZ: -0.3
     absDyObsRelZThre: 0.2

@@ -211,10 +211,8 @@ namespace terrain_analysis {
 
     estimateGround();
 
-    if (config_.clear_dy_obs) {
-      detectDynamicObstacles();
-      filterDynamicObstaclePoints();
-    }
+    detectDynamicObstacles();
+    filterDynamicObstaclePoints();
 
     computeElevation();
     computeHeightMap();
@@ -484,8 +482,7 @@ namespace terrain_analysis {
         continue;
       }
       size_t cell = TerrainGrid::planarVoxelIndex(row, col);
-      if (state_.planar_voxel_dy_obs[cell] >= config_.min_dy_obs_point_num
-          && config_.clear_dy_obs) {
+      if (state_.planar_voxel_dy_obs[cell] >= config_.min_dy_obs_point_num) {
         continue;
       }
 

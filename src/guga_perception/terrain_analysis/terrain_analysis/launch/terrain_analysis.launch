@@ -9,7 +9,6 @@
     <param name="considerDrop" value="false" />
     <param name="limitGroundLift" value="false" />
     <param name="maxGroundLift" value="0.15" />
-    <param name="clearDyObs" value="true" />
     <param name="minDyObsDis" value="0.3" />
     <param name="minDyObsAngle" value="0.0" />
     <param name="minDyObsRelZ" value="-0.3" />

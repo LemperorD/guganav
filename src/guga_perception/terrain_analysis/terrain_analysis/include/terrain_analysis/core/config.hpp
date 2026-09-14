@@ -30,8 +30,6 @@ struct TerrainConfig {
   double max_ground_lift = 0.15;
 
   // 动态障碍过滤
-  /** @brief 是否启用动态障碍过滤。 */
-  bool clear_dy_obs = false;
   /** @brief 动态障碍检测的最小水平距离。 */
   double min_dy_obs_distance = 0.3;
   /** @brief 动态障碍检测的最小仰角，单位为弧度。 */

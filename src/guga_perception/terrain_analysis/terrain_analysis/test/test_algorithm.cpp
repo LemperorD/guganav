@@ -311,7 +311,6 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
 
 // ── detectDynamicObstacles ──
 TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
-  config().clear_dy_obs = true;
   config().min_dy_obs_distance = 5.0;  // high → all points "close"
   config().min_dy_obs_point_num = 7;
   state().vehicle_x = 0;
@@ -327,26 +326,6 @@ TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
   for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
     total += state().planar_voxel_dy_obs[i];
   }
-  EXPECT_GT(total, 0);
-}
-
-// clear_dy_obs 标志为 true 时仍然处理点云
-TEST_F(AlgorithmTest,
-       DetectDynamicObstacles_ClearInitEnabled_StillProcessesPoints) {
-  config().clear_dy_obs = true;
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().planar_voxel_dy_obs.fill(0);
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back({0.1F, 0, 0, 0});
-
-  runStage(stage::Id::DetectDynamic);
-
-  int total = 0;
-  for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-    total += state().planar_voxel_dy_obs[i];
-  }
-  // detects even when init flag is true — it always processes
   EXPECT_GT(total, 0);
 }
 
@@ -421,7 +400,6 @@ TEST_F(AlgorithmTest, DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
 // 高角度点（头顶悬挂物）清零对应 cell 的动态障碍计数
 TEST_F(AlgorithmTest,
        FilterDynamicObstaclePoints_HighAnglePoint_ResetsCellCounter) {
-  config().clear_dy_obs = true;
   config().min_dy_obs_angle = 10.0 * M_PI / 180.0;
   config().min_dy_obs_relative_z = -0.5;
   size_t cell = TerrainGrid::planarVoxelIndex(
@@ -440,7 +418,6 @@ TEST_F(AlgorithmTest,
 // 低角度点（地面/低障碍）保持 cell 计数不变
 TEST_F(AlgorithmTest,
        FilterDynamicObstaclePoints_LowAnglePoint_KeepsCellCounter) {
-  config().clear_dy_obs = true;
   config().min_dy_obs_angle = 90.0 * M_PI
                               / 180.0;  // nearly impossible to exceed
   config().min_dy_obs_relative_z = -0.5;
@@ -539,7 +516,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = true;
-  config().clear_dy_obs = false;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
@@ -570,7 +546,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
-  config().clear_dy_obs = false;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
@@ -639,7 +614,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
-  config().clear_dy_obs = false;
 
   // 天花板点：相对车高 0.26m，高于 ceiling_clearance(0.2)
   pcl::PointXYZI pt;
@@ -671,7 +645,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
-  config().clear_dy_obs = false;
 
   // 低矮障碍点：相对车高 0.1m，低于 ceiling_clearance(0.2)
   pcl::PointXYZI pt;
@@ -838,7 +811,7 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
 
 // ── computeHeightMap 过滤分支 ──
 
-// dy_obs 计数达标 + clear_dy_obs → 该 cell 被过滤
+// dy_obs 计数 ≥ min_dy_obs_point_num → 该 cell 被过滤
 TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
@@ -852,7 +825,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
   config().vehicle_height = 1.0;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
-  config().clear_dy_obs = true;
   config().min_dy_obs_point_num = 3;
 
   size_t cell = TerrainGrid::planarVoxelIndex(

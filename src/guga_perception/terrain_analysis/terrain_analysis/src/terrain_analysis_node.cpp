@@ -28,7 +28,6 @@ namespace terrain_analysis {
                                                  config.limit_ground_lift);
     config.max_ground_lift = declare_parameter("maxGroundLift",
                                                config.max_ground_lift);
-    config.clear_dy_obs = declare_parameter("clearDyObs", config.clear_dy_obs);
     config.min_dy_obs_distance = declare_parameter("minDyObsDis",
                                                    config.min_dy_obs_distance);
     config.min_dy_obs_angle = declare_parameter("minDyObsAngle",
