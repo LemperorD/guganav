@@ -89,6 +89,19 @@ namespace terrain_analysis {
     }
 
   private:
+    // ── 无状态工具（不依赖 config_/state_，故为静态成员）──
+    /**
+     * @brief 把一维坐标换算成网格下标（terrain / planar 两种网格共用）。
+     * @param coordinate 待换算的坐标。
+     * @param vehicle_coordinate 车辆在同一轴上的坐标。
+     * @param voxel_size 对应网格的体素边长。
+     * @param half_width 对应网格的半边长（格）。
+     * @return 网格下标；越界判定由调用方负责。
+     */
+    [[nodiscard]] static int toVoxelIndex(double coordinate,
+                                          double vehicle_coordinate,
+                                          double voxel_size, int half_width);
+
     // ── 网格操作私有类型 ──
     /** @brief 网格轴向。 */
     enum class Axis : uint8_t { AXIS_X, AXIS_Y };

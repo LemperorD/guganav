@@ -17,19 +17,16 @@
 
 namespace terrain_analysis {
 
-  namespace {
-
-    int toVoxelIndex(double point_cloud, double vehicle_cloud,
-                     double voxel_size, int half_width) {
-      const double half_voxel_size = voxel_size / 2;
-      int cell = static_cast<int>(
-                     std::floor((point_cloud - vehicle_cloud + half_voxel_size)
-                                / voxel_size))
-                 + half_width;
-      return cell;
-    }
-
-  }  // namespace
+  int TerrainProcessor::toVoxelIndex(double coordinate,
+                                     double vehicle_coordinate,
+                                     double voxel_size, int half_width) {
+    const double half_voxel_size = voxel_size / 2;
+    int cell =
+        static_cast<int>(std::floor(
+            (coordinate - vehicle_coordinate + half_voxel_size) / voxel_size))
+        + half_width;
+    return cell;
+  }
 
   double TerrainProcessor::horizontalDistanceTo(double px, double py) const {
     return sqrt(((px - state_.vehicle_x) * (px - state_.vehicle_x))
