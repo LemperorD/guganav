@@ -31,13 +31,74 @@ tf_odom_to_lidar = tf(base_footprint→lidar) * tf(Point-LIO 位姿)
 ```
 
 即它是 **`base_footprint` 相对 odom 原点**的高度，而 **odom 原点是 Point-LIO 启动
-时定下的**——没有任何保证"`vehicle_z ≈ 0` 时车正好在地面上"。若启动时雷达离地
-0.3 m，则全程带 0.3 m 常数偏置。而有两处把 `vehicle_z` 当基准：
+时定下的**——没有任何保证"`vehicle_z ≈ 0` 时车正好在地面上"。而有两处把 `vehicle_z`
+当基准：
 
 | 判据 | 形态 | 偏置后果 |
 | --- | --- | --- |
 | 净空上界（两阶段） | `point.z − vehicle_z >= CEILING_CLEARANCE(0.1)` | 允许进入的 10 cm 带随车整体平移 |
 | 下界 `min_relative_z` | `point.z − vehicle_z <= −1.5` | 同样平移 |
+
+### terrain 用的 vehicle 从哪来（已核实）
+
+`terrain_analysis_node.cpp` 直接把消息里的位置塞进状态，**无 TF 查询、无 frame 换算、
+无偏置补偿**：
+
+```cpp
+processor_.ingestOdometry(msg->pose.pose.position.x,   // → state_.vehicle_x
+                          msg->pose.pose.position.y,   // → state_.vehicle_y
+                          msg->pose.pose.position.z,   // → state_.vehicle_z
+                          roll, pitch, yaw);           // 由四元数 getRPY 解出
+```
+
+三点结论：
+
+1. **参考系是 `odom` 而非 `map`**：订阅的 `lidar_odometry` 与发布的 `terrain_map`
+   都标 `frame_id = odom`，terrain 全程不知道 `map` 存在。实车默认 `slam:=False`
+   （走 GICP 重定位）时，terrain 的 `vehicle_*` 与"车在地图里的位置"差一个
+   `map→odom` 变换。
+2. **`vehicle_z` 是 `base_footprint` 的高度**，因 `loam_interface` 做了
+   `tf(odom→base_footprint) = tf(base_footprint→lidar) * tf(Point-LIO 位姿)`。
+3. **姿态来自消息四元数、不是 TF**：`chassis→front_mid360` 有 −10° 安装 roll，
+   `loam_interface` 已把它折进 `odom→base_footprint`，故 terrain 拿到的 roll 是
+   车体姿态、不含该倾角。
+
+### 高度链（实车，`static_tf_publisher_launch.py`）
+
+| 变换 | z |
+| --- | --- |
+| `base_footprint → chassis` | +0.123 |
+| `chassis → front_mid360` | +0.107（另 x=+0.225、roll=−π/18、yaw=−π/2） |
+| **合计 `base_footprint → front_mid360`** | **+0.230 m** |
+
+### 雷达标定点是 O（探测中心），不是底面
+
+据 [Livox Mid-360 User Manual](https://terra-1-g.djicdn.com/65c028cd298f4669a7f0e40e50ba1131/Mid360/Livox_Mid-360_User_Manual_EN.pdf)
+第 11 页 Coordinates 节："Point O is the origin, and O-XYZ is the point cloud
+coordinates"，配图尺寸 60.0±0.5（俯视直径）、39.5、14.3、7° 光学轴倾角。安装要求
+另注明"Use the bottom surface for mounting"。
+
+⇒ **点云坐标以 O 为原点**，故 ROS 里 `front_mid360` frame 对应 **O**；O 在本体内部，
+距底面约 **39.5 mm**。因此上表 0.230 是 **base_footprint 到 O 的高度差**，
+到底面约为 0.230 − 0.0395 ≈ **0.190 m**。
+
+**由此**：
+
+```
+vehicle_z = (地面到 O 的高度) − 0.230
+```
+
+而 `CEILING_CLEARANCE = 0.1`（作用面在 O 下方 0.1 m）与 `minRelZ = −1.5` 都锚在
+**探测中心**上，其物理含义取决于"O 离地多高"这个**装机尺寸，不在本仓库内**。
+另外 `groundFloorZ = −2.0` 是**绝对 z**，与车高无关——若实际地面 z ≈ −0.23，
+该地板离地尚有约 1.77 m 余量，形同虚设。
+
+**须向机械队员确认（待问）**：
+
+1. 实车 **O（雷达探测中心）离地高度** 是多少 → 直接定出 `vehicle_z = 该值 − 0.230`；
+2. URDF/网格里 **`front_mid360` 这一 frame 的原点是否放在 O 处**（若当初按底面建模，
+   会整体差 39.5 mm；那三个数 x=0.225 / z=0.107 也应是在 chassis 系下量到 O 的）；
+3. 底盘基准面到雷达**底面**的实测距离 → 自检：应约等于 `0.230 − 0.0395 ≈ 0.190 m`。
 
 **为何"近处"最明显**：`ingestLaserCloud` 的裁剪带是
 `min/max_relative_z ± disRatioZ × distance`，**带宽随距离放宽**；而净空是
