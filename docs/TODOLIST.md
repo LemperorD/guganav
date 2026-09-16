@@ -6,7 +6,7 @@
 | 感知 | Point-LIO 重构：代码太乱，不急，可先当黑盒用 | `point_lio` |
 | 感知（实车） | 低矮障碍物无法识别 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | 眼前（近距）障碍物识别异常 | `terrain_analysis` / `rog_map_layer` |
-| 感知（实车，进行中） | 近处低地面点被错误忽略；怀疑与实车 `vehicle_z` 基准未标定有关 | `terrain_analysis` |
+| 感知（实车） | **待实测验证**：`vehicle_z` 基准（已按 O 离地 255 mm 推算为 −0.230，需实车读数确认） | `terrain_analysis` |
 | 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留） | `slam_toolbox`（外部依赖）/ `terrain_analysis_ext` |
 | 感知 | `terrain_analysis_ext` 已退化为近场半径过滤器：全局代价地图实际只拿到 4 m 地形，而配置按 10 m 工作 | `terrain_analysis_ext` / `terrain_analysis` |
 | 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价 | `terrain_analysis` |
@@ -14,9 +14,44 @@
 | 控制（实车） | 避障后退方向错误：朝 chassis 后方运动，而非背离障碍物 | `pb_omni_pid_pursuit_controller` |
 | 重构 | `ui_types.hpp` 里全是魔法数字，待修复 | `guga_ui_common` |
 
-## 进行中：近处低地面点被忽略
+## 已修复待验证：近处低地面点被忽略
 
 **现象**：实车近处的低地面点被错误忽略（远处正常）。
+
+### 已完成的修复（2026-09 提交 34be0f4）
+
+**根因（已定位）**：`estimateTerrainGround` 里有一条 `CEILING_CLEARANCE` 上界，
+按**车高**筛地面候选。以实测标定值（O 离地 255 mm、`vehicle_z ≈ −0.230`）代入，
+其作用面是 `point.z ≥ −0.130`，即**离地仅 0.125 m**——凡高于脚踝的点全部被当
+"天花板"丢弃。这是**设计问题**（净空是"障碍能否通过"的判据，与"哪些点属于地面"
+无关），不是标定问题。
+
+**修复内容**：
+
+1. 从 `estimateTerrainGround` **移除**该净空上界，该阶段现只保留下界
+   `ground_floor_z`（绝对 z）。`CEILING_CLEARANCE` 现仅由 `computeHeightMap`
+   使用，语义唯一。
+2. `groundFloorZ` 由 `−2.0` 改为 **`−0.45`**（原值离地尚有 1.75 m 余量，形同虚设）。
+3. 测试 `EstimateTerrainGround_CeilingPoint_ExcludedFromElevation` 断言的正是被
+   移除的行为，改为 `AboveCeilingClearance_StillParticipates`；README 风险节
+   的 3、4 标为已修复，风险 1 记为已部分修复。
+
+**已验证**（合成点云）：10% 上坡时，修复前 `d ≥ 1.25 m` 的地面点全被丢弃
+（该范围输出为 0），修复后 x 每 0.5 m 分箱均约 40 点、**连续无截断**。平地与
+0/10/20% 坡的"输出点与真实地面最大偏差"均为 0.0000 m。
+
+### 待实测确认（下次）
+
+推算用的 `O 离地 255 mm` 来自机械队员口述；`vehicle_z ≈ −0.230` 由
+`base_footprint→O = 0.230` 推得，**尚未在实车验证**。请读：
+
+```bash
+ros2 topic echo /lidar_odometry --field pose.pose.position --once
+```
+
+- 若静止时 `z ≈ −0.230` → 推算成立，本次修复即为正解；
+- 若明显不同（尤其接近 0）→ TF 链与装机不符，需按实测重设 `groundFloorZ`
+  与净空基准（并把该值反馈回本文件）。
 
 **已排除**：3×3 邻域膨胀（`addToPlanarNeighborhood3x3`）。实验：把膨胀改成只写
 中心格，下沉区输出**完全不变**（96 点）；且实测 `planar_voxel_elev` 精确落在实际
