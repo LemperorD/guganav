@@ -561,16 +561,19 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
   EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
 }
 
-// 车顶上方超过安全间隙的点（天花板）不参与地面估计，防止 elev 被抬高后
-// 地面点高度差变负、天花板点高度差落入障碍区间（窄隧道场景）
+// 高于净空的点同样参与地面估计：净空筛选已从本阶段移除（见下方断言注释）
 TEST_F(AlgorithmTest,
-       EstimateTerrainGround_CeilingPoint_ExcludedFromElevation) {
+       EstimateTerrainGround_AboveCeilingClearance_StillParticipates) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
   state().terrain_cloud->clear();
-  // 天花板点：距地面 0.26m（模拟 260mm 顶隙的隧道；测试中 planar_voxel_elev
-  // 为 0，故等于其 z），高于固定的 CEILING_CLEARANCE(0.1)，位于车辆正上方
+  // 高于 CEILING_CLEARANCE(0.1) 的点**现在也参与**地面估计——净空判据已从本
+  // 阶段移除，只保留在 computeHeightMap（障碍输出）。
+  // 理由：净空是"障碍能否通过"的判据，与"哪些点属于地面"无关；留在这里会按
+  // 车高砍掉抬升的地面（坡面），并让候选数随车高漂移、经分位数放大成 elev
+  // 偏差。 新暴露的风险：隧道天花板若未被 ingest 的高度过滤挡下，会抬高 elev
+  // 使真实 地面点丢失——实车偏置下 ingest 上界(z≈0.27)已先挡掉，故暂不构成问题。
   state().terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
@@ -578,7 +581,7 @@ TEST_F(AlgorithmTest,
   size_t center = TerrainGrid::planarVoxelIndex(
       TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
       TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
-  EXPECT_TRUE(state().planar_point_elev[center].empty());
+  EXPECT_EQ(state().planar_point_elev[center].size(), 1U);
 }
 
 // 车顶下方/间隙内的点仍正常参与地面估计

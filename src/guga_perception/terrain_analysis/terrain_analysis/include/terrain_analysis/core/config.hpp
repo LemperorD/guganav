@@ -72,8 +72,13 @@ struct TerrainConfig {
   /** @brief 地面候选的绝对高度地板（odom z）：低于该值的点不参与地面估计。
    *
    *  用绝对量而非"相对车辆"：地面在 odom 中大体水平，且该阈值不应随车体
-   *  俯仰/上下抖动而移动。仅由 estimateTerrainGround 使用。 */
-  double ground_floor_z = -2.0;
+   *  俯仰/上下抖动而移动。仅由 estimateTerrainGround 使用，且是该阶段**唯一**
+   *  的候选筛选（原有的净空上界已移除，见该函数注释）。
+   *
+   *  取值须贴近实际地面 z，否则形同虚设：odom 原点在雷达探测中心 O，实测
+   *  O 离地 255 mm ⇒ 地面 z ≈ −0.255、vehicle_z ≈ −0.230，故取地面下方约
+   *  0.2 m（≈ −0.45）。若换车或改安装，需按新实测值重设。 */
+  double ground_floor_z = -0.45;
 
   // 网格分辨率
   /** @brief 地形体素边长。 */

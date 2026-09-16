@@ -174,25 +174,18 @@ namespace terrain_analysis {
   void TerrainProcessor::estimateTerrainGround() {
     resetPlanarVoxels();
 
-    const double vehicle_z = state_.vehicle_z;
-
     for (const auto& point : state_.terrain_cloud->points) {
-      // 下界用**绝对 z**（odom）：地面在 odom 中大体水平，地板过滤只需挡住
-      // 远低于地面的穿透点，用绝对量比"相对车辆"更贴合语义，也不随车体
-      // 上下抖动而移动。
+      // 唯一的候选筛选是下界，且用**绝对 z**（odom）：地面在 odom 中大体水平，
+      // 地板过滤只需挡住远低于地面的穿透点，用绝对量比"相对车辆"更贴合语义，
+      // 也不随车体上下抖动而移动。
       if (point.z <= config_.ground_floor_z) {
         continue;
       }
-      // 上界用**相对车高**：天花板/横梁是否妨碍通行取决于车顶净空，故与
-      // 车顶挂钩。窄隧道里这类点占比大，混入分位数会抬高 elev，导致真实
-      // 地面点高度差变为负值丢失、天花板点高度差落入障碍区间。
-      // 该上界由 TerrainGrid::CEILING_CLEARANCE 固定（0.1 < max_relative_z），
-      // 故 max_relative_z 在本阶段不参与。
-      const double relative_z = point.z - vehicle_z;
-      if (relative_z >= TerrainGrid::CEILING_CLEARANCE) {
-        continue;
-      }
-
+      // 这里曾有一条 CEILING_CLEARANCE 上界（"车顶上方安全间隙"）。已移除：
+      // 净空是**障碍输出**的判据（车辆能否从下方通过），与"哪些点属于地面"
+      // 无关；放在本阶段只会按车高砍掉抬升的地面（坡面），并使候选数随车高
+      // 漂移、经分位数放大成 elev 偏差。地面候选的上界改由地面自身决定——
+      // 高于地面的部分本就是障碍，会由 computeHeightMap 按净空处理。
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
                                                 point.y);
       if (!grid_index.valid) {

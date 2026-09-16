@@ -79,46 +79,47 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 | 参考系 | 定义 | 使用位置 |
 | ------ | ---- | -------- |
-| odom 世界系 | `point.z` 绝对值 | `terrain_voxel_cloud` 的存量、`planar_voxel_elev` 的数值 |
-| 车辆系 | `relative_z = point.z − state_.vehicle_z` | `ingestLaserCloud` 裁剪带、`estimateTerrainGround` 的两个过滤 |
-| 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的 `height_above_ground`、输出 intensity |
+| odom 世界系 | `point.z` 绝对值 | `terrain_voxel_cloud` 的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `ground_floor_z` |
+| 车辆系 | `relative_z = point.z − state_.vehicle_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `min_relative_z` |
+| 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity |
 
-### 风险 1：前置筛选（车辆系）与判据（地面系）错位 —— 上坡时会失效
+### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
 
-`ingestLaserCloud` 的裁剪带带坡度补偿 `z_margin = disRatioZ × distance`，
-但 `estimateTerrainGround` 的 `ceiling_clearance` 过滤是**常数、不随距离放宽**：
+`ingestLaserCloud` 的裁剪带是 `min/max_relative_z ± disRatioZ × distance`，**带宽随
+距离放宽**（近处 ≈ 0，远处 5 m 处 ±1.0 m）。而 `estimateTerrainGround` 原有的净空
+上界是**常数**，会把抬升的地面按车高砍掉（坡面失效）。
 
-```cpp
-if (relative_z >= config_.ceiling_clearance) continue;   // 车辆系，0.2 固定
-```
-
-后果：上坡时车前 5 m 处地面相对车可达 +1 m（`disRatioZ` 注释本身预期了这一点），
-这些地面点**在候选筛选阶段就被剔除**，该处 `planar_voxel_elev` 无候选或偏差，
-后续地面系的高度判据也就失去正确基准。即"点云收进来了，又被 ceiling 扔掉"。
+**该净空上界已移除**（见下节风险 3），地面候选现只受绝对地板 `ground_floor_z` 约束。
+但裁剪带仍是车辆系、且近处带宽极窄（约 0.2 m），故 `vehicle_z` 的标定误差在**近处**
+仍会直接决定"地面点能否进入管线"——远处因带宽放宽而被掩盖。这与仓库根
+`docs/TODOLIST.md` 记录的"近处低地面点被忽略"直接相关。
 
 ### 风险 2：候选筛选与地面估计互为前提（循环依赖）
 
 筛候选想用"高出局部地面多少"，但局部地面 `elev` 正需要候选才能算。
 当前用车辆系绕开了这个循环，代价就是风险 1。
 
-### 风险 3：一个参数兼两种语义
+### 风险 3（已修复）：一个参数兼两种语义 → 现仅用于障碍输出
 
-`ceilingClearance` 同时表示：
+`CEILING_CLEARANCE` 原先同时表示"隧道净空"（车体属性）与"地面候选高度上限"
+（地形属性），调其一必动另一。现已从 `estimateTerrainGround` 移除，**只由
+`computeHeightMap` 使用**，语义唯一：距**局部地面**达到该值的点不作为障碍输出。
 
-- 隧道能否从下方通过的**车顶净空**（车体属性）；
-- 地面候选的**高度上限**（地形属性）。
+它也不再与 `max_relative_z` 竞争"上界"角色（后者现仅用于 `ingestLaserCloud`
+与 `keepTerrainVoxelPoint`）。
 
-因此为修坡面而调它，会同时改变隧道通过性。YAML 注释也承认了双重用途
-（"不算障碍**且不参与地面估计**"）。
+### 风险 4（已修复）：`maxRelZ` 曾是死配置
 
-### 风险 4：`maxRelZ` 在本阶段是死配置
+原在 `estimateTerrainGround` 与 `computeHeightMap` 中，`relative_z >= max_relative_z`
+永不生效（更紧的净空上界先行）。两处条件均已移除；`maxRelZ` 现仅在
+`ingestLaserCloud` 与 `keepTerrainVoxelPoint` 生效，不再是死参数。
 
-当 `ceilingClearance < maxRelZ`（当前 `0.2 < 0.5`）时，两个条件都在约束
-`relative_z` 的**上界**，前者严格更紧，故 `relative_z >= max_relative_z` 永不生效。
-实测：把 `maxRelZ` 由 0.5 放到 5.0，输出逐点不变。
+### 功能性风险：`CEILING_CLEARANCE` 同时是"可输出障碍的高度上限"
 
-⇒ 调 `maxRelZ` 对地面估计无任何影响，容易被误认为在生效。
-（`maxRelZ` 在 `ingestLaserCloud` 里仍然有效，不能删。）
+它现在是障碍输出的硬上界，即**距地面高于 0.1 m 的点一律不输出为障碍**。这与
+`vehicle_height`（默认 1.5，yaml 0.5，"低于此值才算障碍"）的意图不一致——实际
+生效的是更严的 0.1。对地形分析用途这个值偏小，会导致**除脚踝以下全部漏检**。
+隧道场景下 0.1 有裕量（实测顶隙约 260 mm），但开阔场地应重新评估。
 
 ### 风险 5：索引相对、数值绝对
 
@@ -131,8 +132,8 @@ if (relative_z >= config_.ceiling_clearance) continue;   // 车辆系，0.2 固�
 1. **判据统一到地面系**：障碍高度与地面候选筛选都以"距局部地面"为准；
 2. **两遍法破循环**：先用最低点估粗地面（最低点对障碍不敏感、坡面稳定），
    再以粗地面为基准筛候选，最后用分位数正式估 `elev`；
-3. **拆开 `ceilingClearance`**：车顶净空（隧道）与地面候选高度上限分离，
-   使二者可独立调参；
+3. ~~**拆开 `ceilingClearance`**~~ **已完成**：净空判据已从地面估计阶段移除，
+   现只用于障碍输出（见风险 3）；
 4. 车辆系只保留给**车辆/传感器自身的量**：点云裁剪窗口（车体属性），
    以及以局部地面为基准表达的车顶净空。
 
