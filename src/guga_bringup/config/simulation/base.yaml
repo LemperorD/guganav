@@ -121,7 +121,7 @@ terrain_analysis:
     maxDyObsVFOV: 33.0
     minDyObsPointNum: 1
     minBlockPointNum: 10
-    vehicleHeight: 0.5                  # 小于车辆高度的点才会进行处理
+    vehicleHeight: 0.52                  # 小于车辆高度的点才会进行处理
     ceilingClearance: 0.62              # 障碍输出上界(距局部地面)：按车体高度+100mm 设定（车高520mm→0.62）。必须 >= vehicleHeight，否则后者永不生效、高于该值的障碍全漏检。换车需按新尺寸改
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 1.0

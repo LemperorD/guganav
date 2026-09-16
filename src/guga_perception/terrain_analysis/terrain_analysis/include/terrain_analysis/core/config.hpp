@@ -49,7 +49,7 @@ struct TerrainConfig {
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;
   /** @brief 高度小于该值的障碍点才会输出。按实车车体高度设定。 */
-  double vehicle_height = 0.5;
+  double vehicle_height = 0.52;
   /** @brief 障碍输出上界：距**局部地面**达到该值的点不作为障碍（车辆可从其
    *  下方通过，或高于车体不构成碰撞威胁）。
    *
