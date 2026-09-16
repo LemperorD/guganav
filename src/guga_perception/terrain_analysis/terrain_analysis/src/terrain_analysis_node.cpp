@@ -12,6 +12,30 @@
 
 namespace terrain_analysis {
 
+  namespace {
+
+    /**
+     * @brief 校验高度参数之间被代码隐含依赖的关系，不满足时提示用户。
+     *
+     * computeHeightMap 的障碍输出先按 ceilingClearance 裁掉高点，再用
+     * vehicleHeight 判"是否算障碍"。若 ceilingClearance < vehicleHeight，
+     * 实际生效的上限是前者，vehicleHeight 永远轮不到——表现为"高于某高度
+     * 的障碍全部漏检"。二者无编译期约束，故在启动时校验。
+     */
+    void warnOnHeightParams(const TerrainConfig& config) {
+      if (config.ceiling_clearance < config.vehicle_height) {
+        RCLCPP_WARN(
+            rclcpp::get_logger("terrain_analysis"),
+            "ceilingClearance(%.3f) < vehicleHeight(%.3f)：障碍输出的实际上界"
+            "是 ceilingClearance，vehicleHeight 不会生效，高于 %.3f m 的障碍将"
+            "全部漏检。建议按车体高度 + 100mm 设定 ceilingClearance。",
+            config.ceiling_clearance, config.vehicle_height,
+            config.ceiling_clearance);
+      }
+    }
+
+  }  // namespace
+
   TerrainAnalysis::TerrainAnalysis(const rclcpp::NodeOptions& options)
       : Node("terrain_analysis", options) {
     TerrainConfig& config = processor_.config();
@@ -46,6 +70,8 @@ namespace terrain_analysis {
                                                    config.min_block_point_num);
     config.vehicle_height = declare_parameter("vehicleHeight",
                                               config.vehicle_height);
+    config.ceiling_clearance = declare_parameter("ceilingClearance",
+                                                 config.ceiling_clearance);
     config.voxel_point_update_thre = declare_parameter(
         "voxelPointUpdateThre", config.voxel_point_update_thre);
     config.voxel_time_update_thre = declare_parameter(
@@ -60,6 +86,8 @@ namespace terrain_analysis {
     config.min_dy_obs_angle *= M_PI / 180.0;
     config.min_dy_obs_vfov *= M_PI / 180.0;
     config.max_dy_obs_vfov *= M_PI / 180.0;
+
+    warnOnHeightParams(config);
 
     sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "lidar_odometry", 5,

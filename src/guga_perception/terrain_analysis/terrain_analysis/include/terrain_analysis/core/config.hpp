@@ -48,8 +48,19 @@ struct TerrainConfig {
   // 无数据区域和障碍高度过滤
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;
-  /** @brief 高度小于该值的障碍点才会输出。 */
-  double vehicle_height = 1.5;
+  /** @brief 高度小于该值的障碍点才会输出。按实车车体高度设定。 */
+  double vehicle_height = 0.5;
+  /** @brief 障碍输出上界：距**局部地面**达到该值的点不作为障碍（车辆可从其
+   *  下方通过，或高于车体不构成碰撞威胁）。
+   *
+   *  按实车车体高度 + 100 mm 安全间隙设定（当前车高 520 mm → 0.62）。
+   *  因车高随车而异（后续有第二台车），故为 ROS 参数而非编译期常量。
+   *
+   *  注意它与 vehicle_height 的分工：本值必须 **≥ vehicle_height**，否则
+   *  vehicle_height 永远轮不到生效——可输出障碍的上限会被本值压住。
+   *  例如车高 520 mm 时若本值取 0.1，则离地 0.1 m 以上的点全被丢弃，
+   *  等价于除脚踝以下全部漏检。节点启动时会校验该关系并告警。 */
+  double ceiling_clearance = 0.62;
   // 体素更新和点云范围
   /** @brief 触发体素重建的累计更新点数阈值。 */
   int voxel_point_update_thre = 100;

@@ -181,7 +181,7 @@ namespace terrain_analysis {
       if (point.z <= config_.ground_floor_z) {
         continue;
       }
-      // 这里曾有一条 CEILING_CLEARANCE 上界（"车顶上方安全间隙"）。已移除：
+      // 这里曾有一条 ceiling_clearance 上界（"净空"）。已移除：
       // 净空是**障碍输出**的判据（车辆能否从下方通过），与"哪些点属于地面"
       // 无关；放在本阶段只会按车高砍掉抬升的地面（坡面），并使候选数随车高
       // 漂移、经分位数放大成 elev 偏差。地面候选的上界改由地面自身决定——
@@ -303,7 +303,7 @@ namespace terrain_analysis {
       // 上界：距地面达到安全间隙的点（天花板/横梁）不输出为障碍——
       // 净空足够时车辆可从下方通过（隧道场景）。以**局部地面**为基准：
       // 净空是"地面到障碍下沿"的距离，这也使判据在坡面上保持一致。
-      if (height_above_ground >= TerrainGrid::CEILING_CLEARANCE) {
+      if (height_above_ground >= config_.ceiling_clearance) {
         continue;
       }
       if (state_.planar_voxel_dy_obs[cell] >= config_.min_dy_obs_point_num) {

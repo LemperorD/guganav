@@ -568,7 +568,7 @@ TEST_F(AlgorithmTest,
   state().vehicle_y = 0;
   state().vehicle_z = 0;
   state().terrain_cloud->clear();
-  // 高于 CEILING_CLEARANCE(0.1) 的点**现在也参与**地面估计——净空判据已从本
+  // 高于 ceiling_clearance 的点**现在也参与**地面估计——净空判据已从本
   // 阶段移除，只保留在 computeHeightMap（障碍输出）。
   // 理由：净空是"障碍能否通过"的判据，与"哪些点属于地面"无关；留在这里会按
   // 车高砍掉抬升的地面（坡面），并让候选数随车高漂移、经分位数放大成 elev
@@ -620,9 +620,9 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
+  config().ceiling_clearance = 0.2;  // 显式设定，不依赖默认值（随车高而异）
 
-  // 天花板点：距地面 0.26m（planar_voxel_elev=0），高于固定的
-  // CEILING_CLEARANCE(0.1)
+  // 天花板点：距地面 0.26m（planar_voxel_elev=0），高于 ceiling_clearance(0.2)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
@@ -651,9 +651,10 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
+  config().ceiling_clearance = 0.2;  // 显式设定，不依赖默认值（随车高而异）
 
-  // 低矮障碍点：距地面 0.05m（planar_voxel_elev=0），低于固定的
-  // CEILING_CLEARANCE(0.1)
+  // 低矮障碍点：距地面 0.05m（planar_voxel_elev=0），低于
+  // ceiling_clearance(0.2)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
