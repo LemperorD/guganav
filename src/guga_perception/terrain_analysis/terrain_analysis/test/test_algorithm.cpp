@@ -37,7 +37,7 @@ namespace terrain_analysis {
 
     void resetState() {
       processor_.state_ = {};
-      processor_.voxel_map_ = TerrainVoxelMap{};
+      voxel_map_ = TerrainVoxelMap{};
       for (auto& ptr : voxelMap().cells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
       }
@@ -64,16 +64,10 @@ namespace terrain_analysis {
               state().laser_cloud_time - state().system_init_time);
           break;
         case stage::Id::COLLECT:
-          processor_.collectTerrainCloud();
+          voxelMap().collectCloud(*state().terrain_cloud);
           break;
         case stage::Id::ESTIMATE_TERRAIN_GROUND:
           processor_.estimateTerrainGround();
-          break;
-        case stage::Id::DETECT_DYNAMIC:
-          processor_.detectDynamicObstacles();
-          break;
-        case stage::Id::FILTER_DYNAMIC:
-          processor_.filterDynamicObstaclePoints();
           break;
         case stage::Id::PLANAR_ELEVATION:
           processor_.computePlanarElevation();
@@ -94,15 +88,15 @@ namespace terrain_analysis {
       return processor_.state_;
     }
     TerrainVoxelMap& voxelMap() {
-      return processor_.voxel_map_;
+      return voxel_map_;
     }
     LidarPose lidarPose() const {
       return processor_.state_.lidar;
     }
 
     // then trigger update. Returns the point count retained in the cell.
-    static int updateSinglePoint(TerrainProcessor& proc, double relative_z,
-                                 double distance) {
+    int updateSinglePoint(TerrainProcessor& proc, double relative_z,
+                          double distance) {
       TerrainConfig& config = proc.config_;
       TerrainState& state = proc.state_;
 
@@ -121,7 +115,7 @@ namespace terrain_analysis {
       int center_cell = TerrainGrid::terrainVoxelIndex(
           TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
           TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
-      auto& cell = *proc.voxel_map_.cells()[center_cell];
+      auto& cell = *voxel_map_.cells()[center_cell];
       cell.clear();
       pcl::PointXYZI point;
       point.x = static_cast<float>(distance);
@@ -130,14 +124,14 @@ namespace terrain_analysis {
       point.intensity = 0.0F;
       cell.push_back(point);
 
-      proc.voxel_map_.rebuild(config,
-                              {state.lidar.x, state.lidar.y, state.lidar.z},
-                              state.laser_cloud_time - state.system_init_time);
-      return static_cast<int>(
-          proc.voxel_map_.cells()[center_cell]->points.size());
+      voxel_map_.rebuild(config, state.lidar,
+                         state.laser_cloud_time - state.system_init_time);
+      return static_cast<int>(voxel_map_.cells()[center_cell]->points.size());
     }
 
     TerrainProcessor processor_;
+    /** @brief 跨帧持久的体素地图：由测试持有，按需喂给处理器。 */
+    TerrainVoxelMap voxel_map_;
   };
 }  // namespace terrain_analysis
 
@@ -317,131 +311,6 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
 
   EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.9F);
 }
-
-// ── detectDynamicObstacles ──
-TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
-  config().min_dy_obs_distance = 5.0;  // high → all points "close"
-  config().min_dy_obs_point_num = 7;
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().planar_voxel_dy_obs.fill(0);
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back({0.1F, 0, 0, 0});
-
-  runStage(stage::Id::DETECT_DYNAMIC);
-
-  int total = 0;
-  for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-    total += state().planar_voxel_dy_obs[i];
-  }
-  EXPECT_GT(total, 0);
-}
-
-// 传感器视角内的点触发动态障碍计数递增
-TEST_F(AlgorithmTest,
-       DetectDynamicObstacles_PointInVfov_IncrementsCellCounter) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().cos_lidar_roll = 1;
-  state().sin_lidar_roll = 0;
-  state().cos_lidar_pitch = 1;
-  state().sin_lidar_pitch = 0;
-  state().cos_lidar_yaw = 1;
-  state().sin_lidar_yaw = 0;
-  state().planar_voxel_dy_obs.fill(0);
-  state().terrain_cloud->clear();
-  // Point at moderate distance, slightly elevated → within typical VFOV
-  state().terrain_cloud->push_back({1.0F, 0.1F, 0.3F, 0});
-
-  config().min_dy_obs_distance = 0.0;
-  config().min_dy_obs_point_num = 3;
-  config().min_dy_obs_angle = -1.0;  // below any realistic scan angle
-  config().min_dy_obs_relative_z = -1.0;
-  config().min_dy_obs_vfov = -0.5;  // radians, wide open
-  config().max_dy_obs_vfov = 0.5;
-  config().abs_dy_obs_relative_z_threshold = 0.01;  // tiny → rely on VFOV
-
-  runStage(stage::Id::DETECT_DYNAMIC);
-
-  int total = 0;
-  for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-    total += state().planar_voxel_dy_obs[i];
-  }
-  EXPECT_GT(total, 0);
-}
-
-// 传感器视角外的点不触发动态障碍计数
-TEST_F(AlgorithmTest, DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().cos_lidar_roll = 1;
-  state().sin_lidar_roll = 0;
-  state().cos_lidar_pitch = 1;
-  state().sin_lidar_pitch = 0;
-  state().cos_lidar_yaw = 1;
-  state().sin_lidar_yaw = 0;
-  state().planar_voxel_dy_obs.fill(0);
-  state().terrain_cloud->clear();
-  // Point far away → scan angle will be very shallow, outside VFOV
-  state().terrain_cloud->push_back({10.0F, 0.0F, 0.0F, 0});
-
-  config().min_dy_obs_distance = 0.0;
-  config().min_dy_obs_point_num = 3;
-  config().min_dy_obs_angle = -1.0;
-  config().min_dy_obs_relative_z = -1.0;
-  config().min_dy_obs_vfov = 0.1;  // narrow VFOV
-  config().max_dy_obs_vfov = 0.2;
-  config().abs_dy_obs_relative_z_threshold = 0.0;  // off
-
-  runStage(stage::Id::DETECT_DYNAMIC);
-
-  int total = 0;
-  for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
-    total += state().planar_voxel_dy_obs[i];
-  }
-  EXPECT_EQ(total, 0);
-}
-
-// ── filterDynamicObstaclePoints ──
-// 高角度点（头顶悬挂物）清零对应 cell 的动态障碍计数
-TEST_F(AlgorithmTest,
-       FilterDynamicObstaclePoints_HighAnglePoint_ResetsCellCounter) {
-  config().min_dy_obs_angle = 10.0 * M_PI / 180.0;
-  config().min_dy_obs_relative_z = -0.5;
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
-  state().planar_voxel_dy_obs[cell] = 10;
-  state().laser_cloud_crop->clear();
-  // high relative_z → angle close to 90° > 10°
-  state().laser_cloud_crop->push_back({0.05F, 0, 2.0F, 0});
-
-  runStage(stage::Id::FILTER_DYNAMIC);
-
-  EXPECT_EQ(state().planar_voxel_dy_obs[cell], 0);
-}
-
-// 低角度点（地面/低障碍）保持 cell 计数不变
-TEST_F(AlgorithmTest,
-       FilterDynamicObstaclePoints_LowAnglePoint_KeepsCellCounter) {
-  config().min_dy_obs_angle = 90.0 * M_PI
-                              / 180.0;  // nearly impossible to exceed
-  config().min_dy_obs_relative_z = -0.5;
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
-  state().planar_voxel_dy_obs[cell] = 10;
-  state().laser_cloud_crop->clear();
-  state().laser_cloud_crop->push_back({0.05F, 0, 0, 0});
-
-  runStage(stage::Id::FILTER_DYNAMIC);
-
-  EXPECT_EQ(state().planar_voxel_dy_obs[cell], 10);
-}
-
 // ── estimateTerrainGround ──
 
 // 栅格边缘点触发射线邻居越界检查，不崩溃
@@ -949,38 +818,4 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_EQ(voxelMap().cells()[center_cell]->points.size(), 1U);
-}
-
-// ── computeHeightMap 过滤分支 ──
-
-// dy_obs 计数 ≥ min_dy_obs_point_num → 该 cell 被过滤
-TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0);
-  for (auto& e : state().planar_point_elev) {
-    e = {0., 0.1, 0.2, 0.3, 0.4, 0.5};
-  }
-  config().min_block_point_num = 5;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().min_dy_obs_point_num = 3;
-
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
-  state().planar_voxel_dy_obs[cell] = 5;
-
-  pcl::PointXYZI pt;
-  pt.x = 0.0F;
-  pt.y = 0;
-  pt.z = 0.05F;
-  pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
-
-  runStage(stage::Id::HEIGHT_MAP);
-  EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
 }

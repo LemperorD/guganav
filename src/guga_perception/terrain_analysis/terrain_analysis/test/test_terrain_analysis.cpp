@@ -1,4 +1,5 @@
 #include "terrain_analysis/terrain_analysis_node.hpp"
+#include "terrain_analysis/core/terrain_voxel_map.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
 
@@ -32,6 +33,12 @@ namespace terrain_analysis {
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;
+
+    /** @brief 跨帧持久的体素地图：测试自己持有并逐帧喂给处理器。 */
+    TerrainVoxelMap& voxelMap() {
+      return voxel_map_;
+    }
+    TerrainVoxelMap voxel_map_;
   };
 
   // 纯平面地面点云经过全管线后不输出障碍点：地面落在
@@ -42,7 +49,7 @@ namespace terrain_analysis {
 
     auto cloud = MakeGroundCloud(21, 0.1, 0.01);
     sendCloud(cloud, 100.0);
-    terrain_->processor().run();
+    terrain_->processOnce();
 
     EXPECT_TRUE(terrain_->processor().terrainCloudElev().points.empty())
         << "Flat ground should not be emitted as obstacles";
@@ -56,7 +63,7 @@ namespace terrain_analysis {
 
     auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.06);
     sendCloud(cloud, 100.0);
-    terrain_->processor().run();
+    terrain_->processOnce();
 
     EXPECT_GT(terrain_->processor().terrainCloudElev().points.size(), 0U);
 
@@ -77,7 +84,7 @@ namespace terrain_analysis {
     pcl::PointXYZI obs{3.0F, 3.0F, 0.3F, 0};
     cloud->push_back(obs);
     sendCloud(cloud, 100.0);
-    terrain_->processor().run();
+    terrain_->processOnce();
 
     bool found_isolated = false;
     for (const auto& p : terrain_->processor().terrainCloudElev().points) {

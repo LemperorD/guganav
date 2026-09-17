@@ -1,6 +1,7 @@
 #pragma once
 
 #include "terrain_analysis/core/terrain_processor.hpp"
+#include "terrain_analysis/core/terrain_voxel_map.hpp"
 
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/node.hpp>
@@ -50,11 +51,17 @@ namespace terrain_analysis {
     [[nodiscard]] const TerrainProcessor& processor() const noexcept {
       return processor_;
     }
+    /** @brief 跨帧持久的体素地图；由节点持有并逐帧分发给处理器。 */
+    [[nodiscard]] TerrainVoxelMap& voxelMap() noexcept {
+      return voxel_map_;
+    }
 
   private:
     /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
 
+    /** @brief 跨帧持久的体素地图：节点是它的属主，处理器按帧接收。 */
+    TerrainVoxelMap voxel_map_;
     TerrainProcessor processor_;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;

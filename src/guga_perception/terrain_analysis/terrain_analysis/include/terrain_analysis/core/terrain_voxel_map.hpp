@@ -55,6 +55,15 @@ namespace terrain_analysis {
     void rebuild(const TerrainConfig& config, const LidarPose& lidar,
                  double now_elapsed);
 
+    /**
+     * @brief 采集地图中央窗口内的累积点云。
+     *
+     * 取以雷达为中心的 11x11 格（约 ±5.5 m）——窗口大小是网格布局自身的事实，
+     * 因此由地图类持有，而不是让调用方记住。
+     * @param out 输出容器，会被清空后填入采集结果。
+     */
+    void collectCloud(Cell& out) const;
+
     /** @brief 只读访问所有格子。 */
     [[nodiscard]] const std::array<Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM>&
     cells() const noexcept {
@@ -86,6 +95,9 @@ namespace terrain_analysis {
                                         double now_elapsed);
 
   private:
+    /** @brief 采集窗口的半宽（格数）：以雷达为中心的 11x11 格。 */
+    static constexpr int EXTRACT_HALF_WINDOW = 5;
+
     /** @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。 */
     void shift(bool along_x, bool toward_positive);
 

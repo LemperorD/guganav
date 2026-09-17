@@ -61,16 +61,39 @@ namespace terrain_analysis {
         double timestamp_sec);
 
     /**
-     * @brief 执行一次完整地形分析管线。
+     * @brief 跑一帧的其余阶段：平面高程 → 输出。
      *
-     * 仅在存在待处理点云时才会实际运算；无新点云时直接返回，
-     * 输出点云保持上一次结果。返回前发布所需的输出已就绪。
+     * 采集（B 组）也不在这里：它由调用方用 `TerrainVoxelMap::collectCloud`
+     * 写入本处理器的逐帧容器，再调用本函数。这样"哪些数据分发给谁"由调用方
+     * 决定，处理器只负责阶段的编排。
      */
-    void run();
+    void runStages();
 
     /** @brief 是否存在尚未处理的点云帧。 */
     [[nodiscard]] bool hasPendingCloud() const noexcept {
       return state_.new_laser_cloud;
+    }
+
+    /** @brief 采集结果的逐帧容器（由调用方用 TerrainVoxelMap::collectCloud
+     * 写入）。 */
+    [[nodiscard]] pcl::PointCloud<pcl::PointXYZI>& collectedCloud() noexcept {
+      return *state_.terrain_cloud;
+    }
+
+    /** @brief 本帧裁剪后的点云（分发体素地图时使用）。 */
+    [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& croppedCloud()
+        const noexcept {
+      return *state_.laser_cloud_crop;
+    }
+
+    /** @brief 雷达位姿（分发体素地图时使用）。 */
+    [[nodiscard]] const LidarPose& lidarPose() const noexcept {
+      return state_.lidar;
+    }
+
+    /** @brief 当前时刻相对首帧的秒数（分发体素地图时作为 now_elapsed）。 */
+    [[nodiscard]] double elapsedSeconds() const noexcept {
+      return state_.laser_cloud_time - state_.system_init_time;
     }
 
     /** @brief 最近一帧点云的时间戳，单位为秒（用于给输出打时间戳）。 */

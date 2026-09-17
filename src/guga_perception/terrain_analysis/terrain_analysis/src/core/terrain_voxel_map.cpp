@@ -59,6 +59,18 @@ namespace terrain_analysis {
     rebuild(config, lidar, now_elapsed);
   }
 
+  void TerrainVoxelMap::collectCloud(Cell& out) const {
+    out.clear();
+    constexpr int HALF = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH;
+    for (int row = HALF - EXTRACT_HALF_WINDOW;
+         row <= HALF + EXTRACT_HALF_WINDOW; row++) {
+      for (int column = HALF - EXTRACT_HALF_WINDOW;
+           column <= HALF + EXTRACT_HALF_WINDOW; column++) {
+        out += *cloud_[TerrainGrid::terrainVoxelIndex(row, column)];
+      }
+    }
+  }
+
   void TerrainVoxelMap::rollover(const LidarPose& lidar, double voxel_size) {
     double center_x = voxel_size * shift_x_;
     double center_y = voxel_size * shift_y_;

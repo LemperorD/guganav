@@ -116,7 +116,11 @@ namespace terrain_analysis {
       return rclcpp::ok();
     }
 
-    processor_.run();
+    // 先把本帧数据分发给体素地图（跨帧持久），再跑逐帧阶段。
+    voxel_map_.update(processor_.croppedCloud(), processor_.lidarPose(),
+                      processor_.elapsedSeconds(), processor_.config());
+    voxel_map_.collectCloud(processor_.collectedCloud());
+    processor_.runStages();
     publishPointCloud();
     return rclcpp::ok();
   }

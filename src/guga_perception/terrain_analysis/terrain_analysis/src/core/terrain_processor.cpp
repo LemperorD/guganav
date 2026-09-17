@@ -61,46 +61,17 @@ namespace terrain_analysis {
     state_.new_laser_cloud = true;
   }
 
-  void TerrainProcessor::run() {
+  void TerrainProcessor::runStages() {
     state_.new_laser_cloud = false;
 
-    // 按数据分组，每组自带"清空 → 生产"的完整生命周期：
-    //   A 持久地图  P1,P2 ← F1,F3   rollover → voxelize → update
-    //   B 逐帧采集  F2    ← P1      collect
-    //   C 平面高程  F3,F4 ← F2      estimateTerrainGround →
-    //   computePlanarElevation D 动态障碍  F5    ← F2,F1   detect → filter E
-    //   输出      F6    ← F2,F3,F4,F5
-    // 组间只有必需依赖：A→B、B→{C,D,E}、C→E、D→E。C 与 D 互不依赖，可互换。
-    // 各数组的清空由属主负责（见各阶段开头），所以组的先后不再隐含数据耦合。
-    voxel_map_.update(*state_.laser_cloud_crop, state_.lidar,
-                      state_.laser_cloud_time - state_.system_init_time,
-                      config_);
-    collectTerrainCloud();
-
+    // 分组与数据流向：
+    //   C 平面高程   F3,F4 <- F2(已采集)
+    //   E 输出       F6    <- F2,F3,F4
+    // A 组（体素地图维护）与 B 组（采集）由调用方先做，不在这里。
+    // 组间必需依赖：B->{C,E}、C->E。各数组的清空由属主负责（见各阶段开头）。
     estimateTerrainGround();
     computePlanarElevation();
-
-    detectDynamicObstacles();
-    filterDynamicObstaclePoints();
-
     computeHeightMap();
-  }
-
-  void TerrainProcessor::collectTerrainCloud() {
-    static constexpr int EXTRACT_HALF_WINDOW = 5;
-    state_.terrain_cloud->clear();
-    for (int row = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH - EXTRACT_HALF_WINDOW;
-         row <= TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH + EXTRACT_HALF_WINDOW;
-         row++) {
-      for (int column =
-               TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH - EXTRACT_HALF_WINDOW;
-           column
-           <= TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH + EXTRACT_HALF_WINDOW;
-           column++) {
-        *state_.terrain_cloud +=
-            *voxel_map_.cells()[TerrainGrid::terrainVoxelIndex(row, column)];
-      }
-    }
   }
 
   void TerrainProcessor::estimateTerrainGround() {
