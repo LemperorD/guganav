@@ -129,7 +129,6 @@ namespace terrain_analysis {
     /** @brief 该点相对雷达的水平距离。 */
     [[nodiscard]] double horizontalDistanceTo(double px, double py) const;
     /** @brief 该 terrain voxel 本轮是否需要降采样/衰减重建。 */
-    [[nodiscard]] bool shouldPruneTerrainVoxel(int cell) const;
     /**
      * @brief 该点是否应保留在该 terrain voxel 中。
      * @param relative_z 点相对雷达的高度。
@@ -164,6 +163,9 @@ namespace terrain_analysis {
     void rolloverTerrainVoxels();
     void voxelizeTerrain();
     void updateTerrainVoxels();
+
+    /** @brief 计算点所属的 0.05 m 叶键，供按最新观测融合使用。 */
+    [[nodiscard]] uint64_t leafKey(double x, double y, double z) const;
     void collectTerrainCloud();
     void estimateTerrainGround();
     void detectDynamicObstacles();

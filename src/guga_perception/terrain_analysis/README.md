@@ -33,7 +33,7 @@ rolloverTerrainVoxels → voxelizeTerrain → updateTerrainVoxels → collectTer
 | ----------------------------- | -------------------------------------------------- |
 | `rolloverTerrainVoxels`       | 雷达移动时滚动 terrain voxel 网格，维持以雷达为中心的滑动窗口 |
 | `voxelizeTerrain`             | 当前帧点云按空间位置分配到 terrain voxel 格子      |
-| `updateTerrainVoxels`         | 逐个格子降采样 + 时间衰减 + 空间高度过滤           |
+| `updateTerrainVoxels`         | 逐格每帧重建：按**异性叶**（水平 `scanVoxelSize` 0.1 / 垂直 `scanVoxelSizeZ` 0.05）只保留**最新观测**点 + 时间衰减 + 空间高度过滤 |
 | `collectTerrainCloud`         | 收集雷达周边 11×11 格子的累积地形点                |
 | `estimateTerrainGround`       | 点膨胀到 planar voxel（3×3），收集地面高度候选值   |
 | `detectDynamicObstacles`      | 用仰角 + 传感器 FOV 统计潜在动态障碍               |

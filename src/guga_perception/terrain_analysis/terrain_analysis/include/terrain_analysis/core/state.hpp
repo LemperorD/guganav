@@ -53,11 +53,6 @@ struct TerrainState {
   std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,
              TerrainGrid::TERRAIN_VOXEL_NUM>
       terrain_voxel_cloud = makeTerrainVoxelClouds();
-  /** @brief 每个 Terrain voxel 自上次重建后的更新点数。 */
-  std::array<int, TerrainGrid::TERRAIN_VOXEL_NUM> terrain_voxel_update_num{};
-  /** @brief 每个 Terrain voxel 最近一次重建的相对时间。 */
-  std::array<double, TerrainGrid::TERRAIN_VOXEL_NUM>
-      terrain_voxel_update_time{};
   /** @brief 每个 Planar voxel 的估计地面高度。 */
   std::array<double, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_elev{};
   /** @brief 每个 Planar voxel 的动态障碍计数。 */

@@ -35,6 +35,8 @@ namespace terrain_analysis {
     TerrainConfig& config = processor_.config();
     config.scan_voxel_size = declare_parameter("scanVoxelSize",
                                                config.scan_voxel_size);
+    config.scan_voxel_size_z = declare_parameter("scanVoxelSizeZ",
+                                                 config.scan_voxel_size_z);
     config.decay_time = declare_parameter("decayTime", config.decay_time);
     config.no_decay_distance = declare_parameter("noDecayDis",
                                                  config.no_decay_distance);
@@ -66,10 +68,6 @@ namespace terrain_analysis {
                                                    config.min_obstacle_height);
     config.ceiling_clearance = declare_parameter("ceilingClearance",
                                                  config.ceiling_clearance);
-    config.voxel_point_update_thre = declare_parameter(
-        "voxelPointUpdateThre", config.voxel_point_update_thre);
-    config.voxel_time_update_thre = declare_parameter(
-        "voxelTimeUpdateThre", config.voxel_time_update_thre);
     config.min_relative_z = declare_parameter("minRelZ", config.min_relative_z);
     config.max_relative_z = declare_parameter("maxRelZ", config.max_relative_z);
     config.ground_floor_z = declare_parameter("groundFloorZ",

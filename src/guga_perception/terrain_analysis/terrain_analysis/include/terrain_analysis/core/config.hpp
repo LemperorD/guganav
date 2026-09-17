@@ -10,8 +10,15 @@
  */
 struct TerrainConfig {
   // 输入点云体素化和历史数据衰减
-  /** @brief 输入点云降采样分辨率。 */
-  double scan_voxel_size = 0.05;
+  /** @brief 融合叶尺寸（水平，x/y）。 */
+  double scan_voxel_size = 0.1;
+  /** @brief 融合叶尺寸（垂直，z）。
+   *
+   *  垂直方向必须比水平方向细：每个叶只保留最新观测的那一个点，若地面点与
+   *  矮物体点落进同一个叶，地面点每帧都被观测到，会把物体点顶掉（叶宽 0.2 m
+   *  时实测 6 cm 矮台阶的输出点数归零）。实测：水平 0.1 / 垂直 0.05 相比两者
+   *  都取 0.05，单帧耗时降到约 56%，而矮台阶输出点数不再下降。 */
+  double scan_voxel_size_z = 0.05;
   /** @brief 历史体素点的衰减时间。 */
   double decay_time = 2.0;
   /** @brief 在该距离内不执行时间衰减。 */
@@ -70,10 +77,9 @@ struct TerrainConfig {
    *  删除。换车只需重设本值。 */
   double ceiling_clearance = 0.62;
   // 体素更新和点云范围
-  /** @brief 触发体素重建的累计更新点数阈值。 */
-  int voxel_point_update_thre = 100;
-  /** @brief 触发体素重建的时间阈值。 */
-  double voxel_time_update_thre = 2.0;
+  // 这里曾有两个"触发重建"的参数（累计点数阈值、重建时间阈值）。体素格现改为
+  // 每帧重建一次：逐 0.05 m 叶只保留最新观测点，年龄在重建时判定，因此重建不再
+  // 需要节流，两个参数与相应的状态数组一并删除。
   /** @brief 有效点云相对雷达的高度下限（相对 lidar_z 的偏移量）。
    *  两处共用：ingestLaserCloud 的裁剪带、keepTerrainVoxelPoint 的体素点
    *  保留判定。地面候选的地板不用它——那是绝对高度 ground_floor_z。 */

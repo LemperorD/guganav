@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <unordered_map>
 
 namespace terrain_analysis {
 
@@ -114,43 +115,67 @@ namespace terrain_analysis {
       size_t cell = TerrainGrid::terrainVoxelIndex(grid_index.row,
                                                    grid_index.col);
       state_.terrain_voxel_cloud[cell]->push_back(point);
-      state_.terrain_voxel_update_num[cell]++;
     }
   }
 
   void TerrainProcessor::updateTerrainVoxels() {
-    const double laser_time = state_.laser_cloud_time;
-    const double init_time = state_.system_init_time;
     const double lidar_z = state_.lidar_z;
 
-    // 降采样器仅服务本次重建：不放进共享状态，避免隐式共享与不可重入
-    pcl::VoxelGrid<pcl::PointXYZI> down_size_filter;
-    const auto leaf = static_cast<float>(config_.scan_voxel_size);
-    down_size_filter.setLeafSize(leaf, leaf, leaf);
-    pcl::PointCloud<pcl::PointXYZI> downsampled;
+    // 每个格子每帧重建一次，逐 0.05 m 叶只保留"观测时刻最新"的那一个点。
+    //
+    // 时刻取最新而不是平均：叶内混有新老点时，平均会把仍在被观测的表面判成
+    // 过期。旧实现交给 PCL 的 VoxelGrid 取质心，而它对 intensity 也取平均，
+    // 正是这个缺陷。
+    //
+    // "有新点即刷新、无新点才判年龄"因此不需要额外状态：代表点自带的时刻就是
+    // 该叶的 last_seen，有本帧新点进来时代表点会被换成新点（时刻即本帧），
+    // 没有新点时代表点保留上一轮时刻，由 keepTerrainVoxelPoint 判年龄。
+    std::unordered_map<uint64_t, size_t> leaf_slot;
+    pcl::PointCloud<pcl::PointXYZI> representatives;
 
     for (int cell = 0; cell < TerrainGrid::TERRAIN_VOXEL_NUM; cell++) {
-      if (!shouldPruneTerrainVoxel(cell)) {
-        continue;
-      }
       auto& cell_cloud = *state_.terrain_voxel_cloud[cell];
 
-      downsampled.clear();
-      down_size_filter.setInputCloud(state_.terrain_voxel_cloud[cell]);
-      down_size_filter.filter(downsampled);
-      cell_cloud.clear();
+      representatives.clear();
+      leaf_slot.clear();
 
-      for (const auto& point : downsampled.points) {
+      for (const auto& point : cell_cloud.points) {
+        const uint64_t key = leafKey(point.x, point.y, point.z);
+        const auto it = leaf_slot.find(key);
+        if (it == leaf_slot.end()) {
+          leaf_slot.emplace(key, representatives.size());
+          representatives.push_back(point);
+        } else if (point.intensity > representatives[it->second].intensity) {
+          representatives[it->second] = point;
+        }
+      }
+
+      cell_cloud.clear();
+      for (const auto& point : representatives.points) {
         double distance = horizontalDistanceTo(point.x, point.y);
         if (keepTerrainVoxelPoint(point.z - lidar_z, distance,
                                   point.intensity)) {
           cell_cloud.push_back(point);
         }
       }
-
-      state_.terrain_voxel_update_num[cell] = 0;
-      state_.terrain_voxel_update_time[cell] = laser_time - init_time;
     }
+  }
+
+  uint64_t TerrainProcessor::leafKey(double x, double y, double z) const {
+    // O(n) 融合所需的叶键：坐标除以叶宽取整后按 21 bit 打包。
+    // 偏置 10^6 使 odom 负坐标也能装下，覆盖约 ±54 km 的运行范围。
+    // 水平与垂直用不同的叶宽：垂直更细，避免地面点与矮物体点同叶（同叶只留
+    // 最新观测的那一个点，地面点会把物体点顶掉）。
+    constexpr int kBits = 21;
+    constexpr int64_t kBias = 1000000;
+    const double leaf_xy = config_.scan_voxel_size;
+    const double leaf_z = config_.scan_voxel_size_z;
+    const auto index = [](double value, double leaf) {
+      return static_cast<uint64_t>(
+          static_cast<int64_t>(std::floor(value / leaf)) + kBias);
+    };
+    return (index(x, leaf_xy) << (2 * kBits)) | (index(y, leaf_xy) << kBits)
+           | index(z, leaf_z);
   }
 
   void TerrainProcessor::collectTerrainCloud() {
@@ -333,16 +358,8 @@ namespace terrain_analysis {
                 + ((py - state_.lidar_y) * (py - state_.lidar_y)));
   }
 
-  bool TerrainProcessor::shouldPruneTerrainVoxel(int cell) const {
-    if (state_.terrain_voxel_update_num[cell]
-        >= config_.voxel_point_update_thre) {
-      return true;
-    }
-    double elapsed = state_.laser_cloud_time - state_.system_init_time
-                     - state_.terrain_voxel_update_time[cell];
-    return elapsed >= config_.voxel_time_update_thre;
-  }
-
+  // point_time 为该点的观测时刻（相对首帧的秒数）。对同一叶的代表点而言，
+  // 它是叶内最新的观测时刻，见 updateTerrainVoxels。
   bool TerrainProcessor::keepTerrainVoxelPoint(double relative_z,
                                                double distance,
                                                double point_time) const {

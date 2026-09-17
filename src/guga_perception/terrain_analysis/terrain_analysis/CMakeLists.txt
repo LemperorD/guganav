@@ -81,6 +81,11 @@ if(BUILD_TESTING)
   target_include_directories(test_algorithm PRIVATE test)
   target_link_libraries(test_algorithm terrain_analysis_lib)
 
+  # 叶宽影响测量工具：手动运行，不注册为测试（不拖慢 colcon test）
+  add_executable(measure_leaf test/measure_leaf.cpp)
+  target_include_directories(measure_leaf PRIVATE test)
+  target_link_libraries(measure_leaf terrain_analysis_lib)
+
 endif()
 
 ament_export_dependencies(rclcpp_components)

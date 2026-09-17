@@ -100,7 +100,6 @@ namespace terrain_analysis {
       config.distance_ratio_z = 0.2;
       config.decay_time = 999.0;
       config.no_decay_distance = 999.0;
-      config.voxel_point_update_thre = 1;
 
       state.lidar_x = 0;
       state.lidar_y = 0;
@@ -119,9 +118,6 @@ namespace terrain_analysis {
       point.z = static_cast<float>(relative_z);
       point.intensity = 0.0F;
       cell.push_back(point);
-
-      state.terrain_voxel_update_num[center_cell] =
-          config.voxel_point_update_thre;
 
       proc.updateTerrainVoxels();
       return static_cast<int>(
@@ -228,7 +224,6 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
       TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
       TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
   EXPECT_EQ(state().terrain_voxel_cloud[center]->points.size(), 1U);
-  EXPECT_EQ(state().terrain_voxel_update_num[center], 1);
 }
 
 // 空点云不产生任何体素分配
@@ -238,7 +233,7 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
   runStage(stage::Id::VOXELIZE);
 
   for (int i = 0; i < TerrainGrid::TERRAIN_VOXEL_NUM; i++) {
-    EXPECT_EQ(state().terrain_voxel_update_num[i], 0);
+    EXPECT_TRUE(state().terrain_voxel_cloud[i]->points.empty());
   }
 }
 
@@ -737,7 +732,6 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   config().max_relative_z = 10.0;
   config().decay_time = 1.0;
   config().no_decay_distance = 0.0;
-  config().voxel_point_update_thre = 1;
 
   state().lidar_x = 0;
   state().lidar_y = 0;
@@ -757,11 +751,164 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   point.intensity = 0.0F;
   cell.push_back(point);
 
-  state().terrain_voxel_update_num[center_cell] =
-      config().voxel_point_update_thre;
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
+  EXPECT_TRUE(state().terrain_voxel_cloud[center_cell]->points.empty());
+}
+
+// 叶内混有新老观测时，代表点必须取"最新"的那个点：
+// 旧实现交给 PCL VoxelGrid 取质心、对 intensity 取平均，这个仍被观测到的表面
+// 会被平均时刻判成过期而删除。
+TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
+  config().min_relative_z = -10.0;
+  config().max_relative_z = 10.0;
+  config().decay_time = 0.5;
+  config().no_decay_distance = 0.0;
+  config().scan_voxel_size = 0.05;
+  config().scan_voxel_size_z = 0.05;
+
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0.0;
+  state().laser_cloud_time = 1.2;  // 本帧
+  state().system_init_time = 0.0;
+
+  int center_cell = TerrainGrid::terrainVoxelIndex(
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state().terrain_voxel_cloud[center_cell];
+  cell.clear();
+  // 同一 0.05 m 叶内的三点：两个早已过期，一个本帧刚观测到
+  const double times[] = {0.10, 0.30, 1.20};
+  for (double time : times) {
+    pcl::PointXYZI point;
+    point.x = 1.0F;
+    point.y = 0.0F;
+    point.z = 0.0F;
+    point.intensity = static_cast<float>(time);
+    cell.push_back(point);
+  }
+
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
+
+  ASSERT_EQ(state().terrain_voxel_cloud[center_cell]->points.size(), 1U);
+  EXPECT_FLOAT_EQ(state().terrain_voxel_cloud[center_cell]->points[0].intensity,
+                  1.20F)
+      << "代表点必须是本帧的观测，而不是叶内的某个平均时刻";
+}
+
+// 异性叶：地面点与矮物体点在水平方向只差几厘米，但垂直叶更细时必须分开成
+// 两个叶。若两者同叶，每叶只留最新观测点，地面点会把矮物体点顶掉（水平/垂直
+// 都取 0.1 m 时实测 6 cm 矮台阶输出归零）。
+TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
+  config().min_relative_z = -10.0;
+  config().max_relative_z = 10.0;
+  config().decay_time = 999.0;
+  config().no_decay_distance = 999.0;
+  config().scan_voxel_size = 0.1;     // 水平
+  config().scan_voxel_size_z = 0.05;  // 垂直
+
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0.0;
+  state().laser_cloud_time = 1.0;
+  state().system_init_time = 0.0;
+
+  int center_cell = TerrainGrid::terrainVoxelIndex(
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state().terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI ground;  // 地面点，本帧观测到
+  ground.x = 2.0F;
+  ground.y = 0.0F;
+  ground.z = 0.0F;
+  ground.intensity = 1.0F;
+  cell.push_back(ground);
+  pcl::PointXYZI low;  // 同一水平位置、高 6 cm 的矮台阶，水平差 2 cm
+  low.x = 2.02F;
+  low.y = 0.0F;
+  low.z = 0.06F;
+  low.intensity = 1.0F;
+  cell.push_back(low);
+
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
+
+  EXPECT_EQ(state().terrain_voxel_cloud[center_cell]->points.size(), 2U)
+      << "地面点与矮物体点必须落在不同的垂直叶里，各自保留";
+}
+
+// 叶内只有过期观测（本帧没有新点）→ 整叶按年龄删除
+TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
+  config().min_relative_z = -10.0;
+  config().max_relative_z = 10.0;
+  config().decay_time = 0.5;
+  config().no_decay_distance = 0.0;
+  config().scan_voxel_size = 0.05;
+  config().scan_voxel_size_z = 0.05;
+
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0.0;
+  state().laser_cloud_time = 1.2;
+  state().system_init_time = 0.0;
+
+  int center_cell = TerrainGrid::terrainVoxelIndex(
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state().terrain_voxel_cloud[center_cell];
+  cell.clear();
+  for (double time : {0.10, 0.30}) {
+    pcl::PointXYZI point;
+    point.x = 1.0F;
+    point.y = 0.0F;
+    point.z = 0.0F;
+    point.intensity = static_cast<float>(time);
+    cell.push_back(point);
+  }
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_TRUE(state().terrain_voxel_cloud[center_cell]->points.empty());
+}
+
+// 同一格内、不同高度的两个叶互不影响：地面叶被刷新时，
+// 上方那一叶的旧点仍按自己的时刻过期。
+TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
+  config().min_relative_z = -10.0;
+  config().max_relative_z = 10.0;
+  config().decay_time = 0.5;
+  config().no_decay_distance = 0.0;
+  config().scan_voxel_size = 0.05;
+  config().scan_voxel_size_z = 0.05;
+
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0.0;
+  state().laser_cloud_time = 1.2;
+  state().system_init_time = 0.0;
+
+  int center_cell = TerrainGrid::terrainVoxelIndex(
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
+      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  auto& cell = *state().terrain_voxel_cloud[center_cell];
+  cell.clear();
+  pcl::PointXYZI stale;  // 上方叶：0.30 m 处，早已过期
+  stale.x = 1.0F;
+  stale.y = 0.0F;
+  stale.z = 0.30F;
+  stale.intensity = 0.10F;
+  cell.push_back(stale);
+  pcl::PointXYZI fresh;  // 地面叶：本帧刚观测到
+  fresh.x = 1.0F;
+  fresh.y = 0.0F;
+  fresh.z = 0.0F;
+  fresh.intensity = 1.20F;
+  cell.push_back(fresh);
+
+  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
+
+  ASSERT_EQ(state().terrain_voxel_cloud[center_cell]->points.size(), 1U);
+  EXPECT_FLOAT_EQ(state().terrain_voxel_cloud[center_cell]->points[0].intensity,
+                  1.20F);
 }
 
 // 近点即使过期也保留（near 优先于 decay）
@@ -770,7 +917,6 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   config().max_relative_z = 10.0;
   config().decay_time = 1.0;
   config().no_decay_distance = 3.0;
-  config().voxel_point_update_thre = 1;
 
   state().lidar_x = 0;
   state().lidar_y = 0;
@@ -790,59 +936,8 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   point.intensity = 0.0F;
   cell.push_back(point);
 
-  state().terrain_voxel_update_num[center_cell] =
-      config().voxel_point_update_thre;
-
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
   EXPECT_EQ(state().terrain_voxel_cloud[center_cell]->points.size(), 1U);
-}
-
-// ── shouldPruneTerrainVoxel (via updateTerrainVoxels) ──
-
-// update_num 未达阈值且时间未到 → 不修剪
-TEST_F(AlgorithmTest, ShouldPruneVoxel_NotEnoughPointsOrTime_NotPruned) {
-  config().voxel_point_update_thre = 100;
-  config().voxel_time_update_thre = 10.0;
-  state().laser_cloud_time = 1.0;
-  state().system_init_time = 0.0;
-
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
-  state().terrain_voxel_update_num[center_cell] = 5;
-  state().terrain_voxel_update_time[center_cell] = 0.0;
-
-  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
-  EXPECT_NE(state().terrain_voxel_cloud[center_cell], nullptr);
-}
-
-// update_num 达到阈值 → 触发修剪
-TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
-  config().voxel_point_update_thre = 10;
-  config().voxel_time_update_thre = 999.0;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 999.0;
-  config().no_decay_distance = 999.0;
-  state().laser_cloud_time = 1.0;
-  state().system_init_time = 0.0;
-
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
-  auto& cell = *state().terrain_voxel_cloud[center_cell];
-  cell.clear();
-  pcl::PointXYZI point;
-  point.x = 0.1F;
-  point.y = 0.0F;
-  point.z = 0.0F;
-  point.intensity = 1.0F;
-  cell.push_back(point);
-  state().terrain_voxel_update_num[center_cell] =
-      config().voxel_point_update_thre;
-
-  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
-  EXPECT_EQ(cell.points.size(), 1U);
 }
 
 // ── computeHeightMap 过滤分支 ──
