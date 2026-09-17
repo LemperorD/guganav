@@ -303,6 +303,8 @@ namespace terrain_analysis {
       // 上界：距地面达到安全间隙的点（天花板/横梁）不输出为障碍——
       // 净空足够时车辆可从下方通过（隧道场景）。以**局部地面**为基准：
       // 净空是"地面到障碍下沿"的距离，这也使判据在坡面上保持一致。
+      // 这是障碍输出**唯一**的上界：不再叠加按车高的截断，否则车高与净空
+      // 之间的那一带（车高 0.52 → 净空 0.62 之间）会被漏检，而车过不去。
       if (height_above_ground >= config_.ceiling_clearance) {
         continue;
       }
@@ -316,7 +318,7 @@ namespace terrain_analysis {
       }
 
       auto point_count = state_.planar_point_elev[cell].size();
-      if (height >= 0 && height < config_.vehicle_height
+      if (height >= 0
           && point_count >= static_cast<size_t>(config_.min_block_point_num)) {
         elevations->push_back(point);
         elevations->back().intensity = static_cast<float>(height);

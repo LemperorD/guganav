@@ -485,7 +485,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
   config().min_block_point_num = 5;
-  config().vehicle_height = 1.0;
   config().consider_drop = false;
 
   // Point at z=2.0 exceeds max_relative_z (0.2)
@@ -513,7 +512,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
   config().min_block_point_num = 5;
-  config().vehicle_height = 1.0;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = true;
@@ -531,8 +529,11 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   // height = abs(0 - 0.3) = 0.3 < 1.0 → accepted
 }
 
-// 高度超过 vehicle_height 的点被过滤
-TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
+// 车高与净空之间的点仍然是障碍（车过不去，不能漏检）
+// 旧实现有一条 `height < vehicle_height(0.52)` 的截断，会把 0.52~0.62 之间的点
+// 一并丢掉；该截断已删除，ceiling_clearance 是唯一上界。
+TEST_F(AlgorithmTest,
+       ComputeHeightMap_BetweenVehicleHeightAndCeiling_Obstacle) {
   state().vehicle_x = 0;
   state().vehicle_y = 0;
   state().vehicle_z = 0;
@@ -543,22 +544,22 @@ TEST_F(AlgorithmTest, ComputeHeightMap_AboveVehicleHeight_Filtered) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
   config().min_block_point_num = 5;
-  config().vehicle_height = 0.1;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
+  config().ceiling_clearance = 0.62;  // 车高 0.52 + 0.10
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
-  pt.z = 0.5F;
+  pt.z = 0.55F;  // 0.52 < 0.55 < 0.62：旧实现会丢弃，现在必须输出
   pt.intensity = 0;
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  // height = 0.5 - 0 = 0.5 >= 0.1 → filtered
-  EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
+  ASSERT_EQ(state().terrain_cloud_elev->points.size(), 1U);
+  EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.55, 1e-5);
 }
 
 // 高于净空的点同样参与地面估计：净空筛选已从本阶段移除（见下方断言注释）
@@ -616,7 +617,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};  // 满足 min_block_point_num
   }
   config().min_block_point_num = 5;
-  config().vehicle_height = 1.0;  // 旧逻辑下 0.26 < 1.0 会被输出为障碍
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
@@ -647,7 +647,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
   config().min_block_point_num = 5;
-  config().vehicle_height = 1.0;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().consider_drop = false;
@@ -830,7 +829,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
     e = {0., 0.1, 0.2, 0.3, 0.4, 0.5};
   }
   config().min_block_point_num = 5;
-  config().vehicle_height = 1.0;
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
   config().min_dy_obs_point_num = 3;

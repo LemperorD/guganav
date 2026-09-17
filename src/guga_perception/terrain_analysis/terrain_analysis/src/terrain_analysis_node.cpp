@@ -15,23 +15,17 @@ namespace terrain_analysis {
   namespace {
 
     /**
-     * @brief 校验高度参数之间被代码隐含依赖的关系，不满足时提示用户。
+     * @brief 启动时提示障碍输出的现行高度上界。
      *
-     * computeHeightMap 的障碍输出先按 ceilingClearance 裁掉高点，再用
-     * vehicleHeight 判"是否算障碍"。若 ceilingClearance < vehicleHeight，
-     * 实际生效的上限是前者，vehicleHeight 永远轮不到——表现为"高于某高度
-     * 的障碍全部漏检"。二者无编译期约束，故在启动时校验。
+     * computeHeightMap 只保留 `0 <= h < ceilingClearance` 的点（h 为距局部
+     * 地面高度），ceilingClearance 是唯一的上界，按车体高度 + 100 mm 设定。
+     * 该值随车而异且没有编译期约束，故在启动时打印，便于确认节点实际加载值。
      */
-    void warnOnHeightParams(const TerrainConfig& config) {
-      if (config.ceiling_clearance < config.vehicle_height) {
-        RCLCPP_WARN(
-            rclcpp::get_logger("terrain_analysis"),
-            "ceilingClearance(%.3f) < vehicleHeight(%.3f)：障碍输出的实际上界"
-            "是 ceilingClearance，vehicleHeight 不会生效，高于 %.3f m 的障碍将"
-            "全部漏检。建议按车体高度 + 100mm 设定 ceilingClearance。",
-            config.ceiling_clearance, config.vehicle_height,
-            config.ceiling_clearance);
-      }
+    void logHeightParams(const TerrainConfig& config) {
+      RCLCPP_INFO(rclcpp::get_logger("terrain_analysis"),
+                  "障碍输出高度带：0 <= h < %.3f m（ceilingClearance，"
+                  "距局部地面；按车高 + 100 mm 设定）",
+                  config.ceiling_clearance);
     }
 
   }  // namespace
@@ -68,8 +62,6 @@ namespace terrain_analysis {
         "minDyObsPointNum", config.min_dy_obs_point_num);
     config.min_block_point_num = declare_parameter("minBlockPointNum",
                                                    config.min_block_point_num);
-    config.vehicle_height = declare_parameter("vehicleHeight",
-                                              config.vehicle_height);
     config.ceiling_clearance = declare_parameter("ceilingClearance",
                                                  config.ceiling_clearance);
     config.voxel_point_update_thre = declare_parameter(
@@ -87,7 +79,7 @@ namespace terrain_analysis {
     config.min_dy_obs_vfov *= M_PI / 180.0;
     config.max_dy_obs_vfov *= M_PI / 180.0;
 
-    warnOnHeightParams(config);
+    logHeightParams(config);
 
     sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "lidar_odometry", 5,

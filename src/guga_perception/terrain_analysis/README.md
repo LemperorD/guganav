@@ -114,19 +114,19 @@ scripts/test/test_terrain_analysis_coverage.sh
 永不生效（更紧的净空上界先行）。两处条件均已移除；`maxRelZ` 现仅在
 `ingestLaserCloud` 与 `keepTerrainVoxelPoint` 生效，不再是死参数。
 
-### 功能性风险（已修复）：`ceilingClearance` 曾是硬编码的 0.1 m
+### 障碍输出高度带（2026-09-17 起：唯一上界）
 
-`ceilingClearance` 曾经是编译期常量 **0.1 m**，即"距地面高于 0.1 m 的点一律不输出为
-障碍"，对开阔场地过小（除脚踝以下全部漏检）。现已是 ROS 参数：代码默认 0.62 m，实车
-配置也为 **0.62 m**（车高 520 mm + 100 mm 裕量）。
+障碍输出的条件是 `0 <= h < ceilingClearance`，其中 h 是距**局部地面**的高度。
+`ceilingClearance` 是**唯一**的高度上界，代码默认 0.62 m，实车配置同为 **0.62 m**
+（车高 520 mm + 100 mm 裕量）。等于 0.62 m 的点也会被丢弃，判据用的是 `>=`。
 
-它与 `vehicleHeight`（代码默认 0.52 m，实车 0.52 m，"低于此值才算障碍"）配套使用，
-**实际上界是两者中更紧的那个**：若 `ceilingClearance < vehicleHeight`，则
-`vehicleHeight` 永不生效、高于 `ceilingClearance` 的障碍全部漏检。二者无编译期约束，
-故节点启动时由 `warnOnHeightParams()` 校验并告警（`terrain_analysis_node.cpp`）。
-换车需同时重设这两个值。
+历史上另有一条 `h < vehicleHeight(0.52)` 的截断。它与净空重叠且更严，会把 0.52 至
+0.62 m 之间的点一并丢掉，而这段高度上的悬空结构车是过不去的，属于漏检；2026-09-17
+该截断与 `vehicleHeight` 参数一并删除，换车现在只需要重设 `ceilingClearance`。
 
-（历史：0.1 m 源自隧道实测顶隙约 260 mm 的裕量取值，见提交 `3627c76` 恢复为参数。）
+（更早的历史：净空曾是编译期常量 0.1 m，源自隧道实测顶隙约 260 mm 的裕量取值，
+见提交 `3627c76` 恢复为参数。节点启动时原会比较净空与车高并告警，该检查随截断一并
+移除，现在改为打印实际生效的高度带。）
 
 ### 风险 5：索引相对、数值绝对
 
