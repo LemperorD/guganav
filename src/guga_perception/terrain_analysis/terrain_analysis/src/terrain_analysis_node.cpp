@@ -48,20 +48,6 @@ namespace terrain_analysis {
                                                  config.limit_ground_lift);
     config.max_ground_lift = declare_parameter("maxGroundLift",
                                                config.max_ground_lift);
-    config.min_dy_obs_distance = declare_parameter("minDyObsDis",
-                                                   config.min_dy_obs_distance);
-    config.min_dy_obs_angle = declare_parameter("minDyObsAngle",
-                                                config.min_dy_obs_angle);
-    config.min_dy_obs_relative_z = declare_parameter(
-        "minDyObsRelZ", config.min_dy_obs_relative_z);
-    config.abs_dy_obs_relative_z_threshold = declare_parameter(
-        "absDyObsRelZThre", config.abs_dy_obs_relative_z_threshold);
-    config.min_dy_obs_vfov = declare_parameter("minDyObsVFOV",
-                                               config.min_dy_obs_vfov);
-    config.max_dy_obs_vfov = declare_parameter("maxDyObsVFOV",
-                                               config.max_dy_obs_vfov);
-    config.min_dy_obs_point_num = declare_parameter(
-        "minDyObsPointNum", config.min_dy_obs_point_num);
     config.min_block_point_num = declare_parameter("minBlockPointNum",
                                                    config.min_block_point_num);
     config.min_obstacle_height = declare_parameter("minObstacleHeight",
@@ -74,10 +60,6 @@ namespace terrain_analysis {
                                               config.ground_floor_z);
     config.distance_ratio_z = declare_parameter("disRatioZ",
                                                 config.distance_ratio_z);
-
-    config.min_dy_obs_angle *= M_PI / 180.0;
-    config.min_dy_obs_vfov *= M_PI / 180.0;
-    config.max_dy_obs_vfov *= M_PI / 180.0;
 
     logHeightParams(config);
 

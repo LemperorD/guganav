@@ -18,8 +18,6 @@ namespace stage {
     UPDATE_TERRAIN_VOXELS,
     COLLECT,
     ESTIMATE_TERRAIN_GROUND,
-    DETECT_DYNAMIC,
-    FILTER_DYNAMIC,
     PLANAR_ELEVATION,
     HEIGHT_MAP
   };
@@ -357,7 +355,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
   state().lidar.z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
-  state().planar_voxel_dy_obs.fill(0);
   for (auto& e : state().planar_point_elev) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
@@ -384,7 +381,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   state().lidar.z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0.3);  // ground at +0.3, point at z=0 → -0.3m
-  state().planar_voxel_dy_obs.fill(0);
   for (auto& e : state().planar_point_elev) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
@@ -413,7 +409,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowMinObstacleHeight_Filtered) {
   state().lidar.z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
-  state().planar_voxel_dy_obs.fill(0);
   for (auto& e : state().planar_point_elev) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
@@ -445,7 +440,6 @@ TEST_F(AlgorithmTest,
   state().lidar.z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
-  state().planar_voxel_dy_obs.fill(0);
   for (auto& e : state().planar_point_elev) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
@@ -518,7 +512,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   state().lidar.z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);  // 地面高度 0
-  state().planar_voxel_dy_obs.fill(0);
   for (auto& e : state().planar_point_elev) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};  // 满足 min_block_point_num
   }
@@ -548,7 +541,6 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   state().lidar.z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
-  state().planar_voxel_dy_obs.fill(0);
   for (auto& e : state().planar_point_elev) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }

@@ -36,22 +36,6 @@ struct TerrainConfig {
   /** @brief 地面估计允许的最大抬升量。 */
   double max_ground_lift = 0.15;
 
-  // 动态障碍过滤
-  /** @brief 动态障碍检测的最小水平距离。 */
-  double min_dy_obs_distance = 0.3;
-  /** @brief 动态障碍检测的最小仰角，单位为弧度。 */
-  double min_dy_obs_angle = 0.0;
-  /** @brief 动态障碍相对高度参考值。 */
-  double min_dy_obs_relative_z = -0.5;
-  /** @brief 允许通过绝对高度条件的阈值。 */
-  double abs_dy_obs_relative_z_threshold = 0.2;
-  /** @brief 传感器垂直视场下限，单位为弧度。 */
-  double min_dy_obs_vfov = -16.0 * M_PI / 180.0;
-  /** @brief 传感器垂直视场上限，单位为弧度。 */
-  double max_dy_obs_vfov = 16.0 * M_PI / 180.0;
-  /** @brief 判定动态障碍所需的最小点数。 */
-  int min_dy_obs_point_num = 1;
-
   // 无数据区域和障碍高度过滤
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;

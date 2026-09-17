@@ -39,8 +39,6 @@ struct TerrainState {
       std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   /** @brief 每个 Planar voxel 的估计地面高度。 */
   std::array<double, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_elev{};
-  /** @brief 每个 Planar voxel 的动态障碍计数。 */
-  std::array<int, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_dy_obs{};
   /** @brief 每个 Planar voxel 收集到的地面高度候选值。 */
   std::array<std::vector<double>, TerrainGrid::PLANAR_VOXEL_NUM>
       planar_point_elev;

@@ -104,81 +104,6 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::detectDynamicObstacles() {
-    // 本阶段（与 filter 一起）拥有 F5，逐帧重建。
-    state_.planar_voxel_dy_obs.fill(0);
-
-    const double lidar_x = state_.lidar.x;
-    const double lidar_y = state_.lidar.y;
-    const double lidar_z = state_.lidar.z;
-
-    for (const auto& point : state_.terrain_cloud->points) {
-      const GridIndex grid_index = gridIndex(
-          point.x, point.y, state_.lidar.x, state_.lidar.y,
-          config_.planar_voxel_size, TerrainGrid::PLANAR_VOXEL_WIDTH);
-      if (!grid_index.valid) {
-        continue;
-      }
-      size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
-                                                  grid_index.col);
-
-      double relative_x = point.x - lidar_x;
-      double relative_y = point.y - lidar_y;
-      double relative_z = point.z - lidar_z;
-      double distance = sqrt((relative_x * relative_x)
-                             + (relative_y * relative_y));
-
-      if (distance <= config_.min_dy_obs_distance) {
-        state_.planar_voxel_dy_obs[cell] += config_.min_dy_obs_point_num;
-        continue;
-      }
-
-      double scan_angle = atan2(relative_z - config_.min_dy_obs_relative_z,
-                                distance);
-      if (scan_angle <= config_.min_dy_obs_angle) {
-        continue;
-      }
-
-      auto sensor = transformToSensorFrame(relative_x, relative_y, relative_z);
-      double sensor_distance = sqrt((sensor.x * sensor.x)
-                                    + (sensor.y * sensor.y));
-      double sensor_angle = atan2(sensor.z, sensor_distance);
-      if ((sensor_angle > config_.min_dy_obs_vfov
-           && sensor_angle < config_.max_dy_obs_vfov)
-          || std::abs(sensor.z) < config_.abs_dy_obs_relative_z_threshold) {
-        state_.planar_voxel_dy_obs[cell]++;
-      }
-    }
-  }
-
-  void TerrainProcessor::filterDynamicObstaclePoints() {
-    const double lidar_x = state_.lidar.x;
-    const double lidar_y = state_.lidar.y;
-    const double lidar_z = state_.lidar.z;
-
-    for (const auto& point : state_.laser_cloud_crop->points) {
-      const GridIndex grid_index = gridIndex(
-          point.x, point.y, state_.lidar.x, state_.lidar.y,
-          config_.planar_voxel_size, TerrainGrid::PLANAR_VOXEL_WIDTH);
-      if (!grid_index.valid) {
-        continue;
-      }
-      size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
-                                                  grid_index.col);
-
-      double relative_x = point.x - lidar_x;
-      double relative_y = point.y - lidar_y;
-      double relative_z = point.z - lidar_z;
-      double distance = sqrt((relative_x * relative_x)
-                             + (relative_y * relative_y));
-      double scan_angle = atan2(relative_z - config_.min_dy_obs_relative_z,
-                                distance);
-      if (scan_angle > config_.min_dy_obs_angle) {
-        state_.planar_voxel_dy_obs[cell] = 0;
-      }
-    }
-  }
-
   void TerrainProcessor::computePlanarElevation() {
     // 本阶段拥有 F4：没有候选的格保持 0（见 computeHeightMap 的说明）。
     state_.planar_voxel_elev.fill(0);
@@ -225,10 +150,6 @@ namespace terrain_analysis {
       if (height_above_ground >= config_.ceiling_clearance) {
         continue;
       }
-      if (state_.planar_voxel_dy_obs[cell] >= config_.min_dy_obs_point_num) {
-        continue;
-      }
-
       double height = height_above_ground;
       if (config_.consider_drop) {
         height = std::abs(height);
@@ -251,24 +172,6 @@ namespace terrain_analysis {
 
   // point_time 为该点的观测时刻（相对首帧的秒数）。对同一叶的代表点而言，
   // 它是叶内最新的观测时刻，见 updateTerrainVoxels。
-  TerrainProcessor::SensorPoint TerrainProcessor::transformToSensorFrame(
-      double x, double y, double z) const {
-    double rotated_x = (x * state_.cos_lidar_yaw) + (y * state_.sin_lidar_yaw);
-    double rotated_y = -(x * state_.sin_lidar_yaw) + (y * state_.cos_lidar_yaw);
-
-    double pitched_x = (rotated_x * state_.cos_lidar_pitch)
-                       - (z * state_.sin_lidar_pitch);
-    double pitched_z = (rotated_x * state_.sin_lidar_pitch)
-                       + (z * state_.cos_lidar_pitch);
-
-    double rolled_y = (rotated_y * state_.cos_lidar_roll)
-                      + (pitched_z * state_.sin_lidar_roll);
-    double rolled_z = -(rotated_y * state_.sin_lidar_roll)
-                      + (pitched_z * state_.cos_lidar_roll);
-
-    return {pitched_x, rolled_y, rolled_z};
-  }
-
   void TerrainProcessor::addToPlanarNeighborhood3x3(int row, int col,
                                                     double z) {
     constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;

@@ -112,13 +112,6 @@ terrain_analysis:
     considerDrop: False                 # 考虑凹下去的地面,开启则将相对于地面点的高度取绝对值
     limitGroundLift: False
     maxGroundLift: 0.3
-    minDyObsDis: 0.3
-    minDyObsAngle: 0.0
-    minDyObsRelZ: -0.3
-    absDyObsRelZThre: 0.2
-    minDyObsVFOV: -28.0
-    maxDyObsVFOV: 33.0
-    minDyObsPointNum: 1
     minBlockPointNum: 10
     minObstacleHeight: 0.04             # 障碍输出下界(距局部地面)：地面带死区，吸收地面高度估计误差，实车取 4cm。清除用的回波不受此下界约束
     ceilingClearance: 0.62              # 障碍输出上界，也是唯一上界(距局部地面)：按车体高度+100mm 设定（车高520mm→0.62）。配合 minObstacleHeight 组成输出带 minObstacleHeight<=h<该值；原 vehicleHeight 截断已删除，换车只需改这一个值

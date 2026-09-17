@@ -117,19 +117,9 @@ namespace terrain_analysis {
     }
 
   private:
-    /** @brief 点转换到传感器系后的坐标。 */
-    struct SensorPoint {
-      double x;
-      double y;
-      double z;
-    };
-
     // ── 内部判定与运算（读写 config_/state_，故为成员而非自由函数）──
     /** @brief 该点相对雷达的水平距离。 */
     [[nodiscard]] double horizontalDistanceTo(double px, double py) const;
-    /** @brief 把相对雷达的坐标变换到传感器坐标系。 */
-    [[nodiscard]] SensorPoint transformToSensorFrame(double x, double y,
-                                                     double z) const;
     /**
      * @brief 把一个高度值加入指定 planar voxel 及其 3×3 邻域的候选集中。
      *
@@ -148,19 +138,14 @@ namespace terrain_analysis {
     void elevateByMinimum(int cell);
 
     // ── 管线阶段（实现细节，见类注释的可见性契约）──
-    // 体素地图的三个阶段（rollover / voxelize / update）已提取为包内自由函数，
-    // 见 terrain_voxel_map.hpp；这里只保留编排与其余阶段。
-    void collectTerrainCloud();
+    // A 组（体素地图的滚动/归格/融合）与 B 组（采集）已提取到 TerrainVoxelMap，
+    // 见 terrain_voxel_map.hpp；这里只保留 C（平面高程）与 E（输出）两组。
     void estimateTerrainGround();
-    void detectDynamicObstacles();
-    void filterDynamicObstaclePoints();
     void computePlanarElevation();
     void computeHeightMap();
 
     /** @brief 跨帧持久的体素地图（体素阶段的属主，见 terrain_voxel_map.hpp）。
      */
-    TerrainVoxelMap voxel_map_;
-
     TerrainConfig config_;
     TerrainState state_;
 
