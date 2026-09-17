@@ -56,7 +56,7 @@ source_setup "$WS/install/setup.bash"
 
 echo "=== Run tests ===" | tee -a "$RESULT_FILE"
 cd "$WS/build/terrain_analysis"
-for test_bin in test_terrain_analysis test_state_ingest test_algorithm; do
+for test_bin in test_terrain_analysis test_state_ingest test_algorithm test_integration; do
   echo "--- $test_bin ---" | tee -a "$RESULT_FILE"
   GTEST_COLOR=yes ./$test_bin 2>&1 | tee -a "$RESULT_FILE"
 done

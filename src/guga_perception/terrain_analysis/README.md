@@ -72,6 +72,7 @@ scripts/test/test_terrain_analysis_coverage.sh
 - `test_terrain_analysis`：完整管线行为
 - `test_state_ingest`：状态初值与接收（`ingestOdometry` 位姿与三角函数、`ingestLaserCloud` 首帧时间与越界裁剪）
 - `test_algorithm`：体素、地面高程估计与边界处理
+- `test_integration`：只通过 ROS 话题驱动节点（不发 ingest*/runStages），覆盖订阅与消息转换、逐帧数据分发、发布消息的 frame_id/stamp，以及跨帧的幽灵点清除与体素窗口滚动
 
 `estimateTerrainGround` 与 `computeHeightMap` 都经 `gridIndex(...)` 统一做越界判定；
 超出 `51×51` planar 网格的点会被忽略，避免数组越界。

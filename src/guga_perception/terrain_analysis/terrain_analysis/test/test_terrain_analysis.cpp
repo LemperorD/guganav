@@ -33,12 +33,6 @@ namespace terrain_analysis {
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;
-
-    /** @brief 跨帧持久的体素地图：测试自己持有并逐帧传给管线。 */
-    TerrainVoxelMap& voxelMap() {
-      return voxel_map_;
-    }
-    TerrainVoxelMap voxel_map_;
   };
 
   // 纯平面地面点云经过全管线后不输出障碍点：地面落在
@@ -56,8 +50,8 @@ namespace terrain_analysis {
   }
 
   // 地面上方有障碍点时，输出点云包含非零离地高度。
-  // 障碍高度需低于固定的 TerrainGrid::CEILING_CLEARANCE(0.1)——相对车高达到
-  // 该值的点会被当作天花板（可从下方通过）而不输出，故此处取 0.06。
+  // 障碍高度需低于 ceilingClearance（默认 0.62 m，距局部地面）——达到该值的点
+  // 会被当作可从下方通过的悬空结构而不输出；此处取 0.06，位于输出带内。
   TEST_F(TerrainAnalysisTest, Run_ObstacleAboveGround_OutputsNonZeroIntensity) {
     sendOdom(0, 0, 0, 0);
 

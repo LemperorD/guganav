@@ -54,7 +54,7 @@ if [ ! -w "${ROS_HOME:-$HOME/.ros}" ] 2>/dev/null; then
 fi
 
 cd "$WS/build/terrain_analysis"
-for t in test_terrain_analysis test_state_ingest test_algorithm; do
+for t in test_terrain_analysis test_state_ingest test_algorithm test_integration; do
   ./$t >/dev/null 2>&1 || { echo "FAILED: $t"; exit 1; }
 done
-echo "terrain_analysis: all 3 test suites OK"
+echo "terrain_analysis: all 4 test suites OK"
