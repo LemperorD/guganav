@@ -175,8 +175,9 @@ lidar_z ≈ +0.230      // 平地：雷达在 odom 下的高度，即 base_footp
 
 - **低矮障碍物**：疑似被 `terrain_analysis` 的高度阈值链过滤（`minRelZ` / `maxRelZ` /
   `minBlockPointNum` / `CEILING_CLEARANCE`），或下游代价地图的 `min_obstacle_intensity`
-  将其丢弃；需先定位是哪一环。注意 `CEILING_CLEARANCE` 现已固定为 0.1 m，
-  即**高出车顶 10 cm 以上的点一律不输出为障碍**。
+  将其丢弃；需先定位是哪一环。注意 `ceilingClearance` 现为 0.62 m（按车高 520 mm
+  加 100 mm 设定，也是唯一上界），即**高出局部地面 0.62 m 以上的点不输出为障碍**；
+  下界为 `minObstacleHeight` 0.04 m。
 - **眼前障碍物**：近距点云占比高且分布集中，需排查是否被地面估计抬高、动态障碍过滤误清，
   或近距裁剪范围（`obstacle_min_range`）影响。与上面"近处低地面点"很可能同源。
 - **伪静态障碍物**：SLAM 模式点云来自 `terrain_map`（原 `terrain_map_ext` 已
@@ -185,6 +186,14 @@ lidar_z ≈ +0.230      // 平地：雷达在 odom 下的高度，即 base_footp
 - **避障后退方向**：需检查后退避障的期望速度是否在正确坐标系下生成
   （`prefer_forward_critic.cpp:42` 的后退惩罚 / 底盘正方向约定）。
 - **MPPI GPU 方案**：接入入口见 `nav2_mppi_controller`；导航组合用 `controller:=mppi`。
+- **MPPI 的三个速度阈值故意不写（2026-09-17 决定）**：`min_x/min_y/min_theta_velocity_threshold`
+  在 `controller/mppi.yaml` 里均不出现，生效值是 Nav2 的声明默认 0.0001/0.0001/0.0001。
+  已删除的单文件 `nav2_params.yaml` 里写过 0.001/0.5/0.001，因该文件自 670049b 起不再被加载，
+  这组取值从未生效；其中 `min_y=0.5` 会把 0.5 m/s 以下的横向速度当作零，与 Omni 控制相冲突，
+  因此不沿用。若将来发现 MPPI 抖动，应查此处而非按单文件旧值排查。
+- **实车 PID 的 `min_y_velocity_threshold` 待验证（差异已记录）**：实车
+  `reality/controller/pid.yaml` 为 0.5，仿真 `simulation/controller/pid.yaml` 为 0.001。
+  保留实车取值不动，需实车确认 0.5 是否会吞掉小幅横向微调。
 - **ext 已删除（2026-09-17）**：它当时只剩 `mergeLocalTerrain` 一个半径过滤器——
   把 `terrain_map` 里距车 > `localTerrainMapRadius`(4.0 m) 的点丢掉再转发，无信息
   增量，而 4 m 比 `local_costmap` 需要的 5 m 还窄，**在做负功**。原版 CMU 的远场累积

@@ -105,6 +105,12 @@ controller_server:
       xy_goal_tolerance: 0.15
       yaw_goal_tolerance: 6.28
     failure_tolerance: 0.3
+    # 三个速度阈值（min_x/min_y/min_theta_velocity_threshold）在此故意不写：
+    # MPPI 用 Omni 运动模型，y 方向存在小幅横向速度，Nav2 默认的
+    # 0.0001/0.0001/0.0001 即是当前生效值（已确认 controller_server.cpp 的声明默认值）。
+    # 已删除的单文件 nav2_params.yaml 里写过 0.001/0.5/0.001，但该文件自 670049b
+    # 起不再被加载，这组取值从未生效；其中 min_y=0.5 会把 0.5 m/s 以下的横向速度
+    # 当作零，与 Omni 控制相冲突，故不沿用。
 
     controller_frequency: 30.0
 

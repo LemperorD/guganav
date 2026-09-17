@@ -10,6 +10,8 @@ controller_server:
 
     min_x_velocity_threshold: 0.001
 
+    # 与 simulation/controller/pid.yaml 的 0.001 不一致：实车 PID 先沿用现场验证过的
+    # 取值，0.5 会把 0.5 m/s 以下的横向速度当作零，是否吞掉小幅横向微调待实车验证。
     min_y_velocity_threshold: 0.5
 
     min_theta_velocity_threshold: 0.001
