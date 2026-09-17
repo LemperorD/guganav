@@ -60,7 +60,7 @@ rclcpp_components_register_node(terrain_analysis_lib
   EXECUTABLE terrain_analysis_exe
 )
 
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+
 
 # 组件库运行时依赖：必须安装到 lib 才能被 pluginlib 加载
 install(TARGETS terrain_analysis_lib
