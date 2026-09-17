@@ -1,45 +1,55 @@
 # terrain_analysis
 
-局部地形分析节点，从 LiDAR 点云构建高度地图并检测动态障碍物。
+局部地形分析节点，从 LiDAR 点云构建局部高度地图，输出障碍点云 `terrain_map`（`intensity` 为该点距局部地面的高度）。
 
 ## 架构
 
 ```
-ROS2 消息 → TerrainPipeline::ingest* → TerrainPipeline::run() → publish → ROS2 消息
- (订阅)          (写入内部 state_)          (9 阶段私有管线)          (发布)    (terrain_map)
+ROS2 消息 → TerrainPipeline::ingest* → TerrainVoxelMap::update → collectCloud
+ (订阅)      (写入内部 state_)           (A 组：滚动/归格/重建)   (B 组：采集)
+                                                    ↓
+          publish ← TerrainPipeline::runStages() ← F2 采集点云
+          (发布)      (C 组平面高程 + E 组输出)
 ```
 
-- **TerrainPipeline**（`core/terrain_pipeline.hpp`）— 自持 `TerrainConfig` + `TerrainState`，
-  对外只暴露 `ingestOdometry` / `ingestLaserCloud` / `run` / `terrainCloudElev` 等入口，
-  管线各阶段为私有成员，可自由重构而不影响调用方
-- **节点层**（`terrain_analysis_node.*`）— 仅做 ROS 接线：声明参数、订阅、定时驱动与发布
-- 白盒测试经 `friend` 访问 `TerrainPipeline` 的内部阶段（见 `test_algorithm.cpp` 的 `runStage`）
+- **TerrainPipeline**（`core/terrain_pipeline.hpp`）— 持有 `TerrainConfig` 与
+  `TerrainState`，对外只暴露 `ingestOdometry` / `ingestLaserCloud` / `runStages` /
+  `terrainCloudElev` 等入口；C（平面高程）与 E（输出）两组阶段是它的私有成员，
+  可自由重构而不影响调用方
+- **TerrainVoxelMap**（`core/terrain_voxel_map.hpp`）— 管线里唯一跨帧保留的数据
+  （体素点云 + 以雷达为中心的滑动窗口），负责 A（滚动 / 归格 / 重建）与 B（采集）两组
+- **节点层**（`terrain_analysis_node.*`）— 只做 ROS 接线与数据分发：声明参数、订阅
+  odom 与点云、把裁剪点云和雷达位姿交给体素地图、把采集结果交回管线、发布 `terrain_map`
+- 白盒测试经 `friend` 访问 `TerrainPipeline` 的内部阶段（见 `test_algorithm.cpp`）
 
 ## 管线
 
 ```
-rolloverTerrainVoxels → voxelizeTerrain → updateTerrainVoxels → collectTerrainCloud
-                                                                      ↓
-                                                        estimateTerrainGround
-                                                                      ↓
-                                                  detectDynamicObstacles
-                                                  filterDynamicObstaclePoints
-                                                                      ↓
-                                                     computePlanarElevation
-                                                          computeHeightMap
+A 组（TerrainVoxelMap，跨帧）   rollover → addFrame → rebuild
+                                                        ↓
+B 组（TerrainVoxelMap，逐帧）   collectCloud → F2 采集点云
+                                                        ↓
+C 组（TerrainPipeline，逐帧）   estimateTerrainGround → computePlanarElevation
+                                                        ↓
+E 组（TerrainPipeline，逐帧）   computeHeightMap → terrain_map
 ```
 
-| 阶段                          | 职责                                               |
-| ----------------------------- | -------------------------------------------------- |
-| `rolloverTerrainVoxels`       | 雷达移动时滚动 terrain voxel 网格，维持以雷达为中心的滑动窗口 |
-| `voxelizeTerrain`             | 当前帧点云按空间位置分配到 terrain voxel 格子      |
-| `updateTerrainVoxels`         | 逐格每帧重建：按**异性叶**（水平 `scanVoxelSize` 0.1 / 垂直 `scanVoxelSizeZ` 0.05）只保留**最新观测**点 + 时间衰减 + 空间高度过滤 |
-| `collectTerrainCloud`         | 收集雷达周边 11×11 格子的累积地形点                |
-| `estimateTerrainGround`       | 点膨胀到 planar voxel（3×3），收集地面高度候选值   |
-| `detectDynamicObstacles`      | 用仰角 + 传感器 FOV 统计潜在动态障碍               |
-| `filterDynamicObstaclePoints` | 当前帧高角度点反向印证，清除头顶固定结构的误报     |
-| `computePlanarElevation`      | 对每个 planar voxel 估地面高度（分位数 `quantileZ`，或最小值） |
-| `computeHeightMap`            | 计算每点离地高度，写入 intensity 生成输出点云      |
+| 组 | 阶段 | 职责 |
+| -- | ---- | ---- |
+| A | `rollover` | 雷达移动时滚动 terrain voxel 网格，维持以雷达为中心的滑动窗口 |
+| A | `addFrame` | 当前帧点云按空间位置分配到 terrain voxel 格子 |
+| A | `rebuild` | 逐格每帧重建：按**异性叶**（水平 `scanVoxelSize` 0.1 / 垂直 `scanVoxelSizeZ` 0.05）只保留**最新观测**点 + 时间衰减 + 空间高度过滤 |
+| B | `collectCloud` | 收集雷达周边 11×11 格子的累积地形点 |
+| C | `estimateTerrainGround` | 点膨胀到 planar voxel（3×3），收集地面高度候选值 |
+| C | `computePlanarElevation` | 对每个 planar voxel 估地面高度（分位数 `quantileZ`，或最小值） |
+| E | `computeHeightMap` | 计算每点离地高度，写入 `intensity` 生成输出点云 |
+
+A、B 两组由节点驱动（它同时持有 `TerrainVoxelMap`），C、E 两组由 `TerrainPipeline`
+内部按序调用，两者之间只通过 F2 采集点云交接。
+
+原先的 D 组（`detectDynamicObstacles` / `filterDynamicObstaclePoints`）连同 dy_obs
+机制已于 2026-09-17 删除（提交 `96f2d0b`）：实测幽灵点在打开与关闭该机制时都在 4 帧
+后消失，它对本包唯一的用途（幽灵点清除）没有贡献。
 
 ## 测试
 
@@ -61,10 +71,10 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 - `test_terrain_analysis`：完整管线行为
 - `test_state_ingest`：状态初值与接收（`ingestOdometry` 位姿与三角函数、`ingestLaserCloud` 首帧时间与越界裁剪）
-- `test_algorithm`：体素、地面估计、动态障碍和边界处理
+- `test_algorithm`：体素、地面高程估计与边界处理
 
-`estimateTerrainGround` 经 `voxelIndexOf(VoxelGrid::PLANAR, …)` 统一做越界判定；
-超出 `51×51` planar grid 的点会被忽略，避免数组越界。
+`estimateTerrainGround` 与 `computeHeightMap` 都经 `gridIndex(...)` 统一做越界判定；
+超出 `51×51` planar 网格的点会被忽略，避免数组越界。
 
 ## 网格参数
 
@@ -79,17 +89,17 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 | 参考系 | 定义 | 使用位置 |
 | ------ | ---- | -------- |
-| odom 世界系 | `point.z` 绝对值 | `terrain_voxel_cloud` 的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `ground_floor_z` |
-| 雷达系（`lidar_*` 为雷达位姿） | `relative_z = point.z − state_.lidar_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `min_relative_z` |
+| odom 世界系 | `point.z` 绝对值 | `TerrainVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
+| 雷达系（`lidar_*` 为雷达位姿） | `relative_z = point.z − state_.lidar_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `minRelZ` |
 | 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity |
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
 
-`ingestLaserCloud` 的裁剪带是 `min/max_relative_z ± disRatioZ × distance`，**带宽随
+`ingestLaserCloud` 的裁剪带是 `minRelZ`/`maxRelZ ± disRatioZ × distance`，**带宽随
 距离放宽**（近处 ≈ 0，远处 5 m 处 ±1.0 m）。而 `estimateTerrainGround` 原有的净空
 上界是**常数**，会把抬升的地面按车高砍掉（坡面失效）。
 
-**该净空上界已移除**（见下节风险 3），地面候选现只受绝对地板 `ground_floor_z` 约束。
+**该净空上界已移除**（见下节风险 3），地面候选现只受绝对地板 `groundFloorZ` 约束。
 但裁剪带仍是雷达系、且近处带宽极窄（约 0.2 m），故 `lidar_z` 的标定误差在**近处**
 仍会直接决定"地面点能否进入管线"——远处因带宽放宽而被掩盖。这与仓库根
 `docs/TODOLIST.md` 记录的"近处低地面点被忽略"直接相关。
@@ -101,18 +111,18 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ### 风险 3（已修复）：一个参数兼两种语义 → 现仅用于障碍输出
 
-`CEILING_CLEARANCE` 原先同时表示"隧道净空"（车体属性）与"地面候选高度上限"
+`ceilingClearance` 原先同时表示"隧道净空"（车体属性）与"地面候选高度上限"
 （地形属性），调其一必动另一。现已从 `estimateTerrainGround` 移除，**只由
 `computeHeightMap` 使用**，语义唯一：距**局部地面**达到该值的点不作为障碍输出。
 
-它也不再与 `max_relative_z` 竞争"上界"角色（后者现仅用于 `ingestLaserCloud`
-与 `keepTerrainVoxelPoint`）。
+它也不再与 `maxRelZ` 竞争"上界"角色（后者现仅用于 `ingestLaserCloud`
+与 `TerrainVoxelMap::keepPoint`）。
 
 ### 风险 4（已修复）：`maxRelZ` 曾是死配置
 
-原在 `estimateTerrainGround` 与 `computeHeightMap` 中，`relative_z >= max_relative_z`
+原在 `estimateTerrainGround` 与 `computeHeightMap` 中，`relative_z >= maxRelZ`
 永不生效（更紧的净空上界先行）。两处条件均已移除；`maxRelZ` 现仅在
-`ingestLaserCloud` 与 `keepTerrainVoxelPoint` 生效，不再是死参数。
+`ingestLaserCloud` 与 `TerrainVoxelMap::keepPoint` 生效，不再是死参数。
 
 ### 障碍输出高度带（2026-09-17 起：唯一上界）
 
