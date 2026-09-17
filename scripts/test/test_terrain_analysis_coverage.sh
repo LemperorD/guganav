@@ -18,9 +18,9 @@ if [ -z "${ROS_DISTRO:-}" ]; then
 fi
 cd "$WS"
 
-rm -rf build/terrain_analysis build/terrain_analysis_ext \
-  install/terrain_analysis install/terrain_analysis_ext \
-  log/latest_build/terrain_analysis log/latest_build/terrain_analysis_ext
+rm -rf build/terrain_analysis \
+  install/terrain_analysis \
+  log/latest_build/terrain_analysis
 
 mkdir -p build/terrain_analysis
 RESULT_FILE=$WS/build/terrain_analysis/coverage_result.ans
@@ -41,7 +41,7 @@ colcon build \
   --symlink-install \
   --parallel-workers 1 \
   "${ALLOW_OVERRIDE_ARGS[@]}" \
-  --packages-select terrain_analysis terrain_analysis_ext \
+  --packages-select terrain_analysis \
   --event-handlers console_direct+ \
   --cmake-clean-cache \
   --cmake-args \

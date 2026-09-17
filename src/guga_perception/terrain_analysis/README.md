@@ -44,7 +44,7 @@ rolloverTerrainVoxels → voxelizeTerrain → updateTerrainVoxels → collectTer
 ## 测试
 
 ```bash
-# 单元测试（构建两个 terrain 包并运行 terrain_analysis 测试）
+# 单元测试（构建 terrain_analysis 包并运行其测试）
 scripts/pre-commit/run_terrain_analysis_tests.sh
 
 # 覆盖率（编译 + 运行 + gcovr 报告）
@@ -60,7 +60,7 @@ scripts/test/test_terrain_analysis_coverage.sh
 当前 `terrain_analysis` 测试套件：
 
 - `test_terrain_analysis`：完整管线行为
-- `test_state_ingest`：里程计、点云和清除状态接收
+- `test_state_ingest`：状态初值与接收（`ingestOdometry` 位姿与三角函数、`ingestLaserCloud` 首帧时间与越界裁剪）
 - `test_algorithm`：体素、地面估计、动态障碍和边界处理
 
 `estimateTerrainGround` 经 `voxelIndexOf(VoxelGrid::PLANAR, …)` 统一做越界判定；
@@ -114,12 +114,19 @@ scripts/test/test_terrain_analysis_coverage.sh
 永不生效（更紧的净空上界先行）。两处条件均已移除；`maxRelZ` 现仅在
 `ingestLaserCloud` 与 `keepTerrainVoxelPoint` 生效，不再是死参数。
 
-### 功能性风险：`CEILING_CLEARANCE` 同时是"可输出障碍的高度上限"
+### 功能性风险（已修复）：`ceilingClearance` 曾是硬编码的 0.1 m
 
-它现在是障碍输出的硬上界，即**距地面高于 0.1 m 的点一律不输出为障碍**。这与
-`vehicle_height`（默认 1.5，yaml 0.5，"低于此值才算障碍"）的意图不一致——实际
-生效的是更严的 0.1。对地形分析用途这个值偏小，会导致**除脚踝以下全部漏检**。
-隧道场景下 0.1 有裕量（实测顶隙约 260 mm），但开阔场地应重新评估。
+`ceilingClearance` 曾经是编译期常量 **0.1 m**，即"距地面高于 0.1 m 的点一律不输出为
+障碍"，对开阔场地过小（除脚踝以下全部漏检）。现已是 ROS 参数：代码默认 0.62 m，实车
+配置也为 **0.62 m**（车高 520 mm + 100 mm 裕量）。
+
+它与 `vehicleHeight`（代码默认 0.52 m，实车 0.52 m，"低于此值才算障碍"）配套使用，
+**实际上界是两者中更紧的那个**：若 `ceilingClearance < vehicleHeight`，则
+`vehicleHeight` 永不生效、高于 `ceilingClearance` 的障碍全部漏检。二者无编译期约束，
+故节点启动时由 `warnOnHeightParams()` 校验并告警（`terrain_analysis_node.cpp`）。
+换车需同时重设这两个值。
+
+（历史：0.1 m 源自隧道实测顶隙约 260 mm 的裕量取值，见提交 `3627c76` 恢复为参数。）
 
 ### 风险 5：索引相对、数值绝对
 
@@ -145,57 +152,53 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ## 输入
 
-| 节点                 | Topic             | 类型                      | 来源包/节点                  |
-| -------------------- | ----------------- | ------------------------- | ---------------------------- |
-| `terrainAnalysis`    | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
-| `terrainAnalysis`    | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
-| `terrainAnalysisExt` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
-| `terrainAnalysisExt` | `terrain_map`     | `sensor_msgs/PointCloud2` | `terrainAnalysis` (本包)     |
+| 节点              | Topic             | 类型                      | 来源包/节点                  |
+| ----------------- | ----------------- | ------------------------- | ---------------------------- |
+| `terrainAnalysis` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
+| `terrainAnalysis` | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
 
 ## 输出
 
-| 节点                 | Topic             | 类型                      | 坐标系 | 下游订阅者                                                  |
-| -------------------- | ----------------- | ------------------------- | ------ | ----------------------------------------------------------- |
-| `terrainAnalysis`    | `terrain_map`     | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` (intensity_voxel_layer, `pb_nav2_plugins`)  |
-|                      |                   |                           |        | `terrainAnalysisExt` (本包)                                 |
-| `terrainAnalysisExt` | `terrain_map_ext` | `sensor_msgs/PointCloud2` | `odom` | `global_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
-|                      |                   |                           |        | `pointcloud_to_laserscan` (`guga_perception`, 仅 SLAM 模式) |
+| 节点              | Topic         | 类型                      | 坐标系 | 下游订阅者                                                  |
+| ----------------- | ------------- | ------------------------- | ------ | ----------------------------------------------------------- |
+| `terrainAnalysis` | `terrain_map` | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` (intensity_voxel_layer, `pb_nav2_plugins`)  |
+|                   |               |                           |        | `global_costmap` (intensity_voxel_layer, `pb_nav2_plugins`) |
+|                   |               |                           |        | `pointcloud_to_laserscan` (`guga_perception`, 仅 SLAM 模式) |
 
 ## 数据流
 
 ```
 point_lio (cloud_registered, aft_mapped_to_init)
   │
-loam_interface 
-  │
-  ├─(lidar_odometry)──── terrainAnalysisExt(terrain_map_ext)
-  │                                 │  
-  │                                 ├─── global_costmap
-  │                                 │    (intensity_voxel_layer, pb_nav2_plugins)
-  │                                 │
-  │                                 └─── pointcloud_to_laserscan
-  │                                      (obstacle_scan)
-  │                                             └─ slam_toolbox (map)
-  │                                                         (仅 SLAM 模式)
+loam_interface
   │
   └─(lidar_odometry)──── terrainAnalysis(terrain_map)
      (registered_scan)    │
                           ├─── local_costmap
                           │    (intensity_voxel_layer, pb_nav2_plugins)
                           │
-                          └─── terrainAnalysisExt
-                               (terrain_map_ext)── (见上)
+                          ├─── global_costmap
+                          │    (intensity_voxel_layer, pb_nav2_plugins)
+                          │
+                          └─── pointcloud_to_laserscan (obstacle_scan)
+                               └─ slam_toolbox (map)      (仅 SLAM 模式)
 ```
 
-## 两个节点
+## 单个节点
 
-|          | `terrainAnalysis` (`terrain_analysis_node.cpp`) | `terrainAnalysisExt` (`terrain_analysis_ext_node.cpp`) |
-| -------- | ---------------------------------------------- | ----------------------------------------------------- |
-| 输入     | 原始激光点云 + 里程计                          | `lidar_odometry` + `terrain_map`                      |
-| 参数默认 | Nav2 参数文件统一配置                          | 仅 `localTerrainMapRadius`                            |
-| 用途     | 主地形分析，局部 costmap                       | 按半径裁剪近场地形，全局 costmap + SLAM 建图          |
+本包只提供 `terrainAnalysis` 一个节点（`terrain_analysis_node.cpp`）：输入原始激光
+点云 + 里程计，输出 `terrain_map`，由 Nav2 参数文件统一配置。
 
-> 注意：`terrainAnalysisExt` 目前**只做半径过滤**（`mergeLocalTerrain`），
-> 原版 CMU 的远场累积与 `checkTerrainConn` 连通性判定整体缺失，且
-> `localTerrainMapRadius` 的语义与上游相反（原版用于**排除**近场并输出远场）。
-> 详见仓库根 `docs/TODOLIST.md`。
+`terrainAnalysisExt` 与 `terrain_map_ext` **已于 2026-09-17 删除**。它当时只剩
+`mergeLocalTerrain` 一个半径过滤器（把 `terrain_map` 里距车 > `localTerrainMapRadius`
+的点丢掉再转发，无信息增量），且 4.0 m 比 `local_costmap` 需要的 5 m 还窄，在做负功。
+消费者改指 `terrain_map`，属**严格放宽**（≤4 m → ≤±5.1 m，上限由 planar 网格决定）：
+
+| 原消费者 | 原输入 | 现输入 |
+| -------- | ------ | ------ |
+| `global_costmap` 的 `intensity_voxel_layer` | `terrain_map_ext`（≤4 m） | `terrain_map`（≤±5.1 m） |
+| `pointcloud_to_laserscan`（仅 SLAM 模式） | `terrain_map_ext` | `terrain_map` |
+
+原版 CMU 的远场累积与 `checkTerrainConn` 连通性判定在这套移植里本来就不存在
+（参数表是从原版抄的），不是这次删除造成的；若将来需要远场/连通性判定，需另行设计。
+详见仓库根 `docs/TODOLIST.md`。

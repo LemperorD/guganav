@@ -7,8 +7,8 @@
 | 感知（实车） | 低矮障碍物无法识别 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | 眼前（近距）障碍物识别异常 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | **待实测验证**：`vehicle_z` 基准（已按 O 离地 255 mm 推算为 −0.230，需实车读数确认） | `terrain_analysis` |
-| 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留） | `slam_toolbox`（外部依赖）/ `terrain_analysis_ext` |
-| 感知 | `terrain_analysis_ext` 已退化为近场半径过滤器：全局代价地图实际只拿到 4 m 地形，而配置按 10 m 工作 | `terrain_analysis_ext` / `terrain_analysis` |
+| 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留） | `slam_toolbox`（外部依赖）/ `terrain_analysis` |
+| 感知 | ~~`terrain_analysis_ext` 退化为近场半径过滤器~~ **已删除**（2026-09-17）：消费者（`global_costmap`、`pointcloud_to_laserscan`）改指 `terrain_map`，属严格放宽（4 m → ≤±5.1 m） | `terrain_analysis` |
 | 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价 | `terrain_analysis` |
 | 控制 | MPPI 的 GPU 方案（MPPI 本体已接入） | `nav2_mppi_controller` |
 | 控制（实车） | 避障后退方向错误：朝 chassis 后方运动，而非背离障碍物 | `pb_omni_pid_pursuit_controller` |
@@ -169,19 +169,24 @@ vehicle_z = (地面到 O 的高度) − 0.230
   即**高出车顶 10 cm 以上的点一律不输出为障碍**。
 - **眼前障碍物**：近距点云占比高且分布集中，需排查是否被地面估计抬高、动态障碍过滤误清，
   或近距裁剪范围（`obstacle_min_range`）影响。与上面"近处低地面点"很可能同源。
-- **伪静态障碍物**：SLAM 模式点云来自 `terrain_map_ext`，地图由 `slam_toolbox` 维护且无
+- **伪静态障碍物**：SLAM 模式点云来自 `terrain_map`（原 `terrain_map_ext` 已
+  于 2026-09-17 删除），地图由 `slam_toolbox` 维护且无
   消退机制；该包不在工作区内，改动需走配置或上游输入。
 - **避障后退方向**：需检查后退避障的期望速度是否在正确坐标系下生成
   （`prefer_forward_critic.cpp:42` 的后退惩罚 / 底盘正方向约定）。
 - **MPPI GPU 方案**：接入入口见 `nav2_mppi_controller`；导航组合用 `controller:=mppi`。
-- **ext 退化为近场过滤器**：ext 现在只做 `mergeLocalTerrain` 半径过滤，无远场累积、
-  无连通性检查；原版 CMU 的远场 + `checkTerrainConn` 判定整体缺失（参数表是从原版
-  抄的，实现只剩近场合并段）。注意 `localTerrainMapRadius` 语义被反转：原版用它
-  **排除**近场、输出远场，我们用它**只保留**近场。半径链：主版裁剪 ±11 m →
-  提取窗口 ±5 m（`collectTerrainCloud` 的局部常量 `EXTRACT_HALF_WINDOW=5` × 1.0 m）
-  → ext 再滤 ≤4 m；
-  而 `global_costmap` 的 `obstacle_max_range` 配的是 10 m
-  （`reality/nav2_params.yaml`），即全局代价地图拿到的地形比 `local_costmap`（5 m）还少。
+- **ext 已删除（2026-09-17）**：它当时只剩 `mergeLocalTerrain` 一个半径过滤器——
+  把 `terrain_map` 里距车 > `localTerrainMapRadius`(4.0 m) 的点丢掉再转发，无信息
+  增量，而 4 m 比 `local_costmap` 需要的 5 m 还窄，**在做负功**。原版 CMU 的远场累积
+  与 `checkTerrainConn` 连通性判定在这套移植里本来就不存在（参数表是从原版抄的），
+  不是这次删除造成的；若将来需要远场/连通性判定，需另行设计。
+  删除后消费者改指 `terrain_map`（严格放宽：≤4 m → ≤±5.1 m，受 planar 网格限制）：
+  `global_costmap` 的 `intensity_voxel_layer`、以及 SLAM 模式的 `pointcloud_to_laserscan`。
+  随之移除：`terrain_map_ext` 话题、`localTerrainMapRadius` 参数、`navigation_launch.py`
+  里的 ext 节点（独立与 composable 两种声明）、`guga_bringup` 的 exec_depend、
+  两个脚本的包列表与 rviz 话题项。
+  现半径链：主版裁剪 ±11 m → 提取窗口 ±5.5 m（`collectTerrainCloud` 的
+  `EXTRACT_HALF_WINDOW=5` × 1.0 m 格）→ 输出受 planar 网格限制为 ±5.1 m。
 - **Terrain voxel 网格 21×21 是否必要（待定，已测量）**：不能只看"外圈 320 格从未被
   `collectTerrainCloud` 读取"就断定是空转。外圈实为**车辆前方的地形预存区**：
   `voxelizeTerrain` 按车辆当前位置归格、`rolloverTerrainVoxels` 随车滚动，车前进时

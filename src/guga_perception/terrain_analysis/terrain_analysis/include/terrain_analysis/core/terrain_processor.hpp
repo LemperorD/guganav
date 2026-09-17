@@ -17,8 +17,8 @@ namespace terrain_analysis {
    *   - 管线各阶段（voxelizeTerrain / updateTerrainVoxels /
    * estimateTerrainGround / …）是**实现细节**， 一律
    * private，可自由重构签名而不影响任何外部调用方。
-   *   - 外部只能通过四个语义入口驱动：ingestOdometry / ingestLaserCloud /
-   *     ingestClearing / run，并读取 terrainCloudElev()。
+   *   - 外部只能通过三个语义入口驱动：ingestOdometry / ingestLaserCloud /
+   *     run，并读取 terrainCloudElev()。
    *   - 需要白盒验证各阶段的测试通过 `friend` 显式获得访问权（见下），
    *     刻意不把这些阶段提升为公开 API —— 否则内部编排序会固化成对外契约。
    *

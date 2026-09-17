@@ -27,7 +27,7 @@
 Point-LIO /aft_mapped_to_init -> loam_interface /lidar_odometry
   -> sensor_scan_generation /odometry -> controller / velocity_smoother
 
-terrain_map / terrain_map_ext
+terrain_map
   -> IntensityVoxelLayer -> ESDF -> Inflation -> local/global costmap
   -> JPS (global) -> 7 阶 B-spline（显式 ESDF 梯度优化为可选）-> nav_msgs/Path
   -> Omni PID Pursuit @ 20 Hz -> cmd_vel_controller
@@ -70,7 +70,7 @@ Point-LIO `aft_mapped_to_init`（6DoF pose）
 
 #### terrain map：可保留为障碍高度层，不能当完整地形模型
 
-- `terrain_analysis` 输入 `/lidar_odometry` 与 `/registered_scan`，输出 `/terrain_map`；扩展实例输出 `/terrain_map_ext`。输出点 intensity 的实际定义是 `point.z - estimated_ground_height`，即**相对局部估计地面的离地高度**。local 默认地形/平面体素尺度分别为 `1.0 m`、`0.2 m`；地面高度取局部最低点或分位数。
+- `terrain_analysis` 输入 `/lidar_odometry` 与 `/registered_scan`，输出 `/terrain_map`（原扩展实例 `/terrain_map_ext` 已于 2026-09-17 随 `terrain_analysis_ext` 一起删除，消费者改指 `/terrain_map`）。输出点 intensity 的实际定义是 `point.z - estimated_ground_height`，即**相对局部估计地面的离地高度**。local 默认地形/平面体素尺度分别为 `1.0 m`、`0.2 m`；地面高度取局部最低点或分位数。
 - 实车 `useSorting=True, quantileZ=0.2` 的作用，是让连续坡面相对各自局部地面的高度接近零，从而不把整面坡当障碍。这可支持“坡面点云不过度抬高 costmap”，但没有显式估计纵坡、横坡、粗糙度、坡向、地形置信度、摩擦或可通行速度。
 - `clearDyObs=True` 只是按点的相对高度、距离与雷达垂直视场启发式过滤疑似动态点；没有目标 ID、数据关联、速度估计或未来轨迹，不能算动态障碍跟踪/预测。
 - 扩展实例 YAML 的 `checkTerrainConn`、`terrainConnThre`、`ceilingFilteringThre` 与代码声明的 `checkTerrainConnectivity`、`terrainConnectivityThreshold`、`ceilingFilterThreshold` 不一致，因此这些配置项很可能未被节点采用。当前 `noDataObstacle=False` 也意味着坡顶盲区、落差或负障碍造成的无数据区不会默认阻塞。

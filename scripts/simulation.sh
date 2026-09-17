@@ -313,7 +313,6 @@ cleanup_simulation_processes() {
     "loam_interface"
     "sensor_scan_generation"
     "terrain_analysis"
-    "terrain_analysis_ext"
     "controller_server"
     "planner_server"
     "bt_navigator"
