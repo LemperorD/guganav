@@ -1,7 +1,7 @@
 // 体素地图（跨帧持久）的维护：滚动、归格、按叶保留最新观测。
 //
 // 从 TerrainPipeline 提取为类，使"网格 + 窗口偏移"成为一份可单独构造、单独
-// 驱动的状态：所有输入（雷达位姿、当前时刻、配置）由调用方显式传入，不读任何
+// 驱动的状态：所有输入（雷达位置、当前时刻、配置）由调用方显式传入，不读任何
 // 全局状态。
 
 #include "terrain_analysis/core/terrain_voxel_map.hpp"
@@ -51,7 +51,8 @@ namespace terrain_analysis {
     return !(decayed && !near);
   }
 
-  void TerrainVoxelMap::update(const Cell& crop, const LidarPose& lidar,
+  void TerrainVoxelMap::update(const Cell& crop,
+                               const guga_common::Point3d& lidar,
                                double now_elapsed,
                                const TerrainConfig& config) {
     rollover(lidar, config.terrain_voxel_size);
@@ -71,7 +72,8 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainVoxelMap::rollover(const LidarPose& lidar, double voxel_size) {
+  void TerrainVoxelMap::rollover(const guga_common::Point3d& lidar,
+                                 double voxel_size) {
     double center_x = voxel_size * shift_x_;
     double center_y = voxel_size * shift_y_;
 
@@ -93,7 +95,8 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainVoxelMap::addFrame(const Cell& crop, const LidarPose& lidar,
+  void TerrainVoxelMap::addFrame(const Cell& crop,
+                                 const guga_common::Point3d& lidar,
                                  double voxel_size) {
     for (const auto& point : crop.points) {
       const GridIndex index = gridIndex(point.x, point.y, lidar.x, lidar.y,
@@ -108,7 +111,8 @@ namespace terrain_analysis {
   }
 
   void TerrainVoxelMap::rebuild(const TerrainConfig& config,
-                                const LidarPose& lidar, double now_elapsed) {
+                                const guga_common::Point3d& lidar,
+                                double now_elapsed) {
     // 每个格子每帧重建一次，逐叶只保留"观测时刻最新"的那一个点。
     //
     // 时刻取最新而不是平均：叶内混有新老点时，平均会把仍在被观测的表面判成

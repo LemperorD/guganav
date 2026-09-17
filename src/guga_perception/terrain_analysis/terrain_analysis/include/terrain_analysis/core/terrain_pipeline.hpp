@@ -86,8 +86,8 @@ namespace terrain_analysis {
       return *state_.laser_cloud_crop;
     }
 
-    /** @brief 雷达位姿（分发体素地图时使用）。 */
-    [[nodiscard]] const LidarPose& lidarPose() const noexcept {
+    /** @brief 雷达位置（分发体素地图时使用）。 */
+    [[nodiscard]] const guga_common::Point3d& lidarPosition() const noexcept {
       return state_.lidar;
     }
 

@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
 
     const auto t0 = std::chrono::steady_clock::now();
     // 与生产路径一致：先把本帧数据分发给体素地图，再跑逐帧阶段。
-    voxel_map.update(pipeline.croppedCloud(), pipeline.lidarPose(),
+    voxel_map.update(pipeline.croppedCloud(), pipeline.lidarPosition(),
                      pipeline.elapsedSeconds(), pipeline.config());
     voxel_map.collectCloud(pipeline.collectedCloud());
     pipeline.runStages();

@@ -99,7 +99,7 @@ namespace terrain_analysis {
     }
 
     // 先把本帧数据分发给体素地图（跨帧持久），再跑逐帧阶段。
-    voxel_map_.update(pipeline_.croppedCloud(), pipeline_.lidarPose(),
+    voxel_map_.update(pipeline_.croppedCloud(), pipeline_.lidarPosition(),
                       pipeline_.elapsedSeconds(), pipeline_.config());
     voxel_map_.collectCloud(pipeline_.collectedCloud());
     pipeline_.runStages();

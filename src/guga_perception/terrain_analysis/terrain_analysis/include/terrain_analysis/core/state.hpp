@@ -1,7 +1,7 @@
 #pragma once
 
 #include "terrain_analysis/core/grid.hpp"
-#include "terrain_analysis/core/lidar_pose.hpp"
+#include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -17,9 +17,9 @@
  * 坐标系；输出点云的 intensity 表示点相对估计地面的高度。
  */
 struct TerrainState {
-  // ---- 雷达位姿（terrain 订阅的是雷达位姿，不是车体位姿）----
-  /** @brief 雷达在 odom 坐标系下的位置。 */
-  LidarPose lidar;
+  // ---- 雷达位置（terrain 订阅的是雷达里程计，不是车体里程计）----
+  /** @brief 雷达在 odom 坐标系下的位置（姿态在下面以三角函数缓存）。 */
+  guga_common::Point3d lidar;
   /** @brief 雷达 roll 的正弦和余弦。 */
   double sin_lidar_roll = 0.0, cos_lidar_roll = 0.0;
   /** @brief 雷达 pitch 的正弦和余弦。 */

@@ -2,7 +2,7 @@
 
 #include "terrain_analysis/core/config.hpp"
 #include "terrain_analysis/core/grid.hpp"
-#include "terrain_analysis/core/lidar_pose.hpp"
+#include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -19,7 +19,7 @@ namespace terrain_analysis {
    * 这是管线里唯一跨帧保留的点云数据。逐帧数据（裁剪点云、采集点云、平面高程
    * 等）不属于这里。
    *
-   * 内部只有一种锚点来源：生产路径走 update()，它在一帧内用同一个雷达位姿完成
+   * 内部只有一种锚点来源：生产路径走 update()，它在一帧内用同一个雷达位置完成
    * "滚动 → 归格 → 重建"三步，调用方无法把不同的锚点混进同一帧。逐阶段方法
    * （rollover / addFrame / rebuild）单独开放，供白盒测试与后续阶段使用。
    */
@@ -33,17 +33,18 @@ namespace terrain_analysis {
     /**
      * @brief 一帧的完整维护：滚动窗口 → 本帧点云归格 → 逐格重建。
      * @param crop 本帧裁剪点云（intensity 已由 ingest 写入观测时刻）。
-     * @param lidar 雷达位姿。
+     * @param lidar 雷达位置（odom 下）。
      * @param now_elapsed 当前时刻（相对首帧，秒）。
      */
-    void update(const Cell& crop, const LidarPose& lidar, double now_elapsed,
-                const TerrainConfig& config);
+    void update(const Cell& crop, const guga_common::Point3d& lidar,
+                double now_elapsed, const TerrainConfig& config);
 
     /** @brief 雷达移动时滚动网格，维持以雷达为中心的窗口。 */
-    void rollover(const LidarPose& lidar, double voxel_size);
+    void rollover(const guga_common::Point3d& lidar, double voxel_size);
 
     /** @brief 把本帧点云按位置分配到体素格。 */
-    void addFrame(const Cell& crop, const LidarPose& lidar, double voxel_size);
+    void addFrame(const Cell& crop, const guga_common::Point3d& lidar,
+                  double voxel_size);
 
     /**
      * @brief 逐格重建：按叶保留最新观测点，并做高度带与年龄过滤。
@@ -52,7 +53,7 @@ namespace terrain_analysis {
      * 的那一个点，于是"有新点即刷新、无新点才判年龄"不需要额外状态：代表点自带
      * 的时刻就是该叶的 last_seen。
      */
-    void rebuild(const TerrainConfig& config, const LidarPose& lidar,
+    void rebuild(const TerrainConfig& config, const guga_common::Point3d& lidar,
                  double now_elapsed);
 
     /**

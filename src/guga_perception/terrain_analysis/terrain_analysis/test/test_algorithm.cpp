@@ -50,15 +50,15 @@ namespace terrain_analysis {
     void runStage(stage::Id id) {
       switch (id) {
         case stage::Id::ROLLOVER:
-          voxelMap().rollover(lidarPose(), config().terrain_voxel_size);
+          voxelMap().rollover(lidarPosition(), config().terrain_voxel_size);
           break;
         case stage::Id::VOXELIZE:
-          voxelMap().addFrame(*state().laser_cloud_crop, lidarPose(),
+          voxelMap().addFrame(*state().laser_cloud_crop, lidarPosition(),
                               config().terrain_voxel_size);
           break;
         case stage::Id::UPDATE_TERRAIN_VOXELS:
           voxelMap().rebuild(
-              config(), lidarPose(),
+              config(), lidarPosition(),
               state().laser_cloud_time - state().system_init_time);
           break;
         case stage::Id::COLLECT:
@@ -88,7 +88,7 @@ namespace terrain_analysis {
     TerrainVoxelMap& voxelMap() {
       return voxel_map_;
     }
-    LidarPose lidarPose() const {
+    guga_common::Point3d lidarPosition() const {
       return pipeline_.state_.lidar;
     }
 

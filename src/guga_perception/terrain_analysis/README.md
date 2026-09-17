@@ -19,7 +19,7 @@ ROS2 消息 → TerrainPipeline::ingest* → TerrainVoxelMap::update → collect
 - **TerrainVoxelMap**（`core/terrain_voxel_map.hpp`）— 管线里唯一跨帧保留的数据
   （体素点云 + 以雷达为中心的滑动窗口），负责 A（滚动 / 归格 / 重建）与 B（采集）两组
 - **节点层**（`terrain_analysis_node.*`）— 只做 ROS 接线与数据分发：声明参数、订阅
-  odom 与点云、把裁剪点云和雷达位姿交给体素地图、把采集结果交回管线、发布 `terrain_map`
+  odom 与点云、把裁剪点云和雷达位置交给体素地图、把采集结果交回管线、发布 `terrain_map`
 - 白盒测试经 `friend` 访问 `TerrainPipeline` 的内部阶段（见 `test_algorithm.cpp`）
 
 ## 管线
@@ -91,7 +91,7 @@ scripts/test/test_terrain_analysis_coverage.sh
 | 参考系 | 定义 | 使用位置 |
 | ------ | ---- | -------- |
 | odom 世界系 | `point.z` 绝对值 | `TerrainVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
-| 雷达系（`lidar_*` 为雷达位姿） | `relative_z = point.z − state_.lidar_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `minRelZ` |
+| 雷达系（`lidar_*` 取自雷达里程计的位姿） | `relative_z = point.z − state_.lidar_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `minRelZ` |
 | 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity |
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数

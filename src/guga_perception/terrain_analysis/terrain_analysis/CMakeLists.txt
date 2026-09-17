@@ -30,6 +30,7 @@ find_package(tf2 REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
+find_package(guga_common REQUIRED)
 
 # Library（组件库必须 SHARED，plugin 动态加载）
 add_library(terrain_analysis_lib SHARED
@@ -50,7 +51,8 @@ ament_target_dependencies(
   tf2_geometry_msgs
   message_filters
   pcl_ros
-  pcl_conversions)
+  pcl_conversions
+  guga_common)
 
 
 

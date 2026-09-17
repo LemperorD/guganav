@@ -31,11 +31,11 @@ if colcon build --help 2>/dev/null | grep -q -- "--allow-overriding"; then
 fi
 
 colcon build \
-  --base-paths "$TERRAIN_ROOT" \
+  --base-paths "$TERRAIN_ROOT" "$WS/src/guga_common" \
   --symlink-install \
   --parallel-workers 1 \
   "${ALLOW_OVERRIDE_ARGS[@]}" \
-  --packages-select terrain_analysis \
+  --packages-select guga_common terrain_analysis \
   --event-handlers console_direct+ \
   --cmake-clean-cache \
   --cmake-args \
