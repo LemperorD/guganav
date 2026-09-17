@@ -1,6 +1,6 @@
 #pragma once
 
-#include "terrain_analysis/core/terrain_processor.hpp"
+#include "terrain_analysis/core/terrain_pipeline.hpp"
 #include "terrain_analysis/core/terrain_voxel_map.hpp"
 
 #include <nav_msgs/msg/odometry.hpp>
@@ -14,7 +14,8 @@ namespace terrain_analysis {
    * @brief terrain_analysis ROS2 节点封装。
    *
    * 只负责 ROS 层的接线：声明参数、订阅 odom/点云、按固定周期驱动
-   * TerrainProcessor 并把结果发布为 terrain_map。算法与状态都在 Processor 内。
+   * TerrainPipeline 并把结果发布为 terrain_map。算法状态都在 TerrainPipeline
+   * 内。
    */
   class TerrainAnalysis : public rclcpp::Node {
   public:
@@ -37,21 +38,21 @@ namespace terrain_analysis {
     /** @brief 获取最近一次生成的带高度点云。 */
     [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev()
         const {
-      return processor_.terrainCloudElev();
+      return pipeline_.terrainCloudElev();
     }
     /** @brief 获取可修改的算法配置，主要用于测试和节点初始化。 */
     [[nodiscard]] TerrainConfig& config() noexcept {
-      return processor_.config();
+      return pipeline_.config();
     }
-    /** @brief 获取处理器，供白盒测试驱动。 */
-    [[nodiscard]] TerrainProcessor& processor() noexcept {
-      return processor_;
+    /** @brief 获取逐帧管线，供白盒测试驱动。 */
+    [[nodiscard]] TerrainPipeline& pipeline() noexcept {
+      return pipeline_;
     }
-    /** @brief 获取只读处理器。 */
-    [[nodiscard]] const TerrainProcessor& processor() const noexcept {
-      return processor_;
+    /** @brief 获取只读的逐帧管线。 */
+    [[nodiscard]] const TerrainPipeline& pipeline() const noexcept {
+      return pipeline_;
     }
-    /** @brief 跨帧持久的体素地图；由节点持有并逐帧分发给处理器。 */
+    /** @brief 跨帧持久的体素地图；由节点持有并逐帧分发给管线。 */
     [[nodiscard]] TerrainVoxelMap& voxelMap() noexcept {
       return voxel_map_;
     }
@@ -60,9 +61,9 @@ namespace terrain_analysis {
     /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
 
-    /** @brief 跨帧持久的体素地图：节点是它的属主，处理器按帧接收。 */
+    /** @brief 跨帧持久的体素地图：节点是它的属主，管线按帧接收。 */
     TerrainVoxelMap voxel_map_;
-    TerrainProcessor processor_;
+    TerrainPipeline pipeline_;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr

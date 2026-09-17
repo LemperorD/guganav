@@ -32,7 +32,7 @@ namespace terrain_analysis {
 
   TerrainAnalysis::TerrainAnalysis(const rclcpp::NodeOptions& options)
       : Node("terrain_analysis", options) {
-    TerrainConfig& config = processor_.config();
+    TerrainConfig& config = pipeline_.config();
     config.scan_voxel_size = declare_parameter("scanVoxelSize",
                                                config.scan_voxel_size);
     config.scan_voxel_size_z = declare_parameter("scanVoxelSizeZ",
@@ -72,9 +72,9 @@ namespace terrain_analysis {
           const auto& q = msg->pose.pose.orientation;
           tf2::Matrix3x3(tf2::Quaternion(q.x, q.y, q.z, q.w))
               .getRPY(roll, pitch, yaw);
-          processor_.ingestOdometry(
-              msg->pose.pose.position.x, msg->pose.pose.position.y,
-              msg->pose.pose.position.z, roll, pitch, yaw);
+          pipeline_.ingestOdometry(msg->pose.pose.position.x,
+                                   msg->pose.pose.position.y,
+                                   msg->pose.pose.position.z, roll, pitch, yaw);
         });
 
     sub_laser_cloud_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -82,8 +82,8 @@ namespace terrain_analysis {
         [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
           auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
           pcl::fromROSMsg(*msg, *cloud);
-          processor_.ingestLaserCloud(
-              cloud, rclcpp::Time(msg->header.stamp).seconds());
+          pipeline_.ingestLaserCloud(cloud,
+                                     rclcpp::Time(msg->header.stamp).seconds());
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -94,24 +94,24 @@ namespace terrain_analysis {
   }
 
   bool TerrainAnalysis::processOnce() {
-    if (!processor_.hasPendingCloud()) {
+    if (!pipeline_.hasPendingCloud()) {
       return rclcpp::ok();
     }
 
     // 先把本帧数据分发给体素地图（跨帧持久），再跑逐帧阶段。
-    voxel_map_.update(processor_.croppedCloud(), processor_.lidarPose(),
-                      processor_.elapsedSeconds(), processor_.config());
-    voxel_map_.collectCloud(processor_.collectedCloud());
-    processor_.runStages();
+    voxel_map_.update(pipeline_.croppedCloud(), pipeline_.lidarPose(),
+                      pipeline_.elapsedSeconds(), pipeline_.config());
+    voxel_map_.collectCloud(pipeline_.collectedCloud());
+    pipeline_.runStages();
     publishPointCloud();
     return rclcpp::ok();
   }
 
   void TerrainAnalysis::publishPointCloud() {
     sensor_msgs::msg::PointCloud2 message;
-    pcl::toROSMsg(processor_.terrainCloudElev(), message);
+    pcl::toROSMsg(pipeline_.terrainCloudElev(), message);
     message.header.stamp = rclcpp::Time(
-        static_cast<int64_t>(processor_.laserCloudTime() * 1e9));
+        static_cast<int64_t>(pipeline_.laserCloudTime() * 1e9));
     message.header.frame_id = "odom";
     pub_terrain_map_->publish(message);
   }

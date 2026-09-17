@@ -1,4 +1,4 @@
-#include "terrain_analysis/core/terrain_processor.hpp"
+#include "terrain_analysis/core/terrain_pipeline.hpp"
 #include "terrain_analysis/core/config.hpp"
 #include "terrain_analysis/core/terrain_voxel_map.hpp"
 #include "gtest/gtest.h"
@@ -9,7 +9,7 @@
 
 #include <cmath>
 
-// 白盒测试需要逐阶段驱动管线；fixture 是 TerrainProcessor 的 friend，
+// 白盒测试需要逐阶段驱动管线；fixture 是 TerrainPipeline 的 friend，
 // 因此把这类调用收在它以内的分发器里。
 namespace stage {
   enum class Id {
@@ -34,7 +34,7 @@ namespace terrain_analysis {
     }
 
     void resetState() {
-      processor_.state_ = {};
+      pipeline_.state_ = {};
       voxel_map_ = TerrainVoxelMap{};
       for (auto& ptr : voxelMap().cells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -65,35 +65,35 @@ namespace terrain_analysis {
           voxelMap().collectCloud(*state().terrain_cloud);
           break;
         case stage::Id::ESTIMATE_TERRAIN_GROUND:
-          processor_.estimateTerrainGround();
+          pipeline_.estimateTerrainGround();
           break;
         case stage::Id::PLANAR_ELEVATION:
-          processor_.computePlanarElevation();
+          pipeline_.computePlanarElevation();
           break;
         case stage::Id::HEIGHT_MAP:
-          processor_.computeHeightMap();
+          pipeline_.computeHeightMap();
           break;
       }
     }
 
-    TerrainProcessor& processor() {
-      return processor_;
+    TerrainPipeline& pipeline() {
+      return pipeline_;
     }
     TerrainConfig& config() {
-      return processor_.config_;
+      return pipeline_.config_;
     }
     TerrainState& state() {
-      return processor_.state_;
+      return pipeline_.state_;
     }
     TerrainVoxelMap& voxelMap() {
       return voxel_map_;
     }
     LidarPose lidarPose() const {
-      return processor_.state_.lidar;
+      return pipeline_.state_.lidar;
     }
 
     // then trigger update. Returns the point count retained in the cell.
-    int updateSinglePoint(TerrainProcessor& proc, double relative_z,
+    int updateSinglePoint(TerrainPipeline& proc, double relative_z,
                           double distance) {
       TerrainConfig& config = proc.config_;
       TerrainState& state = proc.state_;
@@ -127,8 +127,8 @@ namespace terrain_analysis {
       return static_cast<int>(voxel_map_.cells()[center_cell]->points.size());
     }
 
-    TerrainProcessor processor_;
-    /** @brief 跨帧持久的体素地图：由测试持有，按需喂给处理器。 */
+    TerrainPipeline pipeline_;
+    /** @brief 跨帧持久的体素地图：由测试持有，按需传给管线。 */
     TerrainVoxelMap voxel_map_;
   };
 }  // namespace terrain_analysis
@@ -572,7 +572,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
   double z_margin = config().distance_ratio_z * 1.0;     // = 0.2
   double boundary = config().min_relative_z - z_margin;  // = -1.7
-  int kept = updateSinglePoint(processor(), boundary + 0.01, 1.0);
+  int kept = updateSinglePoint(pipeline(), boundary + 0.01, 1.0);
   EXPECT_EQ(kept, 1);
 }
 
@@ -580,7 +580,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
 TEST_F(AlgorithmTest, KeepVoxelPoint_AtLowerBoundary_Excluded) {
   double z_margin = config().distance_ratio_z * 1.0;
   double boundary = config().min_relative_z - z_margin;
-  int kept = updateSinglePoint(processor(), boundary, 1.0);
+  int kept = updateSinglePoint(pipeline(), boundary, 1.0);
   EXPECT_EQ(kept, 0);
 }
 
@@ -588,7 +588,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_AtLowerBoundary_Excluded) {
 TEST_F(AlgorithmTest, KeepVoxelPoint_AtUpperBoundary_Excluded) {
   double z_margin = config().distance_ratio_z * 1.0;
   double boundary = config().max_relative_z + z_margin;  // = 0.4
-  int kept = updateSinglePoint(processor(), boundary, 1.0);
+  int kept = updateSinglePoint(pipeline(), boundary, 1.0);
   EXPECT_EQ(kept, 0);
 }
 
@@ -596,7 +596,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_AtUpperBoundary_Excluded) {
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowUpperBoundary_Kept) {
   double z_margin = config().distance_ratio_z * 1.0;
   double boundary = config().max_relative_z + z_margin;
-  int kept = updateSinglePoint(processor(), boundary - 0.01, 1.0);
+  int kept = updateSinglePoint(pipeline(), boundary - 0.01, 1.0);
   EXPECT_EQ(kept, 1);
 }
 

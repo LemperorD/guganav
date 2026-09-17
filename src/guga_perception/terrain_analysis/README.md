@@ -5,15 +5,15 @@
 ## 架构
 
 ```
-ROS2 消息 → TerrainProcessor::ingest* → TerrainProcessor::run() → publish → ROS2 消息
+ROS2 消息 → TerrainPipeline::ingest* → TerrainPipeline::run() → publish → ROS2 消息
  (订阅)          (写入内部 state_)          (9 阶段私有管线)          (发布)    (terrain_map)
 ```
 
-- **TerrainProcessor**（`core/terrain_processor.hpp`）— 自持 `TerrainConfig` + `TerrainState`，
+- **TerrainPipeline**（`core/terrain_pipeline.hpp`）— 自持 `TerrainConfig` + `TerrainState`，
   对外只暴露 `ingestOdometry` / `ingestLaserCloud` / `run` / `terrainCloudElev` 等入口，
   管线各阶段为私有成员，可自由重构而不影响调用方
 - **节点层**（`terrain_analysis_node.*`）— 仅做 ROS 接线：声明参数、订阅、定时驱动与发布
-- 白盒测试经 `friend` 访问 `TerrainProcessor` 的内部阶段（见 `test_algorithm.cpp` 的 `runStage`）
+- 白盒测试经 `friend` 访问 `TerrainPipeline` 的内部阶段（见 `test_algorithm.cpp` 的 `runStage`）
 
 ## 管线
 

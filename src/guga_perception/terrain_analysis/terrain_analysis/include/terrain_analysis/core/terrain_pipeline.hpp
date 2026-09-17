@@ -13,7 +13,7 @@
 namespace terrain_analysis {
 
   /**
-   * @brief 地形分析处理器：拥有算法状态、对外只暴露"一件事"一个入口。
+   * @brief 逐帧地形管线：持有算法状态，负责输入摄取、C/E 两组阶段与输出访问。
    *
    * 设计意图（可见性契约）：
    *   - 管线各阶段（voxelizeTerrain / updateTerrainVoxels /
@@ -27,14 +27,14 @@ namespace terrain_analysis {
    * 线程模型：本类**不做同步**。调用方必须保证 ingest* 与 run 不并发执行
    * （当前由节点在单线程执行器中串行调用满足）。
    */
-  class TerrainProcessor {
+  class TerrainPipeline {
   public:
-    TerrainProcessor() = default;
+    TerrainPipeline() = default;
 
-    TerrainProcessor(const TerrainProcessor&) = delete;
-    TerrainProcessor& operator=(const TerrainProcessor&) = delete;
-    TerrainProcessor(TerrainProcessor&&) = delete;
-    TerrainProcessor& operator=(TerrainProcessor&&) = delete;
+    TerrainPipeline(const TerrainPipeline&) = delete;
+    TerrainPipeline& operator=(const TerrainPipeline&) = delete;
+    TerrainPipeline(TerrainPipeline&&) = delete;
+    TerrainPipeline& operator=(TerrainPipeline&&) = delete;
 
     /**
      * @brief 接收里程计位姿，更新雷达位置与姿态三角函数缓存。
@@ -64,8 +64,8 @@ namespace terrain_analysis {
      * @brief 跑一帧的其余阶段：平面高程 → 输出。
      *
      * 采集（B 组）也不在这里：它由调用方用 `TerrainVoxelMap::collectCloud`
-     * 写入本处理器的逐帧容器，再调用本函数。这样"哪些数据分发给谁"由调用方
-     * 决定，处理器只负责阶段的编排。
+     * 写入本管线的逐帧容器，再调用本函数。这样"哪些数据分发给谁"由调用方
+     * 决定，管线只负责阶段的编排。
      */
     void runStages();
 

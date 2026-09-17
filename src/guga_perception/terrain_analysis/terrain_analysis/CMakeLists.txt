@@ -34,7 +34,7 @@ find_package(pcl_ros REQUIRED)
 # Library（组件库必须 SHARED，plugin 动态加载）
 add_library(terrain_analysis_lib SHARED
   src/terrain_analysis_node.cpp
-  src/core/terrain_processor.cpp
+  src/core/terrain_pipeline.cpp
   src/core/terrain_voxel_map.cpp)
 
 target_include_directories(terrain_analysis_lib PUBLIC include)

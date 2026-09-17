@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
                                rclcpp::Parameter("minObstacleHeight", 0.04),
                                rclcpp::Parameter("ceilingClearance", 0.62)});
   auto node = std::make_unique<TerrainAnalysis>(options);
-  auto& processor = node->processor();
+  auto& pipeline = node->pipeline();
   terrain_analysis::TerrainVoxelMap voxel_map;
   const bool ghost_mode = ghost_frame >= 0;
   const auto frame = makeFrame(ghost_mode);  // 幽灵场景下含 4.2 m 方块
@@ -119,18 +119,18 @@ int main(int argc, char** argv) {
   for (int i = 0; i < frames; i++) {
     const double t = i * 0.1;  // 10 Hz
     const bool ghost_present = ghost_frame < 0 || i < ghost_frame;
-    processor.ingestOdometry(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    processor.ingestLaserCloud(ghost_present ? frame : frame_no_ghost, t);
+    pipeline.ingestOdometry(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    pipeline.ingestLaserCloud(ghost_present ? frame : frame_no_ghost, t);
 
     const auto t0 = std::chrono::steady_clock::now();
     // 与生产路径一致：先把本帧数据分发给体素地图，再跑逐帧阶段。
-    voxel_map.update(processor.croppedCloud(), processor.lidarPose(),
-                     processor.elapsedSeconds(), processor.config());
-    voxel_map.collectCloud(processor.collectedCloud());
-    processor.runStages();
+    voxel_map.update(pipeline.croppedCloud(), pipeline.lidarPose(),
+                     pipeline.elapsedSeconds(), pipeline.config());
+    voxel_map.collectCloud(pipeline.collectedCloud());
+    pipeline.runStages();
     const auto t1 = std::chrono::steady_clock::now();
     if (ghost_frame >= 0 && i >= ghost_frame && ghost_clear_frame < 0
-        && countNear(processor.terrainCloudElev(), 4.2, 0.0, 0.3) == 0) {
+        && countNear(pipeline.terrainCloudElev(), 4.2, 0.0, 0.3) == 0) {
       ghost_clear_frame = i;  // 幽灵点从输出中消失的帧号
     }
     if (i >= 100) {  // 跳过预热
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  const auto& out = processor.terrainCloudElev();
+  const auto& out = pipeline.terrainCloudElev();
   std::printf(
       "leaf_xy=%.3f leaf_z=%.3f  frames=%d\n"
       "  单帧 run()      : %.3f ms（稳态 %d 帧均值）\n"

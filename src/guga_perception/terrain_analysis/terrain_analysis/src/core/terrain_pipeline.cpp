@@ -2,10 +2,10 @@
 //
 // Original work based on sensor_scan_generation package by Hongbiao Zhu.
 //
-// 本文件实现 TerrainProcessor：自持 TerrainConfig/TerrainState，对外仅暴露
+// 本文件实现 TerrainPipeline：自持 TerrainConfig/TerrainState，对外仅暴露
 // ingest* / run / terrainCloudElev；管线各阶段为私有成员，可自由重构。
 
-#include "terrain_analysis/core/terrain_processor.hpp"
+#include "terrain_analysis/core/terrain_pipeline.hpp"
 #include "terrain_analysis/core/config.hpp"
 #include "terrain_analysis/core/grid_lookup.hpp"
 #include "terrain_analysis/core/state.hpp"
@@ -17,8 +17,8 @@
 
 namespace terrain_analysis {
 
-  void TerrainProcessor::ingestOdometry(double x, double y, double z,
-                                        double roll, double pitch, double yaw) {
+  void TerrainPipeline::ingestOdometry(double x, double y, double z,
+                                       double roll, double pitch, double yaw) {
     state_.lidar.x = x;
     state_.lidar.y = y;
     state_.lidar.z = z;
@@ -31,7 +31,7 @@ namespace terrain_analysis {
     state_.cos_lidar_yaw = cos(yaw);
   }
 
-  void TerrainProcessor::ingestLaserCloud(
+  void TerrainPipeline::ingestLaserCloud(
       const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud,
       double timestamp_sec) {
     state_.laser_cloud_time = timestamp_sec;
@@ -61,7 +61,7 @@ namespace terrain_analysis {
     state_.new_laser_cloud = true;
   }
 
-  void TerrainProcessor::runStages() {
+  void TerrainPipeline::runStages() {
     state_.new_laser_cloud = false;
 
     // 分组与数据流向：
@@ -74,7 +74,7 @@ namespace terrain_analysis {
     computeHeightMap();
   }
 
-  void TerrainProcessor::estimateTerrainGround() {
+  void TerrainPipeline::estimateTerrainGround() {
     // 只清本阶段拥有的地面候选 F3；F4 由 computePlanarElevation 清，
     // F5 由 detectDynamicObstacles 清——每份数据只有一个属主。
     for (auto& point_elevations : state_.planar_point_elev) {
@@ -104,7 +104,7 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::computePlanarElevation() {
+  void TerrainPipeline::computePlanarElevation() {
     // 本阶段拥有 F4：没有候选的格保持 0（见 computeHeightMap 的说明）。
     state_.planar_voxel_elev.fill(0);
 
@@ -119,7 +119,7 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::computeHeightMap() {
+  void TerrainPipeline::computeHeightMap() {
     const double lidar_z = state_.lidar.z;
     auto& elevations = state_.terrain_cloud_elev;
     elevations->clear();
@@ -166,14 +166,13 @@ namespace terrain_analysis {
     }
   }
 
-  double TerrainProcessor::horizontalDistanceTo(double px, double py) const {
+  double TerrainPipeline::horizontalDistanceTo(double px, double py) const {
     return horizontalDistance(px, py, state_.lidar.x, state_.lidar.y);
   }
 
   // point_time 为该点的观测时刻（相对首帧的秒数）。对同一叶的代表点而言，
   // 它是叶内最新的观测时刻，见 updateTerrainVoxels。
-  void TerrainProcessor::addToPlanarNeighborhood3x3(int row, int col,
-                                                    double z) {
+  void TerrainPipeline::addToPlanarNeighborhood3x3(int row, int col, double z) {
     constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
 
     for (int delta_row = -1; delta_row <= 1; delta_row++) {
@@ -194,7 +193,7 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainProcessor::elevateByQuantile(int cell) {
+  void TerrainPipeline::elevateByQuantile(int cell) {
     auto& elevations = state_.planar_point_elev[cell];
     int point_count = static_cast<int>(elevations.size());
     if (point_count == 0) {
@@ -214,7 +213,7 @@ namespace terrain_analysis {
             : quantile_z;
   }
 
-  void TerrainProcessor::elevateByMinimum(int cell) {
+  void TerrainPipeline::elevateByMinimum(int cell) {
     auto& elevations = state_.planar_point_elev[cell];
     if (elevations.empty()) {
       return;

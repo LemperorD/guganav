@@ -24,17 +24,17 @@ namespace terrain_analysis {
     }
 
     void sendOdom(double x, double y, double z, double yaw) {
-      terrain_->processor().ingestOdometry(x, y, z, 0.0, 0.0, yaw);
+      terrain_->pipeline().ingestOdometry(x, y, z, 0.0, 0.0, yaw);
     }
 
     void sendCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                    double timestamp_sec) {
-      terrain_->processor().ingestLaserCloud(cloud, timestamp_sec);
+      terrain_->pipeline().ingestLaserCloud(cloud, timestamp_sec);
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;
 
-    /** @brief 跨帧持久的体素地图：测试自己持有并逐帧喂给处理器。 */
+    /** @brief 跨帧持久的体素地图：测试自己持有并逐帧传给管线。 */
     TerrainVoxelMap& voxelMap() {
       return voxel_map_;
     }
@@ -51,7 +51,7 @@ namespace terrain_analysis {
     sendCloud(cloud, 100.0);
     terrain_->processOnce();
 
-    EXPECT_TRUE(terrain_->processor().terrainCloudElev().points.empty())
+    EXPECT_TRUE(terrain_->pipeline().terrainCloudElev().points.empty())
         << "Flat ground should not be emitted as obstacles";
   }
 
@@ -65,10 +65,10 @@ namespace terrain_analysis {
     sendCloud(cloud, 100.0);
     terrain_->processOnce();
 
-    EXPECT_GT(terrain_->processor().terrainCloudElev().points.size(), 0U);
+    EXPECT_GT(terrain_->pipeline().terrainCloudElev().points.size(), 0U);
 
     float max_intensity = 0;
-    for (const auto& p : terrain_->processor().terrainCloudElev().points) {
+    for (const auto& p : terrain_->pipeline().terrainCloudElev().points) {
       max_intensity = std::max(max_intensity, p.intensity);
     }
     EXPECT_GT(max_intensity, 0.05F)
@@ -87,7 +87,7 @@ namespace terrain_analysis {
     terrain_->processOnce();
 
     bool found_isolated = false;
-    for (const auto& p : terrain_->processor().terrainCloudElev().points) {
+    for (const auto& p : terrain_->pipeline().terrainCloudElev().points) {
       if (p.x > 2.5F && p.intensity > 0.1F) {
         found_isolated = true;
         break;
