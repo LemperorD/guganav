@@ -23,3 +23,6 @@ rosbag/
 .cache
 .agents
 .mcp.json
+
+# 嵌入式 git 仓库（ros2 tracing 上游 clone），不作为本仓库内容
+src/ros2_tracing/
