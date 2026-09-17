@@ -6,7 +6,7 @@
 | 感知 | Point-LIO 重构：代码太乱，不急，可先当黑盒用 | `point_lio` |
 | 感知（实车） | 低矮障碍物无法识别 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | 眼前（近距）障碍物识别异常 | `terrain_analysis` / `rog_map_layer` |
-| 感知（实车） | **待实测验证**：`vehicle_z` 基准（已按 O 离地 255 mm 推算为 −0.230，需实车读数确认） | `terrain_analysis` |
+| 感知（实车） | **已实测确认**：`odom → base_footprint` 为单位变换 ⇒ odom 原点即 base_footprint，平地地面 z ≈ 0；`vehicle_z` 是**雷达**高度（≈ +0.230），原按"O 离地 255 mm"推算的 −0.230 符号相反，已改正 | `terrain_analysis` |
 | 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留） | `slam_toolbox`（外部依赖）/ `terrain_analysis` |
 | 感知 | ~~`terrain_analysis_ext` 退化为近场半径过滤器~~ **已删除**（2026-09-17）：消费者（`global_costmap`、`pointcloud_to_laserscan`）改指 `terrain_map`，属严格放宽（4 m → ≤±5.1 m） | `terrain_analysis` |
 | 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价 | `terrain_analysis` |
@@ -21,10 +21,10 @@
 ### 已完成的修复（2026-09 提交 34be0f4）
 
 **根因（已定位）**：`estimateTerrainGround` 里有一条 `CEILING_CLEARANCE` 上界，
-按**车高**筛地面候选。以实测标定值（O 离地 255 mm、`vehicle_z ≈ −0.230`）代入，
-其作用面是 `point.z ≥ −0.130`，即**离地仅 0.125 m**——凡高于脚踝的点全部被当
-"天花板"丢弃。这是**设计问题**（净空是"障碍能否通过"的判据，与"哪些点属于地面"
-无关），不是标定问题。
+按**车高**筛地面候选。按修正后的基准代入（`vehicle_z` = 雷达高度 ≈ +0.230、
+地面 z ≈ 0，当时的净空常量为 0.1），其作用面是 `point.z ≥ 0.330`，即**离地仅
+0.33 m**，高于该值的点全部被当作"天花板"丢弃。这是**设计问题**（净空是"障碍
+能否通过"的判据，与"哪些点属于地面"无关），不是标定问题。
 
 **修复内容**：
 
@@ -36,43 +36,45 @@
    移除的行为，改为 `AboveCeilingClearance_StillParticipates`；README 风险节
    的 3、4 标为已修复，风险 1 记为已部分修复。
 
+**2026-09-17 更新**：`groundFloorZ` 由 `−0.45` 改为 **`−0.2`**，`config.hpp` 的默认值同步修改。
+原值按"地面 z ≈ −0.255"推算，该前提已被实测否定（见下文"基准已实测"）；按地面 z ≈ 0、
+取地面下方 0.2 m，得 −0.2。
+
 **已验证**（合成点云）：10% 上坡时，修复前 `d ≥ 1.25 m` 的地面点全被丢弃
 （该范围输出为 0），修复后 x 每 0.5 m 分箱均约 40 点、**连续无截断**。平地与
 0/10/20% 坡的"输出点与真实地面最大偏差"均为 0.0000 m。
 
-### 待实测确认（下次）
+### 基准已实测（2026-09-17）
 
-推算用的 `O 离地 255 mm` 来自机械队员口述；`vehicle_z ≈ −0.230` 由
-`base_footprint→O = 0.230` 推得，**尚未在实车验证**。请读：
+平地静止读取 `odom → base_footprint`，结果为单位变换（平移 [0, 0, 0]，四元数
+[0, 0, 0, 1]）⇒ odom 原点即 `base_footprint` 的初始位姿，两者重合，平地地面 z ≈ 0。
 
-```bash
-ros2 topic echo /lidar_odometry --field pose.pose.position --once
-```
+由此改正原来的推算：`lidar_odometry.pose` 是**雷达**在 odom 下的位姿，不是
+`base_footprint` 的位姿。静态链 `base_footprint → chassis → front_mid360` 的 z 合计
+0.230，故平地 `vehicle_z ≈ +0.230`；原推算的 `−0.230` 符号相反。
 
-- 若静止时 `z ≈ −0.230` → 推算成立，本次修复即为正解；
-- 若明显不同（尤其接近 0）→ TF 链与装机不符，需按实测重设 `groundFloorZ`
-  与净空基准（并把该值反馈回本文件）。
+与机械队员口述的"O 离地 255 mm"相差约 25 mm，可能 `base_footprint` 略高于实际地面，
+或口述值有取整。若需要厘米级精度，应以实车量测为准。
 
 **已排除**：3×3 邻域膨胀（`addToPlanarNeighborhood3x3`）。实验：把膨胀改成只写
 中心格，下沉区输出**完全不变**（96 点）；且实测 `planar_voxel_elev` 精确落在实际
 地面高度（环带内 −0.6000、环带外 −0.5000）。故膨胀既未抬高 `elev`、也未丢弃点。
 
-**当前怀疑（主）**：`vehicle_z` 基准未标定。
-
-`lidar_odometry` 的 z 由 `loam_interface` 产生：
+**`vehicle_z` 的基准（已由实测确定）**：`lidar_odometry` 的 z 由 `loam_interface` 产生：
 
 ```
 tf_odom_to_lidar = tf(base_footprint→lidar) * tf(Point-LIO 位姿)
 ```
 
-即它是 **`base_footprint` 相对 odom 原点**的高度，而 **odom 原点是 Point-LIO 启动
-时定下的**——没有任何保证"`vehicle_z ≈ 0` 时车正好在地面上"。而有两处把 `vehicle_z`
-当基准：
+结果的物理含义是"雷达位姿，表达在以初始 `base_footprint` 为原点的 odom 系中"，
+所以平地 `vehicle_z ≈ +0.230`（安装高度），地面在 z ≈ 0。
+
+仍有两处把 `vehicle_z` 当基准，因此都带 0.230 m 的偏置：
 
 | 判据 | 形态 | 偏置后果 |
 | --- | --- | --- |
-| 净空上界（两阶段） | `point.z − vehicle_z >= CEILING_CLEARANCE(0.1)` | 允许进入的 10 cm 带随车整体平移 |
-| 下界 `min_relative_z` | `point.z − vehicle_z <= −1.5` | 同样平移 |
+| 净空上界（已移除） | `point.z − vehicle_z >= CEILING_CLEARANCE` | 允许进入的带随车整体平移 |
+| 下界 `min_relative_z` | `point.z − vehicle_z <= −1.5` | 同样平移（相对地面为 −1.27 m） |
 
 ### terrain 用的 vehicle 从哪来（已核实）
 
@@ -92,11 +94,14 @@ processor_.ingestOdometry(msg->pose.pose.position.x,   // → state_.vehicle_x
    都标 `frame_id = odom`，terrain 全程不知道 `map` 存在。实车默认 `slam:=False`
    （走 GICP 重定位）时，terrain 的 `vehicle_*` 与"车在地图里的位置"差一个
    `map→odom` 变换。
-2. **`vehicle_z` 是 `base_footprint` 的高度**，因 `loam_interface` 做了
-   `tf(odom→base_footprint) = tf(base_footprint→lidar) * tf(Point-LIO 位姿)`。
-3. **姿态来自消息四元数、不是 TF**：`chassis→front_mid360` 有 −10° 安装 roll，
-   `loam_interface` 已把它折进 `odom→base_footprint`，故 terrain 拿到的 roll 是
-   车体姿态、不含该倾角。
+2. **`vehicle_z` 是雷达的高度，不是 `base_footprint` 的高度**：`loam_interface` 做了
+   `tf_odom_to_lidar = tf(base_footprint→lidar) * tf(Point-LIO 位姿)`，得到的是雷达位姿
+   在以初始 `base_footprint` 为原点的 odom 系中的表达，故平地 `vehicle_z ≈ +0.230`
+   （即安装高度）。`vehicle_x/y` 同理是雷达位置，比车体中心前移 0.225 m。
+3. **姿态是雷达姿态，包含安装倾角**：`chassis→front_mid360` 的 roll = −10°、yaw = −90°
+   属于 `tf(base_footprint→lidar)`，因此会进入发布出去的四元数，terrain 解出的
+   roll/yaw 含这两个安装量。当前只有 `transformToSensorFrame` 读姿态，而它仅被 dy_obs
+   使用，所以尚无实际影响；若将来要用地形姿态，必须先扣掉安装量。
 
 ### 高度链（实车，`static_tf_publisher_launch.py`）
 
@@ -117,20 +122,24 @@ coordinates"，配图尺寸 60.0±0.5（俯视直径）、39.5、14.3、7° 光�
 距底面约 **39.5 mm**。因此上表 0.230 是 **base_footprint 到 O 的高度差**，
 到底面约为 0.230 − 0.0395 ≈ **0.190 m**。
 
-**由此**：
+**由此**（2026-09-17 由实测改正）：
 
 ```
-vehicle_z = (地面到 O 的高度) − 0.230
+vehicle_z ≈ +0.230      // 平地：雷达在 odom 下的高度，即 base_footprint→front_mid360 的安装高度
+地面 z ≈ 0              // odom 与 base_footprint 重合
 ```
 
-而 `CEILING_CLEARANCE = 0.1`（作用面在 O 下方 0.1 m）与 `minRelZ = −1.5` 都锚在
-**探测中心**上，其物理含义取决于"O 离地多高"这个**装机尺寸，不在本仓库内**。
-另外 `groundFloorZ = −2.0` 是**绝对 z**，与车高无关——若实际地面 z ≈ −0.23，
-该地板离地尚有约 1.77 m 余量，形同虚设。
+`minRelZ = −1.5` 与 `maxRelZ` 锚在**雷达高度**上（`ingestLaserCloud` 的裁剪带与
+`computeHeightMap` 的下界），因此它们相对地面的作用面分别约为"地面以下 1.27 m"与
+"地面以上 0.73 m"，安装高度一改就要重算。净空判据（`ceilingClearance`）不同，它作用在
+`height_above_ground` 上，锚的是**局部地面**，不随安装高度变化。
+
+`groundFloorZ` 是**绝对 z**，与车高无关。原值 −2.0 离地尚有约 1.75 m 余量、形同虚设；
+随后改为 −0.45；2026-09-17 按"地面 z ≈ 0、留 0.2 m 余量"改为 **−0.2**。
 
 **须向机械队员确认（待问）**：
 
-1. 实车 **O（雷达探测中心）离地高度** 是多少 → 直接定出 `vehicle_z = 该值 − 0.230`；
+1. **`base_footprint` 与实际地面是否重合**（这是当前唯一影响 `groundFloorZ` 与净空判断的量）；
 2. URDF/网格里 **`front_mid360` 这一 frame 的原点是否放在 O 处**（若当初按底面建模，
    会整体差 39.5 mm；那三个数 x=0.225 / z=0.107 也应是在 chassis 系下量到 O 的）；
 3. 底盘基准面到雷达**底面**的实测距离 → 自检：应约等于 `0.230 − 0.0395 ≈ 0.190 m`。
@@ -146,11 +155,12 @@ vehicle_z = (地面到 O 的高度) − 0.230
 点）——合成地面点恰好都排在 `[−1.5, +0.1]` 内。实车有噪声、起伏与漂移才会越界，
 故**尚不能断言"就是高度没对"**，只能说该因果链成立且与"近处"特征吻合。
 
-**下次先取这三个实测值**（`ros2 topic echo /lidar_odometry --field pose.pose.position`）：
+**下次先取这三个实测值**：
 
-1. 开机静止时 `z` 是否为 0（非 0 即常数偏置）；
-2. 静止 30 s 的 `z` 漂移量（常数偏置可标定；漂移则必须改为相对地面）；
-3. 同一时刻激光测到的地面 z（可用 `terrain_map` 大片点的 z）。二者之差即真实偏置。
+1. `odom → base_footprint` 的 z（**已测：单位变换，z = 0**）；
+2. `ros2 topic echo /lidar_odometry --field pose.pose.position --once` 的 z：按静态链应为
+   **+0.230**，若为负值或明显不同，说明 `loam_interface` 的变换方向有误，需单独排查；
+3. 静止 30 s 的 z 漂移量（常数偏置可标定；漂移则必须改为相对地面）。
 
 **对症处理**（取决于上面结果）：
 

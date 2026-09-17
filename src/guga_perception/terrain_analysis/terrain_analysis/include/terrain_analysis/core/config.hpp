@@ -86,10 +86,13 @@ struct TerrainConfig {
    *  俯仰/上下抖动而移动。仅由 estimateTerrainGround 使用，且是该阶段**唯一**
    *  的候选筛选（原有的净空上界已移除，见该函数注释）。
    *
-   *  取值须贴近实际地面 z，否则形同虚设：odom 原点在雷达探测中心 O，实测
-   *  O 离地 255 mm ⇒ 地面 z ≈ −0.255、vehicle_z ≈ −0.230，故取地面下方约
-   *  0.2 m（≈ −0.45）。若换车或改安装，需按新实测值重设。 */
-  double ground_floor_z = -0.45;
+   *  取值须贴近实际地面 z：odom 原点与 base_footprint 重合（实测
+   *  `odom → base_footprint` 为单位变换），平地地面 z ≈ 0，故取地面下方约
+   *  0.2 m（≈ −0.2）。注意 `vehicle_z` 是**雷达**在 odom 下的高度（平地为
+   *  +0.230，即 base_footprint→front_mid360 的安装高度），不是本值的参考基准。
+   *  下坡或地面下沉时，真实地面会低于该地板而被排除，坡面场景需重设。
+   *  若换车或改安装，需按新实测值重设。 */
+  double ground_floor_z = -0.2;
 
   // 网格分辨率
   /** @brief 地形体素边长。 */
