@@ -404,7 +404,8 @@ acados 支持 OCP-NLP、约束、软约束、控制变化率和 RTI，并能拆�
 
 ## 仓库内审计入口
 
-- 当前实车 Nav2 参数：[`src/guga_bringup/config/reality/nav2_params.yaml`](../src/guga_bringup/config/reality/nav2_params.yaml)
+- 当前实车 Nav2 参数（三文件合并：base → controller → planner）：[`src/guga_bringup/config/reality/base.yaml`](../src/guga_bringup/config/reality/base.yaml)、[`controller/mppi.yaml`](../src/guga_bringup/config/reality/controller/mppi.yaml)、[`planner/jps.yaml`](../src/guga_bringup/config/reality/planner/jps.yaml)
+  （原单文件 `reality/nav2_params.yaml` 已删除：自 670049b 起 `params_file` 被置空，该文件从未被加载，本报告早期按它做的参数审计需按上列文件复核）
 - 导航启动/速度 remap：[`src/guga_bringup/launch/core/navigation_launch.py`](../src/guga_bringup/launch/core/navigation_launch.py)
 - 当前 PID 控制器：[`src/guga_controller/pb_omni_pid_pursuit_controller`](../src/guga_controller/pb_omni_pid_pursuit_controller)
 - acados MPC 原型：[`src/guga_controller/mpc_controller`](../src/guga_controller/mpc_controller)

@@ -86,13 +86,14 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
-        # 默认必须指向真实文件,不能为空字符串:
-        # reality 会把 params_file 原样传给 bringup_launch,而 bringup 用它作为
-        # RewrittenYaml 的参数源;若为空 → open('') → "No such file or directory: ''"。
-        default_value=os.path.join(bringup_dir, "config", "reality", "nav2_params.yaml"),
+        # 单文件覆盖模式当前**未启用**：reality_launch 与 bringup_launch 都把
+        # params_file 置空以强制三文件合并（base → controller → planner），见
+        # 670049b。该参数仅为兼容保留，传值不会生效；默认值指向 base.yaml，
+        # 避免默认值指向不存在的文件。
+        default_value=os.path.join(bringup_dir, "config", "reality", "base.yaml"),
         description=(
-            "Single params file override (disables 3-file merge); "
-            "default uses reality/nav2_params.yaml"
+            "Reserved: single params file override is currently disabled "
+            "(params_file is forced empty; 3-file merge always applies)"
         ),
     )
     declare_planner_cmd = DeclareLaunchArgument(
