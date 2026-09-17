@@ -1,6 +1,8 @@
 #pragma once
 
 #include "terrain_analysis/core/config.hpp"
+#include "terrain_analysis/core/grid_lookup.hpp"
+#include "terrain_analysis/core/terrain_voxel_map.hpp"
 #include "terrain_analysis/core/state.hpp"
 
 #include <pcl/point_cloud.h>
@@ -92,25 +94,6 @@ namespace terrain_analysis {
     }
 
   private:
-    // ── 私有类型 ──
-    /** @brief 网格轴向（仅 shiftGrid 搬运方向需要区分轴）。 */
-    enum class Axis : uint8_t { AXIS_X, AXIS_Y };
-    /** @brief 网格内容搬运方向：沿索引增大 / 减小，即世界坐标正向 / 负向。 */
-    enum class ShiftDirection : uint8_t {
-      TOWARD_NEGATIVE,
-      TOWARD_POSITIVE,
-    };
-    /** @brief 要换算到的网格种类。 */
-    enum class VoxelGrid : uint8_t {
-      TERRAIN,  ///< 跨帧累积的 terrain voxel 网格。
-      PLANAR,   ///< 逐帧重建的 planar voxel 网格。
-    };
-    /** @brief 平面点所属的网格下标；越界时 valid 为 false，row/col 无意义。 */
-    struct GridIndex {
-      int row = 0;
-      int col = 0;
-      bool valid = false;
-    };
     /** @brief 点转换到传感器系后的坐标。 */
     struct SensorPoint {
       double x;
@@ -118,30 +101,12 @@ namespace terrain_analysis {
       double z;
     };
 
-    /**
-     * @brief 将整张 terrain voxel 网格沿指定轴搬运一格，腾出的新格清空。
-     * @param axis 搬运轴向。
-     * @param direction 搬运方向。
-     */
-    void shiftGrid(Axis axis, ShiftDirection direction);
-
     // ── 内部判定与运算（读写 config_/state_，故为成员而非自由函数）──
     /** @brief 该点相对雷达的水平距离。 */
     [[nodiscard]] double horizontalDistanceTo(double px, double py) const;
-    /** @brief 该 terrain voxel 本轮是否需要降采样/衰减重建。 */
-    /**
-     * @brief 该点是否应保留在该 terrain voxel 中。
-     * @param relative_z 点相对雷达的高度。
-     * @param distance 点相对雷达的水平距离。
-     * @param point_time 点的采集时刻（相对首帧，单位秒）。
-     */
-    [[nodiscard]] bool keepTerrainVoxelPoint(double relative_z, double distance,
-                                             double point_time) const;
     /** @brief 把相对雷达的坐标变换到传感器坐标系。 */
     [[nodiscard]] SensorPoint transformToSensorFrame(double x, double y,
                                                      double z) const;
-    /** @brief 清空 planar voxel 的地面候选、高程估计与动态障碍计数。 */
-    void resetPlanarVoxels();
     /**
      * @brief 把一个高度值加入指定 planar voxel 及其 3×3 邻域的候选集中。
      *
@@ -160,12 +125,8 @@ namespace terrain_analysis {
     void elevateByMinimum(int cell);
 
     // ── 管线阶段（实现细节，见类注释的可见性契约）──
-    void rolloverTerrainVoxels();
-    void voxelizeTerrain();
-    void updateTerrainVoxels();
-
-    /** @brief 计算点所属的 0.05 m 叶键，供按最新观测融合使用。 */
-    [[nodiscard]] uint64_t leafKey(double x, double y, double z) const;
+    // 体素地图的三个阶段（rollover / voxelize / update）已提取为包内自由函数，
+    // 见 terrain_voxel_map.hpp；这里只保留编排与其余阶段。
     void collectTerrainCloud();
     void estimateTerrainGround();
     void detectDynamicObstacles();
@@ -173,19 +134,9 @@ namespace terrain_analysis {
     void computePlanarElevation();
     void computeHeightMap();
 
-    // ── 无状态工具（不依赖 config_/state_，故为静态成员，置于末尾）──
-    /**
-     * @brief 把一个平面点换算成指定网格的行列下标，越界时返回 invalid。
-     *
-     * 雷达位置由 state_ 读取，不由调用方传入——网格索引的基准始终是"当前
-     * 雷达位置"，避免调用点各自快照位姿造成同帧内基准不一致。
-     * @param grid 目标网格种类。
-     * @param x 点在 odom 坐标系下的 x。
-     * @param y 点在 odom 坐标系下的 y。
-     * @return 行列下标；越界时 GridIndex::valid 为 false。
+    /** @brief 跨帧持久的体素地图（体素阶段的属主，见 terrain_voxel_map.hpp）。
      */
-    [[nodiscard]] GridIndex voxelIndexOf(VoxelGrid grid, double x,
-                                         double y) const;
+    TerrainVoxelMap voxel_map_;
 
     TerrainConfig config_;
     TerrainState state_;

@@ -24,9 +24,9 @@ namespace terrain_analysis {
   TEST_F(StateIngestTest, IngestOdometry_StoresVehiclePose) {
     processor_.ingestOdometry(1.0, 2.0, 3.0, 0.1, 0.2, 0.3);
 
-    EXPECT_DOUBLE_EQ(state_.lidar_x, 1.0);
-    EXPECT_DOUBLE_EQ(state_.lidar_y, 2.0);
-    EXPECT_DOUBLE_EQ(state_.lidar_z, 3.0);
+    EXPECT_DOUBLE_EQ(state_.lidar.x, 1.0);
+    EXPECT_DOUBLE_EQ(state_.lidar.y, 2.0);
+    EXPECT_DOUBLE_EQ(state_.lidar.z, 3.0);
   }
 
   // 接收里程计后正确计算 roll/pitch/yaw 的正余弦
@@ -50,9 +50,9 @@ namespace terrain_analysis {
 
   // 超出体素网格范围的点被裁剪掉
   TEST_F(StateIngestTest, IngestLaserCloud_FiltersPointsBeyondVoxelRange) {
-    state_.lidar_x = 0;
-    state_.lidar_y = 0;
-    state_.lidar_z = 0;
+    state_.lidar.x = 0;
+    state_.lidar.y = 0;
+    state_.lidar.z = 0;
     auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     cloud->push_back({0, 0, 0, 0});
     cloud->push_back({50, 50, 0, 0});  // far outside voxel range

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "terrain_analysis/core/grid.hpp"
+#include "terrain_analysis/core/lidar_pose.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -8,19 +9,6 @@
 #include <array>
 #include <memory>
 #include <vector>
-
-/** @brief 创建并初始化 Terrain voxel 点云指针数组。 */
-inline std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,
-                  TerrainGrid::TERRAIN_VOXEL_NUM>
-makeTerrainVoxelClouds() {
-  std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,
-             TerrainGrid::TERRAIN_VOXEL_NUM>
-      clouds;
-  for (auto& ptr : clouds) {
-    ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  }
-  return clouds;
-}
 
 /**
  * @brief terrain_analysis 的可变运行时状态。
@@ -31,7 +19,7 @@ makeTerrainVoxelClouds() {
 struct TerrainState {
   // ---- 雷达位姿（terrain 订阅的是雷达位姿，不是车体位姿）----
   /** @brief 雷达在 odom 坐标系下的位置。 */
-  double lidar_x = 0.0, lidar_y = 0.0, lidar_z = 0.0;
+  LidarPose lidar;
   /** @brief 雷达 roll 的正弦和余弦。 */
   double sin_lidar_roll = 0.0, cos_lidar_roll = 0.0;
   /** @brief 雷达 pitch 的正弦和余弦。 */
@@ -49,10 +37,6 @@ struct TerrainState {
   /** @brief 最终发布的带离地高度 intensity 点云。 */
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev =
       std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  /** @brief 按 Terrain voxel 累积的历史点云。 */
-  std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr,
-             TerrainGrid::TERRAIN_VOXEL_NUM>
-      terrain_voxel_cloud = makeTerrainVoxelClouds();
   /** @brief 每个 Planar voxel 的估计地面高度。 */
   std::array<double, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_elev{};
   /** @brief 每个 Planar voxel 的动态障碍计数。 */
@@ -60,12 +44,6 @@ struct TerrainState {
   /** @brief 每个 Planar voxel 收集到的地面高度候选值。 */
   std::array<std::vector<double>, TerrainGrid::PLANAR_VOXEL_NUM>
       planar_point_elev;
-
-  // ---- Terrain voxel 滚动偏移 ----
-  /** @brief Terrain voxel 网格相对初始中心的 x 方向偏移。 */
-  int terrain_voxel_shift_x = 0;
-  /** @brief Terrain voxel 网格相对初始中心的 y 方向偏移。 */
-  int terrain_voxel_shift_y = 0;
 
   // ---- 输入点云状态 ----
   /** @brief 最近一帧点云时间戳，单位为秒。 */
