@@ -29,15 +29,15 @@ makeTerrainVoxelClouds() {
  * 坐标系；输出点云的 intensity 表示点相对估计地面的高度。
  */
 struct TerrainState {
-  // ---- 车辆位姿 ----
-  /** @brief 车辆在 odom 坐标系下的位置。 */
-  double vehicle_x = 0.0, vehicle_y = 0.0, vehicle_z = 0.0;
-  /** @brief 车辆 roll 的正弦和余弦。 */
-  double sin_vehicle_roll = 0.0, cos_vehicle_roll = 0.0;
-  /** @brief 车辆 pitch 的正弦和余弦。 */
-  double sin_vehicle_pitch = 0.0, cos_vehicle_pitch = 0.0;
-  /** @brief 车辆 yaw 的正弦和余弦。 */
-  double sin_vehicle_yaw = 0.0, cos_vehicle_yaw = 0.0;
+  // ---- 雷达位姿（terrain 订阅的是雷达位姿，不是车体位姿）----
+  /** @brief 雷达在 odom 坐标系下的位置。 */
+  double lidar_x = 0.0, lidar_y = 0.0, lidar_z = 0.0;
+  /** @brief 雷达 roll 的正弦和余弦。 */
+  double sin_lidar_roll = 0.0, cos_lidar_roll = 0.0;
+  /** @brief 雷达 pitch 的正弦和余弦。 */
+  double sin_lidar_pitch = 0.0, cos_lidar_pitch = 0.0;
+  /** @brief 雷达 yaw 的正弦和余弦。 */
+  double sin_lidar_yaw = 0.0, cos_lidar_yaw = 0.0;
 
   // ---- 点云和网格 ----
   /** @brief 按高度和距离预过滤后的当前帧点云。 */

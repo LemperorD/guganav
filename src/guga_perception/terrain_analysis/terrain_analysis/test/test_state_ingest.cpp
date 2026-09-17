@@ -20,23 +20,23 @@ namespace terrain_analysis {
   }
 
   // ── ingestOdometry ──
-  // 接收里程计消息后更新车辆位置和朝向三角函数
+  // 接收里程计消息后更新雷达位置和朝向三角函数
   TEST_F(StateIngestTest, IngestOdometry_StoresVehiclePose) {
     processor_.ingestOdometry(1.0, 2.0, 3.0, 0.1, 0.2, 0.3);
 
-    EXPECT_DOUBLE_EQ(state_.vehicle_x, 1.0);
-    EXPECT_DOUBLE_EQ(state_.vehicle_y, 2.0);
-    EXPECT_DOUBLE_EQ(state_.vehicle_z, 3.0);
+    EXPECT_DOUBLE_EQ(state_.lidar_x, 1.0);
+    EXPECT_DOUBLE_EQ(state_.lidar_y, 2.0);
+    EXPECT_DOUBLE_EQ(state_.lidar_z, 3.0);
   }
 
   // 接收里程计后正确计算 roll/pitch/yaw 的正余弦
   TEST_F(StateIngestTest, IngestOdometry_ComputesSinCos) {
     processor_.ingestOdometry(0, 0, 0, 0, 0, M_PI / 4.0);
 
-    EXPECT_NEAR(state_.sin_vehicle_yaw, sin(M_PI / 4.0), 1e-5);
-    EXPECT_NEAR(state_.cos_vehicle_yaw, cos(M_PI / 4.0), 1e-5);
-    EXPECT_NEAR(state_.sin_vehicle_roll, sin(0), 1e-9);
-    EXPECT_NEAR(state_.cos_vehicle_pitch, cos(0), 1e-9);
+    EXPECT_NEAR(state_.sin_lidar_yaw, sin(M_PI / 4.0), 1e-5);
+    EXPECT_NEAR(state_.cos_lidar_yaw, cos(M_PI / 4.0), 1e-5);
+    EXPECT_NEAR(state_.sin_lidar_roll, sin(0), 1e-9);
+    EXPECT_NEAR(state_.cos_lidar_pitch, cos(0), 1e-9);
   }
 
   // ── ingestLaserCloud ──
@@ -50,9 +50,9 @@ namespace terrain_analysis {
 
   // 超出体素网格范围的点被裁剪掉
   TEST_F(StateIngestTest, IngestLaserCloud_FiltersPointsBeyondVoxelRange) {
-    state_.vehicle_x = 0;
-    state_.vehicle_y = 0;
-    state_.vehicle_z = 0;
+    state_.lidar_x = 0;
+    state_.lidar_y = 0;
+    state_.lidar_z = 0;
     auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     cloud->push_back({0, 0, 0, 0});
     cloud->push_back({50, 50, 0, 0});  // far outside voxel range

@@ -31,10 +31,10 @@ rolloverTerrainVoxels → voxelizeTerrain → updateTerrainVoxels → collectTer
 
 | 阶段                          | 职责                                               |
 | ----------------------------- | -------------------------------------------------- |
-| `rolloverTerrainVoxels`       | 车辆移动时滚动 terrain voxel 网格，维持以车辆为中心的滑动窗口 |
+| `rolloverTerrainVoxels`       | 雷达移动时滚动 terrain voxel 网格，维持以雷达为中心的滑动窗口 |
 | `voxelizeTerrain`             | 当前帧点云按空间位置分配到 terrain voxel 格子      |
 | `updateTerrainVoxels`         | 逐个格子降采样 + 时间衰减 + 空间高度过滤           |
-| `collectTerrainCloud`         | 收集车辆周边 11×11 格子的累积地形点                |
+| `collectTerrainCloud`         | 收集雷达周边 11×11 格子的累积地形点                |
 | `estimateTerrainGround`       | 点膨胀到 planar voxel（3×3），收集地面高度候选值   |
 | `detectDynamicObstacles`      | 用仰角 + 传感器 FOV 统计潜在动态障碍               |
 | `filterDynamicObstaclePoints` | 当前帧高角度点反向印证，清除头顶固定结构的误报     |
@@ -80,7 +80,7 @@ scripts/test/test_terrain_analysis_coverage.sh
 | 参考系 | 定义 | 使用位置 |
 | ------ | ---- | -------- |
 | odom 世界系 | `point.z` 绝对值 | `terrain_voxel_cloud` 的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `ground_floor_z` |
-| 车辆系 | `relative_z = point.z − state_.vehicle_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `min_relative_z` |
+| 雷达系（`lidar_*` 为雷达位姿） | `relative_z = point.z − state_.lidar_z` | `ingestLaserCloud` 裁剪带、`computeHeightMap` 的地板 `min_relative_z` |
 | 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity |
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
@@ -90,14 +90,14 @@ scripts/test/test_terrain_analysis_coverage.sh
 上界是**常数**，会把抬升的地面按车高砍掉（坡面失效）。
 
 **该净空上界已移除**（见下节风险 3），地面候选现只受绝对地板 `ground_floor_z` 约束。
-但裁剪带仍是车辆系、且近处带宽极窄（约 0.2 m），故 `vehicle_z` 的标定误差在**近处**
+但裁剪带仍是雷达系、且近处带宽极窄（约 0.2 m），故 `lidar_z` 的标定误差在**近处**
 仍会直接决定"地面点能否进入管线"——远处因带宽放宽而被掩盖。这与仓库根
 `docs/TODOLIST.md` 记录的"近处低地面点被忽略"直接相关。
 
 ### 风险 2：候选筛选与地面估计互为前提（循环依赖）
 
 筛候选想用"高出局部地面多少"，但局部地面 `elev` 正需要候选才能算。
-当前用车辆系绕开了这个循环，代价就是风险 1。
+当前用雷达系（相对雷达高度）绕开了这个循环，代价就是风险 1。
 
 ### 风险 3（已修复）：一个参数兼两种语义 → 现仅用于障碍输出
 
@@ -116,9 +116,15 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ### 障碍输出高度带（2026-09-17 起：唯一上界）
 
-障碍输出的条件是 `0 <= h < ceilingClearance`，其中 h 是距**局部地面**的高度。
-`ceilingClearance` 是**唯一**的高度上界，代码默认 0.62 m，实车配置同为 **0.62 m**
-（车高 520 mm + 100 mm 裕量）。等于 0.62 m 的点也会被丢弃，判据用的是 `>=`。
+障碍输出的条件是 `minObstacleHeight <= h < ceilingClearance`，其中 h 是距**局部
+地面**的高度。两个边界都作用于输出点云（marking 用途）；清除用的回波不受下界约束。
+
+| 边界 | 参数 | 实车值 | 含义 |
+| --- | --- | --- | --- |
+| 下界 | `minObstacleHeight` | 0.04 m | 地面带死区，吸收地面高度估计的误差 |
+| 上界 | `ceilingClearance` | 0.62 m | 车高 520 mm + 100 mm 裕量，可从下方通过的不算障碍 |
+
+上界是**唯一**的高度上界（判据用 `>=`，等于 0.62 m 的点也丢弃）。
 
 历史上另有一条 `h < vehicleHeight(0.52)` 的截断。它与净空重叠且更严，会把 0.52 至
 0.62 m 之间的点一并丢掉，而这段高度上的悬空结构车是过不去的，属于漏检；2026-09-17
@@ -130,9 +136,9 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ### 风险 5：索引相对、数值绝对
 
-`planar_point_elev[cell]` 的行列下标来自 `point − vehicle`（相对），
+`planar_point_elev[cell]` 的行列下标来自 `point − lidar`（相对），
 压入的却是 `point.z`（odom 绝对）。自洽（后续两个绝对值相减），
-但极易被改成 `point.z − vehicle_z` 而全错。
+但极易被改成 `point.z − lidar_z` 而全错。
 
 ### 建议的统一方向（尚未实施）
 
@@ -141,7 +147,7 @@ scripts/test/test_terrain_analysis_coverage.sh
    再以粗地面为基准筛候选，最后用分位数正式估 `elev`；
 3. ~~**拆开 `ceilingClearance`**~~ **已完成**：净空判据已从地面估计阶段移除，
    现只用于障碍输出（见风险 3）；
-4. 车辆系只保留给**车辆/传感器自身的量**：点云裁剪窗口（车体属性），
+4. 雷达系只保留给**传感器自身的量**：点云裁剪窗口（安装关系），
    以及以局部地面为基准表达的车顶净空。
 
 ### 无需担心的前提

@@ -17,15 +17,15 @@ namespace terrain_analysis {
     /**
      * @brief 启动时提示障碍输出的现行高度上界。
      *
-     * computeHeightMap 只保留 `0 <= h < ceilingClearance` 的点（h 为距局部
-     * 地面高度），ceilingClearance 是唯一的上界，按车体高度 + 100 mm 设定。
-     * 该值随车而异且没有编译期约束，故在启动时打印，便于确认节点实际加载值。
+     * computeHeightMap 只保留 minObstacleHeight <= h < ceilingClearance 的点，
+     * 其中 h 是距局部地面的高度。两个边界都随车而异、也没有编译期约束，
+     * 所以在启动时打印，便于确认节点实际加载的值。
      */
     void logHeightParams(const TerrainConfig& config) {
       RCLCPP_INFO(rclcpp::get_logger("terrain_analysis"),
-                  "障碍输出高度带：0 <= h < %.3f m（ceilingClearance，"
-                  "距局部地面；按车高 + 100 mm 设定）",
-                  config.ceiling_clearance);
+                  "障碍输出高度带：%.3f <= h < %.3f m（距局部地面；下界为地面带"
+                  "死区，上界按车高 + 100 mm 设定）",
+                  config.min_obstacle_height, config.ceiling_clearance);
     }
 
   }  // namespace
@@ -62,6 +62,8 @@ namespace terrain_analysis {
         "minDyObsPointNum", config.min_dy_obs_point_num);
     config.min_block_point_num = declare_parameter("minBlockPointNum",
                                                    config.min_block_point_num);
+    config.min_obstacle_height = declare_parameter("minObstacleHeight",
+                                                   config.min_obstacle_height);
     config.ceiling_clearance = declare_parameter("ceilingClearance",
                                                  config.ceiling_clearance);
     config.voxel_point_update_thre = declare_parameter(

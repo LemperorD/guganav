@@ -102,9 +102,9 @@ namespace terrain_analysis {
       config.no_decay_distance = 999.0;
       config.voxel_point_update_thre = 1;
 
-      state.vehicle_x = 0;
-      state.vehicle_y = 0;
-      state.vehicle_z = 0.0;
+      state.lidar_x = 0;
+      state.lidar_y = 0;
+      state.lidar_z = 0.0;
       state.laser_cloud_time = 1.0;
       state.system_init_time = 0.0;
 
@@ -134,10 +134,10 @@ namespace terrain_analysis {
 
 using terrain_analysis::AlgorithmTest;
 
-// 车辆未移动时，体素网格不发生滚动
+// 雷达未移动时，体素网格不发生滚动
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
   int sx = state().terrain_voxel_shift_x;
   int sy = state().terrain_voxel_shift_y;
 
@@ -147,9 +147,9 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
   EXPECT_EQ(state().terrain_voxel_shift_y, sy);
 }
 
-// 车辆向左超出 voxel 范围时，沿 X 负向滚动一格
+// 雷达向左超出 voxel 范围时，沿 X 负向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
-  state().vehicle_x = -2.0;
+  state().lidar_x = -2.0;
   int sx = state().terrain_voxel_shift_x;
 
   runStage(stage::Id::ROLLOVER);
@@ -157,9 +157,9 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
   EXPECT_EQ(state().terrain_voxel_shift_x, sx - 1);
 }
 
-// 车辆向右超出 voxel 范围时，沿 X 正向滚动一格
+// 雷达向右超出 voxel 范围时，沿 X 正向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
-  state().vehicle_x = 2.0;
+  state().lidar_x = 2.0;
   int sx = state().terrain_voxel_shift_x;
 
   runStage(stage::Id::ROLLOVER);
@@ -167,9 +167,9 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
   EXPECT_EQ(state().terrain_voxel_shift_x, sx + 1);
 }
 
-// 车辆向下超出 voxel 范围时，沿 Y 负向滚动一格
+// 雷达向下超出 voxel 范围时，沿 Y 负向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
-  state().vehicle_y = -2.0;
+  state().lidar_y = -2.0;
   int sy = state().terrain_voxel_shift_y;
 
   runStage(stage::Id::ROLLOVER);
@@ -177,9 +177,9 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
   EXPECT_EQ(state().terrain_voxel_shift_y, sy - 1);
 }
 
-// 车辆向上超出 voxel 范围时，沿 Y 正向滚动一格
+// 雷达向上超出 voxel 范围时，沿 Y 正向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
-  state().vehicle_y = 2.0;
+  state().lidar_y = 2.0;
   int sy = state().terrain_voxel_shift_y;
 
   runStage(stage::Id::ROLLOVER);
@@ -190,7 +190,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
 // 滚动后目标 cell 被清空，原有数据随 shift 迁移
 TEST_F(AlgorithmTest,
        RolloverTerrainVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
-  state().vehicle_x = -2.0;
+  state().lidar_x = -2.0;
   state().terrain_voxel_cloud[0]->clear();
   pcl::PointXYZI p{0, 0, 0, 0};
   state().terrain_voxel_cloud[0]->push_back(p);
@@ -201,10 +201,10 @@ TEST_F(AlgorithmTest,
   EXPECT_TRUE(state().terrain_voxel_cloud[0]->points.empty());
 }
 
-// 车辆同时向左下方移动，X 和 Y 各滚动一格
+// 雷达同时向左下方移动，X 和 Y 各滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
-  state().vehicle_x = -2.0;
-  state().vehicle_y = -2.0;
+  state().lidar_x = -2.0;
+  state().lidar_y = -2.0;
   int sx = state().terrain_voxel_shift_x;
   int sy = state().terrain_voxel_shift_y;
 
@@ -217,8 +217,8 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
 // ── voxelizeTerrain ──
 // 原点处的单个点被分配到网格正中的 cell
 TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
   state().laser_cloud_crop->clear();
   state().laser_cloud_crop->push_back({0, 0, 0, 0});
 
@@ -314,9 +314,9 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
 TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
   config().min_dy_obs_distance = 5.0;  // high → all points "close"
   config().min_dy_obs_point_num = 7;
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().planar_voxel_dy_obs.fill(0);
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({0.1F, 0, 0, 0});
@@ -333,15 +333,15 @@ TEST_F(AlgorithmTest, DetectDynamicObstacles_NearPoint_AddsMinPointNumToCell) {
 // 传感器视角内的点触发动态障碍计数递增
 TEST_F(AlgorithmTest,
        DetectDynamicObstacles_PointInVfov_IncrementsCellCounter) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
-  state().cos_vehicle_roll = 1;
-  state().sin_vehicle_roll = 0;
-  state().cos_vehicle_pitch = 1;
-  state().sin_vehicle_pitch = 0;
-  state().cos_vehicle_yaw = 1;
-  state().sin_vehicle_yaw = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
+  state().cos_lidar_roll = 1;
+  state().sin_lidar_roll = 0;
+  state().cos_lidar_pitch = 1;
+  state().sin_lidar_pitch = 0;
+  state().cos_lidar_yaw = 1;
+  state().sin_lidar_yaw = 0;
   state().planar_voxel_dy_obs.fill(0);
   state().terrain_cloud->clear();
   // Point at moderate distance, slightly elevated → within typical VFOV
@@ -366,15 +366,15 @@ TEST_F(AlgorithmTest,
 
 // 传感器视角外的点不触发动态障碍计数
 TEST_F(AlgorithmTest, DetectDynamicObstacles_PointOutsideVfov_NoIncrement) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
-  state().cos_vehicle_roll = 1;
-  state().sin_vehicle_roll = 0;
-  state().cos_vehicle_pitch = 1;
-  state().sin_vehicle_pitch = 0;
-  state().cos_vehicle_yaw = 1;
-  state().sin_vehicle_yaw = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
+  state().cos_lidar_roll = 1;
+  state().sin_lidar_roll = 0;
+  state().cos_lidar_pitch = 1;
+  state().sin_lidar_pitch = 0;
+  state().cos_lidar_yaw = 1;
+  state().sin_lidar_yaw = 0;
   state().planar_voxel_dy_obs.fill(0);
   state().terrain_cloud->clear();
   // Point far away → scan angle will be very shallow, outside VFOV
@@ -440,9 +440,9 @@ TEST_F(AlgorithmTest,
 TEST_F(AlgorithmTest, EstimateTerrainGround_EdgePoint_HandlesOobNeighbors) {
   constexpr double SZ = 0.2;
   double edge = SZ * (25 - 1);  // ~4.8m, column=49, delta_col+1=50 in bounds
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud->clear();
   pcl::PointXYZI pt;
   pt.x = static_cast<float>(edge);
@@ -458,9 +458,9 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_EdgePoint_HandlesOobNeighbors) {
 
 // 超出 planar grid 的点被跳过，避免在计算 base index 时越界
 TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud->clear();
   state().terrain_cloud->push_back({6.0F, 0.0F, 0.0F, 0.0F});
 
@@ -475,9 +475,9 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
 
 // Z 超出范围的点被过滤
 TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
   state().planar_voxel_dy_obs.fill(0);
@@ -502,9 +502,9 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
 
 // consider_drop 开启时高度取绝对值，负高度也被接受
 TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0.3);  // ground at +0.3, point at z=0 → -0.3m
   state().planar_voxel_dy_obs.fill(0);
@@ -529,14 +529,43 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   // height = abs(0 - 0.3) = 0.3 < 1.0 → accepted
 }
 
+// 地面带死区：距地面小于 min_obstacle_height 的点不作为障碍输出
+TEST_F(AlgorithmTest, ComputeHeightMap_BelowMinObstacleHeight_Filtered) {
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
+  state().terrain_cloud_elev->clear();
+  state().planar_voxel_elev.fill(0);
+  state().planar_voxel_dy_obs.fill(0);
+  for (auto& e : state().planar_point_elev) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
+  config().min_block_point_num = 5;
+  config().min_relative_z = -10.0;
+  config().max_relative_z = 10.0;
+  config().consider_drop = false;
+  config().min_obstacle_height = 0.04;
+
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = 0.02F;  // 距地面 0.02 < 0.04：落在死区内
+  pt.intensity = 0;
+  state().terrain_cloud->clear();
+  state().terrain_cloud->push_back(pt);
+
+  runStage(stage::Id::HEIGHT_MAP);
+  EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
+}
+
 // 车高与净空之间的点仍然是障碍（车过不去，不能漏检）
 // 旧实现有一条 `height < vehicle_height(0.52)` 的截断，会把 0.52~0.62 之间的点
 // 一并丢掉；该截断已删除，ceiling_clearance 是唯一上界。
 TEST_F(AlgorithmTest,
        ComputeHeightMap_BetweenVehicleHeightAndCeiling_Obstacle) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
   state().planar_voxel_dy_obs.fill(0);
@@ -565,9 +594,9 @@ TEST_F(AlgorithmTest,
 // 高于净空的点同样参与地面估计：净空筛选已从本阶段移除（见下方断言注释）
 TEST_F(AlgorithmTest,
        EstimateTerrainGround_AboveCeilingClearance_StillParticipates) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud->clear();
   // 高于 ceiling_clearance 的点**现在也参与**地面估计——净空判据已从本
   // 阶段移除，只保留在 computeHeightMap（障碍输出）。
@@ -588,9 +617,9 @@ TEST_F(AlgorithmTest,
 // 车顶下方/间隙内的点仍正常参与地面估计
 TEST_F(AlgorithmTest,
        EstimateTerrainGround_BelowCeilingClearance_Participates) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud->clear();
   // 点距地面 -0.1m（planar_voxel_elev 为 0）：在地板之上、低于
   // CEILING_CLEARANCE
@@ -607,9 +636,9 @@ TEST_F(AlgorithmTest,
 // 车顶上方达到安全间隙的点（天花板/横梁）不作为障碍输出：顶隙足够，
 // 车辆可从下方通过
 TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);  // 地面高度 0
   state().planar_voxel_dy_obs.fill(0);
@@ -637,9 +666,9 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
 
 // 车顶上方安全间隙内的点仍然是障碍（低矮横梁/门楣不应漏检）
 TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
   state().planar_voxel_dy_obs.fill(0);
@@ -702,7 +731,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_BelowUpperBoundary_Kept) {
   EXPECT_EQ(kept, 1);
 }
 
-// 点的时间戳过期且离车辆较远 → 被清除
+// 点的时间戳过期且离雷达较远 → 被清除
 TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   config().min_relative_z = -10.0;
   config().max_relative_z = 10.0;
@@ -710,9 +739,9 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   config().no_decay_distance = 0.0;
   config().voxel_point_update_thre = 1;
 
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0.0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0.0;
   state().laser_cloud_time = 10.0;
   state().system_init_time = 0.0;
 
@@ -743,9 +772,9 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   config().no_decay_distance = 3.0;
   config().voxel_point_update_thre = 1;
 
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0.0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0.0;
   state().laser_cloud_time = 10.0;
   state().system_init_time = 0.0;
 
@@ -820,9 +849,9 @@ TEST_F(AlgorithmTest, ShouldPruneVoxel_PointCountReached_Pruned) {
 
 // dy_obs 计数 ≥ min_dy_obs_point_num → 该 cell 被过滤
 TEST_F(AlgorithmTest, ComputeHeightMap_DynamicObstacleCell_Filtered) {
-  state().vehicle_x = 0;
-  state().vehicle_y = 0;
-  state().vehicle_z = 0;
+  state().lidar_x = 0;
+  state().lidar_y = 0;
+  state().lidar_z = 0;
   state().terrain_cloud_elev->clear();
   state().planar_voxel_elev.fill(0);
   for (auto& e : state().planar_point_elev) {

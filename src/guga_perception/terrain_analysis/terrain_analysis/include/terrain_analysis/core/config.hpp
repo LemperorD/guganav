@@ -48,6 +48,16 @@ struct TerrainConfig {
   // 无数据区域和障碍高度过滤
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;
+  /** @brief 障碍输出下界：距**局部地面**小于该值的点不作为障碍输出。
+   *
+   *  作为"地面带"的死区使用，吸收地面高度估计的误差：估计值偏低时，真实地面点
+   *  会算出几厘米的正高度，若下界为 0，这些点会被当作低矮障碍标记出去。
+   *  实车取值 0.04 m。
+   *
+   *  注意与清除用途的分工：清除用的回波**不应**受本下界约束（地面回波正是"射线
+   *  路径为空"的证据），见设计文档 R4 对 marking / clearing 两份点云的区分。
+   *  `consider_drop` 打开时高度取绝对值，本下界对凹坑同样成立。 */
+  double min_obstacle_height = 0.04;
   /** @brief 障碍输出上界：距**局部地面**达到该值的点不作为障碍（车辆可从其
    *  下方通过，或高于车体不构成碰撞威胁）。
    *
@@ -64,11 +74,11 @@ struct TerrainConfig {
   int voxel_point_update_thre = 100;
   /** @brief 触发体素重建的时间阈值。 */
   double voxel_time_update_thre = 2.0;
-  /** @brief 有效点云相对车辆的高度下限（相对 vehicle_z 的偏移量）。
+  /** @brief 有效点云相对雷达的高度下限（相对 lidar_z 的偏移量）。
    *  两处共用：ingestLaserCloud 的裁剪带、keepTerrainVoxelPoint 的体素点
    *  保留判定。地面候选的地板不用它——那是绝对高度 ground_floor_z。 */
   double min_relative_z = -1.5;
-  /** @brief 有效点云相对车辆的高度上限（相对 vehicle_z 的偏移量）。
+  /** @brief 有效点云相对雷达的高度上限（相对 lidar_z 的偏移量）。
    *  **仅由 ingestLaserCloud 的裁剪带与 keepTerrainVoxelPoint 使用**。
    *  地面候选（estimateTerrainGround）与障碍输出（computeHeightMap）的上界
    *  都由更紧的 TerrainGrid::CEILING_CLEARANCE(0.1) 决定，本参数在这两处
@@ -80,13 +90,13 @@ struct TerrainConfig {
   // 地面估计
   /** @brief 地面候选的绝对高度地板（odom z）：低于该值的点不参与地面估计。
    *
-   *  用绝对量而非"相对车辆"：地面在 odom 中大体水平，且该阈值不应随车体
+   *  用绝对量而非"相对雷达"：地面在 odom 中大体水平，且该阈值不应随雷达
    *  俯仰/上下抖动而移动。仅由 estimateTerrainGround 使用，且是该阶段**唯一**
    *  的候选筛选（原有的净空上界已移除，见该函数注释）。
    *
    *  取值须贴近实际地面 z：odom 原点与 base_footprint 重合（实测
    *  `odom → base_footprint` 为单位变换），平地地面 z ≈ 0，故取地面下方约
-   *  0.2 m（≈ −0.2）。注意 `vehicle_z` 是**雷达**在 odom 下的高度（平地为
+   *  0.2 m（≈ −0.2）。注意 `lidar_z` 是**雷达**在 odom 下的高度（平地为
    *  +0.230，即 base_footprint→front_mid360 的安装高度），不是本值的参考基准。
    *  下坡或地面下沉时，真实地面会低于该地板而被排除，坡面场景需重设。
    *  若换车或改安装，需按新实测值重设。 */

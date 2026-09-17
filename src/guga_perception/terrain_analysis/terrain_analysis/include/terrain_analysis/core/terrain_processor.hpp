@@ -35,13 +35,16 @@ namespace terrain_analysis {
     TerrainProcessor& operator=(TerrainProcessor&&) = delete;
 
     /**
-     * @brief 接收里程计位姿，更新车辆位置与姿态三角函数缓存。
-     * @param x 车辆在 odom 坐标系下的 x 位置。
-     * @param y 车辆在 odom 坐标系下的 y 位置。
-     * @param z 车辆在 odom 坐标系下的 z 位置。
-     * @param roll 车辆 roll 角，单位为弧度。
-     * @param pitch 车辆 pitch 角，单位为弧度。
-     * @param yaw 车辆 yaw 角，单位为弧度。
+     * @brief 接收里程计位姿，更新雷达位置与姿态三角函数缓存。
+     *
+     * 注意：传入的是**雷达**位姿（`loam_interface` 发布的 `lidar_odometry`
+     * child frame 为 `front_mid360`），不是车体位姿；姿态中含雷达安装倾角。
+     * @param x 雷达在 odom 坐标系下的 x 位置。
+     * @param y 雷达在 odom 坐标系下的 y 位置。
+     * @param z 雷达在 odom 坐标系下的 z 位置。
+     * @param roll 雷达 roll 角，单位为弧度。
+     * @param pitch 雷达 pitch 角，单位为弧度。
+     * @param yaw 雷达 yaw 角，单位为弧度。
      */
     void ingestOdometry(double x, double y, double z, double roll, double pitch,
                         double yaw);
@@ -123,19 +126,19 @@ namespace terrain_analysis {
     void shiftGrid(Axis axis, ShiftDirection direction);
 
     // ── 内部判定与运算（读写 config_/state_，故为成员而非自由函数）──
-    /** @brief 该点相对车辆的水平距离。 */
+    /** @brief 该点相对雷达的水平距离。 */
     [[nodiscard]] double horizontalDistanceTo(double px, double py) const;
     /** @brief 该 terrain voxel 本轮是否需要降采样/衰减重建。 */
     [[nodiscard]] bool shouldPruneTerrainVoxel(int cell) const;
     /**
      * @brief 该点是否应保留在该 terrain voxel 中。
-     * @param relative_z 点相对车辆的高度。
-     * @param distance 点相对车辆的水平距离。
+     * @param relative_z 点相对雷达的高度。
+     * @param distance 点相对雷达的水平距离。
      * @param point_time 点的采集时刻（相对首帧，单位秒）。
      */
     [[nodiscard]] bool keepTerrainVoxelPoint(double relative_z, double distance,
                                              double point_time) const;
-    /** @brief 把相对车辆的坐标变换到传感器坐标系。 */
+    /** @brief 把相对雷达的坐标变换到传感器坐标系。 */
     [[nodiscard]] SensorPoint transformToSensorFrame(double x, double y,
                                                      double z) const;
     /** @brief 清空 planar voxel 的地面候选、高程估计与动态障碍计数。 */
@@ -172,8 +175,8 @@ namespace terrain_analysis {
     /**
      * @brief 把一个平面点换算成指定网格的行列下标，越界时返回 invalid。
      *
-     * 车辆位置由 state_ 读取，不由调用方传入——网格索引的基准始终是"当前
-     * 车辆位置"，避免调用点各自快照位姿造成同帧内基准不一致。
+     * 雷达位置由 state_ 读取，不由调用方传入——网格索引的基准始终是"当前
+     * 雷达位置"，避免调用点各自快照位姿造成同帧内基准不一致。
      * @param grid 目标网格种类。
      * @param x 点在 odom 坐标系下的 x。
      * @param y 点在 odom 坐标系下的 y。

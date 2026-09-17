@@ -75,7 +75,7 @@
 
 ## R4. 高度过滤与清除输入分开
 
-标记点高度定义为 `h = z - ground_z(x, y)`。地面估计有效时，按 `h_min <= h < h_block` 生成当帧障碍云，初始 `h_min = 0.1 m`。地面点可以用于 clearing，但不用于 marking。官方 ObstacleLayer 不检查 intensity，因此必须在 terrain 中实际剔除不符合高度条件的标记点，不能只修改 intensity 值。
+标记点高度定义为 `h = z - ground_z(x, y)`。地面估计有效时，按 `h_min <= h < h_block` 生成当帧障碍云，`h_min` 取 **0.04 m**（2026-09-17 实车确定；原写 0.1 m）。地面点可以用于 clearing，但不用于 marking。官方 ObstacleLayer 不检查 intensity，因此必须在 terrain 中实际剔除不符合高度条件的标记点，不能只修改 intensity 值。
 
 新链路按车高 0.52 m 加 100 mm 裕量设计，使用 `h_block = ceilingClearance = 0.62 m`；不沿用额外的 `h < vehicleHeight(0.52)` 截断。0.52-0.62 m 的悬空结构仍应阻挡。该值为初始设计值，须用实车尺寸和横梁场景验收；新链路的选择不自动改变旧 global/SLAM 输出。
 

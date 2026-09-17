@@ -19,16 +19,16 @@ namespace terrain_analysis {
 
   void TerrainProcessor::ingestOdometry(double x, double y, double z,
                                         double roll, double pitch, double yaw) {
-    state_.vehicle_x = x;
-    state_.vehicle_y = y;
-    state_.vehicle_z = z;
+    state_.lidar_x = x;
+    state_.lidar_y = y;
+    state_.lidar_z = z;
 
-    state_.sin_vehicle_roll = sin(roll);
-    state_.cos_vehicle_roll = cos(roll);
-    state_.sin_vehicle_pitch = sin(pitch);
-    state_.cos_vehicle_pitch = cos(pitch);
-    state_.sin_vehicle_yaw = sin(yaw);
-    state_.cos_vehicle_yaw = cos(yaw);
+    state_.sin_lidar_roll = sin(roll);
+    state_.cos_lidar_roll = cos(roll);
+    state_.sin_lidar_pitch = sin(pitch);
+    state_.cos_lidar_pitch = cos(pitch);
+    state_.sin_lidar_yaw = sin(yaw);
+    state_.cos_lidar_yaw = cos(yaw);
   }
 
   void TerrainProcessor::ingestLaserCloud(
@@ -40,12 +40,12 @@ namespace terrain_analysis {
       state_.system_inited = true;
     }
 
-    const double vehicle_z = state_.vehicle_z;
+    const double lidar_z = state_.lidar_z;
     const double max_range = config_.terrain_voxel_size
                              * (TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH + 1);
     state_.laser_cloud_crop->clear();
     for (const auto& point : cloud->points) {
-      double relative_z = point.z - vehicle_z;
+      double relative_z = point.z - lidar_z;
       double distance = horizontalDistanceTo(point.x, point.y);
       const double z_margin = config_.distance_ratio_z * distance;
       if (relative_z > config_.min_relative_z - z_margin
@@ -83,22 +83,22 @@ namespace terrain_analysis {
     double center_x = terrain_voxel_size * state_.terrain_voxel_shift_x;
     double center_y = terrain_voxel_size * state_.terrain_voxel_shift_y;
 
-    while (state_.vehicle_x - center_x < -terrain_voxel_size) {
+    while (state_.lidar_x - center_x < -terrain_voxel_size) {
       shiftGrid(Axis::AXIS_X, ShiftDirection::TOWARD_NEGATIVE);
       center_x = terrain_voxel_size * --state_.terrain_voxel_shift_x;
     }
 
-    while (state_.vehicle_x - center_x > terrain_voxel_size) {
+    while (state_.lidar_x - center_x > terrain_voxel_size) {
       shiftGrid(Axis::AXIS_X, ShiftDirection::TOWARD_POSITIVE);
       center_x = terrain_voxel_size * ++state_.terrain_voxel_shift_x;
     }
 
-    while (state_.vehicle_y - center_y < -terrain_voxel_size) {
+    while (state_.lidar_y - center_y < -terrain_voxel_size) {
       shiftGrid(Axis::AXIS_Y, ShiftDirection::TOWARD_NEGATIVE);
       center_y = terrain_voxel_size * --state_.terrain_voxel_shift_y;
     }
 
-    while (state_.vehicle_y - center_y > terrain_voxel_size) {
+    while (state_.lidar_y - center_y > terrain_voxel_size) {
       shiftGrid(Axis::AXIS_Y, ShiftDirection::TOWARD_POSITIVE);
       center_y = terrain_voxel_size * ++state_.terrain_voxel_shift_y;
     }
@@ -121,7 +121,7 @@ namespace terrain_analysis {
   void TerrainProcessor::updateTerrainVoxels() {
     const double laser_time = state_.laser_cloud_time;
     const double init_time = state_.system_init_time;
-    const double vehicle_z = state_.vehicle_z;
+    const double lidar_z = state_.lidar_z;
 
     // 降采样器仅服务本次重建：不放进共享状态，避免隐式共享与不可重入
     pcl::VoxelGrid<pcl::PointXYZI> down_size_filter;
@@ -142,7 +142,7 @@ namespace terrain_analysis {
 
       for (const auto& point : downsampled.points) {
         double distance = horizontalDistanceTo(point.x, point.y);
-        if (keepTerrainVoxelPoint(point.z - vehicle_z, distance,
+        if (keepTerrainVoxelPoint(point.z - lidar_z, distance,
                                   point.intensity)) {
           cell_cloud.push_back(point);
         }
@@ -176,8 +176,8 @@ namespace terrain_analysis {
 
     for (const auto& point : state_.terrain_cloud->points) {
       // 唯一的候选筛选是下界，且用**绝对 z**（odom）：地面在 odom 中大体水平，
-      // 地板过滤只需挡住远低于地面的穿透点，用绝对量比"相对车辆"更贴合语义，
-      // 也不随车体上下抖动而移动。
+      // 地板过滤只需挡住远低于地面的穿透点，用绝对量比"相对雷达"更贴合语义，
+      // 也不随雷达上下抖动而移动。
       if (point.z <= config_.ground_floor_z) {
         continue;
       }
@@ -197,9 +197,9 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::detectDynamicObstacles() {
-    const double vehicle_x = state_.vehicle_x;
-    const double vehicle_y = state_.vehicle_y;
-    const double vehicle_z = state_.vehicle_z;
+    const double lidar_x = state_.lidar_x;
+    const double lidar_y = state_.lidar_y;
+    const double lidar_z = state_.lidar_z;
 
     for (const auto& point : state_.terrain_cloud->points) {
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
@@ -210,9 +210,9 @@ namespace terrain_analysis {
       size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
                                                   grid_index.col);
 
-      double relative_x = point.x - vehicle_x;
-      double relative_y = point.y - vehicle_y;
-      double relative_z = point.z - vehicle_z;
+      double relative_x = point.x - lidar_x;
+      double relative_y = point.y - lidar_y;
+      double relative_z = point.z - lidar_z;
       double distance = sqrt((relative_x * relative_x)
                              + (relative_y * relative_y));
 
@@ -240,9 +240,9 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::filterDynamicObstaclePoints() {
-    const double vehicle_x = state_.vehicle_x;
-    const double vehicle_y = state_.vehicle_y;
-    const double vehicle_z = state_.vehicle_z;
+    const double lidar_x = state_.lidar_x;
+    const double lidar_y = state_.lidar_y;
+    const double lidar_z = state_.lidar_z;
 
     for (const auto& point : state_.laser_cloud_crop->points) {
       const GridIndex grid_index = voxelIndexOf(VoxelGrid::PLANAR, point.x,
@@ -253,9 +253,9 @@ namespace terrain_analysis {
       size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
                                                   grid_index.col);
 
-      double relative_x = point.x - vehicle_x;
-      double relative_y = point.y - vehicle_y;
-      double relative_z = point.z - vehicle_z;
+      double relative_x = point.x - lidar_x;
+      double relative_y = point.y - lidar_y;
+      double relative_z = point.z - lidar_z;
       double distance = sqrt((relative_x * relative_x)
                              + (relative_y * relative_y));
       double scan_angle = atan2(relative_z - config_.min_dy_obs_relative_z,
@@ -279,7 +279,7 @@ namespace terrain_analysis {
   }
 
   void TerrainProcessor::computeHeightMap() {
-    const double vehicle_z = state_.vehicle_z;
+    const double lidar_z = state_.lidar_z;
     auto& elevations = state_.terrain_cloud_elev;
     elevations->clear();
 
@@ -295,9 +295,9 @@ namespace terrain_analysis {
       const double ground_z = state_.planar_voxel_elev[cell];
       const double height_above_ground = point.z - ground_z;
 
-      // 下界：地板过滤（挡掉地面以下/穿透点）。此处用**相对车辆**的高度，
-      // 因为要挡的是"远低于车"的穿透点，与地形无关。
-      if (point.z - vehicle_z <= config_.min_relative_z) {
+      // 下界：地板过滤（挡掉地面以下/穿透点）。此处用**相对雷达**的高度，
+      // 因为要挡的是"远低于雷达"的穿透点，与地形无关。
+      if (point.z - lidar_z <= config_.min_relative_z) {
         continue;
       }
       // 上界：距地面达到安全间隙的点（天花板/横梁）不输出为障碍——
@@ -318,7 +318,9 @@ namespace terrain_analysis {
       }
 
       auto point_count = state_.planar_point_elev[cell].size();
-      if (height >= 0
+      // 下界：地面带的死区，吸收地面高度估计的误差。估计值偏低时，真实地面点会
+      // 算出几厘米的正高度；若从 0 起算，它们会被当作低矮障碍标记出去。
+      if (height >= config_.min_obstacle_height
           && point_count >= static_cast<size_t>(config_.min_block_point_num)) {
         elevations->push_back(point);
         elevations->back().intensity = static_cast<float>(height);
@@ -327,8 +329,8 @@ namespace terrain_analysis {
   }
 
   double TerrainProcessor::horizontalDistanceTo(double px, double py) const {
-    return sqrt(((px - state_.vehicle_x) * (px - state_.vehicle_x))
-                + ((py - state_.vehicle_y) * (py - state_.vehicle_y)));
+    return sqrt(((px - state_.lidar_x) * (px - state_.lidar_x))
+                + ((py - state_.lidar_y) * (py - state_.lidar_y)));
   }
 
   bool TerrainProcessor::shouldPruneTerrainVoxel(int cell) const {
@@ -363,20 +365,18 @@ namespace terrain_analysis {
 
   TerrainProcessor::SensorPoint TerrainProcessor::transformToSensorFrame(
       double x, double y, double z) const {
-    double rotated_x = (x * state_.cos_vehicle_yaw)
-                       + (y * state_.sin_vehicle_yaw);
-    double rotated_y = -(x * state_.sin_vehicle_yaw)
-                       + (y * state_.cos_vehicle_yaw);
+    double rotated_x = (x * state_.cos_lidar_yaw) + (y * state_.sin_lidar_yaw);
+    double rotated_y = -(x * state_.sin_lidar_yaw) + (y * state_.cos_lidar_yaw);
 
-    double pitched_x = (rotated_x * state_.cos_vehicle_pitch)
-                       - (z * state_.sin_vehicle_pitch);
-    double pitched_z = (rotated_x * state_.sin_vehicle_pitch)
-                       + (z * state_.cos_vehicle_pitch);
+    double pitched_x = (rotated_x * state_.cos_lidar_pitch)
+                       - (z * state_.sin_lidar_pitch);
+    double pitched_z = (rotated_x * state_.sin_lidar_pitch)
+                       + (z * state_.cos_lidar_pitch);
 
-    double rolled_y = (rotated_y * state_.cos_vehicle_roll)
-                      + (pitched_z * state_.sin_vehicle_roll);
-    double rolled_z = -(rotated_y * state_.sin_vehicle_roll)
-                      + (pitched_z * state_.cos_vehicle_roll);
+    double rolled_y = (rotated_y * state_.cos_lidar_roll)
+                      + (pitched_z * state_.sin_lidar_roll);
+    double rolled_z = -(rotated_y * state_.sin_lidar_roll)
+                      + (pitched_z * state_.cos_lidar_roll);
 
     return {pitched_x, rolled_y, rolled_z};
   }
@@ -467,11 +467,11 @@ namespace terrain_analysis {
                                                              double x,
                                                              double y) const {
     // 一维坐标 → 网格下标：半格偏移使格心对齐整数下标
-    const auto axis_index = [](double coordinate, double vehicle_coordinate,
+    const auto axis_index = [](double coordinate, double lidar_coordinate,
                                double voxel_size, int half_width) {
       const double half_voxel_size = voxel_size / 2;
       return static_cast<int>(
-                 std::floor((coordinate - vehicle_coordinate + half_voxel_size)
+                 std::floor((coordinate - lidar_coordinate + half_voxel_size)
                             / voxel_size))
              + half_width;
     };
@@ -484,8 +484,8 @@ namespace terrain_analysis {
     const int half_width = (width - 1) / 2;
 
     GridIndex out;
-    out.row = axis_index(y, state_.vehicle_y, voxel_size, half_width);
-    out.col = axis_index(x, state_.vehicle_x, voxel_size, half_width);
+    out.row = axis_index(y, state_.lidar_y, voxel_size, half_width);
+    out.col = axis_index(x, state_.lidar_x, voxel_size, half_width);
     out.valid = out.row >= 0 && out.row < width && out.col >= 0
                 && out.col < width;
     return out;

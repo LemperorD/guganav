@@ -34,22 +34,18 @@ namespace terrain_analysis {
     std::unique_ptr<TerrainAnalysis> terrain_;
   };
 
-  // 平面地面点云经过全管线后，输出的 intensity（离地高度）都接近零
-  TEST_F(TerrainAnalysisTest, Run_FlatGround_OutputsLowIntensity) {
+  // 纯平面地面点云经过全管线后不输出障碍点：地面落在
+  // `min_obstacle_height` 的死区内（此前输出过 intensity≈0 的地面点，
+  // 由下游的 intensity 门限再滤掉；现在在 terrain 内就不再输出）。
+  TEST_F(TerrainAnalysisTest, Run_FlatGround_NoObstacleOutput) {
     sendOdom(0, 0, 0, 0);
 
     auto cloud = MakeGroundCloud(21, 0.1, 0.01);
     sendCloud(cloud, 100.0);
     terrain_->processor().run();
 
-    EXPECT_GT(terrain_->processor().terrainCloudElev().points.size(), 0U);
-
-    float max_intensity = 0;
-    for (const auto& p : terrain_->processor().terrainCloudElev().points) {
-      max_intensity = std::max(max_intensity, p.intensity);
-    }
-    EXPECT_LT(max_intensity, 0.5F)
-        << "Flat ground should produce small heights";
+    EXPECT_TRUE(terrain_->processor().terrainCloudElev().points.empty())
+        << "Flat ground should not be emitted as obstacles";
   }
 
   // 地面上方有障碍点时，输出点云包含非零离地高度。
