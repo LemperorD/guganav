@@ -3,9 +3,8 @@
 #include <Eigen/Core>
 #include <vector>
 
-namespace bspline_opt
-{
-namespace detail
+
+namespace bspline_opt::detail
 {
 
 struct BandRow
@@ -40,4 +39,4 @@ void fillCtrl(
   double last_y, int M, Eigen::MatrixXd & ctrl);
 
 }  // namespace detail
-}  // namespace bspline_opt
+

@@ -2,9 +2,8 @@
 #include "bspline_opt/detail/common.hpp"
 #include <cstddef>
 
-namespace bspline_opt
-{
-namespace detail
+
+namespace bspline_opt::detail
 {
 
 int findSpan(double u, const Eigen::RowVectorXd & knots, int n, int p)
@@ -61,7 +60,7 @@ void basisDerivsAt(
   // 相同的 ndu 表算法), 正确处理钳制端 (u=0/u=1) 的单边导数。
   const int n = M - 1;
   const int span = findSpan(u, knots, n, p);
-  constexpr int kOrder = 2;
+  constexpr int korder = 2;
 
   std::vector<double> ndu(static_cast<size_t>((p + 1) * (p + 1)), 0.0);
   std::vector<double> left(static_cast<size_t>(p + 1), 0.0);
@@ -106,7 +105,7 @@ void basisDerivsAt(
     int s2 = 1;
     aAt(0, 0) = 1.0;
 
-    for (int k = 1; k <= kOrder; ++k) {
+    for (int k = 1; k <= korder; ++k) {
       double d = 0.0;
       const int rk = r - k;
       const int pk = p - k;
@@ -145,5 +144,5 @@ void basisDerivsAt(
   }
 }
 
-}  // namespace detail
-}  // namespace bspline_opt
+}  // namespace bspline_opt::detail
+

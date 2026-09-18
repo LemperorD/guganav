@@ -3,9 +3,8 @@
 #include "bspline_opt/detail/common.hpp"
 #include <cstddef>
 
-namespace bspline_opt
-{
-namespace detail
+
+namespace bspline_opt::detail
 {
 
 void rowFromBasis(const std::vector<double> & b, int M, BandRow & row)
@@ -32,7 +31,7 @@ CostCache buildCostCache(
   cc.M = M;
 
   std::vector<double> N, N1, N2;
-  auto pushRow = [&](double u, bool second_deriv, std::vector<BandRow> & rows) {
+  auto pushrow = [&](double u, bool second_deriv, std::vector<BandRow> & rows) {
       basisDerivsAt(u, knots, kSplineDegree, M, N, N1, N2);
       BandRow r;
       rowFromBasis(second_deriv ? N2 : N, M, r);
@@ -41,24 +40,24 @@ CostCache buildCostCache(
 
   cc.d2_smooth.reserve(static_cast<size_t>(cc.Ks + 1));
   for (int k = 0; k <= cc.Ks; ++k) {
-    pushRow(static_cast<double>(k) / cc.Ks, true, cc.d2_smooth);
+    pushrow(static_cast<double>(k) / cc.Ks, true, cc.d2_smooth);
   }
 
   // 距离项采样点: 均匀降采样到 ≤256 个原始航点, 控制代价有界。
   const size_t n = orig_points.size();
   const size_t stride = (n > 256) ? ((n + 255) / 256) : 1;
   for (size_t i = 0; i < n; i += stride) {
-    pushRow(orig_params(static_cast<Eigen::Index>(i)), false, cc.b_dist);
+    pushrow(orig_params(static_cast<Eigen::Index>(i)), false, cc.b_dist);
     cc.dist_q.emplace_back(orig_points[i]);
   }
   if (n > 0 && (n - 1) % stride != 0) {
-    pushRow(orig_params(static_cast<Eigen::Index>(n - 1)), false, cc.b_dist);
+    pushrow(orig_params(static_cast<Eigen::Index>(n - 1)), false, cc.b_dist);
     cc.dist_q.emplace_back(orig_points[n - 1]);
   }
 
   cc.b_esdf.reserve(static_cast<size_t>(cc.Ke + 1));
   for (int k = 0; k <= cc.Ke; ++k) {
-    pushRow(static_cast<double>(k) / cc.Ke, false, cc.b_esdf);
+    pushrow(static_cast<double>(k) / cc.Ke, false, cc.b_esdf);
   }
 
   return cc;
@@ -89,4 +88,4 @@ void fillCtrl(
 }
 
 }  // namespace detail
-}  // namespace bspline_opt
+
