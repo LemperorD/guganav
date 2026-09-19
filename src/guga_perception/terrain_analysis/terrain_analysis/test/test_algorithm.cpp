@@ -1,3 +1,4 @@
+#include "terrain_analysis/core/grid.hpp"
 #include "terrain_analysis/core/per_frame_height_map.hpp"
 #include "terrain_analysis/core/persistent_voxel_map.hpp"
 #include "gtest/gtest.h"

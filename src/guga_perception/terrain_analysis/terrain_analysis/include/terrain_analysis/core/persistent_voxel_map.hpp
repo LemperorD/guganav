@@ -1,7 +1,7 @@
 #pragma once
 
-#include "terrain_analysis/core/persistent_voxel_config.hpp"
-#include "terrain_analysis/core/persistent_voxel_grid.hpp"
+#include "terrain_analysis/core/config.hpp"
+#include "terrain_analysis/core/grid.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
