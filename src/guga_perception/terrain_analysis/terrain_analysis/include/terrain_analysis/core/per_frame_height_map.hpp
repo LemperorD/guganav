@@ -114,7 +114,6 @@ namespace terrain_analysis {
     // 白盒测试需要逐阶段驱动与检查内部状态；仅授予本包测试 fixture，
     // 不对外开放（新增测试如需访问，在此显式追加）。
     friend class AlgorithmTest;
-    friend class TerrainAnalysisTest;
   };
 
 }  // namespace terrain_analysis

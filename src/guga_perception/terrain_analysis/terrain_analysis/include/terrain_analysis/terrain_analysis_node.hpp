@@ -40,19 +40,7 @@ namespace terrain_analysis {
 
     /** @brief 获取最近一次生成的障碍点云。 */
     [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& obstacleCloud() const {
-      return height_map_.obstacleCloud();
-    }
-    /** @brief 前半段（本帧输入与跨帧体素地图）。 */
-    [[nodiscard]] PersistentVoxelMap& voxelMap() noexcept {
-      return voxel_map_;
-    }
-    /** @brief 后半段（地面高程与障碍输出）。 */
-    [[nodiscard]] PerFrameHeightMap& heightMap() noexcept {
-      return height_map_;
-    }
-    /** @brief 两半之间的交接数据（采集点云）。 */
-    [[nodiscard]] pcl::PointCloud<pcl::PointXYZI>& collectedCloud() noexcept {
-      return *collected_cloud_;
+      return per_frame_height_map_.obstacleCloud();
     }
 
   private:
@@ -60,9 +48,9 @@ namespace terrain_analysis {
     void publishPointCloud();
 
     /** @brief 前半段：接收本帧输入并维护跨帧体素地图。 */
-    PersistentVoxelMap voxel_map_;
+    PersistentVoxelMap persistent_voxel_map_;
     /** @brief 后半段：由采集点云估计地面并生成障碍输出。 */
-    PerFrameHeightMap height_map_;
+    PerFrameHeightMap per_frame_height_map_;
     /** @brief 两半之间的交接数据（采集点云）。 */
     pcl::PointCloud<pcl::PointXYZI>::Ptr collected_cloud_ =
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -78,5 +66,9 @@ namespace terrain_analysis {
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
         pub_terrain_map_;
     rclcpp::TimerBase::SharedPtr timer_;
+
+    // 白盒测试要直接驱动两半并检查交接数据；只授予本包测试 fixture，
+    // 不把这些内部成员提升为公开 API。
+    friend class TerrainAnalysisTest;
   };
 }  // namespace terrain_analysis

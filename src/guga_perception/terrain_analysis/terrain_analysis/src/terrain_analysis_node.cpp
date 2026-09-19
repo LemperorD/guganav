@@ -31,8 +31,8 @@ namespace terrain_analysis {
       : Node("terrain_analysis", options) {
     // 参数按两半各自的读取范围分发：前半段要叶尺寸、衰减与接收带，后半段要地面
     // 估计、输出带与平面网格。minRelZ 两半都用（用途不同），故填两次。
-    PersistentVoxelConfig& voxel_config = voxel_map_.config();
-    PerFrameHeightConfig& planar_config = height_map_.config();
+    PersistentVoxelConfig& voxel_config = persistent_voxel_map_.config();
+    PerFrameHeightConfig& height_config = per_frame_height_map_.config();
 
     voxel_config.scan_voxel_size = declare_parameter(
         "scanVoxelSize", voxel_config.scan_voxel_size);
@@ -47,32 +47,32 @@ namespace terrain_analysis {
     voxel_config.distance_ratio_z = declare_parameter(
         "disRatioZ", voxel_config.distance_ratio_z);
 
-    planar_config.use_sorting = declare_parameter("useSorting",
-                                                  planar_config.use_sorting);
-    planar_config.quantile_z = declare_parameter("quantileZ",
-                                                 planar_config.quantile_z);
-    planar_config.consider_drop = declare_parameter(
-        "considerDrop", planar_config.consider_drop);
-    planar_config.limit_ground_lift = declare_parameter(
-        "limitGroundLift", planar_config.limit_ground_lift);
-    planar_config.max_ground_lift = declare_parameter(
-        "maxGroundLift", planar_config.max_ground_lift);
-    planar_config.min_block_point_num = declare_parameter(
-        "minBlockPointNum", planar_config.min_block_point_num);
-    planar_config.min_obstacle_height = declare_parameter(
-        "minObstacleHeight", planar_config.min_obstacle_height);
-    planar_config.ceiling_clearance = declare_parameter(
-        "ceilingClearance", planar_config.ceiling_clearance);
-    planar_config.ground_floor_z = declare_parameter(
-        "groundFloorZ", planar_config.ground_floor_z);
+    height_config.use_sorting = declare_parameter("useSorting",
+                                                  height_config.use_sorting);
+    height_config.quantile_z = declare_parameter("quantileZ",
+                                                 height_config.quantile_z);
+    height_config.consider_drop = declare_parameter(
+        "considerDrop", height_config.consider_drop);
+    height_config.limit_ground_lift = declare_parameter(
+        "limitGroundLift", height_config.limit_ground_lift);
+    height_config.max_ground_lift = declare_parameter(
+        "maxGroundLift", height_config.max_ground_lift);
+    height_config.min_block_point_num = declare_parameter(
+        "minBlockPointNum", height_config.min_block_point_num);
+    height_config.min_obstacle_height = declare_parameter(
+        "minObstacleHeight", height_config.min_obstacle_height);
+    height_config.ceiling_clearance = declare_parameter(
+        "ceilingClearance", height_config.ceiling_clearance);
+    height_config.ground_floor_z = declare_parameter(
+        "groundFloorZ", height_config.ground_floor_z);
 
     // 同一个参数进入两半：前半段用它定义接收带下沿，后半段用它挡穿透点。
     const double min_relative_z = declare_parameter(
         "minRelZ", voxel_config.min_relative_z);
     voxel_config.min_relative_z = min_relative_z;
-    planar_config.min_relative_z = min_relative_z;
+    height_config.min_relative_z = min_relative_z;
 
-    logHeightParams(planar_config);
+    logHeightParams(height_config);
 
     sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "lidar_odometry", 5,
@@ -92,7 +92,7 @@ namespace terrain_analysis {
           auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
           pcl::fromROSMsg(*msg, *cloud);
           last_stamp_ = rclcpp::Time(msg->header.stamp).seconds();
-          voxel_map_.ingest(*cloud, lidar_position_, last_stamp_);
+          persistent_voxel_map_.ingest(*cloud, lidar_position_, last_stamp_);
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -103,22 +103,23 @@ namespace terrain_analysis {
   }
 
   bool TerrainAnalysis::processOnce() {
-    if (!voxel_map_.hasPendingFrame()) {
+    if (!persistent_voxel_map_.hasPendingFrame()) {
       return rclcpp::ok();
     }
 
     // 前半段：累积本帧观测并维护体素地图；采集窗口内的累积点云交给后半段。
-    voxel_map_.update();
-    voxel_map_.collectCloud(*collected_cloud_);
+    persistent_voxel_map_.update();
+    persistent_voxel_map_.collectCloud(*collected_cloud_);
     // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。
-    height_map_.compute(*collected_cloud_, voxel_map_.lidarPosition());
+    per_frame_height_map_.compute(*collected_cloud_,
+                                  persistent_voxel_map_.lidarPosition());
     publishPointCloud();
     return rclcpp::ok();
   }
 
   void TerrainAnalysis::publishPointCloud() {
     sensor_msgs::msg::PointCloud2 message;
-    pcl::toROSMsg(height_map_.obstacleCloud(), message);
+    pcl::toROSMsg(obstacleCloud(), message);
     message.header.stamp = rclcpp::Time(
         static_cast<int64_t>(last_stamp_ * 1e9));
     message.header.frame_id = "odom";

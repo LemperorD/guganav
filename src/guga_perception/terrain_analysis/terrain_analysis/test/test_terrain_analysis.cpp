@@ -28,9 +28,12 @@ namespace terrain_analysis {
       lidar_position_ = {x, y, z};
     }
 
+    /** @brief 把本帧点云交给前半段（节点是 fixture 的 friend，故可直接驱动）。
+     */
     void sendCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                    double timestamp_sec) {
-      terrain_->voxelMap().ingest(*cloud, lidar_position_, timestamp_sec);
+      terrain_->persistent_voxel_map_.ingest(*cloud, lidar_position_,
+                                             timestamp_sec);
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;

@@ -10,16 +10,26 @@ namespace terrain_analysis {
   protected:
     PersistentVoxelMap voxel_map_;
 
-    /** @brief 首帧时刻是内部字段，测试体经 fixture 成员读取。 */
+    // 前半段的这些成员只服务内部与白盒测试（fixture 是它的 friend），
+    // 测试体经下面这些成员函数读取，不把它们提升为公开 API。
     double initTime() const {
       return voxel_map_.init_time_;
+    }
+    double timestamp() const {
+      return voxel_map_.timestamp();
+    }
+    const pcl::PointCloud<pcl::PointXYZI>& frameCloud() const {
+      return voxel_map_.frameCloud();
+    }
+    double elapsed() const {
+      return voxel_map_.elapsedSeconds();
     }
   };
 
   // 默认构造后没有待处理帧，也没有记下任何雷达位置
   TEST_F(FrameIngestTest, DefaultState_NoPendingFrame) {
     EXPECT_FALSE(voxel_map_.hasPendingFrame());
-    EXPECT_TRUE(voxel_map_.frameCloud().points.empty());
+    EXPECT_TRUE(frameCloud().points.empty());
   }
 
   // 接一帧后记下雷达位置、帧时刻，并标记有帧待处理
@@ -30,7 +40,7 @@ namespace terrain_analysis {
     EXPECT_DOUBLE_EQ(voxel_map_.lidarPosition().x, 1.0);
     EXPECT_DOUBLE_EQ(voxel_map_.lidarPosition().y, 2.0);
     EXPECT_DOUBLE_EQ(voxel_map_.lidarPosition().z, 3.0);
-    EXPECT_DOUBLE_EQ(voxel_map_.timestamp(), 100.0);
+    EXPECT_DOUBLE_EQ(timestamp(), 100.0);
     EXPECT_TRUE(voxel_map_.hasPendingFrame());
   }
 
@@ -40,20 +50,20 @@ namespace terrain_analysis {
     voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
 
     EXPECT_DOUBLE_EQ(initTime(), 100.0);
-    EXPECT_DOUBLE_EQ(voxel_map_.elapsedSeconds(), 0.0);
+    EXPECT_DOUBLE_EQ(elapsed(), 0.0);
   }
 
   // 观测时刻写进 intensity：体素叶靠它判年龄，首帧为 0、第二帧为两帧之差
   TEST_F(FrameIngestTest, Ingest_StampsObservationTimeIntoIntensity) {
     auto cloud = MakeCloud(0, 0, 0);
     voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
-    ASSERT_EQ(voxel_map_.frameCloud().points.size(), 1U);
-    EXPECT_FLOAT_EQ(voxel_map_.frameCloud().points[0].intensity, 0.0F);
+    ASSERT_EQ(frameCloud().points.size(), 1U);
+    EXPECT_FLOAT_EQ(frameCloud().points[0].intensity, 0.0F);
 
     voxel_map_.ingest(*MakeCloud(0, 0, 0), {0.0, 0.0, 0.0}, 100.5);
-    ASSERT_EQ(voxel_map_.frameCloud().points.size(), 1U);
-    EXPECT_FLOAT_EQ(voxel_map_.frameCloud().points[0].intensity, 0.5F);
-    EXPECT_DOUBLE_EQ(voxel_map_.elapsedSeconds(), 0.5);
+    ASSERT_EQ(frameCloud().points.size(), 1U);
+    EXPECT_FLOAT_EQ(frameCloud().points[0].intensity, 0.5F);
+    EXPECT_DOUBLE_EQ(elapsed(), 0.5);
   }
 
   // 超出体素网格接收范围的点被裁剪掉
@@ -64,7 +74,7 @@ namespace terrain_analysis {
 
     voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
 
-    EXPECT_EQ(voxel_map_.frameCloud().points.size(), 1U);
+    EXPECT_EQ(frameCloud().points.size(), 1U);
   }
 
   // update() 处理掉本帧后，待处理标记被清掉

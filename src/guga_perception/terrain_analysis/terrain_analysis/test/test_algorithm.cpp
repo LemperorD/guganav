@@ -35,7 +35,7 @@ namespace terrain_analysis {
     void resetState() {
       height_map_ = std::make_unique<PerFrameHeightMap>();
       voxel_map_ = std::make_unique<PersistentVoxelMap>();
-      for (auto& ptr : voxelMap().cells()) {
+      for (auto& ptr : voxelCells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
       }
       terrain_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -106,6 +106,16 @@ namespace terrain_analysis {
     PerFrameHeightMap& heightMap() {
       return *height_map_;
     }
+    int shiftX() const {
+      return voxel_map_->shiftX();
+    }
+    int shiftY() const {
+      return voxel_map_->shiftY();
+    }
+    std::array<pcl::PointCloud<pcl::PointXYZI>::Ptr, PersistentVoxelGrid::NUM>&
+    voxelCells() {
+      return voxel_map_->cells();
+    }
     PersistentVoxelMap& voxelMap() {
       return *voxel_map_;
     }
@@ -142,7 +152,7 @@ namespace terrain_analysis {
 
       int center_cell = PersistentVoxelGrid::linearIndex(
           PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-      auto& cell = *voxelMap().cells()[center_cell];
+      auto& cell = *voxelCells()[center_cell];
       cell.clear();
       pcl::PointXYZI point;
       point.x = static_cast<float>(distance);
@@ -152,7 +162,7 @@ namespace terrain_analysis {
       cell.push_back(point);
 
       voxelMap().rebuild(lidarPosition(), elapsed());
-      return static_cast<int>(voxelMap().cells()[center_cell]->points.size());
+      return static_cast<int>(voxelCells()[center_cell]->points.size());
     }
 
     std::unique_ptr<PerFrameHeightMap> height_map_;
@@ -168,79 +178,79 @@ using terrain_analysis::AlgorithmTest;
 TEST_F(AlgorithmTest, RolloverVoxelMap_Stationary_NoShift) {
   lidar().x = 0;
   lidar().y = 0;
-  int sx = voxelMap().shiftX();
-  int sy = voxelMap().shiftY();
+  int sx = shiftX();
+  int sy = shiftY();
 
   runStage(stage::Id::ROLLOVER);
 
-  EXPECT_EQ(voxelMap().shiftX(), sx);
-  EXPECT_EQ(voxelMap().shiftY(), sy);
+  EXPECT_EQ(shiftX(), sx);
+  EXPECT_EQ(shiftY(), sy);
 }
 
 // 雷达向左超出 voxel 范围时，沿 X 负向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxelMap_LeftOfCenter_ShiftsXNegative) {
   lidar().x = -2.0;
-  int sx = voxelMap().shiftX();
+  int sx = shiftX();
 
   runStage(stage::Id::ROLLOVER);
 
-  EXPECT_EQ(voxelMap().shiftX(), sx - 1);
+  EXPECT_EQ(shiftX(), sx - 1);
 }
 
 // 雷达向右超出 voxel 范围时，沿 X 正向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxelMap_RightOfCenter_ShiftsXPositive) {
   lidar().x = 2.0;
-  int sx = voxelMap().shiftX();
+  int sx = shiftX();
 
   runStage(stage::Id::ROLLOVER);
 
-  EXPECT_EQ(voxelMap().shiftX(), sx + 1);
+  EXPECT_EQ(shiftX(), sx + 1);
 }
 
 // 雷达向下超出 voxel 范围时，沿 Y 负向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxelMap_BelowCenter_ShiftsYNegative) {
   lidar().y = -2.0;
-  int sy = voxelMap().shiftY();
+  int sy = shiftY();
 
   runStage(stage::Id::ROLLOVER);
 
-  EXPECT_EQ(voxelMap().shiftY(), sy - 1);
+  EXPECT_EQ(shiftY(), sy - 1);
 }
 
 // 雷达向上超出 voxel 范围时，沿 Y 正向滚动一格
 TEST_F(AlgorithmTest, RolloverVoxelMap_AboveCenter_ShiftsYPositive) {
   lidar().y = 2.0;
-  int sy = voxelMap().shiftY();
+  int sy = shiftY();
 
   runStage(stage::Id::ROLLOVER);
 
-  EXPECT_EQ(voxelMap().shiftY(), sy + 1);
+  EXPECT_EQ(shiftY(), sy + 1);
 }
 
 // 滚动后目标 cell 被清空，原有数据随 shift 迁移
 TEST_F(AlgorithmTest, RolloverVoxelMap_ShiftLeft_PreservesDataFromShiftedCell) {
   lidar().x = -2.0;
-  voxelMap().cells()[0]->clear();
+  voxelCells()[0]->clear();
   pcl::PointXYZI p{0, 0, 0, 0};
-  voxelMap().cells()[0]->push_back(p);
+  voxelCells()[0]->push_back(p);
 
   runStage(stage::Id::ROLLOVER);
 
   // After shift-left, voxel(0,0) becomes the destination cell and gets cleared
-  EXPECT_TRUE(voxelMap().cells()[0]->points.empty());
+  EXPECT_TRUE(voxelCells()[0]->points.empty());
 }
 
 // 雷达同时向左下方移动，X 和 Y 各滚动一格
 TEST_F(AlgorithmTest, RolloverVoxelMap_LeftAndDown_ShiftsBothAxes) {
   lidar().x = -2.0;
   lidar().y = -2.0;
-  int sx = voxelMap().shiftX();
-  int sy = voxelMap().shiftY();
+  int sx = shiftX();
+  int sy = shiftY();
 
   runStage(stage::Id::ROLLOVER);
 
-  EXPECT_EQ(voxelMap().shiftX(), sx - 1);
-  EXPECT_EQ(voxelMap().shiftY(), sy - 1);
+  EXPECT_EQ(shiftX(), sx - 1);
+  EXPECT_EQ(shiftY(), sy - 1);
 }
 
 // ── voxelizeTerrain ──
@@ -255,7 +265,7 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
 
   size_t center = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  EXPECT_EQ(voxelMap().cells()[center]->points.size(), 1U);
+  EXPECT_EQ(voxelCells()[center]->points.size(), 1U);
 }
 
 // 超出体素网格范围的点不进入任何格
@@ -269,7 +279,7 @@ TEST_F(AlgorithmTest, Voxelize_PointOutsideGrid_Dropped) {
   runStage(stage::Id::VOXELIZE);
 
   size_t total = 0;
-  for (const auto& cell : voxelMap().cells()) {
+  for (const auto& cell : voxelCells()) {
     total += cell->points.size();
   }
   EXPECT_EQ(total, 0U);
@@ -282,7 +292,7 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
   runStage(stage::Id::VOXELIZE);
 
   for (int i = 0; i < PersistentVoxelGrid::NUM; i++) {
-    EXPECT_TRUE(voxelMap().cells()[i]->points.empty());
+    EXPECT_TRUE(voxelCells()[i]->points.empty());
   }
 }
 
@@ -676,7 +686,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
 
   int center_cell = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelMap().cells()[center_cell];
+  auto& cell = *voxelCells()[center_cell];
   cell.clear();
   pcl::PointXYZI point;
   point.x = 2.0F;
@@ -686,7 +696,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   cell.push_back(point);
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
-  EXPECT_TRUE(voxelMap().cells()[center_cell]->points.empty());
+  EXPECT_TRUE(voxelCells()[center_cell]->points.empty());
 }
 
 // 叶内混有新老观测时，代表点必须取"最新"的那个点：
@@ -707,7 +717,7 @@ TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
 
   int center_cell = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelMap().cells()[center_cell];
+  auto& cell = *voxelCells()[center_cell];
   cell.clear();
   // 同一 0.05 m 叶内的三点：两个早已过期，一个本帧刚观测到
   const double times[] = {0.10, 0.30, 1.20};
@@ -722,8 +732,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
 
-  ASSERT_EQ(voxelMap().cells()[center_cell]->points.size(), 1U);
-  EXPECT_FLOAT_EQ(voxelMap().cells()[center_cell]->points[0].intensity, 1.20F)
+  ASSERT_EQ(voxelCells()[center_cell]->points.size(), 1U);
+  EXPECT_FLOAT_EQ(voxelCells()[center_cell]->points[0].intensity, 1.20F)
       << "代表点必须是本帧的观测，而不是叶内的某个平均时刻";
 }
 
@@ -745,7 +755,7 @@ TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
 
   int center_cell = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelMap().cells()[center_cell];
+  auto& cell = *voxelCells()[center_cell];
   cell.clear();
   pcl::PointXYZI ground;  // 地面点，本帧观测到
   ground.x = 2.0F;
@@ -762,7 +772,7 @@ TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
 
-  EXPECT_EQ(voxelMap().cells()[center_cell]->points.size(), 2U)
+  EXPECT_EQ(voxelCells()[center_cell]->points.size(), 2U)
       << "地面点与矮物体点必须落在不同的垂直叶里，各自保留";
 }
 
@@ -782,7 +792,7 @@ TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
 
   int center_cell = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelMap().cells()[center_cell];
+  auto& cell = *voxelCells()[center_cell];
   cell.clear();
   for (double time : {0.10, 0.30}) {
     pcl::PointXYZI point;
@@ -794,7 +804,7 @@ TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
   }
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
-  EXPECT_TRUE(voxelMap().cells()[center_cell]->points.empty());
+  EXPECT_TRUE(voxelCells()[center_cell]->points.empty());
 }
 
 // 同一格内、不同高度的两个叶互不影响：地面叶被刷新时，
@@ -814,7 +824,7 @@ TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
 
   int center_cell = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelMap().cells()[center_cell];
+  auto& cell = *voxelCells()[center_cell];
   cell.clear();
   pcl::PointXYZI stale;  // 上方叶：0.30 m 处，早已过期
   stale.x = 1.0F;
@@ -831,8 +841,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
 
-  ASSERT_EQ(voxelMap().cells()[center_cell]->points.size(), 1U);
-  EXPECT_FLOAT_EQ(voxelMap().cells()[center_cell]->points[0].intensity, 1.20F);
+  ASSERT_EQ(voxelCells()[center_cell]->points.size(), 1U);
+  EXPECT_FLOAT_EQ(voxelCells()[center_cell]->points[0].intensity, 1.20F);
 }
 
 // 近点即使过期也保留（near 优先于 decay）
@@ -849,7 +859,7 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
 
   int center_cell = PersistentVoxelGrid::linearIndex(
       PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelMap().cells()[center_cell];
+  auto& cell = *voxelCells()[center_cell];
   cell.clear();
   pcl::PointXYZI point;
   point.x = 1.0F;
@@ -859,5 +869,5 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   cell.push_back(point);
 
   runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
-  EXPECT_EQ(voxelMap().cells()[center_cell]->points.size(), 1U);
+  EXPECT_EQ(voxelCells()[center_cell]->points.size(), 1U);
 }

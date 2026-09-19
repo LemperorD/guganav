@@ -6,12 +6,15 @@
 //
 // 关注点：叶宽变大后，同一个 3D 叶里地面点与物体点会混合，而每个叶只保留
 // 最新的一个点，矮台阶可能被地面点顶掉。
+//
+// 它直接构造两半并逐帧驱动，不经节点：这里量的是算法开销；ROS 接线与参数分发
+// 由 test_integration 与 test_terrain_analysis 覆盖。
 
-#include "terrain_analysis/terrain_analysis_node.hpp"
+#include "terrain_analysis/core/per_frame_height_map.hpp"
+#include "terrain_analysis/core/persistent_voxel_map.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <rclcpp/rclcpp.hpp>
 
 #include <chrono>
 #include <cmath>
@@ -21,7 +24,8 @@
 
 namespace {
 
-  using terrain_analysis::TerrainAnalysis;
+  using terrain_analysis::PerFrameHeightMap;
+  using terrain_analysis::PersistentVoxelMap;
 
   pcl::PointCloud<pcl::PointXYZI>::Ptr makeFrame(bool with_ghost_box = false) {
     auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -47,7 +51,7 @@ namespace {
         cloud->push_back(p);
       }
     }
-    // 幽灵点场景：2 m 处一个 0.3 m 高的方块，前若干帧存在，之后消失
+    // 幽灵点场景：4.1 m 处一个 0.3 m 高的方块，前若干帧存在，之后消失
     if (with_ghost_box) {
       for (int ix = 0; ix < 6; ix++) {
         for (int iz = 0; iz < 16; iz++) {
@@ -89,30 +93,29 @@ namespace {
 }  // namespace
 
 int main(int argc, char** argv) {
-  rclcpp::init(argc, argv);
   const double leaf_xy = argc > 1 ? std::atof(argv[1]) : 0.1;
   const double leaf_z = argc > 2 ? std::atof(argv[2]) : 0.05;
   const int frames = argc > 3 ? std::atoi(argv[3]) : 300;
   // 第 4 个参数：幽灵点场景中"物体消失"的帧号（<0 表示不启用该场景）
   const int ghost_frame = argc > 4 ? std::atoi(argv[4]) : -1;
 
-  auto options = rclcpp::NodeOptions();
-  // 参数经节点分发到两半各自的配置：前半段拿叶尺寸与衰减，后半段拿地面估计。
-  options.parameter_overrides({rclcpp::Parameter("scanVoxelSize", leaf_xy),
-                               rclcpp::Parameter("scanVoxelSizeZ", leaf_z),
-                               rclcpp::Parameter("decayTime", 0.5),
-                               rclcpp::Parameter("noDecayDis", 0.0),
-                               rclcpp::Parameter("useSorting", true),
-                               rclcpp::Parameter("quantileZ", 0.2),
-                               rclcpp::Parameter("minObstacleHeight", 0.04),
-                               rclcpp::Parameter("ceilingClearance", 0.62)});
-  auto node = std::make_unique<TerrainAnalysis>(options);
-  auto& voxel_map = node->voxelMap();
-  auto& planar_map = node->heightMap();
+  PersistentVoxelMap voxel_map;
+  PerFrameHeightMap height_map;
+  // 取值与实车默认一致（见 config/reality/base.yaml）
+  voxel_map.config().scan_voxel_size = leaf_xy;
+  voxel_map.config().scan_voxel_size_z = leaf_z;
+  voxel_map.config().decay_time = 0.5;
+  voxel_map.config().no_decay_distance = 0.0;
+  height_map.config().use_sorting = true;
+  height_map.config().quantile_z = 0.2;
+  height_map.config().min_obstacle_height = 0.04;
+  height_map.config().ceiling_clearance = 0.62;
+
   const guga_common::Point3d lidar_position{0.0, 0.0, 0.0};
   const bool ghost_mode = ghost_frame >= 0;
-  const auto frame = makeFrame(ghost_mode);  // 幽灵场景下含 4.2 m 方块
+  const auto frame = makeFrame(ghost_mode);  // 幽灵场景下含 4.1 m 方块
   const auto frame_no_ghost = makeFrame(false);  // 方块消失后的帧
+  pcl::PointCloud<pcl::PointXYZI> collected;
 
   double total_ms = 0.0;
   int timed = 0;
@@ -126,11 +129,11 @@ int main(int argc, char** argv) {
 
     const auto t0 = std::chrono::steady_clock::now();
     voxel_map.update();
-    voxel_map.collectCloud(node->collectedCloud());
-    planar_map.compute(node->collectedCloud(), voxel_map.lidarPosition());
+    voxel_map.collectCloud(collected);
+    height_map.compute(collected, voxel_map.lidarPosition());
     const auto t1 = std::chrono::steady_clock::now();
     if (ghost_frame >= 0 && i >= ghost_frame && ghost_clear_frame < 0
-        && countNear(planar_map.obstacleCloud(), 4.2, 0.0, 0.3) == 0) {
+        && countNear(height_map.obstacleCloud(), 4.2, 0.0, 0.3) == 0) {
       ghost_clear_frame = i;  // 幽灵点从输出中消失的帧号
     }
     if (i >= 100) {  // 跳过预热
@@ -139,7 +142,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  const auto& out = planar_map.obstacleCloud();
+  const auto& out = height_map.obstacleCloud();
   std::printf(
       "leaf_xy=%.3f leaf_z=%.3f  frames=%d\n"
       "  单帧 update+输出: %.3f ms（稳态 %d 帧均值，不含收帧裁剪）\n"
@@ -164,7 +167,5 @@ int main(int argc, char** argv) {
     }
   }
 
-  node.reset();
-  rclcpp::shutdown();
   return 0;
 }

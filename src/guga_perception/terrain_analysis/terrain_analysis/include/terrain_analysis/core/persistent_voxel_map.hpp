@@ -27,11 +27,13 @@ namespace terrain_analysis {
    * 这张网格的接收范围：接收半径就是网格宽度，高度带与 rebuild 的 keepPoint
    * 同源。
    *
-   * 一帧的流程：ingest() 收帧 → update() 滚动/归格/重建 → collectCloud()
-   * 取窗口。 update() 用 ingest()
-   * 记下的同一个锚点完成三步，调用方无法把不同的锚点混进
-   * 同一帧；逐阶段方法（rollover / addFrame / rebuild）单独开放，供白盒测试与
-   * 后续阶段用，锚点与时刻由参数传入。
+   * 一帧的流程：ingest() 收帧 → update()（滚动 / 归格 / 重建三步）→
+   * collectCloud() 取窗口。update() 用 ingest() 记下的同一个锚点完成三步，
+   * 调用方无法把不同的锚点混进同一帧。
+   *
+   * 对外只有上面这些入口；逐阶段方法与内部数据一律 private，需要白盒验证的
+   * 测试经 friend 显式获得访问权（见文件末尾的 friend 列表），不把它们提升为
+   * 公开 API——否则内部编排顺序会固化成对外契约。
    *
    * 线程模型：本类不做同步，调用方必须保证 ingest 与 update 不并发执行（当前由
    * 节点在单线程执行器中串行调用满足）。
@@ -64,6 +66,11 @@ namespace terrain_analysis {
     void ingest(const Cell& cloud, const guga_common::Point3d& lidar_position,
                 double timestamp_sec);
 
+    /** @brief 最近一帧的雷达位置（odom 下）；后半段以它作平面网格锚点。 */
+    [[nodiscard]] const guga_common::Point3d& lidarPosition() const noexcept {
+      return lidar_;
+    }
+
     /** @brief 是否存在尚未处理的一帧。 */
     [[nodiscard]] bool hasPendingFrame() const noexcept {
       return frame_pending_;
@@ -85,14 +92,31 @@ namespace terrain_analysis {
      */
     void collectCloud(Cell& out) const;
 
+  private:
+    /** @brief 采集窗口的半宽（格数）：以雷达为中心的 11x11 格。 */
+    static constexpr int EXTRACT_HALF_WINDOW = 5;
+
+    // ── 以下只服务本类内部与白盒测试：测试经 friend 访问，不作为对外契约 ──
+    /** @brief 滚动网格，维持以雷达为中心的窗口（update 的第一步）。 */
+    void rollover(const guga_common::Point3d& lidar);
+
+    /** @brief 把本帧点云按位置分配到体素格（update 的第二步）。 */
+    void addFrame(const Cell& crop, const guga_common::Point3d& lidar);
+
+    /**
+     * @brief 逐格重建：按叶保留最新观测点，并做高度带与年龄过滤（update
+     * 的第三步）。
+     *
+     * 每个叶（水平 scan_voxel_size、垂直 scan_voxel_size_z）只保留观测时刻最新
+     * 的那一个点，于是"有新点即刷新、无新点才判年龄"不需要额外状态：代表点自带
+     * 的时刻就是该叶的 last_seen。
+     */
+    void rebuild(const guga_common::Point3d& lidar, double now_elapsed);
+
+    // ── 内部数据与工具 ──
     /** @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。 */
     [[nodiscard]] const Cell& frameCloud() const noexcept {
       return *frame_cloud_;
-    }
-
-    /** @brief 最近一帧的雷达位置（odom 下）。 */
-    [[nodiscard]] const guga_common::Point3d& lidarPosition() const noexcept {
-      return lidar_;
     }
 
     /** @brief 最近一帧的时间戳，单位为秒。 */
@@ -105,27 +129,12 @@ namespace terrain_analysis {
       return time_ - init_time_;
     }
 
-    /** @brief 雷达移动时滚动网格，维持以雷达为中心的窗口。 */
-    void rollover(const guga_common::Point3d& lidar);
-
-    /** @brief 把本帧点云按位置分配到体素格。 */
-    void addFrame(const Cell& crop, const guga_common::Point3d& lidar);
-
-    /**
-     * @brief 逐格重建：按叶保留最新观测点，并做高度带与年龄过滤。
-     *
-     * 每个叶（水平 scan_voxel_size、垂直 scan_voxel_size_z）只保留观测时刻最新
-     * 的那一个点，于是"有新点即刷新、无新点才判年龄"不需要额外状态：代表点自带
-     * 的时刻就是该叶的 last_seen。
-     */
-    void rebuild(const guga_common::Point3d& lidar, double now_elapsed);
-
     /** @brief 只读访问所有格子。 */
     [[nodiscard]] const std::array<Cell::Ptr, PersistentVoxelGrid::NUM>& cells()
         const noexcept {
       return cloud_;
     }
-    /** @brief 可修改访问所有格子（供采集阶段与测试使用）。 */
+    /** @brief 可修改访问所有格子（供白盒测试注入）。 */
     [[nodiscard]] std::array<Cell::Ptr, PersistentVoxelGrid::NUM>&
     cells() noexcept {
       return cloud_;
@@ -149,10 +158,6 @@ namespace terrain_analysis {
                                         double point_time,
                                         const PersistentVoxelConfig& config,
                                         double now_elapsed);
-
-  private:
-    /** @brief 采集窗口的半宽（格数）：以雷达为中心的 11x11 格。 */
-    static constexpr int EXTRACT_HALF_WINDOW = 5;
 
     /** @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。 */
     void shift(bool along_x, bool toward_positive);
