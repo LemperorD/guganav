@@ -11,18 +11,18 @@ struct BandRow
 {
   int start{};
   int count{};
-  double val[8]{};
+  double value[8]{};
 };
 
 struct CostCache
 {
   int M{};
-  int Ks{50};
-  int Ke{200};
+  int smooth_sample{50};
+  int esdf_sample{200};
   std::vector<BandRow> d2_smooth{};
-  std::vector<BandRow> b_dist{};
+  std::vector<BandRow> basis_dist{};
   std::vector<Eigen::Vector2d> dist_q{};
-  std::vector<BandRow> b_esdf{};
+  std::vector<BandRow> basis_esdf{};
 };
 
 void rowFromBasis(const std::vector<double> & b, int M, BandRow & row);

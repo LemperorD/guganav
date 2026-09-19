@@ -70,7 +70,7 @@ void basisDerivsAt(
   for (int j = 1; j <= p; ++j) {
     left[static_cast<size_t>(j)] = u - knots(span + 1 - j);
     right[static_cast<size_t>(j)] = knots(span + j) - u;
-    double saved = 0.0;
+    double saved_left = 0.0;
     for (int r = 0; r < j; ++r) {
       ndu[static_cast<size_t>(j) * (p + 1) + r] =
         right[static_cast<size_t>(r + 1)] + left[static_cast<size_t>(j - r)];
@@ -78,10 +78,10 @@ void basisDerivsAt(
         ndu[static_cast<size_t>(r) * (p + 1) + (j - 1)] /
         ndu[static_cast<size_t>(j) * (p + 1) + r];
       ndu[static_cast<size_t>(r) * (p + 1) + j] =
-        saved + right[static_cast<size_t>(r + 1)] * temp;
-      saved = left[static_cast<size_t>(j - r)] * temp;
+        saved_left + right[static_cast<size_t>(r + 1)] * temp;
+      saved_left = left[static_cast<size_t>(j - r)] * temp;
     }
-    ndu[static_cast<size_t>(j) * (p + 1) + j] = saved;
+    ndu[static_cast<size_t>(j) * (p + 1) + j] = saved_left;
   }
 
   N.assign(static_cast<size_t>(M), 0.0);
@@ -96,14 +96,14 @@ void basisDerivsAt(
   }
 
   std::vector<double> a(2 * static_cast<size_t>(p + 1), 0.0);
-  auto aAt = [&](int row, int col) -> double & {
+  auto find_index = [&](int row, int col) -> double & {
       return a[static_cast<size_t>(row) * (p + 1) + col];
     };
 
   for (int r = 0; r <= p; ++r) {
     int s1 = 0;
     int s2 = 1;
-    aAt(0, 0) = 1.0;
+   find_index(0, 0) = 1.0;
 
     for (int k = 1; k <= korder; ++k) {
       double d = 0.0;
@@ -111,23 +111,23 @@ void basisDerivsAt(
       const int pk = p - k;
 
       if (r >= k) {
-        aAt(s2, 0) = aAt(s1, 0) /
+       find_index(s2, 0) = find_index(s1, 0) /
           ndu[static_cast<size_t>(pk + 1) * (p + 1) + rk];
-        d = aAt(s2, 0) * ndu[static_cast<size_t>(rk) * (p + 1) + pk];
+        d = find_index(s2, 0) * ndu[static_cast<size_t>(rk) * (p + 1) + pk];
       }
 
       const int j1 = (rk >= -1) ? 1 : -rk;
       const int j2 = (r - 1 <= pk) ? k - 1 : p - r;
       for (int j = j1; j <= j2; ++j) {
-        aAt(s2, j) = (aAt(s1, j) - aAt(s1, j - 1)) /
+        find_index(s2, j) = (find_index(s1, j) - find_index(s1, j - 1)) /
           ndu[static_cast<size_t>(pk + 1) * (p + 1) + (rk + j)];
-        d += aAt(s2, j) * ndu[static_cast<size_t>(rk + j) * (p + 1) + pk];
+        d += find_index(s2, j) * ndu[static_cast<size_t>(rk + j) * (p + 1) + pk];
       }
 
       if (r <= pk) {
-        aAt(s2, k) = -aAt(s1, k - 1) /
+       find_index(s2, k) =  -find_index(s1, k - 1) /
           ndu[static_cast<size_t>(pk + 1) * (p + 1) + r];
-        d += aAt(s2, k) * ndu[static_cast<size_t>(r) * (p + 1) + pk];
+        d += find_index(s2, k) * ndu[static_cast<size_t>(r) * (p + 1) + pk];
       }
 
       const int i = span - p + r;

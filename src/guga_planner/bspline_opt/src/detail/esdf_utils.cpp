@@ -71,22 +71,22 @@ void esdfGradientAt(
   size_t idx01 = idx00 + static_cast<size_t>(esdfdata.esdf_w);
   size_t idx11 = idx01 + 1;
 
-  float g00x = esdf_gx[idx00]; float g10x = esdf_gx[idx10];
-  float g01x = esdf_gx[idx01]; float g11x = esdf_gx[idx11];
-  auto g0x = static_cast<float>(static_cast<double>(g00x) * (1.0 - dx) +
-    static_cast<double>(g10x) * dx);
-  auto g1x = static_cast<float>(static_cast<double>(g01x) * (1.0 - dx) +
-    static_cast<double>(g11x) * dx);
-  gx = static_cast<double>(g0x * static_cast<float>(1.0 - dy) +
+  float gx00 = esdf_gx[idx00]; float gx10 = esdf_gx[idx10];
+  float gx01 = esdf_gx[idx01]; float gx11 = esdf_gx[idx11];
+  auto gx0 = static_cast<float>(static_cast<double>(gx00) * (1.0 - dx) +
+    static_cast<double>(gx10) * dx);
+  auto g1x = static_cast<float>(static_cast<double>(gx01) * (1.0 - dx) +
+    static_cast<double>(gx11) * dx);
+  gx = static_cast<double>(gx0 * static_cast<float>(1.0 - dy) +
     g1x * static_cast<float>(dy));
 
-  float g00y = esdf_gy[idx00]; float g10y = esdf_gy[idx10];
-  float g01y = esdf_gy[idx01]; float g11y = esdf_gy[idx11];
-  auto g0y = static_cast<float>(static_cast<double>(g00y) * (1.0 - dx) +
-    static_cast<double>(g10y) * dx);
-  auto g1y = static_cast<float>(static_cast<double>(g01y) * (1.0 - dx) +
-    static_cast<double>(g11y) * dx);
-  gy = static_cast<double>(g0y * static_cast<float>(1.0 - dy) +
+  float gy00 = esdf_gy[idx00]; float gy10 = esdf_gy[idx10];
+  float gy01 = esdf_gy[idx01]; float gy11 = esdf_gy[idx11];
+  auto gy0 = static_cast<float>(static_cast<double>(gy00) * (1.0 - dx) +
+    static_cast<double>(gy10) * dx);
+  auto g1y = static_cast<float>(static_cast<double>(gy01) * (1.0 - dx) +
+    static_cast<double>(gy11) * dx);
+  gy = static_cast<double>(gy0 * static_cast<float>(1.0 - dy) +
     g1y * static_cast<float>(dy));
 }
 

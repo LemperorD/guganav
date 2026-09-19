@@ -35,7 +35,7 @@ bool BSplineOptimizer::fit(
 
   // ── 短路径回退 (线性) ──
   if (n_pts < 8) {
-    state_.effective_degree = 1;
+    state_.effective_degree = n_pts-1;
     state_.original_points.reserve(n_pts);
     for (const auto & [x, y] : path) {
       state_.original_points.emplace_back(x, y);
