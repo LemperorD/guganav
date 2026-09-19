@@ -9,6 +9,8 @@ namespace terrain_analysis {
   class FrameIngestTest : public testing::Test {
   protected:
     PersistentVoxelMap voxel_map_;
+    /** @brief 配置由测试持有并注入；两半自己不持有配置。 */
+    PersistentVoxelConfig config_;
 
     // 前半段的这些成员只服务内部与白盒测试（fixture 是它的 friend），
     // 测试体经下面这些成员函数读取，不把它们提升为公开 API。
@@ -35,7 +37,7 @@ namespace terrain_analysis {
   // 接一帧后记下雷达位置、帧时刻，并标记有帧待处理
   TEST_F(FrameIngestTest, Ingest_StoresLidarPositionAndTime) {
     auto cloud = MakeCloud(0, 0, 0);
-    voxel_map_.ingest(*cloud, {1.0, 2.0, 3.0}, 100.0);
+    voxel_map_.ingest(*cloud, {1.0, 2.0, 3.0}, 100.0, config_);
 
     EXPECT_DOUBLE_EQ(voxel_map_.lidarPosition().x, 1.0);
     EXPECT_DOUBLE_EQ(voxel_map_.lidarPosition().y, 2.0);
@@ -47,7 +49,7 @@ namespace terrain_analysis {
   // 首帧时刻即 system_init_time，故首帧的 elapsed 为 0
   TEST_F(FrameIngestTest, Ingest_FirstCall_SetsInitTime) {
     auto cloud = MakeCloud(0, 0, 0);
-    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
+    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0, config_);
 
     EXPECT_DOUBLE_EQ(initTime(), 100.0);
     EXPECT_DOUBLE_EQ(elapsed(), 0.0);
@@ -56,11 +58,11 @@ namespace terrain_analysis {
   // 观测时刻写进 intensity：体素叶靠它判年龄，首帧为 0、第二帧为两帧之差
   TEST_F(FrameIngestTest, Ingest_StampsObservationTimeIntoIntensity) {
     auto cloud = MakeCloud(0, 0, 0);
-    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
+    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0, config_);
     ASSERT_EQ(frameCloud().points.size(), 1U);
     EXPECT_FLOAT_EQ(frameCloud().points[0].intensity, 0.0F);
 
-    voxel_map_.ingest(*MakeCloud(0, 0, 0), {0.0, 0.0, 0.0}, 100.5);
+    voxel_map_.ingest(*MakeCloud(0, 0, 0), {0.0, 0.0, 0.0}, 100.5, config_);
     ASSERT_EQ(frameCloud().points.size(), 1U);
     EXPECT_FLOAT_EQ(frameCloud().points[0].intensity, 0.5F);
     EXPECT_DOUBLE_EQ(elapsed(), 0.5);
@@ -72,7 +74,7 @@ namespace terrain_analysis {
     cloud->push_back({0, 0, 0, 0});
     cloud->push_back({50, 50, 0, 0});  // 远超接收半径
 
-    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
+    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0, config_);
 
     EXPECT_EQ(frameCloud().points.size(), 1U);
   }
@@ -80,8 +82,8 @@ namespace terrain_analysis {
   // update() 处理掉本帧后，待处理标记被清掉
   TEST_F(FrameIngestTest, Update_ClearsPendingFlag) {
     auto cloud = MakeCloud(0, 0, 0);
-    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0);
-    voxel_map_.update();
+    voxel_map_.ingest(*cloud, {0.0, 0.0, 0.0}, 100.0, config_);
+    voxel_map_.update(config_);
 
     EXPECT_FALSE(voxel_map_.hasPendingFrame());
   }

@@ -27,9 +27,9 @@ namespace terrain_analysis {
   protected:
     AlgorithmTest() {
       resetState();
-      planarConfig().use_sorting = true;
-      planarConfig().quantile_z = 0.25;
-      planarConfig().limit_ground_lift = false;
+      heightConfig().use_sorting = true;
+      heightConfig().quantile_z = 0.25;
+      heightConfig().limit_ground_lift = false;
     }
 
     void resetState() {
@@ -50,31 +50,33 @@ namespace terrain_analysis {
     void widenBand(double lower, double upper) {
       voxelConfig().min_relative_z = lower;
       voxelConfig().max_relative_z = upper;
-      planarConfig().min_relative_z = lower;
+      heightConfig().min_relative_z = lower;
     }
 
     void runStage(stage::Id id) {
       switch (id) {
         case stage::Id::ROLLOVER:
-          voxelMap().rollover(lidarPosition());
+          voxelMap().rollover(lidarPosition(), voxelConfig());
           break;
         case stage::Id::VOXELIZE:
-          voxelMap().addFrame(*frameCloud(), lidarPosition());
+          voxelMap().addFrame(*frameCloud(), lidarPosition(), voxelConfig());
           break;
         case stage::Id::UPDATE_TERRAIN_VOXELS:
-          voxelMap().rebuild(lidarPosition(), elapsed());
+          voxelMap().rebuild(lidarPosition(), elapsed(), voxelConfig());
           break;
         case stage::Id::COLLECT:
           voxelMap().collectCloud(*terrainCloud());
           break;
         case stage::Id::ESTIMATE_TERRAIN_GROUND:
-          heightMap().estimateTerrainGround(*terrainCloud(), lidarPosition());
+          heightMap().estimateTerrainGround(*terrainCloud(), lidarPosition(),
+                                            heightConfig());
           break;
         case stage::Id::PLANAR_ELEVATION:
-          heightMap().computePlanarElevation();
+          heightMap().computePlanarElevation(heightConfig());
           break;
         case stage::Id::HEIGHT_MAP:
-          heightMap().computeHeightMap(*terrainCloud(), lidarPosition());
+          heightMap().computeHeightMap(*terrainCloud(), lidarPosition(),
+                                       heightConfig());
           break;
       }
     }
@@ -120,10 +122,10 @@ namespace terrain_analysis {
       return *voxel_map_;
     }
     PersistentVoxelConfig& voxelConfig() {
-      return voxel_map_->config_;
+      return voxel_config_;
     }
-    PerFrameHeightConfig& planarConfig() {
-      return height_map_->config_;
+    PerFrameHeightConfig& heightConfig() {
+      return height_config_;
     }
     pcl::PointCloud<pcl::PointXYZI>::Ptr& terrainCloud() {
       return terrain_cloud_;
@@ -161,10 +163,13 @@ namespace terrain_analysis {
       point.intensity = 0.0F;
       cell.push_back(point);
 
-      voxelMap().rebuild(lidarPosition(), elapsed());
+      voxelMap().rebuild(lidarPosition(), elapsed(), voxelConfig());
       return static_cast<int>(voxelCells()[center_cell]->points.size());
     }
 
+    /** @brief 两份配置由 fixture 持有并注入；两半自己不持有配置。 */
+    PersistentVoxelConfig voxel_config_;
+    PerFrameHeightConfig height_config_;
     std::unique_ptr<PerFrameHeightMap> height_map_;
     std::unique_ptr<PersistentVoxelMap> voxel_map_;
     /** @brief 两半之间的交接数据（采集点云），由测试持有。 */
@@ -299,8 +304,8 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 // ── computePlanarElevation ──
 // 排序模式下取指定分位数作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
-  planarConfig().use_sorting = true;
-  planarConfig().quantile_z = 0.5;
+  heightConfig().use_sorting = true;
+  heightConfig().quantile_z = 0.5;
   size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
                                                 PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
@@ -314,7 +319,7 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
 
 // 最小值模式下取最低点作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
-  planarConfig().use_sorting = false;
+  heightConfig().use_sorting = false;
   size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
                                                 PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
@@ -328,10 +333,10 @@ TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
 // 分位数与最小值差距过大时，限制地面高度不超过 min+max_ground_lift
 TEST_F(AlgorithmTest,
        ComputeElevation_LiftLimited_CapsAtMinimumPlusMaxGroundLift) {
-  planarConfig().use_sorting = true;
-  planarConfig().quantile_z = 0.5;
-  planarConfig().limit_ground_lift = true;
-  planarConfig().max_ground_lift = 0.3;
+  heightConfig().use_sorting = true;
+  heightConfig().quantile_z = 0.5;
+  heightConfig().limit_ground_lift = true;
+  heightConfig().max_ground_lift = 0.3;
   size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
                                                 PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
@@ -346,9 +351,9 @@ TEST_F(AlgorithmTest,
 
 // quantile_z=1.0 时 quantile_index 达到 point_count 边界，回退到最后一点
 TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
-  planarConfig().use_sorting = true;
-  planarConfig().quantile_z = 1.0;
-  planarConfig().limit_ground_lift = false;
+  heightConfig().use_sorting = true;
+  heightConfig().quantile_z = 1.0;
+  heightConfig().limit_ground_lift = false;
   size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
                                                 PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
@@ -408,8 +413,8 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  planarConfig().min_block_point_num = 5;
-  planarConfig().consider_drop = false;
+  heightConfig().min_block_point_num = 5;
+  heightConfig().consider_drop = false;
 
   // Point at z=2.0 exceeds max_relative_z (0.2)
   pcl::PointXYZI pt;
@@ -434,9 +439,9 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  planarConfig().min_block_point_num = 5;
+  heightConfig().min_block_point_num = 5;
   widenBand(-10.0, 10.0);
-  planarConfig().consider_drop = true;
+  heightConfig().consider_drop = true;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
@@ -462,8 +467,8 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowLidarFloor_Filtered) {
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  planarConfig().min_block_point_num = 5;
-  planarConfig().consider_drop = false;
+  heightConfig().min_block_point_num = 5;
+  heightConfig().consider_drop = false;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
@@ -488,10 +493,10 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowMinObstacleHeight_Filtered) {
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  planarConfig().min_block_point_num = 5;
+  heightConfig().min_block_point_num = 5;
   widenBand(-10.0, 10.0);
-  planarConfig().consider_drop = false;
-  planarConfig().min_obstacle_height = 0.04;
+  heightConfig().consider_drop = false;
+  heightConfig().min_obstacle_height = 0.04;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
@@ -518,10 +523,10 @@ TEST_F(AlgorithmTest,
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  planarConfig().min_block_point_num = 5;
+  heightConfig().min_block_point_num = 5;
   widenBand(-10.0, 10.0);
-  planarConfig().consider_drop = false;
-  planarConfig().ceiling_clearance = 0.62;  // 车高 0.52 + 0.10
+  heightConfig().consider_drop = false;
+  heightConfig().ceiling_clearance = 0.62;  // 车高 0.52 + 0.10
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
@@ -587,10 +592,10 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};  // 满足 min_block_point_num
   }
-  planarConfig().min_block_point_num = 5;
+  heightConfig().min_block_point_num = 5;
   widenBand(-10.0, 10.0);
-  planarConfig().consider_drop = false;
-  planarConfig().ceiling_clearance =
+  heightConfig().consider_drop = false;
+  heightConfig().ceiling_clearance =
       0.2;  // 显式设定，不依赖默认值（随车高而异）
 
   // 天花板点：距地面 0.26m（planar_voxel_elev=0），高于 ceiling_clearance(0.2)
@@ -616,10 +621,10 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  planarConfig().min_block_point_num = 5;
+  heightConfig().min_block_point_num = 5;
   widenBand(-10.0, 10.0);
-  planarConfig().consider_drop = false;
-  planarConfig().ceiling_clearance =
+  heightConfig().consider_drop = false;
+  heightConfig().ceiling_clearance =
       0.2;  // 显式设定，不依赖默认值（随车高而异）
 
   // 低矮障碍点：距地面 0.05m（planar_voxel_elev=0），低于

@@ -101,15 +101,18 @@ int main(int argc, char** argv) {
 
   PersistentVoxelMap voxel_map;
   PerFrameHeightMap height_map;
-  // 取值与实车默认一致（见 config/reality/base.yaml）
-  voxel_map.config().scan_voxel_size = leaf_xy;
-  voxel_map.config().scan_voxel_size_z = leaf_z;
-  voxel_map.config().decay_time = 0.5;
-  voxel_map.config().no_decay_distance = 0.0;
-  height_map.config().use_sorting = true;
-  height_map.config().quantile_z = 0.2;
-  height_map.config().min_obstacle_height = 0.04;
-  height_map.config().ceiling_clearance = 0.62;
+  // 配置由调用方持有并按调用注入；取值与实车默认一致（见
+  // config/reality/base.yaml）
+  PersistentVoxelConfig voxel_config;
+  PerFrameHeightConfig height_config;
+  voxel_config.scan_voxel_size = leaf_xy;
+  voxel_config.scan_voxel_size_z = leaf_z;
+  voxel_config.decay_time = 0.5;
+  voxel_config.no_decay_distance = 0.0;
+  height_config.use_sorting = true;
+  height_config.quantile_z = 0.2;
+  height_config.min_obstacle_height = 0.04;
+  height_config.ceiling_clearance = 0.62;
 
   const guga_common::Point3d lidar_position{0.0, 0.0, 0.0};
   const bool ghost_mode = ghost_frame >= 0;
@@ -125,12 +128,12 @@ int main(int argc, char** argv) {
     const bool ghost_present = ghost_frame < 0 || i < ghost_frame;
     // 与生产路径一致：前半段收帧并维护体素地图，采集结果交给后半段。
     voxel_map.ingest(ghost_present ? *frame : *frame_no_ghost, lidar_position,
-                     t);
+                     t, voxel_config);
 
     const auto t0 = std::chrono::steady_clock::now();
-    voxel_map.update();
+    voxel_map.update(voxel_config);
     voxel_map.collectCloud(collected);
-    height_map.compute(collected, voxel_map.lidarPosition());
+    height_map.compute(collected, voxel_map.lidarPosition(), height_config);
     const auto t1 = std::chrono::steady_clock::now();
     if (ghost_frame >= 0 && i >= ghost_frame && ghost_clear_frame < 0
         && countNear(height_map.obstacleCloud(), 4.2, 0.0, 0.3) == 0) {

@@ -47,6 +47,11 @@ namespace terrain_analysis {
     /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
 
+    /** @brief 前半段读取的参数；由节点从 ROS
+     * 参数声明后注入，两半自己不持有配置。 */
+    PersistentVoxelConfig voxel_config_;
+    /** @brief 后半段读取的参数。 */
+    PerFrameHeightConfig height_config_;
     /** @brief 前半段：接收本帧输入并维护跨帧体素地图。 */
     PersistentVoxelMap persistent_voxel_map_;
     /** @brief 后半段：由采集点云估计地面并生成障碍输出。 */

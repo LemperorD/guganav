@@ -20,7 +20,8 @@ namespace terrain_analysis {
    * PersistentVoxelMap 跨帧持续，是唯一保留帧间状态的一侧。
    *
    * 持有一张 51×51 的网格（每格的地面候选高度与被估计出的地面高度）与输出点云，
-   * 每帧从头填一遍；逐帧输入（采集点云、雷达位置）由调用方显式传入。
+   * 每帧从头填一遍；逐帧输入（采集点云、雷达位置）与参数都由调用方显式传入，
+   * 本类不持有配置，因此不存在"可写配置"这类对外入口。
    *
    * 三段串联，顺序不可换（后者都依赖前者的产物）：
    *   estimateTerrainGround → computePlanarElevation → computeHeightMap
@@ -42,23 +43,16 @@ namespace terrain_analysis {
     PerFrameHeightMap(PerFrameHeightMap&&) = delete;
     PerFrameHeightMap& operator=(PerFrameHeightMap&&) = delete;
 
-    /** @brief 可修改的后半段参数。 */
-    [[nodiscard]] PerFrameHeightConfig& config() noexcept {
-      return config_;
-    }
-    /** @brief 只读的后半段参数。 */
-    [[nodiscard]] const PerFrameHeightConfig& config() const noexcept {
-      return config_;
-    }
-
     /**
      * @brief 跑完整后半段：估地面 → 逐格高程 → 障碍输出。
      * @param terrain_cloud 采集点云（前半段 collectCloud 的产物）。
      * @param lidar_position 雷达在 odom
      * 下的位置（不是车体位置），作为平面网格锚点。
+     * @param config 本半段读取的参数，由调用方持有并注入。
      */
     void compute(const Cell& terrain_cloud,
-                 const guga_common::Point3d& lidar_position);
+                 const guga_common::Point3d& lidar_position,
+                 const PerFrameHeightConfig& config);
 
     /** @brief 最近一次生成的障碍点云（intensity 为距局部地面的高度）。 */
     [[nodiscard]] const Cell& obstacleCloud() const noexcept {
@@ -72,10 +66,11 @@ namespace terrain_analysis {
      * @param lidar_position 雷达位置，作为平面网格锚点。
      */
     void estimateTerrainGround(const Cell& terrain_cloud,
-                               const guga_common::Point3d& lidar_position);
+                               const guga_common::Point3d& lidar_position,
+                               const PerFrameHeightConfig& config);
 
     /** @brief 逐格估计地面高度（分位数或最小值，见配置）。 */
-    void computePlanarElevation();
+    void computePlanarElevation(const PerFrameHeightConfig& config);
 
     /**
      * @brief 生成障碍输出：离地高度落在输出带内的点写入 intensity。
@@ -83,7 +78,8 @@ namespace terrain_analysis {
      * @param lidar_position 雷达位置，用于挡掉远低于雷达的穿透点。
      */
     void computeHeightMap(const Cell& terrain_cloud,
-                          const guga_common::Point3d& lidar_position);
+                          const guga_common::Point3d& lidar_position,
+                          const PerFrameHeightConfig& config);
 
     /**
      * @brief 把一个高度值加入指定平面格及其 3×3 邻域的候选集中。
@@ -98,11 +94,9 @@ namespace terrain_analysis {
      */
     void addToPlanarNeighborhood3x3(int row, int col, double z);
     /** @brief 用分位数估计指定平面格的地面高度。 */
-    void elevateByQuantile(int cell);
+    void elevateByQuantile(int cell, const PerFrameHeightConfig& config);
     /** @brief 用最低点估计指定平面格的地面高度。 */
     void elevateByMinimum(int cell);
-
-    PerFrameHeightConfig config_;
 
     /** @brief 每格收集到的地面高度候选值。 */
     std::array<std::vector<double>, PerFrameHeightGrid::NUM> point_elev_;

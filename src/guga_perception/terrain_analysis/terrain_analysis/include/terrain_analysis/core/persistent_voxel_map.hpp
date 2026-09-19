@@ -23,6 +23,9 @@ namespace terrain_analysis {
    *   - 跨帧保留的点云（管线里唯一一份），随雷达移动滚动；
    *   - 本帧输入：裁剪后的点云、雷达位置、帧时刻与首帧时刻。
    *
+   * 不持有配置：参数由调用方（节点或测量工具）按调用注入，这样本类的行为不依赖
+   * 任何隐藏的可变状态，也就不需要对外暴露"可写配置"这种入口。
+   *
    * 裁剪放在这里而不是调用方，原因是那两条判据（高度带、接收半径）本来就在服务
    * 这张网格的接收范围：接收半径就是网格宽度，高度带与 rebuild 的 keepPoint
    * 同源。
@@ -45,15 +48,6 @@ namespace terrain_analysis {
 
     PersistentVoxelMap() = default;
 
-    /** @brief 可修改的前半段参数。 */
-    [[nodiscard]] PersistentVoxelConfig& config() noexcept {
-      return config_;
-    }
-    /** @brief 只读的前半段参数。 */
-    [[nodiscard]] const PersistentVoxelConfig& config() const noexcept {
-      return config_;
-    }
-
     /**
      * @brief 接一帧点云：按高度带与接收半径裁剪，写入观测时刻。
      *
@@ -62,9 +56,10 @@ namespace terrain_analysis {
      * @param cloud 输入点云，坐标位于 odom 坐标系。
      * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
      * @param timestamp_sec 本帧时间戳，单位为秒。
+     * @param config 本半段读取的参数，由调用方持有并注入。
      */
     void ingest(const Cell& cloud, const guga_common::Point3d& lidar_position,
-                double timestamp_sec);
+                double timestamp_sec, const PersistentVoxelConfig& config);
 
     /** @brief 最近一帧的雷达位置（odom 下）；后半段以它作平面网格锚点。 */
     [[nodiscard]] const guga_common::Point3d& lidarPosition() const noexcept {
@@ -79,9 +74,10 @@ namespace terrain_analysis {
     /**
      * @brief 本帧维护：滚动窗口 → 本帧点云归格 → 逐格重建。
      *
-     * 使用 ingest() 记下的雷达位置、时刻与自身的配置，因此没有参数可传错。
+     * 使用 ingest() 记下的雷达位置与时刻；参数由调用方注入，本类不持有配置。
+     * @param config 本半段读取的参数。
      */
-    void update();
+    void update(const PersistentVoxelConfig& config);
 
     /**
      * @brief 采集地图中央窗口内的累积点云。
@@ -98,10 +94,12 @@ namespace terrain_analysis {
 
     // ── 以下只服务本类内部与白盒测试：测试经 friend 访问，不作为对外契约 ──
     /** @brief 滚动网格，维持以雷达为中心的窗口（update 的第一步）。 */
-    void rollover(const guga_common::Point3d& lidar);
+    void rollover(const guga_common::Point3d& lidar,
+                  const PersistentVoxelConfig& config);
 
     /** @brief 把本帧点云按位置分配到体素格（update 的第二步）。 */
-    void addFrame(const Cell& crop, const guga_common::Point3d& lidar);
+    void addFrame(const Cell& crop, const guga_common::Point3d& lidar,
+                  const PersistentVoxelConfig& config);
 
     /**
      * @brief 逐格重建：按叶保留最新观测点，并做高度带与年龄过滤（update
@@ -111,7 +109,8 @@ namespace terrain_analysis {
      * 的那一个点，于是"有新点即刷新、无新点才判年龄"不需要额外状态：代表点自带
      * 的时刻就是该叶的 last_seen。
      */
-    void rebuild(const guga_common::Point3d& lidar, double now_elapsed);
+    void rebuild(const guga_common::Point3d& lidar, double now_elapsed,
+                 const PersistentVoxelConfig& config);
 
     // ── 内部数据与工具 ──
     /** @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。 */
@@ -161,8 +160,6 @@ namespace terrain_analysis {
 
     /** @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。 */
     void shift(bool along_x, bool toward_positive);
-
-    PersistentVoxelConfig config_;
 
     std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
     int shift_x_ = 0;

@@ -32,8 +32,8 @@ namespace terrain_analysis {
      */
     void sendCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                    double timestamp_sec) {
-      terrain_->persistent_voxel_map_.ingest(*cloud, lidar_position_,
-                                             timestamp_sec);
+      terrain_->persistent_voxel_map_.ingest(
+          *cloud, lidar_position_, timestamp_sec, terrain_->voxel_config_);
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;

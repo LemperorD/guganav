@@ -22,8 +22,8 @@ ROS2 消息 → PersistentVoxelMap::ingest → update → collectCloud → PerFr
   平面网格（每格的地面候选与地面高度）与输出点云，不保留帧间状态；`compute` 依次跑
   C（收集候选 → 逐格高程）与 E（离地高度落在输出带内的点写入 intensity）。
 - **节点层**（`terrain_analysis_node.*`）— 只做 ROS 接线与逐帧数据分发：声明参数
-  （按两半的读取范围分发给两个配置）、订阅里程计与点云、把采集结果从前者交给后者、
-  发布 `terrain_map`。
+  并按两半的读取范围分成两份配置，按调用注入给两半（两半自己不持有配置，也没有
+  可写配置入口）、订阅里程计与点云、把采集结果从前者交给后者、发布 `terrain_map`。
 - 白盒测试经 `friend` 访问两半的内部阶段（见 `test_algorithm.cpp`），
   节点级与话题级的测试见 `test_terrain_analysis.cpp` 与 `test_integration.cpp`
 

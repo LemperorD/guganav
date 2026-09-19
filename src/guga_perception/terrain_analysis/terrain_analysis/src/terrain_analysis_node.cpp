@@ -29,10 +29,11 @@ namespace terrain_analysis {
 
   TerrainAnalysis::TerrainAnalysis(const rclcpp::NodeOptions& options)
       : Node("terrain_analysis", options) {
-    // 参数按两半各自的读取范围分发：前半段要叶尺寸、衰减与接收带，后半段要地面
-    // 估计、输出带与平面网格。minRelZ 两半都用（用途不同），故填两次。
-    PersistentVoxelConfig& voxel_config = persistent_voxel_map_.config();
-    PerFrameHeightConfig& height_config = per_frame_height_map_.config();
+    // 参数由节点声明并持有，再作为调用参数注入两半；两半自己不持有配置，也不暴露
+    // 配置入口。前半段要叶尺寸、衰减与接收带，后半段要地面估计、输出带与平面网格；
+    // minRelZ 两半都用（用途不同），故填两次。
+    PersistentVoxelConfig& voxel_config = voxel_config_;
+    PerFrameHeightConfig& height_config = height_config_;
 
     voxel_config.scan_voxel_size = declare_parameter(
         "scanVoxelSize", voxel_config.scan_voxel_size);
@@ -92,7 +93,8 @@ namespace terrain_analysis {
           auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
           pcl::fromROSMsg(*msg, *cloud);
           last_stamp_ = rclcpp::Time(msg->header.stamp).seconds();
-          persistent_voxel_map_.ingest(*cloud, lidar_position_, last_stamp_);
+          persistent_voxel_map_.ingest(*cloud, lidar_position_, last_stamp_,
+                                       voxel_config_);
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -108,11 +110,12 @@ namespace terrain_analysis {
     }
 
     // 前半段：累积本帧观测并维护体素地图；采集窗口内的累积点云交给后半段。
-    persistent_voxel_map_.update();
+    persistent_voxel_map_.update(voxel_config_);
     persistent_voxel_map_.collectCloud(*collected_cloud_);
     // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。
     per_frame_height_map_.compute(*collected_cloud_,
-                                  persistent_voxel_map_.lidarPosition());
+                                  persistent_voxel_map_.lidarPosition(),
+                                  height_config_);
     publishPointCloud();
     return rclcpp::ok();
   }
