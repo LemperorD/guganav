@@ -34,8 +34,8 @@ namespace terrain_analysis {
     }
 
     void resetState() {
-      height_map_ = std::make_unique<PerFrameHeightMap>();
-      voxel_map_ = std::make_unique<PersistentVoxelMap>();
+      height_map_ = std::make_unique<PerFrameHeightMap>(height_config_);
+      voxel_map_ = std::make_unique<PersistentVoxelMap>(voxel_config_);
       for (auto& ptr : voxelCells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
       }
@@ -57,27 +57,25 @@ namespace terrain_analysis {
     void runStage(stage::Id id) {
       switch (id) {
         case stage::Id::ROLLOVER:
-          voxelMap().rollover(lidarPosition(), voxelConfig());
+          voxelMap().rollover(lidarPosition());
           break;
         case stage::Id::VOXELIZE:
-          voxelMap().addFrame(*frameCloud(), lidarPosition(), voxelConfig());
+          voxelMap().addFrame(*frameCloud(), lidarPosition());
           break;
         case stage::Id::UPDATE_TERRAIN_VOXELS:
-          voxelMap().rebuild(lidarPosition(), elapsed(), voxelConfig());
+          voxelMap().rebuild(lidarPosition(), elapsed());
           break;
         case stage::Id::COLLECT:
           voxelMap().collectCloud(*terrainCloud());
           break;
         case stage::Id::ESTIMATE_TERRAIN_GROUND:
-          heightMap().estimateTerrainGround(*terrainCloud(), lidarPosition(),
-                                            heightConfig());
+          heightMap().estimateTerrainGround(*terrainCloud(), lidarPosition());
           break;
         case stage::Id::PLANAR_ELEVATION:
-          heightMap().computePlanarElevation(heightConfig());
+          heightMap().computePlanarElevation();
           break;
         case stage::Id::HEIGHT_MAP:
-          heightMap().computeHeightMap(*terrainCloud(), lidarPosition(),
-                                       heightConfig());
+          heightMap().computeHeightMap(*terrainCloud(), lidarPosition());
           break;
       }
     }
@@ -164,7 +162,7 @@ namespace terrain_analysis {
       point.intensity = 0.0F;
       cell.push_back(point);
 
-      voxelMap().rebuild(lidarPosition(), elapsed(), voxelConfig());
+      voxelMap().rebuild(lidarPosition(), elapsed());
       return static_cast<int>(voxelCells()[center_cell]->points.size());
     }
 
@@ -319,6 +317,26 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
 }
 
 // 最小值模式下取最低点作为地面高度估计
+// 配置是常量引用：所有者改了自己那份，两半下一次调用就用新值，不需要重建对象。
+// 这条性质是"引用而非拷贝"的全部理由，因此写死在这里，防止将来被改成按值保存。
+TEST_F(AlgorithmTest, ConfigIsReferenced_UpstreamChangeTakesEffect) {
+  const size_t cell = PerFrameHeightGrid::linearIndex(
+      PerFrameHeightGrid::HALF_WIDTH, PerFrameHeightGrid::HALF_WIDTH);
+  heightConfig().use_sorting = true;
+  pointElev()[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
+
+  heightConfig().quantile_z = 0.0;  // 取最小候选
+  runStage(stage::Id::PLANAR_ELEVATION);
+  const double lowest = voxelElev()[cell];
+
+  heightConfig().quantile_z = 1.0;  // 同一个对象，不重建 map
+  runStage(stage::Id::PLANAR_ELEVATION);
+  const double highest = voxelElev()[cell];
+
+  EXPECT_FLOAT_EQ(lowest, 0.1F) << "quantile 0 应取到最小值";
+  EXPECT_FLOAT_EQ(highest, 0.5F) << "quantile 1 应取到最大值";
+}
+
 TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   heightConfig().use_sorting = false;
   size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,

@@ -31,54 +31,58 @@ namespace terrain_analysis {
 
   }  // namespace
 
+  PersistentVoxelConfig TerrainAnalysis::declareVoxelConfig() {
+    PersistentVoxelConfig config;
+    config.scan_voxel_size = declare_parameter("scanVoxelSize",
+                                               config.scan_voxel_size);
+    config.scan_voxel_size_z = declare_parameter("scanVoxelSizeZ",
+                                                 config.scan_voxel_size_z);
+    config.decay_time = declare_parameter("decayTime", config.decay_time);
+    config.no_decay_distance = declare_parameter("noDecayDis",
+                                                 config.no_decay_distance);
+    config.max_relative_z = declare_parameter("maxRelZ", config.max_relative_z);
+    config.distance_ratio_z = declare_parameter("disRatioZ",
+                                                config.distance_ratio_z);
+    // minRelZ
+    // 两半都用（用途不同）：前半段用它定义接收带下沿，后半段用它挡穿透点。
+    config.min_relative_z = declare_parameter("minRelZ", config.min_relative_z);
+    return config;
+  }
+
+  PerFrameHeightConfig TerrainAnalysis::declareHeightConfig(
+      double min_relative_z) {
+    PerFrameHeightConfig config;
+    config.use_sorting = declare_parameter("useSorting", config.use_sorting);
+    config.quantile_z = declare_parameter("quantileZ", config.quantile_z);
+    config.consider_drop = declare_parameter("considerDrop",
+                                             config.consider_drop);
+    config.limit_ground_lift = declare_parameter("limitGroundLift",
+                                                 config.limit_ground_lift);
+    config.max_ground_lift = declare_parameter("maxGroundLift",
+                                               config.max_ground_lift);
+    config.min_block_point_num = declare_parameter("minBlockPointNum",
+                                                   config.min_block_point_num);
+    config.min_obstacle_height = declare_parameter("minObstacleHeight",
+                                                   config.min_obstacle_height);
+    config.ceiling_clearance = declare_parameter("ceilingClearance",
+                                                 config.ceiling_clearance);
+    config.ground_floor_z = declare_parameter("groundFloorZ",
+                                              config.ground_floor_z);
+    // minRelZ 两半共用，已在前半段那侧声明；这里直接取用，不重复声明。
+    config.min_relative_z = min_relative_z;
+
+    logHeightParams(config);
+    return config;
+  }
+
   TerrainAnalysis::TerrainAnalysis(const rclcpp::NodeOptions& options)
-      : Node("terrain_analysis", options) {
-    // 参数由节点声明并持有，再作为调用参数注入两半；两半自己不持有配置，也不暴露
-    // 配置入口。前半段要叶尺寸、衰减与接收带，后半段要地面估计、输出带与平面网格；
-    // minRelZ 两半都用（用途不同），故填两次。
-    PersistentVoxelConfig& voxel_config = voxel_config_;
-    PerFrameHeightConfig& height_config = height_config_;
-
-    voxel_config.scan_voxel_size = declare_parameter(
-        "scanVoxelSize", voxel_config.scan_voxel_size);
-    voxel_config.scan_voxel_size_z = declare_parameter(
-        "scanVoxelSizeZ", voxel_config.scan_voxel_size_z);
-    voxel_config.decay_time = declare_parameter("decayTime",
-                                                voxel_config.decay_time);
-    voxel_config.no_decay_distance = declare_parameter(
-        "noDecayDis", voxel_config.no_decay_distance);
-    voxel_config.max_relative_z = declare_parameter(
-        "maxRelZ", voxel_config.max_relative_z);
-    voxel_config.distance_ratio_z = declare_parameter(
-        "disRatioZ", voxel_config.distance_ratio_z);
-
-    height_config.use_sorting = declare_parameter("useSorting",
-                                                  height_config.use_sorting);
-    height_config.quantile_z = declare_parameter("quantileZ",
-                                                 height_config.quantile_z);
-    height_config.consider_drop = declare_parameter(
-        "considerDrop", height_config.consider_drop);
-    height_config.limit_ground_lift = declare_parameter(
-        "limitGroundLift", height_config.limit_ground_lift);
-    height_config.max_ground_lift = declare_parameter(
-        "maxGroundLift", height_config.max_ground_lift);
-    height_config.min_block_point_num = declare_parameter(
-        "minBlockPointNum", height_config.min_block_point_num);
-    height_config.min_obstacle_height = declare_parameter(
-        "minObstacleHeight", height_config.min_obstacle_height);
-    height_config.ceiling_clearance = declare_parameter(
-        "ceilingClearance", height_config.ceiling_clearance);
-    height_config.ground_floor_z = declare_parameter(
-        "groundFloorZ", height_config.ground_floor_z);
-
-    // 同一个参数进入两半：前半段用它定义接收带下沿，后半段用它挡穿透点。
-    const double min_relative_z = declare_parameter(
-        "minRelZ", voxel_config.min_relative_z);
-    voxel_config.min_relative_z = min_relative_z;
-    height_config.min_relative_z = min_relative_z;
-
-    logHeightParams(height_config);
-
+      : Node("terrain_analysis", options),
+        // 参数在初始化列表里一次声明并填好，两半随后绑定它们的常量引用；
+        // 因此节点的构造函数体里不再出现任何参数声明。
+        voxel_config_(declareVoxelConfig()),
+        height_config_(declareHeightConfig(voxel_config_.min_relative_z)),
+        persistent_voxel_map_(voxel_config_),
+        per_frame_height_map_(height_config_) {
     sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "lidar_odometry", 5,
         [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
@@ -97,8 +101,7 @@ namespace terrain_analysis {
           auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
           pcl::fromROSMsg(*msg, *cloud);
           last_stamp_ = rclcpp::Time(msg->header.stamp).seconds();
-          persistent_voxel_map_.ingest(*cloud, lidar_position_, last_stamp_,
-                                       voxel_config_);
+          persistent_voxel_map_.ingest(*cloud, lidar_position_, last_stamp_);
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -114,12 +117,11 @@ namespace terrain_analysis {
     }
 
     // 前半段：累积本帧观测并维护体素地图；采集窗口内的累积点云交给后半段。
-    persistent_voxel_map_.update(voxel_config_);
+    persistent_voxel_map_.update();
     persistent_voxel_map_.collectCloud(*collected_cloud_);
     // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。
     per_frame_height_map_.compute(*collected_cloud_,
-                                  persistent_voxel_map_.lidarPosition(),
-                                  height_config_);
+                                  persistent_voxel_map_.lidarPosition());
     publishPointCloud();
     return rclcpp::ok();
   }

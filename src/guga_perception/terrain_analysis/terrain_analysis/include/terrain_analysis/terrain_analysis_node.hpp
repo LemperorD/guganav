@@ -47,8 +47,19 @@ namespace terrain_analysis {
     /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
 
-    /** @brief 前半段读取的参数；由节点从 ROS
-     * 参数声明后注入，两半自己不持有配置。 */
+    /** @brief 声明前半段读取的 ROS 参数并返回填好的配置。 */
+    PersistentVoxelConfig declareVoxelConfig();
+    /**
+     * @brief 声明后半段读取的 ROS
+     * 参数并返回填好的配置（含启动时的高度带日志）。
+     * @param min_relative_z 两半共用的 minRelZ；它只声明一次（在前半段那侧），
+     *        这里直接取已声明的值，避免同一个参数被声明两次。
+     */
+    PerFrameHeightConfig declareHeightConfig(double min_relative_z);
+
+    // 参数由节点声明并持有；两半只保存它们的常量引用，因此这两份必须声明在两半
+    // 之前——引用既要活得过两半，析构顺序也要相反（两半先销毁，配置后销毁）。
+    /** @brief 前半段读取的参数。 */
     PersistentVoxelConfig voxel_config_;
     /** @brief 后半段读取的参数。 */
     PerFrameHeightConfig height_config_;

@@ -16,17 +16,15 @@
 namespace terrain_analysis {
 
   void PerFrameHeightMap::compute(const Cell& terrain_cloud,
-                                  const guga_common::Point3d& lidar_position,
-                                  const PerFrameHeightConfig& config) {
+                                  const guga_common::Point3d& lidar_position) {
     // 依赖是串联的：候选 → 逐格高程 → 输出。顺序不可换。
-    estimateTerrainGround(terrain_cloud, lidar_position, config);
-    computePlanarElevation(config);
-    computeHeightMap(terrain_cloud, lidar_position, config);
+    estimateTerrainGround(terrain_cloud, lidar_position);
+    computePlanarElevation();
+    computeHeightMap(terrain_cloud, lidar_position);
   }
 
   void PerFrameHeightMap::estimateTerrainGround(
-      const Cell& terrain_cloud, const guga_common::Point3d& lidar_position,
-      const PerFrameHeightConfig& config) {
+      const Cell& terrain_cloud, const guga_common::Point3d& lidar_position) {
     // 本阶段拥有候选集；逐格高程由 computePlanarElevation
     // 清，两份数据各有属主。
     for (auto& point_elevations : point_elev_) {
@@ -37,17 +35,13 @@ namespace terrain_analysis {
       // 唯一的候选筛选是下界，且用**绝对 z**（odom）：地面在 odom 中大体水平，
       // 地板过滤只需挡住远低于地面的穿透点，用绝对量比"相对雷达"更贴合语义，
       // 也不随雷达上下抖动而移动。
-      if (point.z <= config.ground_floor_z) {
+      if (point.z <= config_.ground_floor_z) {
         continue;
       }
-      // 这里曾有一条 ceiling_clearance 上界（"净空"）。已移除：
-      // 净空是**障碍输出**的判据（车辆能否从下方通过），与"哪些点属于地面"
-      // 无关；放在本阶段只会按车高砍掉抬升的地面（坡面），并使候选数随车高
-      // 漂移、经分位数放大成 elev 偏差。地面候选的上界改由地面自身决定——
-      // 高于地面的部分本就是障碍，会由 computeHeightMap 按净空处理。
+
       const GridIndex grid_index = gridIndex(
           point.x, point.y, lidar_position.x, lidar_position.y,
-          config.planar_voxel_size, PerFrameHeightGrid::WIDTH);
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
       }
@@ -57,14 +51,13 @@ namespace terrain_analysis {
     }
   }
 
-  void PerFrameHeightMap::computePlanarElevation(
-      const PerFrameHeightConfig& config) {
+  void PerFrameHeightMap::computePlanarElevation() {
     // 本阶段拥有逐格高程：没有候选的格保持 0（见 computeHeightMap 的说明）。
     voxel_elev_.fill(0);
 
-    if (config.use_sorting) {
+    if (config_.use_sorting) {
       for (int i = 0; i < PerFrameHeightGrid::NUM; i++) {
-        elevateByQuantile(i, config);
+        elevateByQuantile(i);
       }
     } else {
       for (int i = 0; i < PerFrameHeightGrid::NUM; i++) {
@@ -74,8 +67,7 @@ namespace terrain_analysis {
   }
 
   void PerFrameHeightMap::computeHeightMap(
-      const Cell& terrain_cloud, const guga_common::Point3d& lidar_position,
-      const PerFrameHeightConfig& config) {
+      const Cell& terrain_cloud, const guga_common::Point3d& lidar_position) {
     const double lidar_z = lidar_position.z;
     auto& elevations = obstacle_cloud_;
     elevations->clear();
@@ -83,7 +75,7 @@ namespace terrain_analysis {
     for (const auto& point : terrain_cloud.points) {
       const GridIndex grid_index = gridIndex(
           point.x, point.y, lidar_position.x, lidar_position.y,
-          config.planar_voxel_size, PerFrameHeightGrid::WIDTH);
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
       }
@@ -95,7 +87,7 @@ namespace terrain_analysis {
 
       // 下界：地板过滤（挡掉地面以下/穿透点）。此处用**相对雷达**的高度，
       // 因为要挡的是"远低于雷达"的穿透点，与地形无关。
-      if (point.z - lidar_z <= config.min_relative_z) {
+      if (point.z - lidar_z <= config_.min_relative_z) {
         continue;
       }
       // 上界：距地面达到安全间隙的点（天花板/横梁）不输出为障碍——
@@ -103,27 +95,26 @@ namespace terrain_analysis {
       // 净空是"地面到障碍下沿"的距离，这也使判据在坡面上保持一致。
       // 这是障碍输出**唯一**的上界：不再叠加按车高的截断，否则车高与净空
       // 之间的那一带（车高 0.52 → 净空 0.62 之间）会被漏检，而车过不去。
-      if (height_above_ground >= config.ceiling_clearance) {
+      if (height_above_ground >= config_.ceiling_clearance) {
         continue;
       }
       double height = height_above_ground;
-      if (config.consider_drop) {
+      if (config_.consider_drop) {
         height = std::abs(height);
       }
 
       auto point_count = point_elev_[cell].size();
       // 下界：地面带的死区，吸收地面高度估计的误差。估计值偏低时，真实地面点会
       // 算出几厘米的正高度；若从 0 起算，它们会被当作低矮障碍标记出去。
-      if (height >= config.min_obstacle_height
-          && point_count >= static_cast<size_t>(config.min_block_point_num)) {
+      if (height >= config_.min_obstacle_height
+          && point_count >= static_cast<size_t>(config_.min_block_point_num)) {
         elevations->push_back(point);
         elevations->back().intensity = static_cast<float>(height);
       }
     }
   }
 
-  void PerFrameHeightMap::elevateByQuantile(
-      int cell, const PerFrameHeightConfig& config) {
+  void PerFrameHeightMap::elevateByQuantile(int cell) {
     auto& elevations = point_elev_[cell];
     int point_count = static_cast<int>(elevations.size());
     if (point_count == 0) {
@@ -131,15 +122,15 @@ namespace terrain_analysis {
     }
     sort(elevations.begin(), elevations.end());
 
-    int quantile_index = static_cast<int>(config.quantile_z * point_count);
+    int quantile_index = static_cast<int>(config_.quantile_z * point_count);
     if (quantile_index >= point_count) {
       quantile_index = point_count - 1;
     }
     double minimum_z = elevations[0];
     double quantile_z = elevations[quantile_index];
-    voxel_elev_[cell] = config.limit_ground_lift ? std::min(
-                            quantile_z, minimum_z + config.max_ground_lift)
-                                                 : quantile_z;
+    voxel_elev_[cell] = config_.limit_ground_lift ? std::min(
+                            quantile_z, minimum_z + config_.max_ground_lift)
+                                                  : quantile_z;
   }
 
   void PerFrameHeightMap::elevateByMinimum(int cell) {

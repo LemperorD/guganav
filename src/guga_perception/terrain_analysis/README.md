@@ -46,6 +46,10 @@ ROS2 消息 → PersistentVoxelMap::ingest → update → collectCloud → PerFr
 - **共享头** — `config.hpp` 放两半各自的参数结构体；`grid.hpp` 放两张网格的类型，
   `grid_utils.hpp` 放换算工具（坐标 ↔ 格、格 ↔ 点云、单点 ↔ 3×3 邻域），两半与
   测试都直接用。
+- **参数的流向** — 节点声明 ROS 参数并持有两份配置；两半在构造时接收它们的
+  `const` 引用，既不拷贝也不修改。因此改配置只需改所有者那一份（测试正是这样逐
+  场景调参），两半下次调用就用到新值；代价是所有者必须先声明、后销毁，且不能在
+  两半运行中改（本包不做同步，当前只在构造期写）。
 - 白盒测试经 `friend` 访问两半的内部阶段（见 `test_algorithm.cpp`），
   节点级与话题级的测试见 `test_terrain_analysis.cpp` 与 `test_integration.cpp`
 

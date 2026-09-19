@@ -24,8 +24,7 @@ namespace terrain_analysis {
 
   void PersistentVoxelMap::ingest(const Cell& cloud,
                                   const guga_common::Point3d& lidar_position,
-                                  double timestamp_sec,
-                                  const PersistentVoxelConfig& config) {
+                                  double timestamp_sec) {
     lidar_ = lidar_position;
     time_ = timestamp_sec;
     if (!inited_) {
@@ -34,16 +33,16 @@ namespace terrain_analysis {
     }
 
     const double elapsed = elapsedSeconds();
-    const double max_range = config.terrain_voxel_size
+    const double max_range = config_.terrain_voxel_size
                              * (PersistentVoxelGrid::HALF_WIDTH + 1);
     frame_cloud_->clear();
     for (const auto& point : cloud.points) {
       const double relative_z = point.z - lidar_.z;
       const double distance = horizontalDistance(point.x, point.y, lidar_.x,
                                                  lidar_.y);
-      const double z_margin = config.distance_ratio_z * distance;
-      if (relative_z > config.min_relative_z - z_margin
-          && relative_z < config.max_relative_z + z_margin
+      const double z_margin = config_.distance_ratio_z * distance;
+      if (relative_z > config_.min_relative_z - z_margin
+          && relative_z < config_.max_relative_z + z_margin
           && distance < max_range) {
         pcl::PointXYZI cropped = point;
         // intensity 借用来携带该点的观测时刻（相对首帧的秒数），rebuild 判年龄
@@ -86,11 +85,11 @@ namespace terrain_analysis {
     return !(decayed && !near);
   }
 
-  void PersistentVoxelMap::update(const PersistentVoxelConfig& config) {
+  void PersistentVoxelMap::update() {
     frame_pending_ = false;
-    rollover(lidar_, config);
-    addFrame(*frame_cloud_, lidar_, config);
-    rebuild(lidar_, elapsedSeconds(), config);
+    rollover(lidar_);
+    addFrame(*frame_cloud_, lidar_);
+    rebuild(lidar_, elapsedSeconds());
   }
 
   void PersistentVoxelMap::collectCloud(Cell& out) const {
@@ -98,9 +97,8 @@ namespace terrain_analysis {
     collectWindow<PersistentVoxelGrid>(cloud_, EXTRACT_HALF_WINDOW, out);
   }
 
-  void PersistentVoxelMap::rollover(const guga_common::Point3d& lidar,
-                                    const PersistentVoxelConfig& config) {
-    const double voxel_size = config.terrain_voxel_size;
+  void PersistentVoxelMap::rollover(const guga_common::Point3d& lidar) {
+    const double voxel_size = config_.terrain_voxel_size;
     double center_x = voxel_size * shift_x_;
     double center_y = voxel_size * shift_y_;
 
@@ -123,9 +121,8 @@ namespace terrain_analysis {
   }
 
   void PersistentVoxelMap::addFrame(const Cell& crop,
-                                    const guga_common::Point3d& lidar,
-                                    const PersistentVoxelConfig& config) {
-    const double voxel_size = config.terrain_voxel_size;
+                                    const guga_common::Point3d& lidar) {
+    const double voxel_size = config_.terrain_voxel_size;
     for (const auto& point : crop.points) {
       const GridIndex index = gridIndex(point.x, point.y, lidar.x, lidar.y,
                                         voxel_size, PersistentVoxelGrid::WIDTH);
@@ -138,8 +135,7 @@ namespace terrain_analysis {
   }
 
   void PersistentVoxelMap::rebuild(const guga_common::Point3d& lidar,
-                                   double now_elapsed,
-                                   const PersistentVoxelConfig& config) {
+                                   double now_elapsed) {
     // 每个格子每帧重建一次，逐叶只保留"观测时刻最新"的那一个点。
     //
     // 时刻取最新而不是平均：叶内混有新老点时，平均会把仍在被观测的表面判成
@@ -159,8 +155,8 @@ namespace terrain_analysis {
 
       for (const auto& point : cell.points) {
         const uint64_t key = leafKey(point.x, point.y, point.z,
-                                     config.scan_voxel_size,
-                                     config.scan_voxel_size_z);
+                                     config_.scan_voxel_size,
+                                     config_.scan_voxel_size_z);
         const auto it = leaf_slot.find(key);
         if (it == leaf_slot.end()) {
           leaf_slot.emplace(key, representatives.size());
@@ -174,7 +170,7 @@ namespace terrain_analysis {
       for (const auto& point : representatives.points) {
         const double distance = horizontalDistance(point.x, point.y, lidar.x,
                                                    lidar.y);
-        if (keepPoint(point.z - lidar.z, distance, point.intensity, config,
+        if (keepPoint(point.z - lidar.z, distance, point.intensity, config_,
                       now_elapsed)) {
           cell.push_back(point);
         }
