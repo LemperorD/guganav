@@ -81,24 +81,17 @@ scripts/test/test_terrain_analysis_coverage.sh
 参数来自 `src/guga_bringup/config/<profile>/base.yaml` 的 `terrain_analysis:` 段（实车与
 仿真各一份），由节点声明后按两半的读取范围分发给两个配置结构体。共 16 个：
 
-| 参数 | 作用 |
-| ---- | ---- |
-| `scanVoxelSize` / `scanVoxelSizeZ` | 融合叶尺寸（水平 0.1 / 垂直 0.05 m） |
-| `decayTime` / `noDecayDis` | 观测的衰减时间与"近处不衰减"半径 |
-| `maxRelZ` / `disRatioZ` | 接收带的上沿与随距离放宽的比例 |
-| `minRelZ` | 前半段：接收带下沿；后半段：障碍输出的地板（只声明一次，两处同值） |
-| `useSorting` / `quantileZ` | 地面高度取分位数还是最小值，及分位点 |
-| `considerDrop` / `limitGroundLift` / `maxGroundLift` | 凹坑取绝对值、地面抬升限幅 |
-| `minBlockPointNum` | 每格参与判定的最少点数 |
-| `minObstacleHeight` / `ceilingClearance` | 障碍输出高度带（下界死区、上界净空） |
-| `groundFloorZ` | 地面候选的绝对高度地板（odom z） |
-
-**不是 ROS 参数、launch 改不了的量**（改这些要重编译）：
-
-- `terrain_voxel_size`（1.0 m）：既是体素格边长，也决定接收半径
-  `terrain_voxel_size × (HALF_WIDTH + 1)` = 11 m 与滚动步长；
-- `planar_voxel_size`（0.2 m）：高度网格的格边长，同时是后半段归格的分辨率；
-- 两张网格的 `WIDTH`（21 / 51）与采集窗口半宽 `EXTRACT_HALF_WINDOW`（5，即 ±5.5 m）。
+| 参数                                                 | 作用                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------ |
+| `scanVoxelSize` / `scanVoxelSizeZ`                   | 融合叶尺寸（水平 0.1 / 垂直 0.05 m）                               |
+| `decayTime` / `noDecayDis`                           | 观测的衰减时间与"近处不衰减"半径                                   |
+| `maxRelZ` / `disRatioZ`                              | 接收带的上沿与随距离放宽的比例                                     |
+| `minRelZ`                                            | 前半段：接收带下沿；后半段：障碍输出的地板（只声明一次，两处同值） |
+| `useSorting` / `quantileZ`                           | 地面高度取分位数还是最小值，及分位点                               |
+| `considerDrop` / `limitGroundLift` / `maxGroundLift` | 凹坑取绝对值、地面抬升限幅                                         |
+| `minBlockPointNum`                                   | 每格参与判定的最少点数                                             |
+| `minObstacleHeight` / `ceilingClearance`             | 障碍输出高度带（下界死区、上界净空）                               |
+| `groundFloorZ`                                       | 地面候选的绝对高度地板（odom z）                                   |
 
 另外注意：`config.hpp` 里的结构体默认值只有部分是实车值——`decay_time`、`no_decay_distance`、
 `quantile_z`、`max_ground_lift`、`max_relative_z` 与 `base.yaml` 不同，单元测试若直接构造
