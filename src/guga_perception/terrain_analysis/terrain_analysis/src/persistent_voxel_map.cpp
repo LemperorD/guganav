@@ -90,9 +90,9 @@ namespace terrain_analysis {
 
   void PersistentVoxelMap::update() {
     frame_pending_ = false;
-    rollover(lidar_);
-    addFrame(*frame_cloud_, lidar_);
-    rebuild(lidar_, elapsedSeconds());
+    rollover();
+    addFrame();
+    rebuild();
   }
 
   void PersistentVoxelMap::collectCloud(Cell& out) const {
@@ -100,7 +100,8 @@ namespace terrain_analysis {
     collectWindow<PersistentVoxelGrid>(cloud_, EXTRACT_HALF_WINDOW, out);
   }
 
-  void PersistentVoxelMap::rollover(const guga_common::Point3d& lidar) {
+  void PersistentVoxelMap::rollover() {
+    const guga_common::Point3d& lidar = lidar_;
     const double voxel_size = config_.terrain_voxel_size;
     double center_x = voxel_size * shift_x_;
     double center_y = voxel_size * shift_y_;
@@ -123,8 +124,9 @@ namespace terrain_analysis {
     }
   }
 
-  void PersistentVoxelMap::addFrame(const Cell& crop,
-                                    const guga_common::Point3d& lidar) {
+  void PersistentVoxelMap::addFrame() {
+    const Cell& crop = *frame_cloud_;
+    const guga_common::Point3d& lidar = lidar_;
     const double voxel_size = config_.terrain_voxel_size;
 
     for (const auto& point : crop.points) {
@@ -138,8 +140,9 @@ namespace terrain_analysis {
     }
   }
 
-  void PersistentVoxelMap::rebuild(const guga_common::Point3d& lidar,
-                                   double now_elapsed) {
+  void PersistentVoxelMap::rebuild() {
+    const guga_common::Point3d& lidar = lidar_;
+    const double now_elapsed = elapsedSeconds();
     // 每个格子每帧重建一次，逐叶只保留"观测时刻最新"的那一个点。
     //
     // 时刻取最新而不是平均：叶内混有新老点时，平均会把仍在被观测的表面判成

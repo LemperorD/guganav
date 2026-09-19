@@ -107,11 +107,13 @@ namespace terrain_analysis {
     // ── 接缝：本类内部编排与数据。生产代码不用，白盒测试用派生类把它们提升为
     // 公有（见 test/test_doubles.hpp）——与 nav2_mppi_controller 的做法一致：
     // 生产头文件里不出现测试类名，封口也不靠 friend 名单维护。 ──
+    // 三个阶段都作用在"本帧"上：锚点、本帧点云与时刻已由 ingest() 记在成员里，
+    // 因此它们不收参数——地图持有这一帧，成员函数直接读它。
     /** @brief 滚动网格，维持以雷达为中心的窗口（update 的第一步）。 */
-    void rollover(const guga_common::Point3d& lidar);
+    void rollover();
 
     /** @brief 把本帧点云按位置分配到体素格（update 的第二步）。 */
-    void addFrame(const Cell& crop, const guga_common::Point3d& lidar);
+    void addFrame();
 
     /**
      * @brief 逐格重建：按叶保留最新观测点，并做高度带与年龄过滤（update
@@ -121,7 +123,8 @@ namespace terrain_analysis {
      * 的那一个点，于是"有新点即刷新、无新点才判年龄"不需要额外状态：代表点自带
      * 的时刻就是该叶的 last_seen。
      */
-    void rebuild(const guga_common::Point3d& lidar, double now_elapsed);
+    /** @brief 第三步，年龄按 elapsedSeconds() 判定。 */
+    void rebuild();
 
     /** @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。 */
     [[nodiscard]] const Cell& frameCloud() const noexcept {

@@ -59,13 +59,13 @@ namespace terrain_analysis {
     void runStage(stage::Id id) {
       switch (id) {
         case stage::Id::ROLLOVER:
-          voxelMap().rollover(lidarPosition());
+          voxelMap().rollover();
           break;
         case stage::Id::VOXELIZE:
-          voxelMap().addFrame(*frameCloud(), lidarPosition());
+          voxelMap().addFrame();
           break;
         case stage::Id::UPDATE_TERRAIN_VOXELS:
-          voxelMap().rebuild(lidarPosition(), elapsed());
+          voxelMap().rebuild();
           break;
         case stage::Id::COLLECT:
           voxelMap().collectCloud(*terrainCloud());
@@ -155,9 +155,6 @@ namespace terrain_analysis {
     guga_common::Point3d lidarPosition() const {
       return voxel_map_->lidar();
     }
-    double elapsed() const {
-      return voxel_map_->time() - voxel_map_->initTime();
-    }
 
     // 把一个点放进体素网格的中心格，再触发重建。返回该格保留的点数。
     int updateSinglePoint(double relative_z, double distance) {
@@ -185,7 +182,7 @@ namespace terrain_analysis {
       point.intensity = 0.0F;
       cell.push_back(point);
 
-      voxelMap().rebuild(lidarPosition(), elapsed());
+      voxelMap().rebuild();
       return static_cast<int>(voxelCells()[center_cell]->points.size());
     }
 
@@ -697,11 +694,11 @@ TEST_F(AlgorithmTest, RolloverVoxelMap_MoveAlongX_ShiftsContentAlongColumns) {
   frameCloud()->clear();
   frameCloud()->push_back(
       {1.0F, 0.0F, 0.0F, 0.0F});  // x=+1, y=0 → (row 10, col 11)
-  voxelMap().addFrame(*frameCloud(), lidarPosition());
+  voxelMap().addFrame();
   EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(10, 11));
 
   lidar().x = 2.5;  // 触发两次滚动
-  voxelMap().rollover(lidarPosition());
+  voxelMap().rollover();
 
   EXPECT_EQ(voxelMap().shiftX(), 2);
   EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(10, 9));
@@ -715,11 +712,11 @@ TEST_F(AlgorithmTest, RolloverVoxelMap_MoveAlongY_ShiftsContentAlongRows) {
   lidar().z = 0.0;
   frameCloud()->clear();
   frameCloud()->push_back({0.0F, 1.0F, 0.0F, 0.0F});  // y=+1 → (row 11, col 10)
-  voxelMap().addFrame(*frameCloud(), lidarPosition());
+  voxelMap().addFrame();
   EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(11, 10));
 
   lidar().y = 2.5;
-  voxelMap().rollover(lidarPosition());
+  voxelMap().rollover();
 
   EXPECT_EQ(voxelMap().shiftY(), 2);
   EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(9, 10));
@@ -736,11 +733,11 @@ TEST_F(AlgorithmTest,
   lidar().z = 0.0;
   frameCloud()->clear();
   frameCloud()->push_back({6.0F, 0.0F, 0.3F, 0.0F});
-  voxelMap().addFrame(*frameCloud(), lidarPosition());
+  voxelMap().addFrame();
 
   for (int i = 1; i <= 5; i++) {
     lidar().x = static_cast<double>(i);
-    voxelMap().rollover(lidarPosition());
+    voxelMap().rollover();
   }
 
   // 滚动判据是"偏离中心超过一整格才搬"，车每开 1 m 恰好触发一次、但首次不触发，
