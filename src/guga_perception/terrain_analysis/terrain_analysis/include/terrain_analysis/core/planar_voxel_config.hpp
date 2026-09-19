@@ -1,30 +1,18 @@
 #pragma once
 
-#include <cmath>
-
 /**
- * @brief terrain_analysis 算法运行参数。
+ * @brief 管线后半段（PlanarVoxelMap）读取的参数。
  *
- * 所有距离和长度参数单位为米，时间参数单位为秒，角度参数在算法内部
- * 使用弧度表示。ROS 节点负责从参数服务器读取并完成角度单位转换。
+ * 后半段负责"由累积观测估计地面并判定障碍"：地面估计方式、地面带死区、障碍输出
+ * 高度带、平面网格分辨率。
+ *
+ * `min_relative_z` 与 TerrainVoxelConfig 同名，这是有意的：它是同一个 ROS 参数
+ * （`minRelZ`），但两半的用途不同——前半段用它定义接收带的下沿，后半段用它挡掉
+ * 远低于雷达的穿透点（障碍输出的地板）。节点从同一个参数同时填入两处。
+ *
+ * 距离单位为米。
  */
-struct TerrainConfig {
-  // 输入点云体素化和历史数据衰减
-  /** @brief 融合叶尺寸（水平，x/y）。 */
-  double scan_voxel_size = 0.1;
-  /** @brief 融合叶尺寸（垂直，z）。
-   *
-   *  垂直方向必须比水平方向细：每个叶只保留最新观测的那一个点，若地面点与
-   *  矮物体点落进同一个叶，地面点每帧都被观测到，会把物体点顶掉（叶宽 0.2 m
-   *  时实测 6 cm 矮台阶的输出点数归零）。实测：水平 0.1 / 垂直 0.05 相比两者
-   *  都取 0.05，单帧耗时降到约 56%，而矮台阶输出点数不再下降。 */
-  double scan_voxel_size_z = 0.05;
-  /** @brief 历史体素点的衰减时间。 */
-  double decay_time = 2.0;
-  /** @brief 在该距离内不执行时间衰减。 */
-  double no_decay_distance = 4.0;
-
-  // 地面高度估计
+struct PlanarVoxelConfig {
   /** @brief 是否使用分位数估计地面高度，否则使用最小值。 */
   bool use_sorting = true;
   /** @brief 地面高度分位数。 */
@@ -36,7 +24,6 @@ struct TerrainConfig {
   /** @brief 地面估计允许的最大抬升量。 */
   double max_ground_lift = 0.15;
 
-  // 无数据区域和障碍高度过滤
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;
   /** @brief 障碍输出下界：距**局部地面**小于该值的点不作为障碍输出。
@@ -60,24 +47,13 @@ struct TerrainConfig {
    *  一并丢掉，而那个高度上的悬空结构车是过不去的——该截断已移除，参数一并
    *  删除。换车只需重设本值。 */
   double ceiling_clearance = 0.62;
-  // 体素更新和点云范围
-  // 这里曾有两个"触发重建"的参数（累计点数阈值、重建时间阈值）。体素格现改为
-  // 每帧重建一次：逐 0.05 m 叶只保留最新观测点，年龄在重建时判定，因此重建不再
-  // 需要节流，两个参数与相应的状态数组一并删除。
-  /** @brief 有效点云相对雷达的高度下限（相对 lidar_z 的偏移量）。
-   *  两处共用：ingestLaserCloud 的裁剪带、keepTerrainVoxelPoint 的体素点
-   *  保留判定。地面候选的地板不用它——那是绝对高度 ground_floor_z。 */
-  double min_relative_z = -1.5;
-  /** @brief 有效点云相对雷达的高度上限（相对 lidar_z 的偏移量）。
-   *  **仅由 ingestLaserCloud 的裁剪带与 keepTerrainVoxelPoint 使用**。
-   *  地面候选（estimateTerrainGround）与障碍输出（computeHeightMap）的上界
-   *  都由更紧的 TerrainGrid::CEILING_CLEARANCE(0.1) 决定，本参数在这两处
-   *  不参与判定。 */
-  double max_relative_z = 0.2;
-  /** @brief 随水平距离放宽高度范围的比例。 */
-  double distance_ratio_z = 0.2;
 
-  // 地面估计
+  /** @brief 障碍输出的地板（相对雷达）：低于该高度的点不输出，用于挡掉穿透点。
+   *
+   *  与 TerrainVoxelConfig 的同名字段来自同一个 ROS 参数，用途见本结构体注释。
+   */
+  double min_relative_z = -1.5;
+
   /** @brief 地面候选的绝对高度地板（odom z）：低于该值的点不参与地面估计。
    *
    *  用绝对量而非"相对雷达"：地面在 odom 中大体水平，且该阈值不应随雷达
@@ -92,9 +68,6 @@ struct TerrainConfig {
    *  若换车或改安装，需按新实测值重设。 */
   double ground_floor_z = -0.2;
 
-  // 网格分辨率
-  /** @brief 地形体素边长。 */
-  double terrain_voxel_size = 1.0;
   /** @brief planar voxel 边长。 */
   double planar_voxel_size = 0.2;
 };

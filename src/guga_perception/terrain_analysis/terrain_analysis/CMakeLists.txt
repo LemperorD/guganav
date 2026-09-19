@@ -24,9 +24,6 @@ find_package(rclcpp_components REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
-find_package(tf2 REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
@@ -35,7 +32,7 @@ find_package(guga_common REQUIRED)
 # Library（组件库必须 SHARED，plugin 动态加载）
 add_library(terrain_analysis_lib SHARED
   src/terrain_analysis_node.cpp
-  src/core/terrain_pipeline.cpp
+  src/core/planar_voxel_map.cpp
   src/core/terrain_voxel_map.cpp)
 
 target_include_directories(terrain_analysis_lib PUBLIC include)
@@ -46,9 +43,6 @@ ament_target_dependencies(
   sensor_msgs
   nav_msgs
   geometry_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
   message_filters
   pcl_ros
   pcl_conversions
@@ -76,9 +70,9 @@ if(BUILD_TESTING)
   target_include_directories(test_terrain_analysis PRIVATE test)
   target_link_libraries(test_terrain_analysis terrain_analysis_lib)
 
-  ament_add_gtest(test_state_ingest test/test_state_ingest.cpp)
-  target_include_directories(test_state_ingest PRIVATE test)
-  target_link_libraries(test_state_ingest terrain_analysis_lib)
+  ament_add_gtest(test_frame_ingest test/test_frame_ingest.cpp)
+  target_include_directories(test_frame_ingest PRIVATE test)
+  target_link_libraries(test_frame_ingest terrain_analysis_lib)
 
   ament_add_gtest(test_algorithm test/test_algorithm.cpp)
   target_include_directories(test_algorithm PRIVATE test)

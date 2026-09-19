@@ -1,5 +1,4 @@
-#include "terrain_analysis/core/terrain_pipeline.hpp"
-#include "terrain_analysis/core/config.hpp"
+#include "terrain_analysis/core/planar_voxel_map.hpp"
 #include "terrain_analysis/core/terrain_voxel_map.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
@@ -9,8 +8,8 @@
 
 #include <cmath>
 
-// 白盒测试需要逐阶段驱动管线；fixture 是 TerrainPipeline 的 friend，
-// 因此把这类调用收在它以内的分发器里。
+// 白盒测试需要逐阶段驱动两半管线；fixture 是 TerrainVoxelMap / PlanarVoxelMap
+// 的 friend，因此把这类调用收在它以内的分发器里。
 namespace stage {
   enum class Id {
     ROLLOVER,
@@ -28,91 +27,122 @@ namespace terrain_analysis {
   protected:
     AlgorithmTest() {
       resetState();
-      config().use_sorting = true;
-      config().quantile_z = 0.25;
-      config().limit_ground_lift = false;
+      planarConfig().use_sorting = true;
+      planarConfig().quantile_z = 0.25;
+      planarConfig().limit_ground_lift = false;
     }
 
     void resetState() {
-      pipeline_.state_ = {};
-      voxel_map_ = TerrainVoxelMap{};
+      planar_map_ = std::make_unique<PlanarVoxelMap>();
+      voxel_map_ = std::make_unique<TerrainVoxelMap>();
       for (auto& ptr : voxelMap().cells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
       }
-      state().laser_cloud_crop =
-          std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-      state().terrain_cloud =
-          std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-      state().terrain_cloud_elev =
-          std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+      terrain_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    }
+
+    /**
+     * @brief 放宽高度带：前半段的接收/保留带与后半段的输出地板一起放宽。
+     *
+     * 拆成两半之后这三个字段分属两个配置，但都来自同一个 minRelZ/maxRelZ 参数，
+     * 所以测试里仍然一起设，语义与拆分前一致。
+     */
+    void widenBand(double lower, double upper) {
+      voxelConfig().min_relative_z = lower;
+      voxelConfig().max_relative_z = upper;
+      planarConfig().min_relative_z = lower;
     }
 
     void runStage(stage::Id id) {
       switch (id) {
         case stage::Id::ROLLOVER:
-          voxelMap().rollover(lidarPosition(), config().terrain_voxel_size);
+          voxelMap().rollover(lidarPosition());
           break;
         case stage::Id::VOXELIZE:
-          voxelMap().addFrame(*state().laser_cloud_crop, lidarPosition(),
-                              config().terrain_voxel_size);
+          voxelMap().addFrame(*frameCloud(), lidarPosition());
           break;
         case stage::Id::UPDATE_TERRAIN_VOXELS:
-          voxelMap().rebuild(
-              config(), lidarPosition(),
-              state().laser_cloud_time - state().system_init_time);
+          voxelMap().rebuild(lidarPosition(), elapsed());
           break;
         case stage::Id::COLLECT:
-          voxelMap().collectCloud(*state().terrain_cloud);
+          voxelMap().collectCloud(*terrainCloud());
           break;
         case stage::Id::ESTIMATE_TERRAIN_GROUND:
-          pipeline_.estimateTerrainGround();
+          planarMap().estimateTerrainGround(*terrainCloud(), lidarPosition());
           break;
         case stage::Id::PLANAR_ELEVATION:
-          pipeline_.computePlanarElevation();
+          planarMap().computePlanarElevation();
           break;
         case stage::Id::HEIGHT_MAP:
-          pipeline_.computeHeightMap();
+          planarMap().computeHeightMap(*terrainCloud(), lidarPosition());
           break;
       }
     }
 
-    TerrainPipeline& pipeline() {
-      return pipeline_;
+    // 下面这些是"内部字段的引用访问器"：friend 只授予 fixture 的成员函数，
+    // 测试体本身没有访问权，故统一经这里取引用。
+    guga_common::Point3d& lidar() {
+      return voxel_map_->lidar_;
     }
-    TerrainConfig& config() {
-      return pipeline_.config_;
+    double& frameTime() {
+      return voxel_map_->time_;
     }
-    TerrainState& state() {
-      return pipeline_.state_;
+    double& initTime() {
+      return voxel_map_->init_time_;
+    }
+    pcl::PointCloud<pcl::PointXYZI>::Ptr& frameCloud() {
+      return voxel_map_->frame_cloud_;
+    }
+    std::array<double, PlanarVoxelGrid::NUM>& voxelElev() {
+      return planar_map_->voxel_elev_;
+    }
+    std::array<std::vector<double>, PlanarVoxelGrid::NUM>& pointElev() {
+      return planar_map_->point_elev_;
+    }
+    pcl::PointCloud<pcl::PointXYZI>::Ptr& obstacleCloud() {
+      return planar_map_->obstacle_cloud_;
+    }
+
+    PlanarVoxelMap& planarMap() {
+      return *planar_map_;
     }
     TerrainVoxelMap& voxelMap() {
-      return voxel_map_;
+      return *voxel_map_;
+    }
+    TerrainVoxelConfig& voxelConfig() {
+      return voxel_map_->config_;
+    }
+    PlanarVoxelConfig& planarConfig() {
+      return planar_map_->config_;
+    }
+    pcl::PointCloud<pcl::PointXYZI>::Ptr& terrainCloud() {
+      return terrain_cloud_;
     }
     guga_common::Point3d lidarPosition() const {
-      return pipeline_.state_.lidar;
+      return voxel_map_->lidar_;
+    }
+    double elapsed() const {
+      return voxel_map_->time_ - voxel_map_->init_time_;
     }
 
-    // then trigger update. Returns the point count retained in the cell.
-    int updateSinglePoint(TerrainPipeline& proc, double relative_z,
-                          double distance) {
-      TerrainConfig& config = proc.config_;
-      TerrainState& state = proc.state_;
-
+    // 把一个点放进体素网格的中心格，再触发重建。返回该格保留的点数。
+    int updateSinglePoint(double relative_z, double distance) {
+      TerrainVoxelConfig& config = voxelConfig();
       config.min_relative_z = -1.5;
       config.max_relative_z = 0.2;
       config.distance_ratio_z = 0.2;
       config.decay_time = 999.0;
       config.no_decay_distance = 999.0;
 
-      state.lidar.x = 0;
-      state.lidar.y = 0;
-      state.lidar.z = 0.0;
-      state.laser_cloud_time = 1.0;
-      state.system_init_time = 0.0;
+      voxel_map_->lidar_.x = 0;
+      voxel_map_->lidar_.y = 0;
+      voxel_map_->lidar_.z = 0.0;
+      voxel_map_->time_ = 1.0;
+      voxel_map_->init_time_ = 0.0;
 
       int center_cell = TerrainVoxelGrid::linearIndex(
           TerrainVoxelGrid::HALF_WIDTH, TerrainVoxelGrid::HALF_WIDTH);
-      auto& cell = *voxel_map_.cells()[center_cell];
+      auto& cell = *voxelMap().cells()[center_cell];
       cell.clear();
       pcl::PointXYZI point;
       point.x = static_cast<float>(distance);
@@ -121,14 +151,14 @@ namespace terrain_analysis {
       point.intensity = 0.0F;
       cell.push_back(point);
 
-      voxel_map_.rebuild(config, state.lidar,
-                         state.laser_cloud_time - state.system_init_time);
-      return static_cast<int>(voxel_map_.cells()[center_cell]->points.size());
+      voxelMap().rebuild(lidarPosition(), elapsed());
+      return static_cast<int>(voxelMap().cells()[center_cell]->points.size());
     }
 
-    TerrainPipeline pipeline_;
-    /** @brief 跨帧持久的体素地图：由测试持有，按需传给管线。 */
-    TerrainVoxelMap voxel_map_;
+    std::unique_ptr<PlanarVoxelMap> planar_map_;
+    std::unique_ptr<TerrainVoxelMap> voxel_map_;
+    /** @brief 两半之间的交接数据（采集点云），由测试持有。 */
+    pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_;
   };
 }  // namespace terrain_analysis
 
@@ -136,8 +166,8 @@ using terrain_analysis::AlgorithmTest;
 
 // 雷达未移动时，体素网格不发生滚动
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
+  lidar().x = 0;
+  lidar().y = 0;
   int sx = voxelMap().shiftX();
   int sy = voxelMap().shiftY();
 
@@ -149,7 +179,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
 
 // 雷达向左超出 voxel 范围时，沿 X 负向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
-  state().lidar.x = -2.0;
+  lidar().x = -2.0;
   int sx = voxelMap().shiftX();
 
   runStage(stage::Id::ROLLOVER);
@@ -159,7 +189,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
 
 // 雷达向右超出 voxel 范围时，沿 X 正向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
-  state().lidar.x = 2.0;
+  lidar().x = 2.0;
   int sx = voxelMap().shiftX();
 
   runStage(stage::Id::ROLLOVER);
@@ -169,7 +199,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
 
 // 雷达向下超出 voxel 范围时，沿 Y 负向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
-  state().lidar.y = -2.0;
+  lidar().y = -2.0;
   int sy = voxelMap().shiftY();
 
   runStage(stage::Id::ROLLOVER);
@@ -179,7 +209,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
 
 // 雷达向上超出 voxel 范围时，沿 Y 正向滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
-  state().lidar.y = 2.0;
+  lidar().y = 2.0;
   int sy = voxelMap().shiftY();
 
   runStage(stage::Id::ROLLOVER);
@@ -190,7 +220,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
 // 滚动后目标 cell 被清空，原有数据随 shift 迁移
 TEST_F(AlgorithmTest,
        RolloverTerrainVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
-  state().lidar.x = -2.0;
+  lidar().x = -2.0;
   voxelMap().cells()[0]->clear();
   pcl::PointXYZI p{0, 0, 0, 0};
   voxelMap().cells()[0]->push_back(p);
@@ -203,8 +233,8 @@ TEST_F(AlgorithmTest,
 
 // 雷达同时向左下方移动，X 和 Y 各滚动一格
 TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
-  state().lidar.x = -2.0;
-  state().lidar.y = -2.0;
+  lidar().x = -2.0;
+  lidar().y = -2.0;
   int sx = voxelMap().shiftX();
   int sy = voxelMap().shiftY();
 
@@ -217,10 +247,10 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
 // ── voxelizeTerrain ──
 // 原点处的单个点被分配到网格正中的 cell
 TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().laser_cloud_crop->clear();
-  state().laser_cloud_crop->push_back({0, 0, 0, 0});
+  lidar().x = 0;
+  lidar().y = 0;
+  frameCloud()->clear();
+  frameCloud()->push_back({0, 0, 0, 0});
 
   runStage(stage::Id::VOXELIZE);
 
@@ -231,7 +261,7 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
 
 // 空点云不产生任何体素分配
 TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
-  state().laser_cloud_crop->clear();
+  frameCloud()->clear();
 
   runStage(stage::Id::VOXELIZE);
 
@@ -243,65 +273,65 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 // ── computePlanarElevation ──
 // 排序模式下取指定分位数作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
-  config().use_sorting = true;
-  config().quantile_z = 0.5;
+  planarConfig().use_sorting = true;
+  planarConfig().quantile_z = 0.5;
   size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
                                              PlanarVoxelGrid::HALF_WIDTH);
-  state().planar_voxel_elev.fill(999);
-  state().planar_point_elev[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
+  voxelElev().fill(999);
+  pointElev()[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
 
   runStage(stage::Id::PLANAR_ELEVATION);
 
   // sorted: 0.1, 0.2, 0.3, 0.4, 0.5. quantile 0.5*(5) = 2 → index 2 → 0.3
-  EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.3F);
+  EXPECT_FLOAT_EQ(voxelElev()[cell], 0.3F);
 }
 
 // 最小值模式下取最低点作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
-  config().use_sorting = false;
+  planarConfig().use_sorting = false;
   size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
                                              PlanarVoxelGrid::HALF_WIDTH);
-  state().planar_voxel_elev.fill(999);
-  state().planar_point_elev[cell] = {1.5, 0.5, 1.0};
+  voxelElev().fill(999);
+  pointElev()[cell] = {1.5, 0.5, 1.0};
 
   runStage(stage::Id::PLANAR_ELEVATION);
 
-  EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.5F);
+  EXPECT_FLOAT_EQ(voxelElev()[cell], 0.5F);
 }
 
 // 分位数与最小值差距过大时，限制地面高度不超过 min+max_ground_lift
 TEST_F(AlgorithmTest,
        ComputeElevation_LiftLimited_CapsAtMinimumPlusMaxGroundLift) {
-  config().use_sorting = true;
-  config().quantile_z = 0.5;
-  config().limit_ground_lift = true;
-  config().max_ground_lift = 0.3;
+  planarConfig().use_sorting = true;
+  planarConfig().quantile_z = 0.5;
+  planarConfig().limit_ground_lift = true;
+  planarConfig().max_ground_lift = 0.3;
   size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
                                              PlanarVoxelGrid::HALF_WIDTH);
-  state().planar_voxel_elev.fill(999);
+  voxelElev().fill(999);
   // sorted: 0.5, 1.0, 2.0. quantile 0.5*3 = 1 → 1.0. diff 1.0-0.5=0.5 > 0.3
-  state().planar_point_elev[cell] = {0.5, 2.0, 1.0};
+  pointElev()[cell] = {0.5, 2.0, 1.0};
 
   runStage(stage::Id::PLANAR_ELEVATION);
 
   // lift limited → 0.5 + 0.3 = 0.8
-  EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.8F);
+  EXPECT_FLOAT_EQ(voxelElev()[cell], 0.8F);
 }
 
 // quantile_z=1.0 时 quantile_index 达到 point_count 边界，回退到最后一点
 TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
-  config().use_sorting = true;
-  config().quantile_z = 1.0;
-  config().limit_ground_lift = false;
+  planarConfig().use_sorting = true;
+  planarConfig().quantile_z = 1.0;
+  planarConfig().limit_ground_lift = false;
   size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
                                              PlanarVoxelGrid::HALF_WIDTH);
-  state().planar_voxel_elev.fill(999);
+  voxelElev().fill(999);
   // 3 points: sorted 0.1, 0.3, 0.9. quantile 1.0*3 = 3 >= 3 → clamp to 2 → 0.9
-  state().planar_point_elev[cell] = {0.1, 0.9, 0.3};
+  pointElev()[cell] = {0.1, 0.9, 0.3};
 
   runStage(stage::Id::PLANAR_ELEVATION);
 
-  EXPECT_FLOAT_EQ(state().planar_voxel_elev[cell], 0.9F);
+  EXPECT_FLOAT_EQ(voxelElev()[cell], 0.9F);
 }
 // ── estimateTerrainGround ──
 
@@ -309,16 +339,16 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
 TEST_F(AlgorithmTest, EstimateTerrainGround_EdgePoint_HandlesOobNeighbors) {
   constexpr double SZ = 0.2;
   double edge = SZ * (25 - 1);  // ~4.8m, column=49, delta_col+1=50 in bounds
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud->clear();
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  terrainCloud()->clear();
   pcl::PointXYZI pt;
   pt.x = static_cast<float>(edge);
   pt.y = 0;
   pt.z = 0;
   pt.intensity = 0;
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
   // No crash = pass; point Z=0 is within min/max relative_z range
@@ -327,15 +357,15 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_EdgePoint_HandlesOobNeighbors) {
 
 // 超出 planar grid 的点被跳过，避免在计算 base index 时越界
 TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back({6.0F, 0.0F, 0.0F, 0.0F});
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  terrainCloud()->clear();
+  terrainCloud()->push_back({6.0F, 0.0F, 0.0F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
-  for (const auto& elevations : state().planar_point_elev) {
+  for (const auto& elevations : pointElev()) {
     EXPECT_TRUE(elevations.empty());
   }
 }
@@ -344,16 +374,16 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
 
 // Z 超出范围的点被过滤
 TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0);
-  for (auto& e : state().planar_point_elev) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0);
+  for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  config().min_block_point_num = 5;
-  config().consider_drop = false;
+  planarConfig().min_block_point_num = 5;
+  planarConfig().consider_drop = false;
 
   // Point at z=2.0 exceeds max_relative_z (0.2)
   pcl::PointXYZI pt;
@@ -361,67 +391,65 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
   pt.y = 0;
   pt.z = 2.0F;
   pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
+  EXPECT_TRUE(obstacleCloud()->points.empty());
 }
 
 // consider_drop 开启时高度取绝对值，负高度也被接受
 TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0.3);  // ground at +0.3, point at z=0 → -0.3m
-  for (auto& e : state().planar_point_elev) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0.3);  // ground at +0.3, point at z=0 → -0.3m
+  for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  config().min_block_point_num = 5;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().consider_drop = true;
+  planarConfig().min_block_point_num = 5;
+  widenBand(-10.0, 10.0);
+  planarConfig().consider_drop = true;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
   pt.z = 0.0F;
   pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  EXPECT_EQ(state().terrain_cloud_elev->points.size(), 1U);
+  EXPECT_EQ(obstacleCloud()->points.size(), 1U);
   // height = abs(0 - 0.3) = 0.3 < 1.0 → accepted
 }
 
 // 地面带死区：距地面小于 min_obstacle_height 的点不作为障碍输出
 TEST_F(AlgorithmTest, ComputeHeightMap_BelowMinObstacleHeight_Filtered) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0);
-  for (auto& e : state().planar_point_elev) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0);
+  for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  config().min_block_point_num = 5;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().consider_drop = false;
-  config().min_obstacle_height = 0.04;
+  planarConfig().min_block_point_num = 5;
+  widenBand(-10.0, 10.0);
+  planarConfig().consider_drop = false;
+  planarConfig().min_obstacle_height = 0.04;
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
   pt.z = 0.02F;  // 距地面 0.02 < 0.04：落在死区内
   pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
+  EXPECT_TRUE(obstacleCloud()->points.empty());
 }
 
 // 车高与净空之间的点仍然是障碍（车过不去，不能漏检）
@@ -429,89 +457,88 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowMinObstacleHeight_Filtered) {
 // 一并丢掉；该截断已删除，ceiling_clearance 是唯一上界。
 TEST_F(AlgorithmTest,
        ComputeHeightMap_BetweenVehicleHeightAndCeiling_Obstacle) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0);
-  for (auto& e : state().planar_point_elev) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0);
+  for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  config().min_block_point_num = 5;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().consider_drop = false;
-  config().ceiling_clearance = 0.62;  // 车高 0.52 + 0.10
+  planarConfig().min_block_point_num = 5;
+  widenBand(-10.0, 10.0);
+  planarConfig().consider_drop = false;
+  planarConfig().ceiling_clearance = 0.62;  // 车高 0.52 + 0.10
 
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
   pt.z = 0.55F;  // 0.52 < 0.55 < 0.62：旧实现会丢弃，现在必须输出
   pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  ASSERT_EQ(state().terrain_cloud_elev->points.size(), 1U);
-  EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.55, 1e-5);
+  ASSERT_EQ(obstacleCloud()->points.size(), 1U);
+  EXPECT_NEAR(obstacleCloud()->points[0].intensity, 0.55, 1e-5);
 }
 
 // 高于净空的点同样参与地面估计：净空筛选已从本阶段移除（见下方断言注释）
 TEST_F(AlgorithmTest,
        EstimateTerrainGround_AboveCeilingClearance_StillParticipates) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud->clear();
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  terrainCloud()->clear();
   // 高于 ceiling_clearance 的点**现在也参与**地面估计——净空判据已从本
   // 阶段移除，只保留在 computeHeightMap（障碍输出）。
   // 理由：净空是"障碍能否通过"的判据，与"哪些点属于地面"无关；留在这里会按
   // 车高砍掉抬升的地面（坡面），并让候选数随车高漂移、经分位数放大成 elev
   // 偏差。 新暴露的风险：隧道天花板若未被 ingest 的高度过滤挡下，会抬高 elev
   // 使真实 地面点丢失——实车偏置下 ingest 上界(z≈0.27)已先挡掉，故暂不构成问题。
-  state().terrain_cloud->push_back({0.0F, 0.0F, 0.26F, 0.0F});
+  terrainCloud()->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
   size_t center = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
                                                PlanarVoxelGrid::HALF_WIDTH);
-  EXPECT_EQ(state().planar_point_elev[center].size(), 1U);
+  EXPECT_EQ(pointElev()[center].size(), 1U);
 }
 
 // 车顶下方/间隙内的点仍正常参与地面估计
 TEST_F(AlgorithmTest,
        EstimateTerrainGround_BelowCeilingClearance_Participates) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud->clear();
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  terrainCloud()->clear();
   // 点距地面 -0.1m（planar_voxel_elev 为 0）：在地板之上、低于
   // CEILING_CLEARANCE
-  state().terrain_cloud->push_back({0.0F, 0.0F, -0.1F, 0.0F});
+  terrainCloud()->push_back({0.0F, 0.0F, -0.1F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
   size_t center = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
                                                PlanarVoxelGrid::HALF_WIDTH);
-  EXPECT_EQ(state().planar_point_elev[center].size(), 1U);
+  EXPECT_EQ(pointElev()[center].size(), 1U);
 }
 
 // 车顶上方达到安全间隙的点（天花板/横梁）不作为障碍输出：顶隙足够，
 // 车辆可从下方通过
 TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0);  // 地面高度 0
-  for (auto& e : state().planar_point_elev) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0);  // 地面高度 0
+  for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};  // 满足 min_block_point_num
   }
-  config().min_block_point_num = 5;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().consider_drop = false;
-  config().ceiling_clearance = 0.2;  // 显式设定，不依赖默认值（随车高而异）
+  planarConfig().min_block_point_num = 5;
+  widenBand(-10.0, 10.0);
+  planarConfig().consider_drop = false;
+  planarConfig().ceiling_clearance =
+      0.2;  // 显式设定，不依赖默认值（随车高而异）
 
   // 天花板点：距地面 0.26m（planar_voxel_elev=0），高于 ceiling_clearance(0.2)
   pcl::PointXYZI pt;
@@ -519,28 +546,28 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   pt.y = 0;
   pt.z = 0.26F;
   pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  EXPECT_TRUE(state().terrain_cloud_elev->points.empty());
+  EXPECT_TRUE(obstacleCloud()->points.empty());
 }
 
 // 车顶上方安全间隙内的点仍然是障碍（低矮横梁/门楣不应漏检）
 TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0;
-  state().terrain_cloud_elev->clear();
-  state().planar_voxel_elev.fill(0);
-  for (auto& e : state().planar_point_elev) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0);
+  for (auto& e : pointElev()) {
     e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   }
-  config().min_block_point_num = 5;
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().consider_drop = false;
-  config().ceiling_clearance = 0.2;  // 显式设定，不依赖默认值（随车高而异）
+  planarConfig().min_block_point_num = 5;
+  widenBand(-10.0, 10.0);
+  planarConfig().consider_drop = false;
+  planarConfig().ceiling_clearance =
+      0.2;  // 显式设定，不依赖默认值（随车高而异）
 
   // 低矮障碍点：距地面 0.05m（planar_voxel_elev=0），低于
   // ceiling_clearance(0.2)
@@ -549,61 +576,60 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   pt.y = 0;
   pt.z = 0.05F;
   pt.intensity = 0;
-  state().terrain_cloud->clear();
-  state().terrain_cloud->push_back(pt);
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
 
   runStage(stage::Id::HEIGHT_MAP);
-  ASSERT_EQ(state().terrain_cloud_elev->points.size(), 1U);
+  ASSERT_EQ(obstacleCloud()->points.size(), 1U);
   // height_above_ground = 0.05 - 0 = 0.05，写入 intensity
-  EXPECT_NEAR(state().terrain_cloud_elev->points[0].intensity, 0.05F, 1e-6);
+  EXPECT_NEAR(obstacleCloud()->points[0].intensity, 0.05F, 1e-6);
 }
 
 // ── keepTerrainVoxelPoint boundary tests (via updateTerrainVoxels) ──
 
 // 略高于下限边界的点被保留
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
-  double z_margin = config().distance_ratio_z * 1.0;     // = 0.2
-  double boundary = config().min_relative_z - z_margin;  // = -1.7
-  int kept = updateSinglePoint(pipeline(), boundary + 0.01, 1.0);
+  double z_margin = voxelConfig().distance_ratio_z * 1.0;     // = 0.2
+  double boundary = voxelConfig().min_relative_z - z_margin;  // = -1.7
+  int kept = updateSinglePoint(boundary + 0.01, 1.0);
   EXPECT_EQ(kept, 1);
 }
 
 // 等于下限边界的点被排除
 TEST_F(AlgorithmTest, KeepVoxelPoint_AtLowerBoundary_Excluded) {
-  double z_margin = config().distance_ratio_z * 1.0;
-  double boundary = config().min_relative_z - z_margin;
-  int kept = updateSinglePoint(pipeline(), boundary, 1.0);
+  double z_margin = voxelConfig().distance_ratio_z * 1.0;
+  double boundary = voxelConfig().min_relative_z - z_margin;
+  int kept = updateSinglePoint(boundary, 1.0);
   EXPECT_EQ(kept, 0);
 }
 
 // 等于上限边界的点被排除
 TEST_F(AlgorithmTest, KeepVoxelPoint_AtUpperBoundary_Excluded) {
-  double z_margin = config().distance_ratio_z * 1.0;
-  double boundary = config().max_relative_z + z_margin;  // = 0.4
-  int kept = updateSinglePoint(pipeline(), boundary, 1.0);
+  double z_margin = voxelConfig().distance_ratio_z * 1.0;
+  double boundary = voxelConfig().max_relative_z + z_margin;  // = 0.4
+  int kept = updateSinglePoint(boundary, 1.0);
   EXPECT_EQ(kept, 0);
 }
 
 // 略低于上限边界的点被保留
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowUpperBoundary_Kept) {
-  double z_margin = config().distance_ratio_z * 1.0;
-  double boundary = config().max_relative_z + z_margin;
-  int kept = updateSinglePoint(pipeline(), boundary - 0.01, 1.0);
+  double z_margin = voxelConfig().distance_ratio_z * 1.0;
+  double boundary = voxelConfig().max_relative_z + z_margin;
+  int kept = updateSinglePoint(boundary - 0.01, 1.0);
   EXPECT_EQ(kept, 1);
 }
 
 // 点的时间戳过期且离雷达较远 → 被清除
 TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 1.0;
-  config().no_decay_distance = 0.0;
+  widenBand(-10.0, 10.0);
+  voxelConfig().decay_time = 1.0;
+  voxelConfig().no_decay_distance = 0.0;
 
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0.0;
-  state().laser_cloud_time = 10.0;
-  state().system_init_time = 0.0;
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0.0;
+  frameTime() = 10.0;
+  initTime() = 0.0;
 
   int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
                                                   TerrainVoxelGrid::HALF_WIDTH);
@@ -624,18 +650,17 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
 // 旧实现交给 PCL VoxelGrid 取质心、对 intensity 取平均，这个仍被观测到的表面
 // 会被平均时刻判成过期而删除。
 TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 0.5;
-  config().no_decay_distance = 0.0;
-  config().scan_voxel_size = 0.05;
-  config().scan_voxel_size_z = 0.05;
+  widenBand(-10.0, 10.0);
+  voxelConfig().decay_time = 0.5;
+  voxelConfig().no_decay_distance = 0.0;
+  voxelConfig().scan_voxel_size = 0.05;
+  voxelConfig().scan_voxel_size_z = 0.05;
 
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0.0;
-  state().laser_cloud_time = 1.2;  // 本帧
-  state().system_init_time = 0.0;
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0.0;
+  frameTime() = 1.2;  // 本帧
+  initTime() = 0.0;
 
   int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
                                                   TerrainVoxelGrid::HALF_WIDTH);
@@ -663,18 +688,17 @@ TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
 // 两个叶。若两者同叶，每叶只留最新观测点，地面点会把矮物体点顶掉（水平/垂直
 // 都取 0.1 m 时实测 6 cm 矮台阶输出归零）。
 TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 999.0;
-  config().no_decay_distance = 999.0;
-  config().scan_voxel_size = 0.1;     // 水平
-  config().scan_voxel_size_z = 0.05;  // 垂直
+  widenBand(-10.0, 10.0);
+  voxelConfig().decay_time = 999.0;
+  voxelConfig().no_decay_distance = 999.0;
+  voxelConfig().scan_voxel_size = 0.1;     // 水平
+  voxelConfig().scan_voxel_size_z = 0.05;  // 垂直
 
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0.0;
-  state().laser_cloud_time = 1.0;
-  state().system_init_time = 0.0;
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0.0;
+  frameTime() = 1.0;
+  initTime() = 0.0;
 
   int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
                                                   TerrainVoxelGrid::HALF_WIDTH);
@@ -701,18 +725,17 @@ TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
 
 // 叶内只有过期观测（本帧没有新点）→ 整叶按年龄删除
 TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 0.5;
-  config().no_decay_distance = 0.0;
-  config().scan_voxel_size = 0.05;
-  config().scan_voxel_size_z = 0.05;
+  widenBand(-10.0, 10.0);
+  voxelConfig().decay_time = 0.5;
+  voxelConfig().no_decay_distance = 0.0;
+  voxelConfig().scan_voxel_size = 0.05;
+  voxelConfig().scan_voxel_size_z = 0.05;
 
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0.0;
-  state().laser_cloud_time = 1.2;
-  state().system_init_time = 0.0;
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0.0;
+  frameTime() = 1.2;
+  initTime() = 0.0;
 
   int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
                                                   TerrainVoxelGrid::HALF_WIDTH);
@@ -734,18 +757,17 @@ TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
 // 同一格内、不同高度的两个叶互不影响：地面叶被刷新时，
 // 上方那一叶的旧点仍按自己的时刻过期。
 TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 0.5;
-  config().no_decay_distance = 0.0;
-  config().scan_voxel_size = 0.05;
-  config().scan_voxel_size_z = 0.05;
+  widenBand(-10.0, 10.0);
+  voxelConfig().decay_time = 0.5;
+  voxelConfig().no_decay_distance = 0.0;
+  voxelConfig().scan_voxel_size = 0.05;
+  voxelConfig().scan_voxel_size_z = 0.05;
 
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0.0;
-  state().laser_cloud_time = 1.2;
-  state().system_init_time = 0.0;
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0.0;
+  frameTime() = 1.2;
+  initTime() = 0.0;
 
   int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
                                                   TerrainVoxelGrid::HALF_WIDTH);
@@ -772,16 +794,15 @@ TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
 
 // 近点即使过期也保留（near 优先于 decay）
 TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
-  config().min_relative_z = -10.0;
-  config().max_relative_z = 10.0;
-  config().decay_time = 1.0;
-  config().no_decay_distance = 3.0;
+  widenBand(-10.0, 10.0);
+  voxelConfig().decay_time = 1.0;
+  voxelConfig().no_decay_distance = 3.0;
 
-  state().lidar.x = 0;
-  state().lidar.y = 0;
-  state().lidar.z = 0.0;
-  state().laser_cloud_time = 10.0;
-  state().system_init_time = 0.0;
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0.0;
+  frameTime() = 10.0;
+  initTime() = 0.0;
 
   int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
                                                   TerrainVoxelGrid::HALF_WIDTH);

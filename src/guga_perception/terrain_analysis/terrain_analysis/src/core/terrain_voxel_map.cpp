@@ -1,8 +1,6 @@
-// 体素地图（跨帧持久）的维护：滚动、归格、按叶保留最新观测。
+// 管线前半段：本帧输入的接收与裁剪 + 体素地图（跨帧持久）的维护。
 //
-// 从 TerrainPipeline 提取为类，使"网格 + 窗口偏移"成为一份可单独构造、单独
-// 驱动的状态：所有输入（雷达位置、当前时刻、配置）由调用方显式传入，不读任何
-// 全局状态。
+// 本类不读任何全局状态：帧输入由 ingest() 写入，配置由调用方在启动时填入。
 
 #include "terrain_analysis/core/terrain_voxel_map.hpp"
 
@@ -21,6 +19,39 @@ namespace terrain_analysis {
     return cells;
   }
 
+  void TerrainVoxelMap::ingest(const Cell& cloud,
+                               const guga_common::Point3d& lidar_position,
+                               double timestamp_sec) {
+    lidar_ = lidar_position;
+    time_ = timestamp_sec;
+    if (!inited_) {
+      init_time_ = time_;
+      inited_ = true;
+    }
+
+    const double elapsed = elapsedSeconds();
+    const double max_range = config_.terrain_voxel_size
+                             * (TerrainVoxelGrid::HALF_WIDTH + 1);
+    frame_cloud_->clear();
+    for (const auto& point : cloud.points) {
+      const double relative_z = point.z - lidar_.z;
+      const double distance = horizontalDistance(point.x, point.y, lidar_.x,
+                                                 lidar_.y);
+      const double z_margin = config_.distance_ratio_z * distance;
+      if (relative_z > config_.min_relative_z - z_margin
+          && relative_z < config_.max_relative_z + z_margin
+          && distance < max_range) {
+        pcl::PointXYZI cropped = point;
+        // intensity 借用来携带该点的观测时刻（相对首帧的秒数），rebuild 判年龄
+        // 时读它；原始反射强度在下游没有被使用。
+        cropped.intensity = static_cast<float>(elapsed);
+        frame_cloud_->push_back(cropped);
+      }
+    }
+
+    frame_pending_ = true;
+  }
+
   uint64_t TerrainVoxelMap::leafKey(double x, double y, double z,
                                     double leaf_xy, double leaf_z) {
     // O(n) 融合所需的叶键：坐标除以叶宽取整后按 21 bit 打包。
@@ -37,7 +68,7 @@ namespace terrain_analysis {
 
   bool TerrainVoxelMap::keepPoint(double relative_z, double distance,
                                   double point_time,
-                                  const TerrainConfig& config,
+                                  const TerrainVoxelConfig& config,
                                   double now_elapsed) {
     const double z_margin = config.distance_ratio_z * distance;
     if (relative_z <= config.min_relative_z - z_margin) {
@@ -51,13 +82,11 @@ namespace terrain_analysis {
     return !(decayed && !near);
   }
 
-  void TerrainVoxelMap::update(const Cell& crop,
-                               const guga_common::Point3d& lidar,
-                               double now_elapsed,
-                               const TerrainConfig& config) {
-    rollover(lidar, config.terrain_voxel_size);
-    addFrame(crop, lidar, config.terrain_voxel_size);
-    rebuild(config, lidar, now_elapsed);
+  void TerrainVoxelMap::update() {
+    frame_pending_ = false;
+    rollover(lidar_);
+    addFrame(*frame_cloud_, lidar_);
+    rebuild(lidar_, elapsedSeconds());
   }
 
   void TerrainVoxelMap::collectCloud(Cell& out) const {
@@ -72,8 +101,8 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainVoxelMap::rollover(const guga_common::Point3d& lidar,
-                                 double voxel_size) {
+  void TerrainVoxelMap::rollover(const guga_common::Point3d& lidar) {
+    const double voxel_size = config_.terrain_voxel_size;
     double center_x = voxel_size * shift_x_;
     double center_y = voxel_size * shift_y_;
 
@@ -96,8 +125,8 @@ namespace terrain_analysis {
   }
 
   void TerrainVoxelMap::addFrame(const Cell& crop,
-                                 const guga_common::Point3d& lidar,
-                                 double voxel_size) {
+                                 const guga_common::Point3d& lidar) {
+    const double voxel_size = config_.terrain_voxel_size;
     for (const auto& point : crop.points) {
       const GridIndex index = gridIndex(point.x, point.y, lidar.x, lidar.y,
                                         voxel_size, TerrainVoxelGrid::WIDTH);
@@ -109,9 +138,9 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainVoxelMap::rebuild(const TerrainConfig& config,
-                                const guga_common::Point3d& lidar,
+  void TerrainVoxelMap::rebuild(const guga_common::Point3d& lidar,
                                 double now_elapsed) {
+    const TerrainVoxelConfig& config = config_;
     // 每个格子每帧重建一次，逐叶只保留"观测时刻最新"的那一个点。
     //
     // 时刻取最新而不是平均：叶内混有新老点时，平均会把仍在被观测的表面判成

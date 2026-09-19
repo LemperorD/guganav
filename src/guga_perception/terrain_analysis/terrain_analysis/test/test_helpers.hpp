@@ -1,8 +1,5 @@
 #pragma once
 
-#include "terrain_analysis/core/config.hpp"
-#include "terrain_analysis/core/state.hpp"
-
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 

@@ -8,7 +8,6 @@
 // 最新的一个点，矮台阶可能被地面点顶掉。
 
 #include "terrain_analysis/terrain_analysis_node.hpp"
-#include "terrain_analysis/core/terrain_voxel_map.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -98,6 +97,7 @@ int main(int argc, char** argv) {
   const int ghost_frame = argc > 4 ? std::atoi(argv[4]) : -1;
 
   auto options = rclcpp::NodeOptions();
+  // 参数经节点分发到两半各自的配置：前半段拿叶尺寸与衰减，后半段拿地面估计。
   options.parameter_overrides({rclcpp::Parameter("scanVoxelSize", leaf_xy),
                                rclcpp::Parameter("scanVoxelSizeZ", leaf_z),
                                rclcpp::Parameter("decayTime", 0.5),
@@ -107,8 +107,9 @@ int main(int argc, char** argv) {
                                rclcpp::Parameter("minObstacleHeight", 0.04),
                                rclcpp::Parameter("ceilingClearance", 0.62)});
   auto node = std::make_unique<TerrainAnalysis>(options);
-  auto& pipeline = node->pipeline();
-  terrain_analysis::TerrainVoxelMap voxel_map;
+  auto& voxel_map = node->voxelMap();
+  auto& planar_map = node->planarMap();
+  const guga_common::Point3d lidar_position{0.0, 0.0, 0.0};
   const bool ghost_mode = ghost_frame >= 0;
   const auto frame = makeFrame(ghost_mode);  // 幽灵场景下含 4.2 m 方块
   const auto frame_no_ghost = makeFrame(false);  // 方块消失后的帧
@@ -119,18 +120,17 @@ int main(int argc, char** argv) {
   for (int i = 0; i < frames; i++) {
     const double t = i * 0.1;  // 10 Hz
     const bool ghost_present = ghost_frame < 0 || i < ghost_frame;
-    pipeline.ingestOdometry(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    pipeline.ingestLaserCloud(ghost_present ? frame : frame_no_ghost, t);
+    // 与生产路径一致：前半段收帧并维护体素地图，采集结果交给后半段。
+    voxel_map.ingest(ghost_present ? *frame : *frame_no_ghost, lidar_position,
+                     t);
 
     const auto t0 = std::chrono::steady_clock::now();
-    // 与生产路径一致：先把本帧数据分发给体素地图，再跑逐帧阶段。
-    voxel_map.update(pipeline.croppedCloud(), pipeline.lidarPosition(),
-                     pipeline.elapsedSeconds(), pipeline.config());
-    voxel_map.collectCloud(pipeline.collectedCloud());
-    pipeline.runStages();
+    voxel_map.update();
+    voxel_map.collectCloud(node->collectedCloud());
+    planar_map.compute(node->collectedCloud(), voxel_map.lidarPosition());
     const auto t1 = std::chrono::steady_clock::now();
     if (ghost_frame >= 0 && i >= ghost_frame && ghost_clear_frame < 0
-        && countNear(pipeline.terrainCloudElev(), 4.2, 0.0, 0.3) == 0) {
+        && countNear(planar_map.obstacleCloud(), 4.2, 0.0, 0.3) == 0) {
       ghost_clear_frame = i;  // 幽灵点从输出中消失的帧号
     }
     if (i >= 100) {  // 跳过预热
@@ -139,10 +139,10 @@ int main(int argc, char** argv) {
     }
   }
 
-  const auto& out = pipeline.terrainCloudElev();
+  const auto& out = planar_map.obstacleCloud();
   std::printf(
       "leaf_xy=%.3f leaf_z=%.3f  frames=%d\n"
-      "  单帧 run()      : %.3f ms（稳态 %d 帧均值）\n"
+      "  单帧 update+输出: %.3f ms（稳态 %d 帧均值，不含收帧裁剪）\n"
       "  输出点数        : %zu\n"
       "  矮台阶(2m,6cm)  : %zu 点\n"
       "  箱子(3m,0.1-0.5): %zu 点\n",

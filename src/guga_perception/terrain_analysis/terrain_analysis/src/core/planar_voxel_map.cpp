@@ -1,15 +1,10 @@
-// Copyright 2024 Hongbiao Zhu
+// 管线后半段：地面高程的收集与估计、障碍输出。
 //
-// Original work based on sensor_scan_generation package by Hongbiao Zhu.
-//
-// 本文件实现 TerrainPipeline：自持 TerrainConfig/TerrainState，对外仅暴露
-// ingest* / run / terrainCloudElev；管线各阶段为私有成员，可自由重构。
+// 输入只有两样——采集点云与雷达位置——都由调用方逐帧传入，本类不保留帧间状态。
 
-#include "terrain_analysis/core/terrain_pipeline.hpp"
-#include "terrain_analysis/core/config.hpp"
+#include "terrain_analysis/core/planar_voxel_map.hpp"
+
 #include "terrain_analysis/core/grid_lookup.hpp"
-#include "terrain_analysis/core/state.hpp"
-#include "terrain_analysis/core/terrain_voxel_map.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,71 +12,23 @@
 
 namespace terrain_analysis {
 
-  void TerrainPipeline::ingestOdometry(double x, double y, double z,
-                                       double roll, double pitch, double yaw) {
-    state_.lidar.x = x;
-    state_.lidar.y = y;
-    state_.lidar.z = z;
-
-    state_.sin_lidar_roll = sin(roll);
-    state_.cos_lidar_roll = cos(roll);
-    state_.sin_lidar_pitch = sin(pitch);
-    state_.cos_lidar_pitch = cos(pitch);
-    state_.sin_lidar_yaw = sin(yaw);
-    state_.cos_lidar_yaw = cos(yaw);
-  }
-
-  void TerrainPipeline::ingestLaserCloud(
-      const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud,
-      double timestamp_sec) {
-    state_.laser_cloud_time = timestamp_sec;
-    if (!state_.system_inited) {
-      state_.system_init_time = state_.laser_cloud_time;
-      state_.system_inited = true;
-    }
-
-    const double lidar_z = state_.lidar.z;
-    const double max_range = config_.terrain_voxel_size
-                             * (TerrainVoxelGrid::HALF_WIDTH + 1);
-    state_.laser_cloud_crop->clear();
-    for (const auto& point : cloud->points) {
-      double relative_z = point.z - lidar_z;
-      double distance = horizontalDistanceTo(point.x, point.y);
-      const double z_margin = config_.distance_ratio_z * distance;
-      if (relative_z > config_.min_relative_z - z_margin
-          && relative_z < config_.max_relative_z + z_margin
-          && distance < max_range) {
-        pcl::PointXYZI cropped = point;
-        cropped.intensity = static_cast<float>(state_.laser_cloud_time
-                                               - state_.system_init_time);
-        state_.laser_cloud_crop->push_back(cropped);
-      }
-    }
-
-    state_.new_laser_cloud = true;
-  }
-
-  void TerrainPipeline::runStages() {
-    state_.new_laser_cloud = false;
-
-    // 分组与数据流向：
-    //   C 平面高程   F3,F4 <- F2(已采集)
-    //   E 输出       F6    <- F2,F3,F4
-    // A 组（体素地图维护）与 B 组（采集）由调用方先做，不在这里。
-    // 组间必需依赖：B->{C,E}、C->E。各数组的清空由属主负责（见各阶段开头）。
-    estimateTerrainGround();
+  void PlanarVoxelMap::compute(const Cell& terrain_cloud,
+                               const guga_common::Point3d& lidar_position) {
+    // 依赖是串联的：候选 → 逐格高程 → 输出。顺序不可换。
+    estimateTerrainGround(terrain_cloud, lidar_position);
     computePlanarElevation();
-    computeHeightMap();
+    computeHeightMap(terrain_cloud, lidar_position);
   }
 
-  void TerrainPipeline::estimateTerrainGround() {
-    // 只清本阶段拥有的地面候选 F3；F4 由 computePlanarElevation 清，
-    // F5 由 detectDynamicObstacles 清——每份数据只有一个属主。
-    for (auto& point_elevations : state_.planar_point_elev) {
+  void PlanarVoxelMap::estimateTerrainGround(
+      const Cell& terrain_cloud, const guga_common::Point3d& lidar_position) {
+    // 本阶段拥有候选集；逐格高程由 computePlanarElevation
+    // 清，两份数据各有属主。
+    for (auto& point_elevations : point_elev_) {
       point_elevations.clear();
     }
 
-    for (const auto& point : state_.terrain_cloud->points) {
+    for (const auto& point : terrain_cloud.points) {
       // 唯一的候选筛选是下界，且用**绝对 z**（odom）：地面在 odom 中大体水平，
       // 地板过滤只需挡住远低于地面的穿透点，用绝对量比"相对雷达"更贴合语义，
       // 也不随雷达上下抖动而移动。
@@ -94,7 +41,7 @@ namespace terrain_analysis {
       // 漂移、经分位数放大成 elev 偏差。地面候选的上界改由地面自身决定——
       // 高于地面的部分本就是障碍，会由 computeHeightMap 按净空处理。
       const GridIndex grid_index = gridIndex(
-          point.x, point.y, state_.lidar.x, state_.lidar.y,
+          point.x, point.y, lidar_position.x, lidar_position.y,
           config_.planar_voxel_size, PlanarVoxelGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
@@ -104,9 +51,9 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainPipeline::computePlanarElevation() {
-    // 本阶段拥有 F4：没有候选的格保持 0（见 computeHeightMap 的说明）。
-    state_.planar_voxel_elev.fill(0);
+  void PlanarVoxelMap::computePlanarElevation() {
+    // 本阶段拥有逐格高程：没有候选的格保持 0（见 computeHeightMap 的说明）。
+    voxel_elev_.fill(0);
 
     if (config_.use_sorting) {
       for (int i = 0; i < PlanarVoxelGrid::NUM; i++) {
@@ -119,14 +66,15 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainPipeline::computeHeightMap() {
-    const double lidar_z = state_.lidar.z;
-    auto& elevations = state_.terrain_cloud_elev;
+  void PlanarVoxelMap::computeHeightMap(
+      const Cell& terrain_cloud, const guga_common::Point3d& lidar_position) {
+    const double lidar_z = lidar_position.z;
+    auto& elevations = obstacle_cloud_;
     elevations->clear();
 
-    for (const auto& point : state_.terrain_cloud->points) {
+    for (const auto& point : terrain_cloud.points) {
       const GridIndex grid_index = gridIndex(
-          point.x, point.y, state_.lidar.x, state_.lidar.y,
+          point.x, point.y, lidar_position.x, lidar_position.y,
           config_.planar_voxel_size, PlanarVoxelGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
@@ -134,7 +82,7 @@ namespace terrain_analysis {
       const size_t cell = PlanarVoxelGrid::linearIndex(grid_index.row,
                                                        grid_index.col);
       // 该点所在处的地面高度（本帧估计值），下面所有高度判据都以它为基准。
-      const double ground_z = state_.planar_voxel_elev[cell];
+      const double ground_z = voxel_elev_[cell];
       const double height_above_ground = point.z - ground_z;
 
       // 下界：地板过滤（挡掉地面以下/穿透点）。此处用**相对雷达**的高度，
@@ -155,7 +103,7 @@ namespace terrain_analysis {
         height = std::abs(height);
       }
 
-      auto point_count = state_.planar_point_elev[cell].size();
+      auto point_count = point_elev_[cell].size();
       // 下界：地面带的死区，吸收地面高度估计的误差。估计值偏低时，真实地面点会
       // 算出几厘米的正高度；若从 0 起算，它们会被当作低矮障碍标记出去。
       if (height >= config_.min_obstacle_height
@@ -166,13 +114,7 @@ namespace terrain_analysis {
     }
   }
 
-  double TerrainPipeline::horizontalDistanceTo(double px, double py) const {
-    return horizontalDistance(px, py, state_.lidar.x, state_.lidar.y);
-  }
-
-  // point_time 为该点的观测时刻（相对首帧的秒数）。对同一叶的代表点而言，
-  // 它是叶内最新的观测时刻，见 updateTerrainVoxels。
-  void TerrainPipeline::addToPlanarNeighborhood3x3(int row, int col, double z) {
+  void PlanarVoxelMap::addToPlanarNeighborhood3x3(int row, int col, double z) {
     constexpr int width = PlanarVoxelGrid::WIDTH;
 
     for (int delta_row = -1; delta_row <= 1; delta_row++) {
@@ -188,13 +130,13 @@ namespace terrain_analysis {
         // 行偏移按整行换算（乘网格宽度），列偏移直接相加
         const size_t index = PlanarVoxelGrid::linearIndex(neighbor_row,
                                                           neighbor_col);
-        state_.planar_point_elev[index].push_back(z);
+        point_elev_[index].push_back(z);
       }
     }
   }
 
-  void TerrainPipeline::elevateByQuantile(int cell) {
-    auto& elevations = state_.planar_point_elev[cell];
+  void PlanarVoxelMap::elevateByQuantile(int cell) {
+    auto& elevations = point_elev_[cell];
     int point_count = static_cast<int>(elevations.size());
     if (point_count == 0) {
       return;
@@ -207,19 +149,17 @@ namespace terrain_analysis {
     }
     double minimum_z = elevations[0];
     double quantile_z = elevations[quantile_index];
-    state_.planar_voxel_elev[cell] =
-        config_.limit_ground_lift
-            ? std::min(quantile_z, minimum_z + config_.max_ground_lift)
-            : quantile_z;
+    voxel_elev_[cell] = config_.limit_ground_lift ? std::min(
+                            quantile_z, minimum_z + config_.max_ground_lift)
+                                                  : quantile_z;
   }
 
-  void TerrainPipeline::elevateByMinimum(int cell) {
-    auto& elevations = state_.planar_point_elev[cell];
+  void PlanarVoxelMap::elevateByMinimum(int cell) {
+    auto& elevations = point_elev_[cell];
     if (elevations.empty()) {
       return;
     }
-    state_.planar_voxel_elev[cell] = *std::min_element(elevations.begin(),
-                                                       elevations.end());
+    voxel_elev_[cell] = *std::min_element(elevations.begin(), elevations.end());
   }
 
 }  // namespace terrain_analysis

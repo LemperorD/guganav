@@ -1,7 +1,8 @@
 #pragma once
 
-#include "terrain_analysis/core/terrain_pipeline.hpp"
+#include "terrain_analysis/core/planar_voxel_map.hpp"
 #include "terrain_analysis/core/terrain_voxel_map.hpp"
+#include "guga_common/geometry.hpp"
 
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/node.hpp>
@@ -9,13 +10,15 @@
 #include <rclcpp/timer.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
+#include <memory>
+
 namespace terrain_analysis {
   /**
    * @brief terrain_analysis ROS2 节点封装。
    *
-   * 只负责 ROS 层的接线：声明参数、订阅 odom/点云、按固定周期驱动
-   * TerrainPipeline 并把结果发布为 terrain_map。算法状态都在 TerrainPipeline
-   * 内。
+   * 只负责 ROS 层的接线与**逐帧数据分发**：声明参数、订阅里程计与点云、把接收
+   * 与累积交给前半段 TerrainVoxelMap、把采集结果交给后半段 PlanarVoxelMap、
+   * 发布 terrain_map。两半各自的算法状态都在它们自己内部。
    */
   class TerrainAnalysis : public rclcpp::Node {
   public:
@@ -30,40 +33,44 @@ namespace terrain_analysis {
     TerrainAnalysis& operator=(TerrainAnalysis&&) = delete;
 
     /**
-     * @brief 驱动一次处理：若有无新点云则跑管线并发布。
+     * @brief 驱动一次处理：若有无新点云则跑两半管线并发布。
      * @return ROS 上下文仍运行时返回 true，否则返回 false。
      */
     bool processOnce();
 
-    /** @brief 获取最近一次生成的带高度点云。 */
-    [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& terrainCloudElev()
-        const {
-      return pipeline_.terrainCloudElev();
+    /** @brief 获取最近一次生成的障碍点云。 */
+    [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& obstacleCloud() const {
+      return planar_map_.obstacleCloud();
     }
-    /** @brief 获取可修改的算法配置，主要用于测试和节点初始化。 */
-    [[nodiscard]] TerrainConfig& config() noexcept {
-      return pipeline_.config();
-    }
-    /** @brief 获取逐帧管线，供白盒测试驱动。 */
-    [[nodiscard]] TerrainPipeline& pipeline() noexcept {
-      return pipeline_;
-    }
-    /** @brief 获取只读的逐帧管线。 */
-    [[nodiscard]] const TerrainPipeline& pipeline() const noexcept {
-      return pipeline_;
-    }
-    /** @brief 跨帧持久的体素地图；由节点持有并逐帧分发给管线。 */
+    /** @brief 前半段（本帧输入与跨帧体素地图）。 */
     [[nodiscard]] TerrainVoxelMap& voxelMap() noexcept {
       return voxel_map_;
+    }
+    /** @brief 后半段（地面高程与障碍输出）。 */
+    [[nodiscard]] PlanarVoxelMap& planarMap() noexcept {
+      return planar_map_;
+    }
+    /** @brief 两半之间的交接数据（采集点云）。 */
+    [[nodiscard]] pcl::PointCloud<pcl::PointXYZI>& collectedCloud() noexcept {
+      return *collected_cloud_;
     }
 
   private:
     /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
 
-    /** @brief 跨帧持久的体素地图：节点是它的属主，管线按帧接收。 */
+    /** @brief 前半段：接收本帧输入并维护跨帧体素地图。 */
     TerrainVoxelMap voxel_map_;
-    TerrainPipeline pipeline_;
+    /** @brief 后半段：由采集点云估计地面并生成障碍输出。 */
+    PlanarVoxelMap planar_map_;
+    /** @brief 两半之间的交接数据（采集点云）。 */
+    pcl::PointCloud<pcl::PointXYZI>::Ptr collected_cloud_ =
+        std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+
+    /** @brief 最近一帧的雷达位置（里程计回调写入，再分发给两半）。 */
+    guga_common::Point3d lidar_position_;
+    /** @brief 最近一帧的时间戳，单位为秒（用于给输出打时间戳）。 */
+    double last_stamp_ = 0.0;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr

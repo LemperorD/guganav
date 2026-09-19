@@ -82,7 +82,7 @@ tf_odom_to_lidar = tf(base_footprint→lidar) * tf(Point-LIO 位姿)
 无偏置补偿**：
 
 ```cpp
-processor_.ingestOdometry(msg->pose.pose.position.x,   // → state_.lidar_x
+voxelMap().ingest(...)                                  // 位置随帧传入（原 state_.lidar_x）
                           msg->pose.pose.position.y,   // → state_.lidar_y
                           msg->pose.pose.position.z,   // → state_.lidar_z
                           roll, pitch, yaw);           // 由四元数 getRPY 解出
@@ -129,7 +129,7 @@ lidar_z ≈ +0.230      // 平地：雷达在 odom 下的高度，即 base_footp
 地面 z ≈ 0              // odom 与 base_footprint 重合
 ```
 
-`minRelZ = −1.5` 与 `maxRelZ` 锚在**雷达高度**上（`ingestLaserCloud` 的裁剪带与
+`minRelZ = −1.5` 与 `maxRelZ` 锚在**雷达高度**上（前半段 `ingest` 的裁剪带与
 `computeHeightMap` 的下界），因此它们相对地面的作用面分别约为"地面以下 1.27 m"与
 "地面以上 0.73 m"，安装高度一改就要重算。净空判据（`ceilingClearance`）不同，它作用在
 `height_above_ground` 上，锚的是**局部地面**，不随安装高度变化。
@@ -144,7 +144,7 @@ lidar_z ≈ +0.230      // 平地：雷达在 odom 下的高度，即 base_footp
    会整体差 39.5 mm；那三个数 x=0.225 / z=0.107 也应是在 chassis 系下量到 O 的）；
 3. 底盘基准面到雷达**底面**的实测距离 → 自检：应约等于 `0.230 − 0.0395 ≈ 0.190 m`。
 
-**为何"近处"最明显**：`ingestLaserCloud` 的裁剪带是
+**为何"近处"最明显**：前半段 `ingest` 的裁剪带是
 `min/max_relative_z ± disRatioZ × distance`，**带宽随距离放宽**；而净空是
 **常数 0.1 m、不放宽**。于是
 
@@ -209,7 +209,7 @@ lidar_z ≈ +0.230      // 平地：雷达在 odom 下的高度，即 base_footp
 - **Terrain voxel 网格 21×21 是否必要（待定，已测量）**：不能只看"外圈 320 格从未被
   `collectTerrainCloud` 读取"就断定是空转。外圈实为**车辆前方的地形预存区**：
   `voxelizeTerrain` 按车辆当前位置归格、`rolloverTerrainVoxels` 随车滚动，车前进时
-  外圈点会被滚进 ±5 m 窗口参与地面估计。且 `ingestLaserCloud` 的接收半径绑定网格宽度
+  外圈点会被滚进 ±5 m 窗口参与地面估计。且 `ingest` 的接收半径绑定网格宽度
   （`terrain_voxel_size * (HALF_WIDTH + 1)`），缩网格会连带把接收范围从 ±11 m 降到 ±6 m。
   已测量（21×21 → 11×11，静止/移动差分）：
   - `updateTerrainVoxels` 单次 0.376 ms → 0.220 ms（**省 41.5%，即 0.156 ms/帧**）
