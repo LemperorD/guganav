@@ -54,50 +54,11 @@ namespace terrain_analysis {
     frame_pending_ = true;
   }
 
-  uint64_t PersistentVoxelMap::leafKey(double x, double y, double z,
-                                       double leaf_xy, double leaf_z) {
-    // O(n) 融合所需的叶键：坐标除以叶宽取整后按 21 bit 打包。
-    // 偏置 10^6 使 odom 负坐标也能装下，覆盖约 ±54 km 的运行范围。
-    constexpr int kBits = 21;
-    constexpr int64_t kBias = 1000000;
-    const auto index = [](double value, double leaf) {
-      return static_cast<uint64_t>(
-          static_cast<int64_t>(std::floor(value / leaf)) + kBias);
-    };
-    return (index(x, leaf_xy) << (2 * kBits)) | (index(y, leaf_xy) << kBits)
-           | index(z, leaf_z);
-  }
-
-  bool PersistentVoxelMap::insideReceiveBand(
-      double z_rel_lidar, double distance,
-      const PersistentVoxelConfig& config) {
-    const double z_margin = config.distance_ratio_z * distance;
-    return z_rel_lidar > config.min_relative_z - z_margin
-           && z_rel_lidar < config.max_relative_z + z_margin;
-  }
-
-  bool PersistentVoxelMap::keepPoint(double z_rel_lidar, double distance,
-                                     double point_time,
-                                     const PersistentVoxelConfig& config,
-                                     double now_elapsed) {
-    if (!insideReceiveBand(z_rel_lidar, distance, config)) {
-      return false;
-    }
-    const bool near = distance < config.no_decay_distance;
-    const bool decayed = (now_elapsed - point_time) >= config.decay_time;
-    return !(decayed && !near);
-  }
-
   void PersistentVoxelMap::update() {
     frame_pending_ = false;
     rollover();
     addFrame();
-    rebuild();
-  }
-
-  void PersistentVoxelMap::collectCloud(Cell& out) const {
-    // 拼接本身是"格 → 点云"的通用换算，见 grid_utils.hpp；这里只决定窗口多大。
-    collectWindow<PersistentVoxelGrid>(cloud_, EXTRACT_HALF_WINDOW, out);
+    rebuildGrids();
   }
 
   void PersistentVoxelMap::rollover() {
@@ -124,6 +85,30 @@ namespace terrain_analysis {
     }
   }
 
+  void PersistentVoxelMap::shift(ShiftAxis axis, ShiftDirection positive) {
+    static constexpr int WIDTH = PersistentVoxelGrid::WIDTH;
+    const bool toward_positive = positive == ShiftDirection::POSITIVE;
+    const int src = toward_positive ? 0 : WIDTH - 1;
+    const int dst = toward_positive ? WIDTH - 1 : 0;
+    const int step = toward_positive ? 1 : -1;
+
+    // 沿 x 搬运变化的是列下标，沿 y 搬运变化的是行下标。
+    const bool along_x = axis == ShiftAxis::X;
+    for (int fixed = 0; fixed < WIDTH; fixed++) {
+      const auto cell = [&](int m) {
+        return along_x ? PersistentVoxelGrid::linearIndex(fixed, m)
+                       : PersistentVoxelGrid::linearIndex(m, fixed);
+      };
+      auto ptr = cloud_[cell(src)];
+      for (int m = src; m != dst; m += step) {
+        cloud_[cell(m)] = cloud_[cell(m + step)];
+      }
+      auto& dst_cell = cloud_[cell(dst)];
+      dst_cell = ptr;
+      dst_cell->clear();
+    }
+  }
+
   void PersistentVoxelMap::addFrame() {
     const Cell& crop = *frame_cloud_;
     const guga_common::Point3d& lidar = lidar_;
@@ -140,7 +125,7 @@ namespace terrain_analysis {
     }
   }
 
-  void PersistentVoxelMap::rebuild() {
+  void PersistentVoxelMap::rebuildGrids() {
     const guga_common::Point3d& lidar = lidar_;
     const double now_elapsed = elapsedSeconds();
     // 每个格子每帧重建一次，逐叶只保留"观测时刻最新"的那一个点。
@@ -161,9 +146,7 @@ namespace terrain_analysis {
       leaf_slot.clear();
 
       for (const auto& point : cell.points) {
-        const uint64_t key = leafKey(point.x, point.y, point.z,
-                                     config_.scan_voxel_size,
-                                     config_.scan_voxel_size_z);
+        const uint64_t key = leafKey(point.x, point.y, point.z);
         const auto it = leaf_slot.find(key);
         if (it == leaf_slot.end()) {
           leaf_slot.emplace(key, representatives.size());
@@ -177,8 +160,7 @@ namespace terrain_analysis {
       for (const auto& point : representatives.points) {
         const double distance = horizontalDistance(point.x, point.y, lidar.x,
                                                    lidar.y);
-        const double z_rel_lidar = point.z - lidar.z;  // 保留判据用雷达系
-        if (keepPoint(z_rel_lidar, distance, point.intensity, config_,
+        if (keepPoint(point.z - lidar.z, distance, point.intensity, config_,
                       now_elapsed)) {
           cell.push_back(point);
         }
@@ -186,29 +168,42 @@ namespace terrain_analysis {
     }
   }
 
-  void PersistentVoxelMap::shift(ShiftAxis axis, ShiftDirection positive) {
-    static constexpr int WIDTH = PersistentVoxelGrid::WIDTH;
-    const bool toward_positive = positive == ShiftDirection::POSITIVE;
-    const int src = toward_positive ? 0 : WIDTH - 1;
-    const int dst = toward_positive ? WIDTH - 1 : 0;
-    const int step = toward_positive ? 1 : -1;
+  uint64_t PersistentVoxelMap::leafKey(double x, double y, double z) {
+    auto leaf_xy = config_.scan_voxel_size;
+    auto leaf_z = config_.scan_voxel_size_z;
+    // O(n) 融合所需的叶键：坐标除以叶宽取整后按 21 bit 打包。
+    // 偏置 10^6 使 odom 负坐标也能装下，覆盖约 ±54 km 的运行范围。
+    constexpr int kBits = 21;
+    constexpr int64_t kBias = 1000000;
+    const auto index = [](double value, double leaf) {
+      return static_cast<uint64_t>(
+          static_cast<int64_t>(std::floor(value / leaf)) + kBias);
+    };
+    return (index(x, leaf_xy) << (2 * kBits)) | (index(y, leaf_xy) << kBits)
+           | index(z, leaf_z);
+  }
 
-    // 轴约定（写反过一次，故写在这里）：gridIndex 把 x 映射到 col、y 映射到
-    // row， 所以沿 x 搬运变化的是列下标，沿 y 搬运变化的才是行下标。
-    const bool along_x = axis == ShiftAxis::X;
-    for (int fixed = 0; fixed < WIDTH; fixed++) {
-      const auto cell = [&](int m) {
-        return along_x ? PersistentVoxelGrid::linearIndex(fixed, m)
-                       : PersistentVoxelGrid::linearIndex(m, fixed);
-      };
-      auto ptr = cloud_[cell(src)];
-      for (int m = src; m != dst; m += step) {
-        cloud_[cell(m)] = cloud_[cell(m + step)];
-      }
-      auto& dst_cell = cloud_[cell(dst)];
-      dst_cell = ptr;
-      dst_cell->clear();
+  bool PersistentVoxelMap::keepPoint(double z_rel_lidar, double distance,
+                                     double point_time,
+                                     const PersistentVoxelConfig& config,
+                                     double now_elapsed) {
+    if (!insideReceiveBand(z_rel_lidar, distance, config)) {
+      return false;
     }
+    return (now_elapsed - point_time) < config.decay_time;
+  }
+
+  bool PersistentVoxelMap::insideReceiveBand(
+      double z_rel_lidar, double distance,
+      const PersistentVoxelConfig& config) {
+    const double z_margin = config.distance_ratio_z * distance;
+    return z_rel_lidar > config.min_relative_z - z_margin
+           && z_rel_lidar < config.max_relative_z + z_margin;
+  }
+
+  void PersistentVoxelMap::collectCloud(Cell& out) const {
+    // 拼接本身是"格 → 点云"的通用换算，见 grid_utils.hpp；这里只决定窗口多大。
+    collectWindow<PersistentVoxelGrid>(cloud_, EXTRACT_HALF_WINDOW, out);
   }
 
 }  // namespace terrain_analysis

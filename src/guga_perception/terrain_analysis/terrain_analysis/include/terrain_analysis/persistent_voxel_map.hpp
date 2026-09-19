@@ -124,7 +124,7 @@ namespace terrain_analysis {
      * 的时刻就是该叶的 last_seen。
      */
     /** @brief 第三步，年龄按 elapsedSeconds() 判定。 */
-    void rebuild();
+    void rebuildGrids();
 
     /** @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。 */
     [[nodiscard]] const Cell& frameCloud() const noexcept {
@@ -171,7 +171,10 @@ namespace terrain_analysis {
         const PersistentVoxelConfig& config);
 
     /**
-     * @brief 该点是否应保留在该体素格中：接收带内，且未过期（近处不判年龄）。
+     * @brief 该点是否应保留在该体素格中：接收带内，且年龄未达 `decay_time`。
+     *
+     * 年龄一律按观测时刻算，不再有"近处豁免"——那条规则用距离去猜"看不见了"，
+     * 会把已被搬走的近处残影一并留住，实车配置里本来就是 0（等于关闭）。
      * @param z_rel_lidar 相对雷达的高度（**雷达系**）。
      * @param distance 水平距离（与参考系无关）。
      * @param point_time 该点的观测时刻（相对首帧的秒数），现由 intensity 携带。
@@ -190,8 +193,7 @@ namespace terrain_analysis {
 
   private:
     /** @brief 融合叶键：x/y 与 z 使用不同叶宽（垂直更细）。 */
-    [[nodiscard]] static uint64_t leafKey(double x, double y, double z,
-                                          double leaf_xy, double leaf_z);
+    [[nodiscard]] uint64_t leafKey(double x, double y, double z);
 
     /** @brief 滚动时要搬运的轴。 */
     enum class ShiftAxis { X, Y };

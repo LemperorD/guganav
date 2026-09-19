@@ -31,7 +31,7 @@ namespace terrain_analysis {
     using PersistentVoxelMap::insideReceiveBand;
     using PersistentVoxelMap::keepPoint;
     using PersistentVoxelMap::PersistentVoxelMap;  // 继承构造函数
-    using PersistentVoxelMap::rebuild;
+    using PersistentVoxelMap::rebuildGrids;
     using PersistentVoxelMap::rollover;
     using PersistentVoxelMap::shiftX;
     using PersistentVoxelMap::shiftY;

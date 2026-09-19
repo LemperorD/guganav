@@ -122,7 +122,6 @@ namespace terrain_analysis {
       rclcpp::NodeOptions options;
       options.parameter_overrides(
           {rclcpp::Parameter("decayTime", 0.5),
-           rclcpp::Parameter("noDecayDis", 0.0),
            rclcpp::Parameter("useSorting", true),
            rclcpp::Parameter("quantileZ", 0.2),
            rclcpp::Parameter("minObstacleHeight", 0.04),

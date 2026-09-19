@@ -65,7 +65,7 @@ namespace terrain_analysis {
           voxelMap().addFrame();
           break;
         case stage::Id::UPDATE_TERRAIN_VOXELS:
-          voxelMap().rebuild();
+          voxelMap().rebuildGrids();
           break;
         case stage::Id::COLLECT:
           voxelMap().collectCloud(*terrainCloud());
@@ -163,7 +163,6 @@ namespace terrain_analysis {
       config.max_relative_z = 0.2;
       config.distance_ratio_z = 0.2;
       config.decay_time = 999.0;
-      config.no_decay_distance = 999.0;
 
       voxel_map_->lidar().x = 0;
       voxel_map_->lidar().y = 0;
@@ -182,7 +181,7 @@ namespace terrain_analysis {
       point.intensity = 0.0F;
       cell.push_back(point);
 
-      voxelMap().rebuild();
+      voxelMap().rebuildGrids();
       return static_cast<int>(voxelCells()[center_cell]->points.size());
     }
 
@@ -820,7 +819,7 @@ TEST_F(AlgorithmTest, InsideOutputBand_BoundariesAndConsiderDrop) {
   EXPECT_TRUE(heightMap().insideOutputBand(-0.7, heightConfig()));
 }
 
-// ── keepPoint 边界测试（经 rebuild）──
+// ── keepPoint 边界测试（经 rebuildGrids）──
 
 // 略高于下限边界的点被保留
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
@@ -858,7 +857,6 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_BelowUpperBoundary_Kept) {
 TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   widenBand(-10.0, 10.0);
   voxelConfig().decay_time = 1.0;
-  voxelConfig().no_decay_distance = 0.0;
 
   lidar().x = 0;
   lidar().y = 0;
@@ -887,7 +885,6 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
 TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
   widenBand(-10.0, 10.0);
   voxelConfig().decay_time = 0.5;
-  voxelConfig().no_decay_distance = 0.0;
   voxelConfig().scan_voxel_size = 0.05;
   voxelConfig().scan_voxel_size_z = 0.05;
 
@@ -925,7 +922,6 @@ TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
 TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
   widenBand(-10.0, 10.0);
   voxelConfig().decay_time = 999.0;
-  voxelConfig().no_decay_distance = 999.0;
   voxelConfig().scan_voxel_size = 0.1;     // 水平
   voxelConfig().scan_voxel_size_z = 0.05;  // 垂直
 
@@ -962,7 +958,6 @@ TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
 TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
   widenBand(-10.0, 10.0);
   voxelConfig().decay_time = 0.5;
-  voxelConfig().no_decay_distance = 0.0;
   voxelConfig().scan_voxel_size = 0.05;
   voxelConfig().scan_voxel_size_z = 0.05;
 
@@ -994,7 +989,6 @@ TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
 TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
   widenBand(-10.0, 10.0);
   voxelConfig().decay_time = 0.5;
-  voxelConfig().no_decay_distance = 0.0;
   voxelConfig().scan_voxel_size = 0.05;
   voxelConfig().scan_voxel_size_z = 0.05;
 
@@ -1025,31 +1019,4 @@ TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
 
   ASSERT_EQ(voxelCells()[center_cell]->points.size(), 1U);
   EXPECT_FLOAT_EQ(voxelCells()[center_cell]->points[0].intensity, 1.20F);
-}
-
-// 近点即使过期也保留（near 优先于 decay）
-TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
-  widenBand(-10.0, 10.0);
-  voxelConfig().decay_time = 1.0;
-  voxelConfig().no_decay_distance = 3.0;
-
-  lidar().x = 0;
-  lidar().y = 0;
-  lidar().z = 0.0;
-  frameTime() = 10.0;
-  initTime() = 0.0;
-
-  int center_cell = PersistentVoxelGrid::linearIndex(
-      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
-  auto& cell = *voxelCells()[center_cell];
-  cell.clear();
-  pcl::PointXYZI point;
-  point.x = 1.0F;
-  point.y = 0.0F;
-  point.z = 0.0F;
-  point.intensity = 0.0F;
-  cell.push_back(point);
-
-  runStage(stage::Id::UPDATE_TERRAIN_VOXELS);
-  EXPECT_EQ(voxelCells()[center_cell]->points.size(), 1U);
 }

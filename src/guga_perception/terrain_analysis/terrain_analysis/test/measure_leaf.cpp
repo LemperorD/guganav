@@ -105,7 +105,6 @@ int main(int argc, char** argv) {
   voxel_config.scan_voxel_size = leaf_xy;
   voxel_config.scan_voxel_size_z = leaf_z;
   voxel_config.decay_time = 0.5;
-  voxel_config.no_decay_distance = 0.0;
   height_config.use_sorting = true;
   height_config.quantile_z = 0.2;
   height_config.min_obstacle_height = 0.04;

@@ -31,8 +31,6 @@ struct PersistentVoxelConfig {
   double scan_voxel_size_z = 0.05;
   /** @brief 历史体素点的衰减时间。 */
   double decay_time = 2.0;
-  /** @brief 在该距离内不执行时间衰减。 */
-  double no_decay_distance = 4.0;
 
   /** @brief 接收带的下沿。**雷达系**：相对雷达高度（`point.z − lidar_z`）。
    *

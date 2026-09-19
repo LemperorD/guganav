@@ -31,15 +31,13 @@ namespace terrain_analysis {
 
   }  // namespace
 
-  PersistentVoxelConfig TerrainAnalysis::declareVoxelConfig() {
+  PersistentVoxelConfig TerrainAnalysis::getVoxelConfig() {
     PersistentVoxelConfig config;
     config.scan_voxel_size = declare_parameter("scanVoxelSize",
                                                config.scan_voxel_size);
     config.scan_voxel_size_z = declare_parameter("scanVoxelSizeZ",
                                                  config.scan_voxel_size_z);
     config.decay_time = declare_parameter("decayTime", config.decay_time);
-    config.no_decay_distance = declare_parameter("noDecayDis",
-                                                 config.no_decay_distance);
     config.max_relative_z = declare_parameter("maxRelZ", config.max_relative_z);
     config.distance_ratio_z = declare_parameter("disRatioZ",
                                                 config.distance_ratio_z);
@@ -49,8 +47,7 @@ namespace terrain_analysis {
     return config;
   }
 
-  PerFrameHeightConfig TerrainAnalysis::declareHeightConfig(
-      double min_relative_z) {
+  PerFrameHeightConfig TerrainAnalysis::getHeightConfig(double min_relative_z) {
     PerFrameHeightConfig config;
     config.use_sorting = declare_parameter("useSorting", config.use_sorting);
     config.quantile_z = declare_parameter("quantileZ", config.quantile_z);
@@ -79,8 +76,8 @@ namespace terrain_analysis {
       : Node("terrain_analysis", options),
         // 参数在初始化列表里一次声明并填好，两半随后绑定它们的常量引用；
         // 因此节点的构造函数体里不再出现任何参数声明。
-        voxel_config_(declareVoxelConfig()),
-        height_config_(declareHeightConfig(voxel_config_.min_relative_z)),
+        voxel_config_(getVoxelConfig()),
+        height_config_(getHeightConfig(voxel_config_.min_relative_z)),
         persistent_voxel_map_(voxel_config_),
         per_frame_height_map_(height_config_) {
     sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
