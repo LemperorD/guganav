@@ -190,13 +190,21 @@ namespace terrain_analysis {
     [[nodiscard]] static uint64_t leafKey(double x, double y, double z,
                                           double leaf_xy, double leaf_z);
 
+    /** @brief 滚动时要搬运的轴。 */
+    enum class ShiftAxis { X, Y };
+
+    /** @brief 内容搬向哪一侧的下标：POSITIVE 指下标增大的一侧。 */
+    enum class ShiftDirection { NEGATIVE, POSITIVE };
+
     /**
      * @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。
-     * @param along_x true 表示沿 x 轴（列方向）搬运，false 表示沿 y
-     * 轴（行方向）。 注意 gridIndex 把 x 放在列上，两者必须一致。
-     * @param toward_positive 内容搬向下标增大的一侧。
+     *
+     * 轴与 gridIndex 的约定必须一致（x 在列上、y
+     * 在行上）——写反过一次，见实现处的
+     * 注释。方向说的是**内容**搬向哪一侧的下标：车向 +x 移动一格时，锚点 x
+     * 增大， 同一世界点的列下标要减 1，因此内容搬向下标更小的一侧。
      */
-    void shift(bool along_x, bool toward_positive);
+    void shift(ShiftAxis axis, ShiftDirection positive);
 
     /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */
     const PersistentVoxelConfig& config_;

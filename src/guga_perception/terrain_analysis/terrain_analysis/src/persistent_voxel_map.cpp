@@ -106,19 +106,19 @@ namespace terrain_analysis {
     double center_y = voxel_size * shift_y_;
 
     while (lidar.x - center_x < -voxel_size) {
-      shift(true, false);
+      shift(ShiftAxis::X, ShiftDirection::NEGATIVE);
       center_x = voxel_size * --shift_x_;
     }
     while (lidar.x - center_x > voxel_size) {
-      shift(true, true);
+      shift(ShiftAxis::X, ShiftDirection::POSITIVE);
       center_x = voxel_size * ++shift_x_;
     }
     while (lidar.y - center_y < -voxel_size) {
-      shift(false, false);
+      shift(ShiftAxis::Y, ShiftDirection::NEGATIVE);
       center_y = voxel_size * --shift_y_;
     }
     while (lidar.y - center_y > voxel_size) {
-      shift(false, true);
+      shift(ShiftAxis::Y, ShiftDirection::POSITIVE);
       center_y = voxel_size * ++shift_y_;
     }
   }
@@ -126,6 +126,7 @@ namespace terrain_analysis {
   void PersistentVoxelMap::addFrame(const Cell& crop,
                                     const guga_common::Point3d& lidar) {
     const double voxel_size = config_.terrain_voxel_size;
+
     for (const auto& point : crop.points) {
       const GridIndex index = gridIndex(point.x, point.y, lidar.x, lidar.y,
                                         voxel_size, PersistentVoxelGrid::WIDTH);
@@ -182,14 +183,16 @@ namespace terrain_analysis {
     }
   }
 
-  void PersistentVoxelMap::shift(bool along_x, bool toward_positive) {
+  void PersistentVoxelMap::shift(ShiftAxis axis, ShiftDirection positive) {
     static constexpr int WIDTH = PersistentVoxelGrid::WIDTH;
+    const bool toward_positive = positive == ShiftDirection::POSITIVE;
     const int src = toward_positive ? 0 : WIDTH - 1;
     const int dst = toward_positive ? WIDTH - 1 : 0;
     const int step = toward_positive ? 1 : -1;
 
     // 轴约定（写反过一次，故写在这里）：gridIndex 把 x 映射到 col、y 映射到
-    // row， 所以"沿 x 搬运"变化的是列下标，"沿 y 搬运"变化的才是行下标。
+    // row， 所以沿 x 搬运变化的是列下标，沿 y 搬运变化的才是行下标。
+    const bool along_x = axis == ShiftAxis::X;
     for (int fixed = 0; fixed < WIDTH; fixed++) {
       const auto cell = [&](int m) {
         return along_x ? PersistentVoxelGrid::linearIndex(fixed, m)
