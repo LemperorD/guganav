@@ -184,10 +184,12 @@ namespace terrain_analysis {
     const int dst = toward_positive ? WIDTH - 1 : 0;
     const int step = toward_positive ? 1 : -1;
 
+    // 轴约定（写反过一次，故写在这里）：gridIndex 把 x 映射到 col、y 映射到
+    // row， 所以"沿 x 搬运"变化的是列下标，"沿 y 搬运"变化的才是行下标。
     for (int fixed = 0; fixed < WIDTH; fixed++) {
       const auto cell = [&](int m) {
-        return along_x ? PersistentVoxelGrid::linearIndex(m, fixed)
-                       : PersistentVoxelGrid::linearIndex(fixed, m);
+        return along_x ? PersistentVoxelGrid::linearIndex(fixed, m)
+                       : PersistentVoxelGrid::linearIndex(m, fixed);
       };
       auto ptr = cloud_[cell(src)];
       for (int m = src; m != dst; m += step) {

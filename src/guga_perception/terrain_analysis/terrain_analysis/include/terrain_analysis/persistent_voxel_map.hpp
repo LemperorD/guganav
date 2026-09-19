@@ -178,7 +178,12 @@ namespace terrain_analysis {
                                         const PersistentVoxelConfig& config,
                                         double now_elapsed);
 
-    /** @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。 */
+    /**
+     * @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。
+     * @param along_x true 表示沿 x 轴（列方向）搬运，false 表示沿 y
+     * 轴（行方向）。 注意 gridIndex 把 x 放在列上，两者必须一致。
+     * @param toward_positive 内容搬向下标增大的一侧。
+     */
     void shift(bool along_x, bool toward_positive);
 
     /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */

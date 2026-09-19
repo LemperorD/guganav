@@ -108,6 +108,27 @@ namespace terrain_analysis {
     TestHeightMap& heightMap() {
       return *height_map_;
     }
+    /** @brief 清空所有格子。 */
+    void clearCells() {
+      for (auto& cell : voxelCells()) {
+        cell->clear();
+      }
+    }
+    /** @brief 唯一非空格子的线性下标；空或多于一个时返回 npos。 */
+    size_t singleOccupiedCell() {
+      const size_t npos = voxelCells().size();
+      size_t found = npos;
+      for (size_t i = 0; i < npos; i++) {
+        if (!voxelCells()[i]->points.empty()) {
+          if (found != npos) {
+            return npos;  // 不止一个
+          }
+          found = i;
+        }
+      }
+      return found;
+    }
+
     int shiftX() const {
       return voxel_map_->shiftX();
     }
@@ -661,6 +682,74 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   ASSERT_EQ(obstacleCloud()->points.size(), 1U);
   // height_above_ground = 0.05 - 0 = 0.05，写入 intensity
   EXPECT_NEAR(obstacleCloud()->points[0].intensity, 0.05F, 1e-6);
+}
+
+// 搬移轴回归：gridIndex 把 x 放在列上，所以车向 +x 移动时列的相对下标要减，
+// 点必须沿列搬。写反一次就会把存量点搬到侧向，这个用例专门盯住这一点。
+TEST_F(AlgorithmTest, RolloverVoxelMap_MoveAlongX_ShiftsContentAlongColumns) {
+  clearCells();
+  lidar().x = 0.0;
+  lidar().y = 0.0;
+  lidar().z = 0.0;
+  frameCloud()->clear();
+  frameCloud()->push_back(
+      {1.0F, 0.0F, 0.0F, 0.0F});  // x=+1, y=0 → (row 10, col 11)
+  voxelMap().addFrame(*frameCloud(), lidarPosition());
+  EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(10, 11));
+
+  lidar().x = 2.5;  // 触发两次滚动
+  voxelMap().rollover(lidarPosition());
+
+  EXPECT_EQ(voxelMap().shiftX(), 2);
+  EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(10, 9));
+}
+
+// 同理：y 在行上，车向 +y 移动时行下标减。
+TEST_F(AlgorithmTest, RolloverVoxelMap_MoveAlongY_ShiftsContentAlongRows) {
+  clearCells();
+  lidar().x = 0.0;
+  lidar().y = 0.0;
+  lidar().z = 0.0;
+  frameCloud()->clear();
+  frameCloud()->push_back({0.0F, 1.0F, 0.0F, 0.0F});  // y=+1 → (row 11, col 10)
+  voxelMap().addFrame(*frameCloud(), lidarPosition());
+  EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(11, 10));
+
+  lidar().y = 2.5;
+  voxelMap().rollover(lidarPosition());
+
+  EXPECT_EQ(voxelMap().shiftY(), 2);
+  EXPECT_EQ(singleOccupiedCell(), PersistentVoxelGrid::linearIndex(9, 10));
+}
+
+// 窗口必须跟着车走：车向前开 5 m 后，世界 x=6
+// 处那点（先被观测、之后不再被观测） 应落在"相对车前方 1
+// m"的格子里，而不是被搬到侧向或滚出窗口。
+TEST_F(AlgorithmTest,
+       RolloverVoxelMap_DrivingForward_KeepsHistoryAtTrueRelativeCell) {
+  clearCells();
+  lidar().x = 0.0;
+  lidar().y = 0.0;
+  lidar().z = 0.0;
+  frameCloud()->clear();
+  frameCloud()->push_back({6.0F, 0.0F, 0.3F, 0.0F});
+  voxelMap().addFrame(*frameCloud(), lidarPosition());
+
+  for (int i = 1; i <= 5; i++) {
+    lidar().x = static_cast<double>(i);
+    voxelMap().rollover(lidarPosition());
+  }
+
+  // 滚动判据是"偏离中心超过一整格才搬"，车每开 1 m 恰好触发一次、但首次不触发，
+  // 因此 5 m 行程只搬 4 格；该点应落在相对车前方 1~2 m 的列上，且行（y）不变。
+  // 行不变正是本用例的重点：搬错轴时它会沿行漂走。
+  const size_t cell = singleOccupiedCell();
+  ASSERT_NE(cell, voxelCells().size());
+  const int row = static_cast<int>(cell) / PersistentVoxelGrid::WIDTH;
+  const int col = static_cast<int>(cell) % PersistentVoxelGrid::WIDTH;
+  EXPECT_EQ(row, 10);
+  EXPECT_GE(col, 11);
+  EXPECT_LE(col, 12);
 }
 
 // ── keepPoint 边界测试（经 rebuild）──
