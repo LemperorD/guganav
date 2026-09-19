@@ -81,17 +81,24 @@ scripts/test/test_terrain_analysis_coverage.sh
 参数来自 `src/guga_bringup/config/<profile>/base.yaml` 的 `terrain_analysis:` 段（实车与
 仿真各一份），由节点声明后按两半的读取范围分发给两个配置结构体。共 16 个：
 
-| 参数                                                 | 作用                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------ |
-| `scanVoxelSize` / `scanVoxelSizeZ`                   | 融合叶尺寸（水平 0.1 / 垂直 0.05 m）                               |
-| `decayTime` / `noDecayDis`                           | 观测的衰减时间与"近处不衰减"半径                                   |
-| `maxRelZ` / `disRatioZ`                              | 接收带的上沿与随距离放宽的比例                                     |
-| `minRelZ`                                            | 前半段：接收带下沿；后半段：障碍输出的地板（只声明一次，两处同值） |
-| `useSorting` / `quantileZ`                           | 地面高度取分位数还是最小值，及分位点                               |
-| `considerDrop` / `limitGroundLift` / `maxGroundLift` | 凹坑取绝对值、地面抬升限幅                                         |
-| `minBlockPointNum`                                   | 每格参与判定的最少点数                                             |
-| `minObstacleHeight` / `ceilingClearance`             | 障碍输出高度带（下界死区、上界净空）                               |
-| `groundFloorZ`                                       | 地面候选的绝对高度地板（odom z）                                   |
+| 参数                | 作用                                                                 |
+| ------------------- | -------------------------------------------------------------------- |
+| `scanVoxelSize`     | 融合叶的水平尺寸（0.1 m）                                            |
+| `scanVoxelSizeZ`    | 融合叶的垂直尺寸（0.05 m）；必须比水平细，否则地面点会把矮物体点顶掉 |
+| `decayTime`         | 观测的衰减时间：超过它、又在近处之外、且未被重新观测的点会被清掉     |
+| `noDecayDis`        | 该距离内的点不做时间衰减                                             |
+| `maxRelZ`           | 接收带的上沿（相对雷达高度）                                         |
+| `disRatioZ`         | 接收带随水平距离放宽的比例                                           |
+| `minRelZ`           | 接收带的下沿（相对雷达高度）；同一参数也是后半段障碍输出的地板       |
+| `useSorting`        | 地面高度取分位数（true）还是最低点（false）                          |
+| `quantileZ`         | `useSorting` 打开时用的分位点                                        |
+| `considerDrop`      | 打开时离地高度取绝对值，凹坑也算障碍                                 |
+| `limitGroundLift`   | 是否限制地面估计相对最低点的抬升量                                   |
+| `maxGroundLift`     | `limitGroundLift` 打开时的最大抬升量                                 |
+| `minBlockPointNum`  | 每格参与判定的最少点数                                               |
+| `minObstacleHeight` | 障碍输出下界（地面带死区，距局部地面）                               |
+| `ceilingClearance`  | 障碍输出上界（净空，距局部地面；也是唯一上界）                       |
+| `groundFloorZ`      | 地面候选的绝对高度地板（odom z），低于它的点不参与地面估计           |
 
 另外注意：`config.hpp` 里的结构体默认值只有部分是实车值——`decay_time`、`no_decay_distance`、
 `quantile_z`、`max_ground_lift`、`max_relative_z` 与 `base.yaml` 不同，单元测试若直接构造
