@@ -162,9 +162,9 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 | 参考系                                   | 定义                                      | 使用位置                                                                                                       |
 | ---------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| odom 世界系                              | `point.z` 绝对值                          | `PersistentVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
+| odom 世界系                              | `point.z` 绝对值                          | `PersistentVoxelMap` 里体素格的存量、`voxel_elev_` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
 | 雷达系（`lidar_*` 取自雷达里程计的位置） | `relative_z = point.z − lidar_position.z` | `PersistentVoxelMap::ingest` 裁剪带、`computeHeightMap` 的地板 `minRelZ`                                       |
-| 地面系                                   | `point.z − planar_voxel_elev[cell]`       | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity                                          |
+| 地面系                                   | `point.z − voxel_elev_[cell]`       | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity                                          |
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
 
@@ -219,7 +219,7 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ### 风险 5：索引相对、数值绝对
 
-`planar_point_elev[cell]` 的行列下标来自 `point − lidar`（相对），
+`point_elev_[cell]` 的行列下标来自 `point − lidar`（相对），
 压入的却是 `point.z`（odom 绝对）。自洽（后续两个绝对值相减），
 但极易被改成 `point.z − lidar_z` 而全错。
 

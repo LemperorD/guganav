@@ -96,13 +96,10 @@ namespace terrain_analysis {
     std::array<std::vector<double>, PerFrameHeightGrid::NUM> point_elev_;
     /** @brief 每格估计出的地面高度（没有候选的格保持 0）。 */
     std::array<double, PerFrameHeightGrid::NUM> voxel_elev_{};
-    /** @brief 障碍输出点云。 */
     Cell::Ptr obstacle_cloud_ = std::make_shared<Cell>();
 
   private:
-    /** @brief 用分位数估计指定平面格的地面高度。 */
     void elevateByQuantile(int cell);
-    /** @brief 用最低点估计指定平面格的地面高度。 */
     void elevateByMinimum(int cell);
 
     /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */

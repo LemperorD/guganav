@@ -131,7 +131,6 @@ namespace terrain_analysis {
       return rclcpp::ok();
     }
 
-    // 前半段：累积本帧观测并维护体素地图；采集窗口内的累积点云交给后半段。
     persistent_voxel_map_.update();
     persistent_voxel_map_.collectCloud(*collected_cloud_);
     // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。

@@ -126,7 +126,6 @@ int main(int argc, char** argv) {
   for (int i = 0; i < frames; i++) {
     const double t = i * 0.1;  // 10 Hz
     const bool ghost_present = ghost_frame < 0 || i < ghost_frame;
-    // 与生产路径一致：前半段收帧并维护体素地图，采集结果交给后半段。
     voxel_map.ingest(ghost_present ? *frame : *frame_no_ghost, lidar_position,
                      t);
 

@@ -616,8 +616,7 @@ TEST_F(AlgorithmTest,
   lidar().y = 0;
   lidar().z = 0;
   terrainCloud()->clear();
-  // 点距地面 -0.1m（planar_voxel_elev 为 0）：在地板之上、低于
-  // CEILING_CLEARANCE
+  // 点距地面 -0.1 m（本格地面高度为 0）：在地板之上、低于净空
   terrainCloud()->push_back({0.0F, 0.0F, -0.1F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
@@ -644,7 +643,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_CeilingPoint_NotObstacle) {
   heightConfig().ceiling_clearance =
       0.2;  // 显式设定，不依赖默认值（随车高而异）
 
-  // 天花板点：距地面 0.26m（planar_voxel_elev=0），高于 ceiling_clearance(0.2)
+  // 天花板点：距地面 0.26 m（本格地面高度为 0），高于 ceiling_clearance(0.2)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
@@ -673,8 +672,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   heightConfig().ceiling_clearance =
       0.2;  // 显式设定，不依赖默认值（随车高而异）
 
-  // 低矮障碍点：距地面 0.05m（planar_voxel_elev=0），低于
-  // ceiling_clearance(0.2)
+  // 低矮障碍点：距地面 0.05 m（本格地面高度为 0），低于 ceiling_clearance(0.2)
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;

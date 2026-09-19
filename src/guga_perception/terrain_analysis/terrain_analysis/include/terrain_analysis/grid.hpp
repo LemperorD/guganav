@@ -22,11 +22,9 @@
  * TerrainGrid 里，各自的使用方看不出边界，故拆开。
  */
 struct PersistentVoxelGrid {
-  /** @brief 网格边长（格数）。 */
   static constexpr int WIDTH = 21;
-  /** @brief 网格半边长（格数）。 */
+  /** @brief 半边长即锚点所在格的下标，故 WIDTH 取奇数。 */
   static constexpr int HALF_WIDTH = (WIDTH - 1) / 2;
-  /** @brief 网格总格数。 */
   static constexpr int NUM = WIDTH * WIDTH;
 
   /**
@@ -46,11 +44,9 @@ struct PersistentVoxelGrid {
  * 不随车移动而滚动，超出窗口的点直接不参与（见 estimateTerrainGround）。
  */
 struct PerFrameHeightGrid {
-  /** @brief 网格边长（格数）。 */
   static constexpr int WIDTH = 51;
-  /** @brief 网格半边长（格数）。 */
+  /** @brief 半边长即锚点所在格的下标，故 WIDTH 取奇数。 */
   static constexpr int HALF_WIDTH = (WIDTH - 1) / 2;
-  /** @brief 网格总格数。 */
   static constexpr int NUM = WIDTH * WIDTH;
 
   /**
@@ -62,12 +58,3 @@ struct PerFrameHeightGrid {
     return (WIDTH * row) + col;
   }
 };
-
-/**
- * @brief 网格工具：坐标与下标的换算，以及网格与相邻表示之间的搬运。
- *
- * 这里的函数既不专属于某一半管线，也不持有任何状态：都是"格 ←→ 坐标"和
- * "格 ←→ 点/邻域"的纯换算，两半与测试都可以直接用。线性下标的换算式由各网格
- * 类型自己提供（linearIndex），这里不重复它；网格类型作为模板参数传入，
- * 因此同一份函数对两张网格（将来加第三张）都成立。
- */

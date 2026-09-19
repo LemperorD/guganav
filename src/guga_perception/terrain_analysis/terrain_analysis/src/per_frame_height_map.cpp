@@ -81,7 +81,7 @@ namespace terrain_analysis {
       }
       const size_t cell = PerFrameHeightGrid::linearIndex(grid_index.row,
                                                           grid_index.col);
-      // 该点所在处的地面高度（本帧估计值），下面所有高度判据都以它为基准。
+      // 下面所有高度判据都以本帧估计的该处地面高度为基准。
       const double ground_z = voxel_elev_[cell];
       const double height_above_ground = point.z - ground_z;
 

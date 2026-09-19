@@ -35,19 +35,16 @@ namespace terrain_analysis {
     using PersistentVoxelMap::shiftY;
     using PersistentVoxelMap::timestamp;
 
-    /** @brief 雷达位置（可写，用于注入场景）。 */
+    // 下面几个返回引用，供测试注入场景（改雷达位置、塞点云、改时刻）。
     guga_common::Point3d& lidar() noexcept {
       return lidar_;
     }
-    /** @brief 裁剪后的本帧点云（可写，用于注入场景）。 */
     pcl::PointCloud<pcl::PointXYZI>::Ptr& frameCloudPtr() noexcept {
       return frame_cloud_;
     }
-    /** @brief 最近一帧的时刻（可写，用于注入场景）。 */
     double& time() noexcept {
       return time_;
     }
-    /** @brief 首帧时刻（可写，用于注入场景）。 */
     double& initTime() noexcept {
       return init_time_;
     }
@@ -61,16 +58,14 @@ namespace terrain_analysis {
     using PerFrameHeightMap::estimateTerrainGround;
     using PerFrameHeightMap::PerFrameHeightMap;  // 继承构造函数
 
-    /** @brief 每格的地面候选高度（可写，用于注入场景）。 */
+    // 下面几个返回引用，供测试注入候选高度、检查逐格高程与清空输出。
     std::array<std::vector<double>, PerFrameHeightGrid::NUM>&
     pointElev() noexcept {
       return point_elev_;
     }
-    /** @brief 每格的地面高度（可写，用于注入场景）。 */
     std::array<double, PerFrameHeightGrid::NUM>& voxelElev() noexcept {
       return voxel_elev_;
     }
-    /** @brief 障碍输出点云（可写，用于清空后重跑）。 */
     pcl::PointCloud<pcl::PointXYZI>::Ptr& obstacleCloudPtr() noexcept {
       return obstacle_cloud_;
     }

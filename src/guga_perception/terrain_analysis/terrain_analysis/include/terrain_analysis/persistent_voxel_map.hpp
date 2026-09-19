@@ -79,7 +79,6 @@ namespace terrain_analysis {
       return lidar_;
     }
 
-    /** @brief 是否存在尚未处理的一帧。 */
     [[nodiscard]] bool hasPendingFrame() const noexcept {
       return frame_pending_;
     }
@@ -102,7 +101,6 @@ namespace terrain_analysis {
     void collectCloud(Cell& out) const;
 
   private:
-    /** @brief 采集窗口的半宽（格数）：以雷达为中心的 11x11 格。 */
     static constexpr int EXTRACT_HALF_WINDOW = 5;
 
   protected:
@@ -130,7 +128,7 @@ namespace terrain_analysis {
       return *frame_cloud_;
     }
 
-    /** @brief 最近一帧的时间戳，单位为秒。 */
+    /** @brief 最近一帧的时间戳（秒）。 */
     [[nodiscard]] double timestamp() const noexcept {
       return time_;
     }
@@ -140,12 +138,10 @@ namespace terrain_analysis {
       return time_ - init_time_;
     }
 
-    /** @brief 只读访问所有格子。 */
     [[nodiscard]] const std::array<Cell::Ptr, PersistentVoxelGrid::NUM>& cells()
         const noexcept {
       return cloud_;
     }
-    /** @brief 可修改访问所有格子（供白盒测试注入）。 */
     [[nodiscard]] std::array<Cell::Ptr, PersistentVoxelGrid::NUM>&
     cells() noexcept {
       return cloud_;

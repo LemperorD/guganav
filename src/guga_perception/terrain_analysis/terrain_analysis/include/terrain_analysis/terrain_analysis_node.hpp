@@ -22,9 +22,7 @@ namespace terrain_analysis {
    */
   class TerrainAnalysis : public rclcpp::Node {
   public:
-    /** @brief 构造节点封装，声明参数、创建订阅/发布器和处理定时器。 */
     explicit TerrainAnalysis(const rclcpp::NodeOptions& options);
-    /** @brief 默认析构，释放 ROS 句柄和算法状态。 */
     ~TerrainAnalysis() = default;
 
     TerrainAnalysis(const TerrainAnalysis&) = delete;
@@ -52,17 +50,15 @@ namespace terrain_analysis {
                       const guga_common::Point3d& lidar_position,
                       double timestamp_sec);
 
-    /** @brief 获取最近一次生成的障碍点云。 */
+    /** @brief 最近一次生成的障碍点云；intensity 为距局部地面的高度。 */
     [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& obstacleCloud() const {
       return per_frame_height_map_.obstacleCloud();
     }
 
   private:
-    /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
 
-    /** @brief 记下本帧的雷达位置与时刻，把点云交给前半段（两条订阅与
-     * processFrame 共用这一处）。 */
+    /** @brief 两条订阅与 processFrame 共用这一处收帧。 */
     void ingestFrame(const pcl::PointCloud<pcl::PointXYZI>& cloud,
                      const guga_common::Point3d& lidar_position,
                      double timestamp_sec);
