@@ -29,6 +29,11 @@
 
 ## 架构
 
+![terrain_analysis 架构：节点负责接线与分发，两张网格负责处理](../../../docs/img/terrain_analysis架构.svg)
+
+上图（`docs/img/terrain_analysis架构.svg`）画的是组件与数据流；下面这段文字版强调代码里的
+分组与调用顺序，两者配合看：
+
 ```
 ROS2 消息 → PersistentVoxelMap::ingest → update → collectCloud → PerFrameHeightMap::compute
  (订阅)      (裁剪 + 记位置/时刻)   (A 组滚动/归格/重建)(B 组采集)  (C 组高程 + E 组输出)
