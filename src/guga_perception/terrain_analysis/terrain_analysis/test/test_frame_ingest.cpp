@@ -1,4 +1,4 @@
-#include "terrain_analysis/core/persistent_voxel_map.hpp"
+#include "terrain_analysis/persistent_voxel_map.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
 

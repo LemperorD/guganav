@@ -1,7 +1,7 @@
 #pragma once
 
-#include "terrain_analysis/core/per_frame_height_map.hpp"
-#include "terrain_analysis/core/persistent_voxel_map.hpp"
+#include "terrain_analysis/per_frame_height_map.hpp"
+#include "terrain_analysis/persistent_voxel_map.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <nav_msgs/msg/odometry.hpp>

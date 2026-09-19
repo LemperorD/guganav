@@ -10,8 +10,8 @@
 // 它直接构造两半并逐帧驱动，不经节点：这里量的是算法开销；ROS 接线与参数分发
 // 由 test_integration 与 test_terrain_analysis 覆盖。
 
-#include "terrain_analysis/core/per_frame_height_map.hpp"
-#include "terrain_analysis/core/persistent_voxel_map.hpp"
+#include "terrain_analysis/per_frame_height_map.hpp"
+#include "terrain_analysis/persistent_voxel_map.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

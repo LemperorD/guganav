@@ -2,10 +2,10 @@
 //
 // 本类不读任何全局状态：帧输入由 ingest() 写入，配置由调用方在启动时填入。
 
-#include "terrain_analysis/core/persistent_voxel_map.hpp"
+#include "terrain_analysis/persistent_voxel_map.hpp"
 
-#include "terrain_analysis/core/grid.hpp"
-#include "terrain_analysis/core/grid_utils.hpp"
+#include "terrain_analysis/grid.hpp"
+#include "terrain_analysis/grid_utils.hpp"
 
 #include <unordered_map>
 

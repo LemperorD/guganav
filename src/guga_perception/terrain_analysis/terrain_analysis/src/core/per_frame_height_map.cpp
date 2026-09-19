@@ -2,10 +2,10 @@
 //
 // 输入只有两样——采集点云与雷达位置——都由调用方逐帧传入，本类不保留帧间状态。
 
-#include "terrain_analysis/core/per_frame_height_map.hpp"
+#include "terrain_analysis/per_frame_height_map.hpp"
 
-#include "terrain_analysis/core/grid.hpp"
-#include "terrain_analysis/core/grid_utils.hpp"
+#include "terrain_analysis/grid.hpp"
+#include "terrain_analysis/grid_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
