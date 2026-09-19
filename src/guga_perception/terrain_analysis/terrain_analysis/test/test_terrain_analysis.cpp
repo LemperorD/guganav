@@ -91,4 +91,78 @@ namespace terrain_analysis {
     }
     EXPECT_FALSE(found_isolated) << "稀疏体素里的孤立障碍点应被排除";
   }
+
+  // 平地上没有障碍：带内的障碍云为空，但回波云要保留地面回波——清除射线正是
+  // 靠这些回波判定"该方向的路径为空"。
+  TEST_F(TerrainAnalysisTest, Run_FlatGround_ReturnsKeepGroundEchoes) {
+    sendOdom(0, 0, 0);
+
+    auto cloud = MakeGroundCloud(21, 0.1, 0.01);
+    sendCloud(cloud, 100.0);
+
+    EXPECT_TRUE(terrain_->frameObstacleCloud().points.empty())
+        << "地面点落在输出带死区内，不应进入障碍云";
+    EXPECT_GT(terrain_->frameReturnCloud().points.size(), 0U)
+        << "地面回波应保留在回波云中";
+  }
+
+  // 障碍点在带内：两份当帧输出都含它，且 intensity 为离地高度。
+  TEST_F(TerrainAnalysisTest, Run_ObstacleInBand_FrameOutputsCarryHeight) {
+    sendOdom(0, 0, 0);
+
+    auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.06);
+    sendCloud(cloud, 100.0);
+
+    EXPECT_GT(terrain_->frameObstacleCloud().points.size(), 0U);
+
+    float max_intensity = 0;
+    for (const auto& p : terrain_->frameObstacleCloud().points) {
+      max_intensity = std::max(max_intensity, p.intensity);
+    }
+    EXPECT_GT(max_intensity, 0.05F);
+    EXPECT_GT(terrain_->frameReturnCloud().points.size(),
+              terrain_->frameObstacleCloud().points.size())
+        << "回波云还应含输出带之外的地面回波";
+  }
+
+  // 远低于地面地板的点两份都不输出：它既不是障碍，也不该给出清除射线。
+  TEST_F(TerrainAnalysisTest,
+         Run_PointBelowGroundFloor_ExcludedFromFrameOutputs) {
+    sendOdom(0, 0, 0);
+
+    auto cloud = MakeGroundCloud(21, 0.1, 0.01);
+    pcl::PointXYZI below_floor{2.0F, 2.0F, -1.0F, 0};
+    cloud->push_back(below_floor);
+    sendCloud(cloud, 100.0);
+
+    const auto has_point_near = [](const auto& points, float x, float y) {
+      for (const auto& p : points) {
+        if (std::abs(p.x - x) < 1e-3F && std::abs(p.y - y) < 1e-3F) {
+          return true;
+        }
+      }
+      return false;
+    };
+    EXPECT_FALSE(
+        has_point_near(terrain_->frameObstacleCloud().points, 2.0F, 2.0F));
+    EXPECT_FALSE(
+        has_point_near(terrain_->frameReturnCloud().points, 2.0F, 2.0F))
+        << "低于地面地板的点不应进入回波云";
+  }
+
+  // 当帧输出只反映本帧：上一帧的障碍点留在累计输出里，但不进入本帧两份输出。
+  TEST_F(TerrainAnalysisTest, Run_FrameOutputsUseCurrentFrameOnly) {
+    sendOdom(0, 0, 0);
+
+    sendCloud(MakeGroundAndObstacleCloud(21, 0.1, 0.01, 0.06), 100.0);
+    EXPECT_GT(terrain_->frameObstacleCloud().points.size(), 0U);
+
+    // 第二帧里该障碍已消失（时间间隔仍在衰减阈值内）。
+    sendCloud(MakeGroundCloud(21, 0.1, 0.01), 100.05);
+
+    EXPECT_TRUE(terrain_->frameObstacleCloud().points.empty())
+        << "本帧没有障碍时，当帧障碍云应为空";
+    EXPECT_FALSE(terrain_->obstacleCloud().points.empty())
+        << "该障碍仍在累计云的衰减窗口内";
+  }
 }  // namespace terrain_analysis

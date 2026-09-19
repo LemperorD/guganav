@@ -100,6 +100,16 @@ namespace terrain_analysis {
      */
     void collectCloud(Cell& out) const;
 
+    /**
+     * @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。
+     *
+     * 节点用它生成两份当帧输出（见 PerFrameHeightMap::computeFrameOutputs）：
+     * 累计云代表"感知历史"，而射线清除需要的是本帧这一份观测。
+     */
+    [[nodiscard]] const Cell& frameCloud() const noexcept {
+      return *frame_cloud_;
+    }
+
   private:
     static constexpr int EXTRACT_HALF_WINDOW = 5;
 
@@ -125,11 +135,6 @@ namespace terrain_analysis {
      */
     /** @brief 第三步，年龄按 elapsedSeconds() 判定。 */
     void rebuildGrids();
-
-    /** @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。 */
-    [[nodiscard]] const Cell& frameCloud() const noexcept {
-      return *frame_cloud_;
-    }
 
     /** @brief 最近一帧的时间戳（秒）。 */
     [[nodiscard]] double timestamp() const noexcept {

@@ -17,8 +17,13 @@ namespace terrain_analysis {
    * @brief terrain_analysis ROS2 节点封装。
    *
    * 只负责 ROS 层的接线与**逐帧数据分发**：声明参数、订阅里程计与点云、把接收
-   * 与累积交给跨帧持续的 PersistentVoxelMap、把采集结果交给逐帧的
-   * PerFrameHeightMap、发布 terrain_map。两半各自的算法状态都在它们自己内部。
+   * 与累积交给跨帧持续的 PersistentVoxelMap、把采集结果与当帧点云交给逐帧的
+   * PerFrameHeightMap，发布三条点云：
+   *   - terrain_map：累计云的障碍输出，供全局代价地图等既有消费者使用；
+   *   - terrain_obstacles_current：本帧带内的障碍点，供代价地图标记；
+   *   -
+   * terrain_returns_current：本帧全部有效回波（含地面回波），供代价地图清除。
+   * 两半各自的算法状态都在它们自己内部。
    */
   class TerrainAnalysis : public rclcpp::Node {
   public:
@@ -55,8 +60,29 @@ namespace terrain_analysis {
       return per_frame_height_map_.obstacleCloud();
     }
 
+    /** @brief 最近一帧的带内障碍点云；intensity 为距局部地面的高度。 */
+    [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& frameObstacleCloud()
+        const {
+      return per_frame_height_map_.frameObstacleCloud();
+    }
+
+    /**
+     * @brief 最近一帧的有效回波点云（含地面回波）；intensity
+     * 为距局部地面的高度。
+     */
+    [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& frameReturnCloud()
+        const {
+      return per_frame_height_map_.frameReturnCloud();
+    }
+
   private:
-    void publishPointCloud();
+    /** @brief 发布三条点云，共用本帧时间戳与 odom 坐标系。 */
+    void publishClouds();
+
+    /** @brief 把一份点云转成消息并发布。 */
+    void publishCloud(const rclcpp::Publisher<
+                          sensor_msgs::msg::PointCloud2>::SharedPtr& publisher,
+                      const pcl::PointCloud<pcl::PointXYZI>& cloud);
 
     /** @brief 两条订阅与 processFrame 共用这一处收帧。 */
     void ingestFrame(const pcl::PointCloud<pcl::PointXYZI>& cloud,
@@ -97,6 +123,12 @@ namespace terrain_analysis {
         sub_laser_cloud_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
         pub_terrain_map_;
+    /** @brief 当帧障碍点云：代价地图的标记来源。 */
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+        pub_terrain_obstacles_current_;
+    /** @brief 当帧回波点云：代价地图射线清除的来源。 */
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+        pub_terrain_returns_current_;
     rclcpp::TimerBase::SharedPtr timer_;
   };
 }  // namespace terrain_analysis

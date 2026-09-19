@@ -1,8 +1,8 @@
 // 主线位置：一帧的后半程（节点在采集之后调用 compute）。
 //
-// 管线后半段：地面高程的收集与估计、障碍输出。
+// 管线后半段：地面高程的收集与估计、障碍输出、当帧输出。
 //
-// 输入只有两样——采集点云与雷达位置——都由调用方逐帧传入，本类不保留帧间状态。
+// 输入只有两样——点云与雷达位置——都由调用方逐帧传入，本类不保留帧间状态。
 
 #include "terrain_analysis/per_frame_height_map.hpp"
 
@@ -21,6 +21,42 @@ namespace terrain_analysis {
     estimateTerrainGround(terrain_cloud, lidar_position);
     computePlanarElevation();
     computeHeightMap(terrain_cloud, lidar_position);
+  }
+
+  void PerFrameHeightMap::computeFrameOutputs(
+      const Cell& frame_cloud, const guga_common::Point3d& lidar_position) {
+    frame_obstacle_cloud_->clear();
+    frame_return_cloud_->clear();
+
+    for (const auto& point : frame_cloud.points) {
+      const GridIndex grid_index = gridIndex(
+          point.x, point.y, lidar_position.x, lidar_position.y,
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
+      // 平面网格是这两份输出的空间界：格无效即超出约 5 m 窗口。
+      if (!grid_index.valid) {
+        continue;
+      }
+      // 地面场来自 compute()：本阶段不重估地面，只按同一套判据分类。
+      const double h_ground = point.z
+                              - voxel_elev_[PerFrameHeightGrid::linearIndex(
+                                  grid_index.row, grid_index.col)];
+      if (!abovePenetrationFloor(point.z - lidar_position.z, config_)) {
+        continue;
+      }
+      if (!aboveGroundFloor(point.z, config_)) {
+        continue;
+      }
+      const float height = static_cast<float>(
+          config_.consider_drop ? std::abs(h_ground) : h_ground);
+
+      frame_return_cloud_->push_back(point);
+      frame_return_cloud_->back().intensity = height;
+
+      if (insideOutputBand(h_ground, config_)) {
+        frame_obstacle_cloud_->push_back(point);
+        frame_obstacle_cloud_->back().intensity = height;
+      }
+    }
   }
 
   void PerFrameHeightMap::estimateTerrainGround(

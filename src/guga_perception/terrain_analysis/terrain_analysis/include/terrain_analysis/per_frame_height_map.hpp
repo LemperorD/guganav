@@ -26,6 +26,10 @@ namespace terrain_analysis {
    * 三段串联，顺序不可换（后者都依赖前者的产物）：
    *   estimateTerrainGround → computePlanarElevation → computeHeightMap
    *
+   * computeFrameOutputs 是第二条入口，把**本帧**点云过滤成两份当帧输出（供代价
+   * 地图分别做标记与清除），地面场直接复用上面那条流水线算好的 voxel_elev_，
+   * 因此必须在 compute() 之后调用。
+   *
    * 可见性契约：三段是实现细节，一律 private，可自由重构签名而不影响调用方；
    * 外部只走 compute() 与 obstacleCloud()。三段与网格数据放在 protected 的
    * "接缝"区，需要白盒验证的测试用派生类把它们提升为公有（见
@@ -68,6 +72,37 @@ namespace terrain_analysis {
     /** @brief 最近一次生成的障碍点云（intensity 为距局部地面的高度）。 */
     [[nodiscard]] const Cell& obstacleCloud() const noexcept {
       return *obstacle_cloud_;
+    }
+
+    /**
+     * @brief 由本帧点云生成两份当帧输出：障碍点云与回波点云。
+     *
+     * 与 compute() 产出的累计障碍云有三处不同，都是"当帧"这条语义要求的：
+     *   -
+     * 输入是本帧点云（PersistentVoxelMap::frameCloud），不是采集到的累计云；
+     *   - 不做逐格点数门限：min_block_point_num 是按累计云的逐格点数定的，单帧
+     *     每格点数远小于它，套用会几乎没有输出；
+     *   - 同时产出两份。障碍点云再套一层输出带，供代价地图标记；回波点云只保留
+     *     地面地板与穿透地板这两条筛选，含地面回波——清除射线需要的是"该方向上
+     *     有一次回波"，地面回波正是"射线路径为空"的证据，它不必是障碍点。
+     *
+     * 两份输出都只保留平面网格窗口内的点（与累计输出同为约 5 m 半径），
+     * intensity 都是距局部地面的高度 h。
+     * @param frame_cloud 本帧点云，坐标位于 odom 坐标系。
+     * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
+     */
+    void computeFrameOutputs(const Cell& frame_cloud,
+                             const guga_common::Point3d& lidar_position);
+
+    /** @brief 最近一次生成的当帧障碍点云（intensity 为距局部地面的高度）。 */
+    [[nodiscard]] const Cell& frameObstacleCloud() const noexcept {
+      return *frame_obstacle_cloud_;
+    }
+
+    /** @brief 最近一次生成的当帧回波点云（含地面回波，intensity
+     * 为距局部地面的高度）。 */
+    [[nodiscard]] const Cell& frameReturnCloud() const noexcept {
+      return *frame_return_cloud_;
     }
 
   protected:
@@ -124,6 +159,10 @@ namespace terrain_analysis {
     /** @brief 每格估计出的地面高度（没有候选的格保持 0）。 */
     std::array<double, PerFrameHeightGrid::NUM> voxel_elev_{};
     Cell::Ptr obstacle_cloud_ = std::make_shared<Cell>();
+    /** @brief 当帧输出：带内的障碍点，供代价地图标记。 */
+    Cell::Ptr frame_obstacle_cloud_ = std::make_shared<Cell>();
+    /** @brief 当帧输出：全部有效回波（含地面回波），供代价地图射线清除。 */
+    Cell::Ptr frame_return_cloud_ = std::make_shared<Cell>();
 
   private:
     void elevateByQuantile(int cell);

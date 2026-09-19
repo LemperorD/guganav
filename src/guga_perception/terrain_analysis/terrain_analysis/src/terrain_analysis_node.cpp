@@ -1,6 +1,6 @@
 // 主线位置：ROS 回调收帧 → processOnce() 跑一帧（前半段累积 → 采集 → 后半段估计
-// 并输出）→ 发布 terrain_map。整个包的入口就是本文件里的这两条订阅与
-// processOnce。
+// 并输出）→ 发布累计的 terrain_map 与两条当帧点云。整个包的入口就是本文件里的
+// 这两条订阅与 processOnce。
 //
 // Copyright 2024 Hongbiao Zhu
 //
@@ -103,6 +103,12 @@ namespace terrain_analysis {
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
         "terrain_map", 2);
+    pub_terrain_obstacles_current_ =
+        this->create_publisher<sensor_msgs::msg::PointCloud2>(
+            "terrain_obstacles_current", 2);
+    pub_terrain_returns_current_ =
+        this->create_publisher<sensor_msgs::msg::PointCloud2>(
+            "terrain_returns_current", 2);
 
     timer_ = this->create_wall_timer(std::chrono::milliseconds(10),
                                      [this]() { processOnce(); });
@@ -131,19 +137,32 @@ namespace terrain_analysis {
     persistent_voxel_map_.update();
     persistent_voxel_map_.collectCloud(*collected_cloud_);
     // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。
-    per_frame_height_map_.compute(*collected_cloud_,
-                                  persistent_voxel_map_.lidarPosition());
-    publishPointCloud();
+    const guga_common::Point3d& lidar_position =
+        persistent_voxel_map_.lidarPosition();
+    per_frame_height_map_.compute(*collected_cloud_, lidar_position);
+    // 当帧输出取自本帧点云，地面场复用上一行的结果，因此必须紧随其后。
+    per_frame_height_map_.computeFrameOutputs(
+        persistent_voxel_map_.frameCloud(), lidar_position);
+    publishClouds();
     return rclcpp::ok();
   }
 
-  void TerrainAnalysis::publishPointCloud() {
+  void TerrainAnalysis::publishClouds() {
+    publishCloud(pub_terrain_map_, obstacleCloud());
+    publishCloud(pub_terrain_obstacles_current_, frameObstacleCloud());
+    publishCloud(pub_terrain_returns_current_, frameReturnCloud());
+  }
+
+  void TerrainAnalysis::publishCloud(
+      const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
+          publisher,
+      const pcl::PointCloud<pcl::PointXYZI>& cloud) {
     sensor_msgs::msg::PointCloud2 message;
-    pcl::toROSMsg(obstacleCloud(), message);
+    pcl::toROSMsg(cloud, message);
     message.header.stamp = rclcpp::Time(
         static_cast<int64_t>(last_stamp_ * 1e9));
     message.header.frame_id = "odom";
-    pub_terrain_map_->publish(message);
+    publisher->publish(message);
   }
 
 }  // namespace terrain_analysis
