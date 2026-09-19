@@ -52,3 +52,35 @@
 
 - 默认不写注释，只在原因非明显时添加
 - 不使用 Doxygen `///`，不使用 `// ...` 分区注释段
+
+## 保存时自动格式化（clangd）
+
+格式只由仓库根的 `.clang-format` 决定，pre-commit 钩子与编辑器用的是同一份，因此保存过的
+文件在提交时不会再被钩子改写。clangd 另外读 `.clangd`（编译参数与 clang-tidy 检查项），
+编译数据库是仓库根的 `compile_commands.json`（软链到 `build/compile_commands.json`）。
+
+- **VS Code**：装 clangd 扩展，并在 `.vscode/settings.json` 里给 C/C++ 指定它：
+
+  ```json
+  "[cpp] { "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+           "editor.formatOnSave": true },
+  "[c]":  { "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+           "editor.formatOnSave": true }
+  ```
+
+  注意 `.vscode/` 被本地 exclude（`.git/info/exclude`）排除、不入库，所以这台机器上配好
+  之后，换机器要再配一次。若同时装了 `ms-vscode.cpptools`，把它的 IntelliSense 关掉
+  （`"C_Cpp.intelliSenseEngine": "disabled"`），否则两套诊断会重复。
+- **CLion**：Settings → Tools → Actions on Save 勾选 “Reformat code”，并在
+  Settings → Editor → Code Style → C/C++ 里启用 clang-format（读同一份 `.clang-format`）。
+- **Neovim**：在写入前调用 LSP 的格式化：
+
+  ```lua
+  vim.api.nvim_create_autocmd("BufWritePre", {
+    pattern = { "*.cpp", "*.hpp", "*.h" },
+    callback = function() vim.lsp.buf.format({ async = false }) end,
+  })
+  ```
+
+`.clangd` 的 `CompileFlags.CompilationDatabase: build` 指向 colcon 的构建目录；某个包的
+编译数据库没生成时，clangd 会因为拿不到编译参数而解析错乱，重新构建该包即可。
