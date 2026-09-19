@@ -165,45 +165,4 @@ namespace terrain_analysis {
     EXPECT_FALSE(terrain_->obstacleCloud().points.empty())
         << "该障碍仍在累计云的衰减窗口内";
   }
-
-  // 清除端点云每个方位角桶一个端点：桶内有回波就用最远的那个（哪怕它在平面网格
-  // 之外），桶内没有回波就合成一个远端端点——那个方位的光束一路没有碰到东西，
-  // 也就是那里为空；不补端点，该方位的旧标记永远清不掉。障碍云需要离地高度，
-  // 因此不含网格外的点。
-  TEST_F(TerrainAnalysisTest, Run_ReturnFan_CoversEveryAzimuth) {
-    sendOdom(0, 0, 0);
-
-    // 只在 +x 方位放回波，最远 8 m（超出平面网格的 ±5.1 m）
-    auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-    for (int i = 0; i <= 10; ++i) {
-      pcl::PointXYZI p;
-      p.x = static_cast<float>(6.0 + 0.2 * static_cast<double>(i));
-      p.y = 0.0F;
-      p.z = 0.01F;
-      p.intensity = 0;
-      cloud->push_back(p);
-    }
-    sendCloud(cloud, 100.0);
-
-    const auto& fan = terrain_->frameReturnCloud();
-    EXPECT_EQ(fan.points.size(), 720U) << "0.5° 一桶，每个方位角都要有端点";
-
-    // 按同样的分桶规则取 +x 桶（下标 360）与反方向桶（下标 0）的距离
-    const auto distance_at_bin = [&](int wanted) {
-      for (const auto& p : fan.points) {
-        const double angle = std::atan2(p.y, p.x);
-        const int bin = static_cast<int>(
-            std::floor((angle + M_PI) / (2.0 * M_PI) * 720.0));
-        if (bin == wanted) {
-          return std::hypot(static_cast<double>(p.x), static_cast<double>(p.y));
-        }
-      }
-      return -1.0;
-    };
-    EXPECT_NEAR(distance_at_bin(360), 8.0, 0.1) << "+x 方位应取该桶最远的回波";
-    EXPECT_NEAR(distance_at_bin(0), 12.0, 0.1) << "没有回波的方位应补远端端点";
-
-    EXPECT_TRUE(terrain_->frameObstacleCloud().points.empty())
-        << "网格外没有地面估计，不该输出障碍点";
-  }
 }  // namespace terrain_analysis

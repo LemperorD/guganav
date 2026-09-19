@@ -28,92 +28,35 @@ namespace terrain_analysis {
     frame_obstacle_cloud_->clear();
     frame_return_cloud_->clear();
 
-    // 回波按方位角分桶，每桶只留**最远**的那一个：一个回波说明光束一路没有碰到
-    // 东西，也就是该方位的路径到那里为空，射线端点取最远的那个才覆盖得最全。
-    // bin_distance 为 0 表示该桶还没有回波。
-    std::array<double, CLEARING_AZIMUTH_BINS> bin_distance{};
-    bin_distance.fill(0.0);
-    std::array<size_t, CLEARING_AZIMUTH_BINS> bin_slot{};
-
     for (const auto& point : frame_cloud.points) {
+      const GridIndex grid_index = gridIndex(
+          point.x, point.y, lidar_position.x, lidar_position.y,
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
+      // 平面网格是这两份输出的空间界：格无效即超出约 5 m 窗口。
+      if (!grid_index.valid) {
+        continue;
+      }
+      // 地面场来自 compute()：本阶段不重估地面，只按同一套判据分类。
+      const double h_ground = point.z
+                              - voxel_elev_[PerFrameHeightGrid::linearIndex(
+                                  grid_index.row, grid_index.col)];
       if (!abovePenetrationFloor(point.z - lidar_position.z, config_)) {
         continue;
       }
       if (!aboveGroundFloor(point.z, config_)) {
         continue;
       }
+      const float height = static_cast<float>(
+          config_.consider_drop ? std::abs(h_ground) : h_ground);
 
-      // 地面场来自 compute()：本阶段不重估地面，只按同一套判据分类。网格外没有
-      // 地面估计，因此只有格内的点才谈得上离地高度。
-      const GridIndex grid_index = gridIndex(
-          point.x, point.y, lidar_position.x, lidar_position.y,
-          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
+      frame_return_cloud_->push_back(point);
+      frame_return_cloud_->back().intensity = height;
 
-      float height = 0.0F;
-      if (grid_index.valid) {
-        const double h_ground = point.z
-                                - voxel_elev_[PerFrameHeightGrid::linearIndex(
-                                    grid_index.row, grid_index.col)];
-        height = static_cast<float>(config_.consider_drop ? std::abs(h_ground)
-                                                          : h_ground);
-        // 障碍点供代价地图标记，必须能算出离地高度，所以仍受网格限制。
-        if (insideOutputBand(h_ground, config_)) {
-          frame_obstacle_cloud_->push_back(point);
-          frame_obstacle_cloud_->back().intensity = height;
-        }
-      }
-
-      const double dx = point.x - lidar_position.x;
-      const double dy = point.y - lidar_position.y;
-      const double distance = std::hypot(dx, dy);
-      const int bin = azimuthBin(std::atan2(dy, dx));
-      if (distance > bin_distance[bin]) {
-        if (bin_distance[bin] == 0.0) {
-          frame_return_cloud_->push_back(point);
-          bin_slot[bin] = frame_return_cloud_->size() - 1;
-        } else {
-          frame_return_cloud_->points[bin_slot[bin]] = point;
-        }
-        frame_return_cloud_->points[bin_slot[bin]].intensity = height;
-        bin_distance[bin] = distance;
+      if (insideOutputBand(h_ground, config_)) {
+        frame_obstacle_cloud_->push_back(point);
+        frame_obstacle_cloud_->back().intensity = height;
       }
     }
-
-    // 每个方位角都要有一个端点：该方位没有回波时，按雷达水平视场覆盖整圈这一事实
-    // 取接收带上限——那里的光束一路没有碰到东西。端点距离本身不影响结果，代价
-    // 地图层会先把端点裁剪到自己的边界，再截断到 raytrace_max_range。
-    for (int bin = 0; bin < CLEARING_AZIMUTH_BINS; ++bin) {
-      if (bin_distance[bin] > 0.0 && bin_distance[bin] <= CLEARING_RANGE) {
-        continue;  // 桶内最远的回波已在限内，直接用它的原始点
-      }
-      const double angle = binAngle(bin);
-      pcl::PointXYZI endpoint;
-      endpoint.x = static_cast<float>(lidar_position.x
-                                      + CLEARING_RANGE * std::cos(angle));
-      endpoint.y = static_cast<float>(lidar_position.y
-                                      + CLEARING_RANGE * std::sin(angle));
-      // 高度不参与清除（代价地图层只读 x/y）；取雷达高度，以通过源级高度范围。
-      endpoint.z = static_cast<float>(lidar_position.z);
-      endpoint.intensity = 0.0F;
-      if (bin_distance[bin] > 0.0) {
-        frame_return_cloud_->points[bin_slot[bin]] = endpoint;
-      } else {
-        frame_return_cloud_->push_back(endpoint);
-      }
-    }
-  }
-
-  int PerFrameHeightMap::azimuthBin(double angle) {
-    const double normalized = (angle + M_PI) / (2.0 * M_PI);
-    const int bin = static_cast<int>(
-        std::floor(normalized * CLEARING_AZIMUTH_BINS));
-    return std::clamp(bin, 0, CLEARING_AZIMUTH_BINS - 1);
-  }
-
-  double PerFrameHeightMap::binAngle(int bin) {
-    return -M_PI
-           + (static_cast<double>(bin) + 0.5) * 2.0 * M_PI
-                 / CLEARING_AZIMUTH_BINS;
   }
 
   void PerFrameHeightMap::estimateTerrainGround(

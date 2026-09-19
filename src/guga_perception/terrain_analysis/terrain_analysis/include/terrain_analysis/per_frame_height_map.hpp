@@ -82,19 +82,12 @@ namespace terrain_analysis {
      * 输入是本帧点云（PersistentVoxelMap::frameCloud），不是采集到的累计云；
      *   - 不做逐格点数门限：min_block_point_num 是按累计云的逐格点数定的，单帧
      *     每格点数远小于它，套用会几乎没有输出；
-     *   - 同时产出两份，供代价地图分别标记与清除。
+     *   - 同时产出两份。障碍点云再套一层输出带，供代价地图标记；回波点云只保留
+     *     地面地板与穿透地板这两条筛选，含地面回波——清除射线需要的是"该方向上
+     *     有一次回波"，地面回波正是"射线路径为空"的证据，它不必是障碍点。
      *
-     * **障碍点云**（标记用）再套一层输出带，并且必须落在平面网格窗口内——输出带
-     * 判据要离地高度，而离地高度来自逐格的地面估计。
-     *
-     * **清除端点云**（射线清除用）按方位角分桶，每桶一个端点：桶内最远的回波，
-     * 该桶没有回波时取 CLEARING_RANGE。理由有二：
-     *   - 代价地图层对每个点只画一条射线（端点会被裁剪到层自己的边界、再截断到
-     *     raytrace_max_range），所以需要的是"每个方位都有端点"，而不是每个回波一个；
-     *   - 某个方位一个回波都没有，说明扫描该方位的光束一路没有碰到东西，也就是
-     *     那里到量程为止为空——不补端点，该方位就一条射线都没有，旧标记清不掉。
-     * 端点为桶内原始回波时 intensity 为距局部地面的高度（网格外为 0），合成端点
-     * 为 0；代价地图层不读 intensity。
+     * 两份输出都只保留平面网格窗口内的点（与累计输出同为约 5 m 半径），
+     * intensity 都是距局部地面的高度 h。
      * @param frame_cloud 本帧点云，坐标位于 odom 坐标系。
      * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
      */
@@ -106,12 +99,8 @@ namespace terrain_analysis {
       return *frame_obstacle_cloud_;
     }
 
-    /**
-     * @brief 最近一次生成的当帧清除端点云：每个方位角桶一个端点。
-     *
-     * 桶内为原始回波时 intensity 是距局部地面的高度（网格外的点为 0），合成端点
-     * 为 0。详见 computeFrameOutputs。
-     */
+    /** @brief 最近一次生成的当帧回波点云（含地面回波，intensity
+     * 为距局部地面的高度）。 */
     [[nodiscard]] const Cell& frameReturnCloud() const noexcept {
       return *frame_return_cloud_;
     }
@@ -172,34 +161,12 @@ namespace terrain_analysis {
     Cell::Ptr obstacle_cloud_ = std::make_shared<Cell>();
     /** @brief 当帧输出：带内的障碍点，供代价地图标记。 */
     Cell::Ptr frame_obstacle_cloud_ = std::make_shared<Cell>();
-    /** @brief 当帧输出：按方位角分桶的清除端点，供代价地图射线清除。 */
+    /** @brief 当帧输出：全部有效回波（含地面回波），供代价地图射线清除。 */
     Cell::Ptr frame_return_cloud_ = std::make_shared<Cell>();
 
   private:
     void elevateByQuantile(int cell);
     void elevateByMinimum(int cell);
-
-    /**
-     * @brief 清除云的方位角桶数。0.5° 一桶。
-     *
-     * 定这个值的是覆盖与开销：代价地图单元 0.05 m，射线到 5 m 时 0.5° 对应约
-     * 4 cm，细于一个单元，窗口内不留未清除的缝；同时射线数被封在桶数以内。
-     */
-    static constexpr int CLEARING_AZIMUTH_BINS = 720;
-
-    /**
-     * @brief 清除端点的距离上限，单位 m。
-     *
-     * 只要不小于代价地图源的 raytrace_max_range（实车 5.5 m）即可——层会先把端点
-     * 裁剪到自己的边界再截断，端点更远不多清一格。取 12 m 覆盖接收带上限。
-     */
-    static constexpr double CLEARING_RANGE = 12.0;
-
-    /** @brief 把方位角（[-π, π)）映射到桶下标。 */
-    [[nodiscard]] static int azimuthBin(double angle);
-
-    /** @brief 桶下标对应的方位角（取桶中心）。 */
-    [[nodiscard]] static double binAngle(int bin);
 
     /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */
     const PerFrameHeightConfig& config_;
