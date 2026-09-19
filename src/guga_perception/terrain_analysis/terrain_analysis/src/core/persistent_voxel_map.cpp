@@ -4,7 +4,7 @@
 
 #include "terrain_analysis/core/persistent_voxel_map.hpp"
 
-#include "terrain_analysis/core/grid_lookup.hpp"
+#include "terrain_analysis/core/grid_utils.hpp"
 
 #include <unordered_map>
 
@@ -91,15 +91,8 @@ namespace terrain_analysis {
   }
 
   void PersistentVoxelMap::collectCloud(Cell& out) const {
-    out.clear();
-    constexpr int HALF = PersistentVoxelGrid::HALF_WIDTH;
-    for (int row = HALF - EXTRACT_HALF_WINDOW;
-         row <= HALF + EXTRACT_HALF_WINDOW; row++) {
-      for (int column = HALF - EXTRACT_HALF_WINDOW;
-           column <= HALF + EXTRACT_HALF_WINDOW; column++) {
-        out += *cloud_[PersistentVoxelGrid::linearIndex(row, column)];
-      }
-    }
+    // 拼接本身是"格 → 点云"的通用换算，见 grid_utils.hpp；这里只决定窗口多大。
+    collectWindow<PersistentVoxelGrid>(cloud_, EXTRACT_HALF_WINDOW, out);
   }
 
   void PersistentVoxelMap::rollover(const guga_common::Point3d& lidar,

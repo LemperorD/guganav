@@ -4,7 +4,7 @@
 
 #include "terrain_analysis/core/per_frame_height_map.hpp"
 
-#include "terrain_analysis/core/grid_lookup.hpp"
+#include "terrain_analysis/core/grid_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -49,7 +49,8 @@ namespace terrain_analysis {
         continue;
       }
 
-      addToPlanarNeighborhood3x3(grid_index.row, grid_index.col, point.z);
+      addToNeighborhood3x3<PerFrameHeightGrid>(grid_index.row, grid_index.col,
+                                               point.z, point_elev_);
     }
   }
 
@@ -114,28 +115,6 @@ namespace terrain_analysis {
           && point_count >= static_cast<size_t>(config.min_block_point_num)) {
         elevations->push_back(point);
         elevations->back().intensity = static_cast<float>(height);
-      }
-    }
-  }
-
-  void PerFrameHeightMap::addToPlanarNeighborhood3x3(int row, int col,
-                                                     double z) {
-    constexpr int width = PerFrameHeightGrid::WIDTH;
-
-    for (int delta_row = -1; delta_row <= 1; delta_row++) {
-      const int neighbor_row = row + delta_row;
-      if (neighbor_row < 0 || neighbor_row >= width) {
-        continue;
-      }
-      for (int delta_col = -1; delta_col <= 1; delta_col++) {
-        const int neighbor_col = col + delta_col;
-        if (neighbor_col < 0 || neighbor_col >= width) {
-          continue;
-        }
-        // 行偏移按整行换算（乘网格宽度），列偏移直接相加
-        const size_t index = PerFrameHeightGrid::linearIndex(neighbor_row,
-                                                             neighbor_col);
-        point_elev_[index].push_back(z);
       }
     }
   }

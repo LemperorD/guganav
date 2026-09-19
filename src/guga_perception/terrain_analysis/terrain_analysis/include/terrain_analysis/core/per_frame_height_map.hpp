@@ -81,18 +81,6 @@ namespace terrain_analysis {
                           const guga_common::Point3d& lidar_position,
                           const PerFrameHeightConfig& config);
 
-    /**
-     * @brief 把一个高度值加入指定平面格及其 3×3 邻域的候选集中。
-     *
-     * 邻域膨胀的目的是让每格地面高度由约 0.6 m 范围内的点共同决定，以抗单点
-     * 噪声；代价有二，改动时需一并考虑：
-     *   - 实际地面分辨率低于标称的 planar_voxel_size（0.2 m）；
-     *   - min_block_point_num 的语义被稀释——只靠邻居的点也能凑够该阈值。
-     * @param row 中心格的行下标（必须已在网格范围内）。
-     * @param col 中心格的列下标（必须已在网格范围内）。
-     * @param z 要加入候选的高度值（odom 绝对 z）。
-     */
-    void addToPlanarNeighborhood3x3(int row, int col, double z);
     /** @brief 用分位数估计指定平面格的地面高度。 */
     void elevateByQuantile(int cell, const PerFrameHeightConfig& config);
     /** @brief 用最低点估计指定平面格的地面高度。 */
