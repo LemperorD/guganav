@@ -2,6 +2,25 @@
 
 局部地形分析节点，从 LiDAR 点云构建局部高度地图，输出障碍点云 `terrain_map`（`intensity` 为该点距局部地面的高度）。
 
+## 从哪里读起
+
+主线只有一条：ROS 回调收帧 → `TerrainAnalysis::processOnce()` 跑一帧 → 发布。
+按下面三份顺次读，一帧的全部动作就到手了：
+
+1. `src/terrain_analysis_node.cpp` — 订阅、逐帧分发与发布都在这里；`processOnce()`
+   只有五行，把一帧的三件事写全了：前半段 `update`（累积）、`collectCloud`（取窗口）、
+   后半段 `compute`（估计并输出障碍）。
+2. `persistent_voxel_map.hpp` — 前半段（跨帧持续）。类文档说明 `ingest` 收帧、
+   `update` 的三步与窗口策略；判据与实现细节在 `persistent_voxel_map.cpp`。
+3. `per_frame_height_map.hpp` — 后半段（逐帧）。类文档说明三段串联与各自的输入输出；
+   判据在 `per_frame_height_map.cpp`。
+
+另外三份是词汇表，读到主线里用到时再按需查：`config.hpp`（两半各自的参数结构体）、
+`grid.hpp`（两张网格的尺寸与下标换算）、`grid_utils.hpp`（坐标 ↔ 格、格 ↔ 点云、
+单点 ↔ 3×3 邻域）。测试按同一顺序读：`test_integration.cpp` 是话题级的整条链路，
+`test_algorithm.cpp` 是两半各自的阶段，`test_frame_ingest.cpp` 是前半段的收帧，
+`test_terrain_analysis.cpp` 是节点对象级的三个场景。
+
 ## 架构
 
 ```

@@ -1,3 +1,7 @@
+// 主线位置：ROS 回调收帧 → processOnce() 跑一帧（前半段累积 → 采集 → 后半段估计
+// 并输出）→ 发布 terrain_map。整个包的入口就是本文件里的这两条订阅与
+// processOnce。
+//
 // Copyright 2024 Hongbiao Zhu
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
