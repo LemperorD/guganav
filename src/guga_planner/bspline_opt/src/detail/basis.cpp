@@ -1,12 +1,11 @@
-#include "bspline_opt/detail/basis.hpp"
-#include "bspline_opt/detail/common.hpp"
+#include "bspline_opt/basis_cache.hpp"
 #include <cstddef>
 
 
 namespace bspline_opt::detail
 {
 
-int findSpan(double u, const Eigen::RowVectorXd & knots, int n, int p)
+int BasisCache::findSpan(double u, const Eigen::RowVectorXd & knots, int n, int p)
 {
   if (u >= knots(n + 1)) {return n;}
   if (u <= knots(p)) {return p;}
@@ -19,40 +18,7 @@ int findSpan(double u, const Eigen::RowVectorXd & knots, int n, int p)
   return lo;
 }
 
-
-void basisValuesAt(
-  double u, const Eigen::RowVectorXd & knots, int p, int M,
-  std::vector<double> & out)
-{
-  out.assign(static_cast<size_t>(M), 0.0);
-  const int n = M - 1;
-  const int j = findSpan(u, knots, n, p);
-
-  std::vector<double> N(static_cast<size_t>(p + 1), 0.0);
-  N[0] = 1.0;
-  for (int k = 1; k <= p; ++k) {
-    double saved = 0.0;
-    for (int r = 0; r < k; ++r) {
-      double tmp = N[static_cast<size_t>(r)];
-      double den = knots(j + 1 + r) - knots(j - k + 1 + r);
-      double right = (den != 0.0) ? (knots(j + 1 + r) - u) / den : 0.0;
-      double left = (den != 0.0) ? (u - knots(j - k + 1 + r)) / den : 0.0;
-      N[static_cast<size_t>(r)] = saved + right * tmp;
-      saved = left * tmp;
-    }
-    N[static_cast<size_t>(k)] = saved;
-  }
-
-  for (int r = 0; r <= p; ++r) {
-    int i = j - p + r;
-    if (i >= 0 && i < M) {
-      out[static_cast<size_t>(i)] = N[static_cast<size_t>(r)];
-    }
-  }
-}
-
-
-void basisDerivsAt(
+void BasisCache::basisDerivsAt(
   double u, const Eigen::RowVectorXd & knots, int p, int M,
   std::vector<double> & N, std::vector<double> & N1, std::vector<double> & N2)
 {

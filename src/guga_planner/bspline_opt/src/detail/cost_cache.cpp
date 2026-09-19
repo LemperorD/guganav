@@ -1,13 +1,12 @@
 #include "bspline_opt/detail/cost_cache.hpp"
-#include "bspline_opt/detail/basis.hpp"
-#include "bspline_opt/detail/common.hpp"
+#include "bspline_opt/basis_cache.hpp"
 #include <cstddef>
 
 
 namespace bspline_opt::detail
 {
 
-void rowFromBasis(const std::vector<double> & basis_value, int M, BandRow & row)
+void BasisCache::rowFromBasis(const std::vector<double> & basis_value, int M, BandRow & row)
 {
   row.start = 0;
   row.count = 0;
@@ -22,17 +21,16 @@ void rowFromBasis(const std::vector<double> & basis_value, int M, BandRow & row)
 }
 
 
-CostCache buildCostCache(
+CostCache BasisCache::buildCostCache(
   const Eigen::RowVectorXd & knots, int M,
   const std::vector<Eigen::Vector2d> & orig_points,
   const Eigen::VectorXd & orig_params)
 {
   CostCache cc;
   cc.M = M;
-
   std::vector<double> N, N1, N2;
   auto pushrow = [&](double u, bool second_deriv, std::vector<BandRow> & rows) {
-      basisDerivsAt(u, knots, kSplineDegree, M, N, N1, N2);
+      basisDerivsAt(u, knots, config_.kSplineDegree, M, N, N1, N2);
       BandRow r;
       rowFromBasis(second_deriv ? N2 : N, M, r);
       rows.push_back(r);
@@ -64,7 +62,7 @@ CostCache buildCostCache(
 }
 
 
-double bandedDot(const BandRow & row, const Eigen::MatrixXd & ctrl, int dim)
+double BasisCache::bandedDot(const BandRow & row, const Eigen::MatrixXd & ctrl, int dim)
 {
   double s{};
   for (int k = 0; k < row.count; ++k) {
@@ -74,7 +72,7 @@ double bandedDot(const BandRow & row, const Eigen::MatrixXd & ctrl, int dim)
 }
 
 
-void fillCtrl(
+void BasisCache::fillCtrl(
   const std::vector<double> & params, double first_x, double first_y,
   double last_x, double last_y, int M, Eigen::MatrixXd & ctrl)
 {

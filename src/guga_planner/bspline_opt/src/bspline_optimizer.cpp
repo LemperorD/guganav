@@ -1,5 +1,5 @@
 #include "bspline_opt/bspline_optimizer.hpp"
-
+#include "bspline_opt/basis_cache.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -244,7 +244,8 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
     bool converged{};
     int iters_out{};
-    const auto cc = buildCostCache(
+    BasisCache basis;
+    const auto cc = basis.buildCostCache(
       state_.knots, M, state_.original_points, state_.parameters);
     // 归一化标度: 各代价项除以其初始值, 使权重无量纲且与路径长度/格网无关
     CostNormal costnormal{};

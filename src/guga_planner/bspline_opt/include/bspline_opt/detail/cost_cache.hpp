@@ -24,19 +24,5 @@ struct CostCache
   std::vector<Eigen::Vector2d> dist_q{};
   std::vector<BandRow> basis_esdf{};
 };
-
-void rowFromBasis(const std::vector<double> & b, int M, BandRow & row);
-
-CostCache buildCostCache(
-  const Eigen::RowVectorXd & knots, int M,
-  const std::vector<Eigen::Vector2d> & orig_points,
-  const Eigen::VectorXd & orig_params);
-
-double bandedDot(const BandRow & row, const Eigen::MatrixXd & ctrl, int dim);
-
-void fillCtrl(
-  const std::vector<double> & params, double first_x, double first_y, double last_x,
-  double last_y, int M, Eigen::MatrixXd & ctrl);
-
 }  // namespace detail
 
