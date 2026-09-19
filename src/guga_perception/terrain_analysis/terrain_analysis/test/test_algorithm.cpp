@@ -10,8 +10,9 @@
 
 #include <cmath>
 
-// 白盒测试需要逐阶段驱动两半管线；fixture 是 PersistentVoxelMap /
-// PerFrameHeightMap 的 friend，因此把这类调用收在它以内的分发器里。
+// 白盒测试需要逐阶段驱动两半管线。接缝在 protected 区，测试经
+// test_doubles.hpp 里的派生封装把它们提升为公有（见该文件说明），
+// 因此这里把这类调用收在 fixture 的分发器里。
 namespace stage {
   enum class Id {
     ROLLOVER,
@@ -81,8 +82,8 @@ namespace terrain_analysis {
       }
     }
 
-    // 下面这些是"内部字段的引用访问器"：friend 只授予 fixture 的成员函数，
-    // 测试体本身没有访问权，故统一经这里取引用。
+    // 下面这些是"内部字段的引用访问器"：测试体本身没有访问权，故统一经 fixture
+    // 成员取引用；它们是 TestVoxelMap / TestHeightMap 暴露的公有接缝。
     guga_common::Point3d& lidar() {
       return voxel_map_->lidar();
     }
@@ -445,7 +446,9 @@ TEST_F(AlgorithmTest, EstimateTerrainGround_PointOutsidePlanarGrid_Ignored) {
 // ── computeHeightMap ──
 
 // Z 超出范围的点被过滤
-TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
+// 高于净空的点不输出为障碍。注意判据是 ceiling_clearance（距局部地面），
+// 不是 maxRelZ——后者只作用于前半段的接收带，输出阶段不用它。
+TEST_F(AlgorithmTest, ComputeHeightMap_AboveCeilingClearance_Filtered) {
   lidar().x = 0;
   lidar().y = 0;
   lidar().z = 0;
@@ -457,7 +460,8 @@ TEST_F(AlgorithmTest, ComputeHeightMap_PointOutOfZRange_Filtered) {
   heightConfig().min_block_point_num = 5;
   heightConfig().consider_drop = false;
 
-  // Point at z=2.0 exceeds max_relative_z (0.2)
+  heightConfig().ceiling_clearance = 0.62;
+  // z=2.0 远高于净空上界：按 ceiling_clearance 被挡下（不是 maxRelZ）
   pcl::PointXYZI pt;
   pt.x = 0.5F;
   pt.y = 0;
@@ -595,6 +599,7 @@ TEST_F(AlgorithmTest,
   // 车高砍掉抬升的地面（坡面），并让候选数随车高漂移、经分位数放大成 elev
   // 偏差。 新暴露的风险：隧道天花板若未被 ingest 的高度过滤挡下，会抬高 elev
   // 使真实 地面点丢失——实车偏置下 ingest 上界(z≈0.27)已先挡掉，故暂不构成问题。
+  heightConfig().ceiling_clearance = 0.2;  // 压低净空，使下面这点确实高于它
   terrainCloud()->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);

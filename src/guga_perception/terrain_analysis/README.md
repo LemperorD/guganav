@@ -4,22 +4,28 @@
 
 ## 从哪里读起
 
-主线只有一条：ROS 回调收帧 → `TerrainAnalysis::processOnce()` 跑一帧 → 发布。
-按下面三份顺次读，一帧的全部动作就到手了：
+主线只有一条：Timer 回调函数 → `TerrainAnalysis::processOnce()` 跑一帧 → 发布。
+详细步骤如下：
 
-1. `src/terrain_analysis_node.cpp` — 订阅、逐帧分发与发布都在这里；`processOnce()`
-   只有五行，把一帧的三件事写全了：前半段 `update`（累积）、`collectCloud`（取窗口）、
-   后半段 `compute`（估计并输出障碍）。
-2. `persistent_voxel_map.hpp` — 前半段（跨帧持续）。类文档说明 `ingest` 收帧、
-   `update` 的三步与窗口策略；判据与实现细节在 `persistent_voxel_map.cpp`。
-3. `per_frame_height_map.hpp` — 后半段（逐帧）。类文档说明三段串联与各自的输入输出；
-   判据在 `per_frame_height_map.cpp`。
+1. `src/terrain_analysis_node.cpp` — 订阅、逐帧分发与发布都在这里；
+  - 初始化: 使用参数注入, 在 node 里接受 ros2 参数, 支持动态调参; 将接受的参数结构体的常量指针传递给持有类的构造函数, 使之得到只读的参数数据.
+  - 循环: 调用 walltimer, 每 10ms 执行一次 processOnce(), 更新,计算,并发布数据.
 
-另外三份是词汇表，读到主线里用到时再按需查：`config.hpp`（两半各自的参数结构体）、
-`grid.hpp`（两张网格的尺寸与下标换算）、`grid_utils.hpp`（坐标 ↔ 格、格 ↔ 点云、
-单点 ↔ 3×3 邻域）。测试按同一顺序读：`test_integration.cpp` 是话题级的整条链路，
-`test_algorithm.cpp` 是两半各自的阶段，`test_frame_ingest.cpp` 是前半段的收帧，
-`test_terrain_analysis.cpp` 是节点对象级的三个场景。
+2. `persistent_voxel_map.hpp` — 前半段（跨帧持续）。
+  - 粗网格, 每格 $1m \times 1m$, 负责存储历史点云,并通过时间衰减与高度初步更新并过滤点云,还负责将点云信息注入到缓冲点云中.
+
+3. `per_frame_height_map.hpp` — 后半段（逐帧）。
+  - 细网格, 每格 $0.2m \times 0.2m$,从缓冲点云中获取点并重新构建二维点云簇,通过取分位数的方式决定点云的高度,并最终过滤计算出发布点云.
+
+`config.hpp`: 两网格类各自的参数结构体.
+`grid.hpp` : 两张网格的尺寸与下标换算
+`grid_utils.hpp`坐标 ↔ 格、格 ↔ 点云、单点 ↔ 3×3 邻域的转换函数。
+
+测试:
+`test_integration.cpp` 是话题级的整条链路，
+`test_algorithm.cpp` 是两网格各自的公有方法，
+`test_frame_ingest.cpp` 测试参数传递是否正确，
+`test_terrain_analysis.cpp` 是三个场景下的集成测试。
 
 ## 架构
 
@@ -71,15 +77,15 @@ C 组（PerFrameHeightMap，逐帧）    estimateTerrainGround → computePlanar
 E 组（PerFrameHeightMap，逐帧）    computeHeightMap → 障碍点云（terrain_map）
 ```
 
-| 组 | 阶段 | 职责 |
-| -- | ---- | ---- |
-| A | `rollover` | 雷达移动时滚动 terrain voxel 网格，维持以雷达为中心的滑动窗口 |
-| A | `addFrame` | 当前帧点云按空间位置分配到 terrain voxel 格子 |
-| A | `rebuild` | 逐格每帧重建：按**异性叶**（水平 `scanVoxelSize` 0.1 / 垂直 `scanVoxelSizeZ` 0.05）只保留**最新观测**点 + 时间衰减 + 空间高度过滤 |
-| B | `collectCloud` | 收集雷达周边 11×11 格子的累积地形点 |
-| C | `estimateTerrainGround` | 点膨胀到 planar voxel（3×3），收集地面高度候选值 |
-| C | `computePlanarElevation` | 对每个 planar voxel 估地面高度（分位数 `quantileZ`，或最小值） |
-| E | `computeHeightMap` | 计算每点离地高度，写入 `intensity` 生成输出点云 |
+| 组  | 阶段                     | 职责                                                                                                                              |
+| --- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| A   | `rollover`               | 雷达移动时滚动 terrain voxel 网格，维持以雷达为中心的滑动窗口                                                                     |
+| A   | `addFrame`               | 当前帧点云按空间位置分配到 terrain voxel 格子                                                                                     |
+| A   | `rebuild`                | 逐格每帧重建：按**异性叶**（水平 `scanVoxelSize` 0.1 / 垂直 `scanVoxelSizeZ` 0.05）只保留**最新观测**点 + 时间衰减 + 空间高度过滤 |
+| B   | `collectCloud`           | 收集雷达周边 11×11 格子的累积地形点                                                                                               |
+| C   | `estimateTerrainGround`  | 点膨胀到 planar voxel（3×3），收集地面高度候选值                                                                                  |
+| C   | `computePlanarElevation` | 对每个 planar voxel 估地面高度（分位数 `quantileZ`，或最小值）                                                                    |
+| E   | `computeHeightMap`       | 计算每点离地高度，写入 `intensity` 生成输出点云                                                                                   |
 
 收帧与 A、B 两组都在前半段内完成，C、E 两组由后半段的 `compute` 按序调用；两半之间
 只通过 F2 采集点云交接（节点持有该缓冲）。
@@ -98,10 +104,10 @@ scripts/pre-commit/run_terrain_analysis_tests.sh
 scripts/test/test_terrain_analysis_coverage.sh
 ```
 
-| 输出            | 路径                                   |
-| --------------- | -------------------------------------- |
-| Html 覆盖率报告 | `build/terrain_analysis/coverage.html` |
-| lcov 信息       | `lcov.info`                            |
+| 输出            | 路径                                         |
+| --------------- | -------------------------------------------- |
+| Html 覆盖率报告 | `build/terrain_analysis/coverage.html`       |
+| lcov 信息       | `lcov.info`                                  |
 | 测试日志        | `build/terrain_analysis/coverage_result.ans` |
 
 当前 `terrain_analysis` 测试套件：
@@ -117,20 +123,48 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ## 网格参数
 
-| 网格          | 分辨率 | 尺寸  | 说明                     |
-| ------------- | ------ | ----- | ------------------------ |
-| Terrain voxel | 1.0m   | 21×21 | 滑动窗口，累积多帧地形点 |
-| Planar voxel  | 0.2m   | 51×51 | 固定窗口，估算地面高度   |
+| 网格                     | 分辨率 | 尺寸  | 说明                       |
+| ------------------------ | ------ | ----- | -------------------------- |
+| PersistentVoxelGrid      | 1.0 m  | 21×21 | 滑动窗口，累积多帧点云     |
+| PerFrameHeightGrid       | 0.2 m  | 51×51 | 随车逐帧重建，估地面高度   |
+
+## 参数
+
+参数来自 `src/guga_bringup/config/<profile>/base.yaml` 的 `terrain_analysis:` 段（实车与
+仿真各一份），由节点声明后按两半的读取范围分发给两个配置结构体。共 16 个：
+
+| 归属 | 参数 | 作用 |
+| ---- | ---- | ---- |
+| 前半段 | `scanVoxelSize` / `scanVoxelSizeZ` | 融合叶尺寸（水平 0.1 / 垂直 0.05 m） |
+| 前半段 | `decayTime` / `noDecayDis` | 观测的衰减时间与"近处不衰减"半径 |
+| 前半段 | `maxRelZ` / `disRatioZ` | 接收带的上沿与随距离放宽的比例 |
+| 两半共用 | `minRelZ` | 前半段：接收带下沿；后半段：障碍输出的地板（只声明一次，两处同值） |
+| 后半段 | `useSorting` / `quantileZ` | 地面高度取分位数还是最小值，及分位点 |
+| 后半段 | `considerDrop` / `limitGroundLift` / `maxGroundLift` | 凹坑取绝对值、地面抬升限幅 |
+| 后半段 | `minBlockPointNum` | 每格参与判定的最少点数 |
+| 后半段 | `minObstacleHeight` / `ceilingClearance` | 障碍输出高度带（下界死区、上界净空） |
+| 后半段 | `groundFloorZ` | 地面候选的绝对高度地板（odom z） |
+
+**不是 ROS 参数、launch 改不了的量**（改这些要重编译）：
+
+- `terrain_voxel_size`（1.0 m）：既是体素格边长，也决定接收半径
+  `terrain_voxel_size × (HALF_WIDTH + 1)` = 11 m 与滚动步长；
+- `planar_voxel_size`（0.2 m）：高度网格的格边长，同时是后半段归格的分辨率；
+- 两张网格的 `WIDTH`（21 / 51）与采集窗口半宽 `EXTRACT_HALF_WINDOW`（5，即 ±5.5 m）。
+
+另外注意：`config.hpp` 里的结构体默认值只有部分是实车值——`decay_time`、`no_decay_distance`、
+`quantile_z`、`max_ground_lift`、`max_relative_z` 与 `base.yaml` 不同，单元测试若直接构造
+结构体，跑的是默认值而不是实车工况。
 
 ## 已知风险：坐标系不统一
 
 管线内部同时使用**三个参考系**，且没有在类型或命名上区分——这是当前最容易被误改的地方。
 
-| 参考系 | 定义 | 使用位置 |
-| ------ | ---- | -------- |
-| odom 世界系 | `point.z` 绝对值 | `PersistentVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
-| 雷达系（`lidar_*` 取自雷达里程计的位置） | `relative_z = point.z − lidar_position.z` | `PersistentVoxelMap::ingest` 裁剪带、`computeHeightMap` 的地板 `minRelZ` |
-| 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity |
+| 参考系                                   | 定义                                      | 使用位置                                                                                                       |
+| ---------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| odom 世界系                              | `point.z` 绝对值                          | `PersistentVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
+| 雷达系（`lidar_*` 取自雷达里程计的位置） | `relative_z = point.z − lidar_position.z` | `PersistentVoxelMap::ingest` 裁剪带、`computeHeightMap` 的地板 `minRelZ`                                       |
+| 地面系                                   | `point.z − planar_voxel_elev[cell]`       | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity                                          |
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
 
@@ -168,10 +202,10 @@ scripts/test/test_terrain_analysis_coverage.sh
 障碍输出的条件是 `minObstacleHeight <= h < ceilingClearance`，其中 h 是距**局部
 地面**的高度。两个边界都作用于输出点云（marking 用途）；清除用的回波不受下界约束。
 
-| 边界 | 参数 | 实车值 | 含义 |
-| --- | --- | --- | --- |
-| 下界 | `minObstacleHeight` | 0.04 m | 地面带死区，吸收地面高度估计的误差 |
-| 上界 | `ceilingClearance` | 0.62 m | 车高 520 mm + 100 mm 裕量，可从下方通过的不算障碍 |
+| 边界 | 参数                | 实车值 | 含义                                              |
+| ---- | ------------------- | ------ | ------------------------------------------------- |
+| 下界 | `minObstacleHeight` | 0.04 m | 地面带死区，吸收地面高度估计的误差                |
+| 上界 | `ceilingClearance`  | 0.62 m | 车高 520 mm + 100 mm 裕量，可从下方通过的不算障碍 |
 
 上界是**唯一**的高度上界（判据用 `>=`，等于 0.62 m 的点也丢弃）。
 
@@ -249,10 +283,10 @@ loam_interface
 的点丢掉再转发，无信息增量），且 4.0 m 比 `local_costmap` 需要的 5 m 还窄，在做负功。
 消费者改指 `terrain_map`，属**严格放宽**（≤4 m → ≤±5.1 m，上限由 planar 网格决定）：
 
-| 原消费者 | 原输入 | 现输入 |
-| -------- | ------ | ------ |
+| 原消费者                                    | 原输入                    | 现输入                   |
+| ------------------------------------------- | ------------------------- | ------------------------ |
 | `global_costmap` 的 `intensity_voxel_layer` | `terrain_map_ext`（≤4 m） | `terrain_map`（≤±5.1 m） |
-| `pointcloud_to_laserscan`（仅 SLAM 模式） | `terrain_map_ext` | `terrain_map` |
+| `pointcloud_to_laserscan`（仅 SLAM 模式）   | `terrain_map_ext`         | `terrain_map`            |
 
 原版 CMU 的远场累积与 `checkTerrainConn` 连通性判定在这套移植里本来就不存在
 （参数表是从原版抄的），不是这次删除造成的；若将来需要远场/连通性判定，需另行设计。

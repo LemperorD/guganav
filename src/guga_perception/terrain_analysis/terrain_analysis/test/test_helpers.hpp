@@ -9,12 +9,6 @@ inline auto MakeCloud(float x, float y, float z) {
   return cloud;
 }
 
-inline auto MakeCloudWithTime(float x, float y, float z, float timestamp_sec) {
-  auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-  cloud->push_back({x, y, z, timestamp_sec});
-  return cloud;
-}
-
 inline auto MakeGroundCloud(int grid_size, double spacing, double z) {
   // grid_size points per side, centered at origin
   auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();

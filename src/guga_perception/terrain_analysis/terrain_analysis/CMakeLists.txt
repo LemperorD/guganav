@@ -64,6 +64,12 @@ install(TARGETS terrain_analysis_lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME})
 
+# 头文件对外可用：别的包找到本包时能拿到 include 目录与传递依赖
+# （guga_common 的 Point3d、PCL 的点类型都出现在公有头里）。
+install(DIRECTORY include/ DESTINATION include)
+ament_export_include_directories(include)
+ament_export_dependencies(guga_common)
+
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_terrain_analysis test/test_terrain_analysis.cpp)
