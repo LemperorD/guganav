@@ -27,9 +27,9 @@ namespace terrain_analysis {
    *   estimateTerrainGround → computePlanarElevation → computeHeightMap
    *
    * 可见性契约：三段是实现细节，一律 private，可自由重构签名而不影响调用方；
-   * 外部只走 compute() 与 obstacleCloud()。需要白盒验证各段的测试通过 friend
-   * 显式获得访问权，刻意不把这些阶段提升为公开 API——否则内部顺序会固化成对外
-   * 契约。
+   * 外部只走 compute() 与 obstacleCloud()。三段与网格数据放在 protected 的
+   * "接缝"区，需要白盒验证的测试用派生类把它们提升为公有（见
+   * test/test_doubles.hpp），生产头文件里不出现测试类名。
    */
   class PerFrameHeightMap {
   public:
@@ -70,7 +70,9 @@ namespace terrain_analysis {
       return *obstacle_cloud_;
     }
 
-  private:
+  protected:
+    // ── 接缝：三段阶段与网格数据。生产代码不用，白盒测试用派生类提升为公有
+    // （见 test/test_doubles.hpp），生产头文件里不出现测试类名。 ──
     /**
      * @brief 收集地面高度候选：把每个地面点膨胀到 3×3 平面邻域。
      * @param terrain_cloud 采集点云。
@@ -90,13 +92,6 @@ namespace terrain_analysis {
     void computeHeightMap(const Cell& terrain_cloud,
                           const guga_common::Point3d& lidar_position);
 
-    /** @brief 用分位数估计指定平面格的地面高度。 */
-    void elevateByQuantile(int cell);
-    /** @brief 用最低点估计指定平面格的地面高度。 */
-    void elevateByMinimum(int cell);
-
-    /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */
-    const PerFrameHeightConfig& config_;
     /** @brief 每格收集到的地面高度候选值。 */
     std::array<std::vector<double>, PerFrameHeightGrid::NUM> point_elev_;
     /** @brief 每格估计出的地面高度（没有候选的格保持 0）。 */
@@ -104,9 +99,14 @@ namespace terrain_analysis {
     /** @brief 障碍输出点云。 */
     Cell::Ptr obstacle_cloud_ = std::make_shared<Cell>();
 
-    // 白盒测试需要逐阶段驱动与检查内部状态；仅授予本包测试 fixture，
-    // 不对外开放（新增测试如需访问，在此显式追加）。
-    friend class AlgorithmTest;
+  private:
+    /** @brief 用分位数估计指定平面格的地面高度。 */
+    void elevateByQuantile(int cell);
+    /** @brief 用最低点估计指定平面格的地面高度。 */
+    void elevateByMinimum(int cell);
+
+    /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */
+    const PerFrameHeightConfig& config_;
   };
 
 }  // namespace terrain_analysis

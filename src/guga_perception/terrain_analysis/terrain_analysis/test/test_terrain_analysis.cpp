@@ -28,12 +28,13 @@ namespace terrain_analysis {
       lidar_position_ = {x, y, z};
     }
 
-    /** @brief 把本帧点云交给前半段（节点是 fixture 的 friend，故可直接驱动）。
+    /**
+     * @brief 同步跑一帧：节点的公有入口，不必经 ROS
+     * 话题，也就不需要任何内部访问。
      */
     void sendCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                    double timestamp_sec) {
-      terrain_->persistent_voxel_map_.ingest(*cloud, lidar_position_,
-                                             timestamp_sec);
+      terrain_->processFrame(*cloud, lidar_position_, timestamp_sec);
     }
 
     std::unique_ptr<TerrainAnalysis> terrain_;
@@ -48,7 +49,6 @@ namespace terrain_analysis {
 
     auto cloud = MakeGroundCloud(21, 0.1, 0.01);
     sendCloud(cloud, 100.0);
-    terrain_->processOnce();
 
     EXPECT_TRUE(terrain_->obstacleCloud().points.empty())
         << "平坦地面不应输出障碍点";
@@ -62,7 +62,6 @@ namespace terrain_analysis {
 
     auto cloud = MakeGroundAndObstacleCloud(21, 0.1, 0.0, 0.06);
     sendCloud(cloud, 100.0);
-    terrain_->processOnce();
 
     EXPECT_GT(terrain_->obstacleCloud().points.size(), 0U);
 
@@ -82,7 +81,6 @@ namespace terrain_analysis {
     pcl::PointXYZI obs{3.0F, 3.0F, 0.3F, 0};
     cloud->push_back(obs);
     sendCloud(cloud, 100.0);
-    terrain_->processOnce();
 
     bool found_isolated = false;
     for (const auto& p : terrain_->obstacleCloud().points) {

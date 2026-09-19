@@ -50,8 +50,12 @@ ROS2 消息 → PersistentVoxelMap::ingest → update → collectCloud → PerFr
   `const` 引用，既不拷贝也不修改。因此改配置只需改所有者那一份（测试正是这样逐
   场景调参），两半下次调用就用到新值；代价是所有者必须先声明、后销毁，且不能在
   两半运行中改（本包不做同步，当前只在构造期写）。
-- 白盒测试经 `friend` 访问两半的内部阶段（见 `test_algorithm.cpp`），
-  节点级与话题级的测试见 `test_terrain_analysis.cpp` 与 `test_integration.cpp`
+- 测试的接缝：两半把内部编排与数据放在 `protected` 的“接缝”区，白盒测试用派生类
+  提升为公有（`test/test_doubles.hpp`，做法借鉴 `nav2_mppi_controller` 的
+  `OptimizerTester` / `CriticManagerWrapper`），因此生产头文件里没有测试类名、
+  也没有 `friend` 名单；节点不需要接缝，它对外有 `processFrame()` 这个同步入口。
+  阶段级用例见 `test_algorithm.cpp`，节点级见 `test_terrain_analysis.cpp`，
+  话题级见 `test_integration.cpp`。
 
 ## 管线
 

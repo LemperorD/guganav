@@ -34,9 +34,9 @@ namespace terrain_analysis {
    * collectCloud() 取窗口。update() 用 ingest() 记下的同一个锚点完成三步，
    * 调用方无法把不同的锚点混进同一帧。
    *
-   * 对外只有上面这些入口；逐阶段方法与内部数据一律 private，需要白盒验证的
-   * 测试经 friend 显式获得访问权（见文件末尾的 friend 列表），不把它们提升为
-   * 公开 API——否则内部编排顺序会固化成对外契约。
+   * 对外只有上面这些入口；逐阶段方法与内部数据放在 protected 的"接缝"区，
+   * 需要白盒验证的测试用派生类把它们提升为公有（见 test/test_doubles.hpp），
+   * 生产头文件里不出现测试类名。
    *
    * 线程模型：本类不做同步，调用方必须保证 ingest 与 update 不并发执行（当前由
    * 节点在单线程执行器中串行调用满足）。
@@ -105,7 +105,10 @@ namespace terrain_analysis {
     /** @brief 采集窗口的半宽（格数）：以雷达为中心的 11x11 格。 */
     static constexpr int EXTRACT_HALF_WINDOW = 5;
 
-    // ── 以下只服务本类内部与白盒测试：测试经 friend 访问，不作为对外契约 ──
+  protected:
+    // ── 接缝：本类内部编排与数据。生产代码不用，白盒测试用派生类把它们提升为
+    // 公有（见 test/test_doubles.hpp）——与 nav2_mppi_controller 的做法一致：
+    // 生产头文件里不出现测试类名，封口也不靠 friend 名单维护。 ──
     /** @brief 滚动网格，维持以雷达为中心的窗口（update 的第一步）。 */
     void rollover(const guga_common::Point3d& lidar);
 
@@ -122,7 +125,6 @@ namespace terrain_analysis {
      */
     void rebuild(const guga_common::Point3d& lidar, double now_elapsed);
 
-    // ── 内部数据与工具 ──
     /** @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。 */
     [[nodiscard]] const Cell& frameCloud() const noexcept {
       return *frame_cloud_;
@@ -158,6 +160,14 @@ namespace terrain_analysis {
       return shift_y_;
     }
 
+    std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
+    // 本帧输入：由 ingest 写入，update 消费。
+    Cell::Ptr frame_cloud_ = std::make_shared<Cell>();
+    guga_common::Point3d lidar_;
+    double time_ = 0.0;
+    double init_time_ = 0.0;
+
+  private:
     /** @brief 融合叶键：x/y 与 z 使用不同叶宽（垂直更细）。 */
     [[nodiscard]] static uint64_t leafKey(double x, double y, double z,
                                           double leaf_xy, double leaf_z);
@@ -173,25 +183,13 @@ namespace terrain_analysis {
 
     /** @brief 构造时注入的只读配置；本类不修改它（见构造函数注释）。 */
     const PersistentVoxelConfig& config_;
-    std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
     int shift_x_ = 0;
     int shift_y_ = 0;
-
-    // 本帧输入：由 ingest 写入，update 消费。
-    Cell::Ptr frame_cloud_ = std::make_shared<Cell>();
-    guga_common::Point3d lidar_;
-    double time_ = 0.0;
-    double init_time_ = 0.0;
     bool inited_ = false;
     bool frame_pending_ = false;
 
     [[nodiscard]] static std::array<Cell::Ptr, PersistentVoxelGrid::NUM>
     makeCells();
-
-    // 白盒测试需要逐阶段驱动并检查内部状态；仅授予本包测试 fixture，
-    // 不对外开放（新增测试如需访问，在此显式追加）。
-    friend class AlgorithmTest;
-    friend class FrameIngestTest;
   };
 
 }  // namespace terrain_analysis

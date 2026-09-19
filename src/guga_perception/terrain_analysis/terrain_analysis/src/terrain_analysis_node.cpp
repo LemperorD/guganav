@@ -100,8 +100,8 @@ namespace terrain_analysis {
         [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
           auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
           pcl::fromROSMsg(*msg, *cloud);
-          last_stamp_ = rclcpp::Time(msg->header.stamp).seconds();
-          persistent_voxel_map_.ingest(*cloud, lidar_position_, last_stamp_);
+          ingestFrame(*cloud, lidar_position_,
+                      rclcpp::Time(msg->header.stamp).seconds());
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -109,6 +109,21 @@ namespace terrain_analysis {
 
     timer_ = this->create_wall_timer(std::chrono::milliseconds(10),
                                      [this]() { processOnce(); });
+  }
+
+  void TerrainAnalysis::ingestFrame(
+      const pcl::PointCloud<pcl::PointXYZI>& cloud,
+      const guga_common::Point3d& lidar_position, double timestamp_sec) {
+    lidar_position_ = lidar_position;
+    last_stamp_ = timestamp_sec;
+    persistent_voxel_map_.ingest(cloud, lidar_position_, last_stamp_);
+  }
+
+  bool TerrainAnalysis::processFrame(
+      const pcl::PointCloud<pcl::PointXYZI>& cloud,
+      const guga_common::Point3d& lidar_position, double timestamp_sec) {
+    ingestFrame(cloud, lidar_position, timestamp_sec);
+    return processOnce();
   }
 
   bool TerrainAnalysis::processOnce() {

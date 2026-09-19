@@ -2,6 +2,7 @@
 #include "terrain_analysis/per_frame_height_map.hpp"
 #include "terrain_analysis/persistent_voxel_map.hpp"
 #include "gtest/gtest.h"
+#include "test_doubles.hpp"
 #include "test_helpers.hpp"
 
 #include <pcl/point_cloud.h>
@@ -34,8 +35,8 @@ namespace terrain_analysis {
     }
 
     void resetState() {
-      height_map_ = std::make_unique<PerFrameHeightMap>(height_config_);
-      voxel_map_ = std::make_unique<PersistentVoxelMap>(voxel_config_);
+      height_map_ = std::make_unique<TestHeightMap>(height_config_);
+      voxel_map_ = std::make_unique<TestVoxelMap>(voxel_config_);
       for (auto& ptr : voxelCells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
       }
@@ -83,28 +84,28 @@ namespace terrain_analysis {
     // 下面这些是"内部字段的引用访问器"：friend 只授予 fixture 的成员函数，
     // 测试体本身没有访问权，故统一经这里取引用。
     guga_common::Point3d& lidar() {
-      return voxel_map_->lidar_;
+      return voxel_map_->lidar();
     }
     double& frameTime() {
-      return voxel_map_->time_;
+      return voxel_map_->time();
     }
     double& initTime() {
-      return voxel_map_->init_time_;
+      return voxel_map_->initTime();
     }
     pcl::PointCloud<pcl::PointXYZI>::Ptr& frameCloud() {
-      return voxel_map_->frame_cloud_;
+      return voxel_map_->frameCloudPtr();
     }
     std::array<double, PerFrameHeightGrid::NUM>& voxelElev() {
-      return height_map_->voxel_elev_;
+      return height_map_->voxelElev();
     }
     std::array<std::vector<double>, PerFrameHeightGrid::NUM>& pointElev() {
-      return height_map_->point_elev_;
+      return height_map_->pointElev();
     }
     pcl::PointCloud<pcl::PointXYZI>::Ptr& obstacleCloud() {
-      return height_map_->obstacle_cloud_;
+      return height_map_->obstacleCloudPtr();
     }
 
-    PerFrameHeightMap& heightMap() {
+    TestHeightMap& heightMap() {
       return *height_map_;
     }
     int shiftX() const {
@@ -117,7 +118,7 @@ namespace terrain_analysis {
     voxelCells() {
       return voxel_map_->cells();
     }
-    PersistentVoxelMap& voxelMap() {
+    TestVoxelMap& voxelMap() {
       return *voxel_map_;
     }
     PersistentVoxelConfig& voxelConfig() {
@@ -130,10 +131,10 @@ namespace terrain_analysis {
       return terrain_cloud_;
     }
     guga_common::Point3d lidarPosition() const {
-      return voxel_map_->lidar_;
+      return voxel_map_->lidar();
     }
     double elapsed() const {
-      return voxel_map_->time_ - voxel_map_->init_time_;
+      return voxel_map_->time() - voxel_map_->initTime();
     }
 
     // 把一个点放进体素网格的中心格，再触发重建。返回该格保留的点数。
@@ -145,11 +146,11 @@ namespace terrain_analysis {
       config.decay_time = 999.0;
       config.no_decay_distance = 999.0;
 
-      voxel_map_->lidar_.x = 0;
-      voxel_map_->lidar_.y = 0;
-      voxel_map_->lidar_.z = 0.0;
-      voxel_map_->time_ = 1.0;
-      voxel_map_->init_time_ = 0.0;
+      voxel_map_->lidar().x = 0;
+      voxel_map_->lidar().y = 0;
+      voxel_map_->lidar().z = 0.0;
+      voxel_map_->time() = 1.0;
+      voxel_map_->initTime() = 0.0;
 
       int center_cell = PersistentVoxelGrid::linearIndex(
           PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
@@ -169,8 +170,8 @@ namespace terrain_analysis {
     /** @brief 两份配置由 fixture 持有并注入；两半自己不持有配置。 */
     PersistentVoxelConfig voxel_config_;
     PerFrameHeightConfig height_config_;
-    std::unique_ptr<PerFrameHeightMap> height_map_;
-    std::unique_ptr<PersistentVoxelMap> voxel_map_;
+    std::unique_ptr<TestHeightMap> height_map_;
+    std::unique_ptr<TestVoxelMap> voxel_map_;
     /** @brief 两半之间的交接数据（采集点云），由测试持有。 */
     pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_;
   };

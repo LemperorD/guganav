@@ -38,6 +38,20 @@ namespace terrain_analysis {
      */
     bool processOnce();
 
+    /**
+     * @brief 同步跑一帧：收下这帧点云与雷达位置，跑完整条管线并发布。
+     *
+     * 与两条订阅等价，只是不必经过 ROS 话题——便于进程内嵌入、回放与测试。
+     * 定时器驱动的生产方式仍走订阅 + processOnce()。
+     * @param cloud 本帧点云，坐标位于 odom 坐标系。
+     * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
+     * @param timestamp_sec 本帧时间戳，单位为秒。
+     * @return ROS 上下文仍运行时返回 true，否则返回 false。
+     */
+    bool processFrame(const pcl::PointCloud<pcl::PointXYZI>& cloud,
+                      const guga_common::Point3d& lidar_position,
+                      double timestamp_sec);
+
     /** @brief 获取最近一次生成的障碍点云。 */
     [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& obstacleCloud() const {
       return per_frame_height_map_.obstacleCloud();
@@ -46,6 +60,12 @@ namespace terrain_analysis {
   private:
     /** @brief 将内部输出点云转换为 ROS 消息并发布。 */
     void publishPointCloud();
+
+    /** @brief 记下本帧的雷达位置与时刻，把点云交给前半段（两条订阅与
+     * processFrame 共用这一处）。 */
+    void ingestFrame(const pcl::PointCloud<pcl::PointXYZI>& cloud,
+                     const guga_common::Point3d& lidar_position,
+                     double timestamp_sec);
 
     /** @brief 声明前半段读取的 ROS 参数并返回填好的配置。 */
     PersistentVoxelConfig declareVoxelConfig();
@@ -82,9 +102,5 @@ namespace terrain_analysis {
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
         pub_terrain_map_;
     rclcpp::TimerBase::SharedPtr timer_;
-
-    // 白盒测试要直接驱动两半并检查交接数据；只授予本包测试 fixture，
-    // 不把这些内部成员提升为公开 API。
-    friend class TerrainAnalysisTest;
   };
 }  // namespace terrain_analysis
