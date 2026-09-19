@@ -17,12 +17,6 @@ namespace jps_planner {
   // 数据结构
   // ────────────────────────────────────────────────────────────
 
-  /** @brief 网格坐标 (格元索引, 整数)。 */
-  struct Node {
-    int x{};
-    int y{};
-  };
-
   /**
    * @brief JPS 搜索中使用的搜索节点。
    *
@@ -36,7 +30,7 @@ namespace jps_planner {
     double h{INF_COST};  // 从此节点到终点的启发式估计
     double f{INF_COST};  // f = g + h (A* 排序键)
     const SearchNode* parent{nullptr};  // 指向最优路径上的前驱节点
-    bool closed{false};                 // 是否已从开放列表中关闭
+    bool closed{false};                 // 是否已从开放列表中删去
   };
 
   /** @brief JPS 算法的不可变配置 (遵循模式 A: 公开字段)。 */

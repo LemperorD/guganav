@@ -22,15 +22,15 @@ JPS 航点(折线) ──fit──▶ B-spline ──optimize──▶ 平滑路
 
 ```
 include/bspline_opt/
-├── bspline_optimizer.hpp        # 公开 API：BSplineConfig / State / Result / Optimizer
+├── bspline_optimizer.hpp        # 公开 API：BSplineConfig / State / 
+├── basis_cache.hpp              # 基函数缓存类
+Result / Optimizer
 └── detail/                      # 内部模块（头文件）
-    ├── common.hpp               # 共享常量（kSplineDegree=7）
     ├── grid_utils.hpp           # 代价地图障碍工具
     ├── esdf_utils.hpp           # ESDF 距离/梯度场双线性查询
-    ├── basis.hpp                # B-spline 基函数（findSpan / basisValues / basisDerivs）
-    ├── cost_cache.hpp           # BandRow / CostCache 带状缓存
     ├── cost_function.hpp        # 三项代价与解析梯度
     └── gradient_descent.hpp     # 共轭梯度优化器
+
 
 src/
 ├── bspline_optimizer.cpp        # fit / optimize / sample / curvatureAt ...
@@ -41,8 +41,7 @@ src/
 
 | 模块 | 职责 |
 | --- | --- |
-| `basis` | NURBS Book 基函数算法，计算任意参数处的基函数值/一阶导/二阶导 |
-| `cost_cache` | 把基函数行预计算成带状结构，避免优化时重复求值 |
+| `basis_cache` | NURBS Book 基函数算法，计算任意参数处的基函数值/一阶导/二阶导并把基函数行预计算成带状结构，避免优化时重复求值 |
 | `cost_function` | 平滑/距离/ESDF 三项代价及其解析梯度（按初始值归一化） |
 | `gradient_descent` | 共轭梯度下降 + 回溯线搜索 + 走廊约束 |
 | `grid_utils` | 障碍判定与螺旋搜索投射 |

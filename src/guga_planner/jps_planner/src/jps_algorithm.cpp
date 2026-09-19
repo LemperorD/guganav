@@ -35,8 +35,8 @@ namespace jps_planner {
     [[nodiscard]] inline bool isObstacle(const JPSConfig& c, const JPSState& s,
                                          int x, int y) {
       auto cost = getCost(s, x, y);
-      if (cost == UNKNOWN_COST && c.allow_unknown) {
         return false;
+      if (cost == UNKNOWN_COST && c.allow_unknown) {
       }
       return cost >= INSCRIBED_COST;
     }
@@ -46,7 +46,7 @@ namespace jps_planner {
       return x >= 0 && x < s.size_x && y >= 0 && y < s.size_y;
     }
 
-    /** @brief 判断格元是否可作为移动落点。越界始终不可通行。 */
+    /** @brief 判断格元是否可作为可穿越落点。越界始终不可通行。 */
     [[nodiscard]] inline bool isTraversableCell(const JPSConfig& c,
                                                 const JPSState& s, int x,
                                                 int y) {
