@@ -764,12 +764,10 @@ TEST_F(AlgorithmTest, InsideReceiveBand_Boundaries_ExcludeEqualValues) {
   const double lower = -1.5 - 0.2 * distance;  // -2.5
   const double upper = 0.5 + 0.2 * distance;   // 2.5
 
-  EXPECT_FALSE(voxelMap().insideReceiveBand(lower, distance, voxelConfig()));
-  EXPECT_TRUE(
-      voxelMap().insideReceiveBand(lower + 0.01, distance, voxelConfig()));
-  EXPECT_FALSE(voxelMap().insideReceiveBand(upper, distance, voxelConfig()));
-  EXPECT_TRUE(
-      voxelMap().insideReceiveBand(upper - 0.01, distance, voxelConfig()));
+  EXPECT_FALSE(voxelMap().insideReceiveBand(lower, distance));
+  EXPECT_TRUE(voxelMap().insideReceiveBand(lower + 0.01, distance));
+  EXPECT_FALSE(voxelMap().insideReceiveBand(upper, distance));
+  EXPECT_TRUE(voxelMap().insideReceiveBand(upper - 0.01, distance));
 }
 
 // 接收带随距离放宽：同样的高度在近处出界、在远处进界
@@ -779,8 +777,8 @@ TEST_F(AlgorithmTest, InsideReceiveBand_WidensWithDistance) {
   voxelConfig().distance_ratio_z = 0.2;
 
   const double z_rel_lidar = 0.5;  // 相对雷达 0.5 m
-  EXPECT_FALSE(voxelMap().insideReceiveBand(z_rel_lidar, 0.5, voxelConfig()));
-  EXPECT_TRUE(voxelMap().insideReceiveBand(z_rel_lidar, 5.0, voxelConfig()));
+  EXPECT_FALSE(voxelMap().insideReceiveBand(z_rel_lidar, 0.5));
+  EXPECT_TRUE(voxelMap().insideReceiveBand(z_rel_lidar, 5.0));
 }
 
 // 地面候选地板（odom 绝对）：等于地板的点排除

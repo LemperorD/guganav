@@ -41,8 +41,7 @@ namespace terrain_analysis {
       const double z_rel_lidar = point.z - lidar_.z;
       const double distance = horizontalDistance(point.x, point.y, lidar_.x,
                                                  lidar_.y);
-      if (insideReceiveBand(z_rel_lidar, distance, config_)
-          && distance < max_range) {
+      if (insideReceiveBand(z_rel_lidar, distance) && distance < max_range) {
         pcl::PointXYZI cropped = point;
         // intensity 借用来携带该点的观测时刻（相对首帧的秒数），rebuild 判年龄
         // 时读它；原始反射强度在下游没有被使用。
@@ -160,7 +159,7 @@ namespace terrain_analysis {
       for (const auto& point : representatives.points) {
         const double distance = horizontalDistance(point.x, point.y, lidar.x,
                                                    lidar.y);
-        if (keepPoint(point.z - lidar.z, distance, point.intensity, config_,
+        if (keepPoint(point.z - lidar.z, distance, point.intensity,
                       now_elapsed)) {
           cell.push_back(point);
         }
@@ -184,21 +183,18 @@ namespace terrain_analysis {
   }
 
   bool PersistentVoxelMap::keepPoint(double z_rel_lidar, double distance,
-                                     double point_time,
-                                     const PersistentVoxelConfig& config,
-                                     double now_elapsed) {
-    if (!insideReceiveBand(z_rel_lidar, distance, config)) {
+                                     double point_time, double now_elapsed) {
+    if (!insideReceiveBand(z_rel_lidar, distance)) {
       return false;
     }
-    return (now_elapsed - point_time) < config.decay_time;
+    return (now_elapsed - point_time) < config_.decay_time;
   }
 
-  bool PersistentVoxelMap::insideReceiveBand(
-      double z_rel_lidar, double distance,
-      const PersistentVoxelConfig& config) {
-    const double z_margin = config.distance_ratio_z * distance;
-    return z_rel_lidar > config.min_relative_z - z_margin
-           && z_rel_lidar < config.max_relative_z + z_margin;
+  bool PersistentVoxelMap::insideReceiveBand(double z_rel_lidar,
+                                             double distance) {
+    const double z_margin = config_.distance_ratio_z * distance;
+    return z_rel_lidar > config_.min_relative_z - z_margin
+           && z_rel_lidar < config_.max_relative_z + z_margin;
   }
 
   void PersistentVoxelMap::collectCloud(Cell& out) const {

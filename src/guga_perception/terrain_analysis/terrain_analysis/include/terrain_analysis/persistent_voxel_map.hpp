@@ -166,9 +166,7 @@ namespace terrain_analysis {
      * `ingest` 的裁剪与 `rebuild` 的保留用的是同一个带，判据只此一处——两处各写
      * 一遍正是"改了一处忘了另一处"的来源。
      */
-    [[nodiscard]] static bool insideReceiveBand(
-        double z_rel_lidar, double distance,
-        const PersistentVoxelConfig& config);
+    [[nodiscard]] bool insideReceiveBand(double z_rel_lidar, double distance);
 
     /**
      * @brief 该点是否应保留在该体素格中：接收带内，且年龄未达 `decay_time`。
@@ -179,10 +177,8 @@ namespace terrain_analysis {
      * @param distance 水平距离（与参考系无关）。
      * @param point_time 该点的观测时刻（相对首帧的秒数），现由 intensity 携带。
      */
-    [[nodiscard]] static bool keepPoint(double z_rel_lidar, double distance,
-                                        double point_time,
-                                        const PersistentVoxelConfig& config,
-                                        double now_elapsed);
+    [[nodiscard]] bool keepPoint(double z_rel_lidar, double distance,
+                                 double point_time, double now_elapsed);
 
     std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
     // 本帧输入：由 ingest 写入，update 消费。
