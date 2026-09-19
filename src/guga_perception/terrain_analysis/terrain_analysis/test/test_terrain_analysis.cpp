@@ -166,16 +166,18 @@ namespace terrain_analysis {
         << "该障碍仍在累计云的衰减窗口内";
   }
 
-  // 网格外的回波仍要进入清除云：它同样证明该方向的路径为空，代价地图层会把端点
-  // 裁剪到自己的边界再画射线；丢掉它，该方向就一条射线都没有。障碍云需要离地高度，
-  // 因此不含网格外的点，其 intensity 也按 0 输出。
-  TEST_F(TerrainAnalysisTest, Run_ReturnOutsideGrid_StillUsedForClearing) {
+  // 清除端点云每个方位角桶一个端点：桶内有回波就用最远的那个（哪怕它在平面网格
+  // 之外），桶内没有回波就合成一个远端端点——那个方位的光束一路没有碰到东西，
+  // 也就是那里为空；不补端点，该方位的旧标记永远清不掉。障碍云需要离地高度，
+  // 因此不含网格外的点。
+  TEST_F(TerrainAnalysisTest, Run_ReturnFan_CoversEveryAzimuth) {
     sendOdom(0, 0, 0);
 
+    // 只在 +x 方位放回波，最远 8 m（超出平面网格的 ±5.1 m）
     auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-    for (double x = 6.0; x <= 8.0; x += 0.2) {
+    for (int i = 0; i <= 10; ++i) {
       pcl::PointXYZI p;
-      p.x = static_cast<float>(x);
+      p.x = static_cast<float>(6.0 + 0.2 * static_cast<double>(i));
       p.y = 0.0F;
       p.z = 0.01F;
       p.intensity = 0;
@@ -183,12 +185,25 @@ namespace terrain_analysis {
     }
     sendCloud(cloud, 100.0);
 
-    EXPECT_EQ(terrain_->frameReturnCloud().points.size(), cloud->size())
-        << "网格外的回波应全部进入清除云";
+    const auto& fan = terrain_->frameReturnCloud();
+    EXPECT_EQ(fan.points.size(), 720U) << "0.5° 一桶，每个方位角都要有端点";
+
+    // 按同样的分桶规则取 +x 桶（下标 360）与反方向桶（下标 0）的距离
+    const auto distance_at_bin = [&](int wanted) {
+      for (const auto& p : fan.points) {
+        const double angle = std::atan2(p.y, p.x);
+        const int bin = static_cast<int>(
+            std::floor((angle + M_PI) / (2.0 * M_PI) * 720.0));
+        if (bin == wanted) {
+          return std::hypot(static_cast<double>(p.x), static_cast<double>(p.y));
+        }
+      }
+      return -1.0;
+    };
+    EXPECT_NEAR(distance_at_bin(360), 8.0, 0.1) << "+x 方位应取该桶最远的回波";
+    EXPECT_NEAR(distance_at_bin(0), 12.0, 0.1) << "没有回波的方位应补远端端点";
+
     EXPECT_TRUE(terrain_->frameObstacleCloud().points.empty())
         << "网格外没有地面估计，不该输出障碍点";
-    for (const auto& p : terrain_->frameReturnCloud().points) {
-      EXPECT_FLOAT_EQ(p.intensity, 0.0F) << "网格外的点没有离地高度，按 0 输出";
-    }
   }
 }  // namespace terrain_analysis
