@@ -4,15 +4,33 @@
 | --- | --- | --- |
 | 感知 | 坡面识别：让哨兵上坡时对准坡面法线，可参考川大开源 | `terrain_analysis` |
 | 感知 | Point-LIO 重构：代码太乱，不急，可先当黑盒用 | `point_lio` |
-| 感知（实车） | 低矮障碍物无法识别 | `terrain_analysis` / `rog_map_layer` |
+| 感知（实车） | 低矮障碍物无法识别；方向：重构 terrain、调参 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | 眼前（近距）障碍物识别异常 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | **已实测确认**：`odom → base_footprint` 为单位变换 ⇒ odom 原点即 base_footprint，平地地面 z ≈ 0；`lidar_z` 是**雷达**高度（≈ +0.230），原按"O 离地 255 mm"推算的 −0.230 符号相反，已改正 | `terrain_analysis` |
-| 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留） | `slam_toolbox`（外部依赖）/ `terrain_analysis` |
+| 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留）；方向：射线追踪 | `slam_toolbox`（外部依赖）/ `terrain_analysis` |
 | 感知 | ~~`terrain_analysis_ext` 退化为近场半径过滤器~~ **已删除**（2026-09-17）：消费者（`global_costmap`、`pointcloud_to_laserscan`）改指 `terrain_map`，属严格放宽（4 m → ≤±5.1 m） | `terrain_analysis` |
 | 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价 | `terrain_analysis` |
 | 控制 | MPPI 的 GPU 方案（MPPI 本体已接入） | `nav2_mppi_controller` |
 | 控制（实车） | 避障后退方向错误：朝 chassis 后方运动，而非背离障碍物 | `pb_omni_pid_pursuit_controller` |
 | 重构 | `ui_types.hpp` 里全是魔法数字，待修复 | `guga_ui_common` |
+
+## 已实施待验证：local 射线清除改用当帧回波云
+
+**现状（2026-09-19 提交 `6b61f78`，配置已生效，实车未验）**：terrain 新增当帧话题
+`terrain_obstacles_current`（本帧带内障碍点）与 `terrain_returns_current`（本帧全部有效
+回波，含地面回波）；local costmap 的 `terrain_map` 源改为只做标记，清除改由当帧回波云承担。
+global costmap 仍用累计的 `terrain_map` 做标记与清除。
+
+待验证与待办：
+
+1. **实车验证清除效果**：障碍被移走后，格子在若干秒内被射线清掉；同时记录 local costmap
+   单次更新的耗时——官方层对回波云里每个点都画一条射线，本帧回波在 5 m 窗口内有数千点，
+   CPU 开销集中在一次更新里，若超预算需要按方位角降采样后再发。
+2. **marking 是否也切到当帧**：`terrain_obstacles_current` 已发布但暂无消费者，标记仍走
+   0.5 s 衰减的累计云。切过去的好处是障碍一消失即停止标记；代价是残留只能靠射线清除。
+3. **清除源的源级高度范围**：现取 `-3.0/3.0`（odom 绝对高度），若实车 odom 与地面高度
+   关系有偏差（见下文"基准已实测"），需要按实测值调整，否则地面回波会被
+   `ObservationBuffer` 滤掉。
 
 ## 已修复待验证：近处低地面点被忽略
 
