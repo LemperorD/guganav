@@ -5,6 +5,7 @@
 #include "terrain_analysis/core/persistent_voxel_map.hpp"
 
 #include "terrain_analysis/core/grid.hpp"
+#include "terrain_analysis/core/grid_utils.hpp"
 
 #include <unordered_map>
 
