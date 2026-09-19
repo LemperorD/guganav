@@ -259,6 +259,23 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
   EXPECT_EQ(voxelMap().cells()[center]->points.size(), 1U);
 }
 
+// 超出体素网格范围的点不进入任何格
+TEST_F(AlgorithmTest, Voxelize_PointOutsideGrid_Dropped) {
+  lidar().x = 0;
+  lidar().y = 0;
+  frameCloud()->clear();
+  frameCloud()->push_back(
+      {50.0F, 50.0F, 0.0F, 0.0F});  // 远超 21×21 的 1 m 网格
+
+  runStage(stage::Id::VOXELIZE);
+
+  size_t total = 0;
+  for (const auto& cell : voxelMap().cells()) {
+    total += cell->points.size();
+  }
+  EXPECT_EQ(total, 0U);
+}
+
 // 空点云不产生任何体素分配
 TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
   frameCloud()->clear();
@@ -426,6 +443,33 @@ TEST_F(AlgorithmTest, ComputeHeightMap_ConsiderDrop_AcceptsNegativeHeight) {
 }
 
 // 地面带死区：距地面小于 min_obstacle_height 的点不作为障碍输出
+// 远低于雷达的穿透点被地板判据挡掉，不进入输出
+TEST_F(AlgorithmTest, ComputeHeightMap_BelowLidarFloor_Filtered) {
+  lidar().x = 0;
+  lidar().y = 0;
+  lidar().z = 0;
+  obstacleCloud()->clear();
+  voxelElev().fill(0);
+  for (auto& e : pointElev()) {
+    e = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  }
+  planarConfig().min_block_point_num = 5;
+  planarConfig().consider_drop = false;
+
+  pcl::PointXYZI pt;
+  pt.x = 0.5F;
+  pt.y = 0;
+  pt.z = -2.0F;  // 比 minRelZ(-1.5) 还低：穿透点
+  pt.intensity = 0;
+  terrainCloud()->clear();
+  terrainCloud()->push_back(pt);
+
+  runStage(stage::Id::HEIGHT_MAP);
+
+  EXPECT_TRUE(obstacleCloud()->points.empty())
+      << "低于雷达 minRelZ 的点不应输出";
+}
+
 TEST_F(AlgorithmTest, ComputeHeightMap_BelowMinObstacleHeight_Filtered) {
   lidar().x = 0;
   lidar().y = 0;
