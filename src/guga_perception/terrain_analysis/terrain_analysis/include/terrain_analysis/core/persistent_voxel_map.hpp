@@ -1,7 +1,7 @@
 #pragma once
 
-#include "terrain_analysis/core/terrain_voxel_config.hpp"
-#include "terrain_analysis/core/terrain_voxel_grid.hpp"
+#include "terrain_analysis/core/persistent_voxel_config.hpp"
+#include "terrain_analysis/core/persistent_voxel_grid.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
@@ -15,6 +15,9 @@ namespace terrain_analysis {
 
   /**
    * @brief 管线前半段：本帧输入的接收与裁剪 + 跨帧持久的体素地图。
+   *
+   * 两半的分界是**寿命**：本类跨帧持续，是管线里唯一保留帧间状态的一侧；后半段
+   * PerFrameHeightMap 每帧重建、帧间不存任何东西。
    *
    * 持有两样东西：
    *   - 跨帧保留的点云（管线里唯一一份），随雷达移动滚动；
@@ -33,19 +36,19 @@ namespace terrain_analysis {
    * 线程模型：本类不做同步，调用方必须保证 ingest 与 update 不并发执行（当前由
    * 节点在单线程执行器中串行调用满足）。
    */
-  class TerrainVoxelMap {
+  class PersistentVoxelMap {
   public:
     /** @brief 一格累积点云。 */
     using Cell = pcl::PointCloud<pcl::PointXYZI>;
 
-    TerrainVoxelMap() = default;
+    PersistentVoxelMap() = default;
 
     /** @brief 可修改的前半段参数。 */
-    [[nodiscard]] TerrainVoxelConfig& config() noexcept {
+    [[nodiscard]] PersistentVoxelConfig& config() noexcept {
       return config_;
     }
     /** @brief 只读的前半段参数。 */
-    [[nodiscard]] const TerrainVoxelConfig& config() const noexcept {
+    [[nodiscard]] const PersistentVoxelConfig& config() const noexcept {
       return config_;
     }
 
@@ -118,12 +121,12 @@ namespace terrain_analysis {
     void rebuild(const guga_common::Point3d& lidar, double now_elapsed);
 
     /** @brief 只读访问所有格子。 */
-    [[nodiscard]] const std::array<Cell::Ptr, TerrainVoxelGrid::NUM>& cells()
+    [[nodiscard]] const std::array<Cell::Ptr, PersistentVoxelGrid::NUM>& cells()
         const noexcept {
       return cloud_;
     }
     /** @brief 可修改访问所有格子（供采集阶段与测试使用）。 */
-    [[nodiscard]] std::array<Cell::Ptr, TerrainVoxelGrid::NUM>&
+    [[nodiscard]] std::array<Cell::Ptr, PersistentVoxelGrid::NUM>&
     cells() noexcept {
       return cloud_;
     }
@@ -144,7 +147,7 @@ namespace terrain_analysis {
     /** @brief 该点是否应保留在该体素格中（高度带 + 年龄）。 */
     [[nodiscard]] static bool keepPoint(double relative_z, double distance,
                                         double point_time,
-                                        const TerrainVoxelConfig& config,
+                                        const PersistentVoxelConfig& config,
                                         double now_elapsed);
 
   private:
@@ -154,9 +157,9 @@ namespace terrain_analysis {
     /** @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。 */
     void shift(bool along_x, bool toward_positive);
 
-    TerrainVoxelConfig config_;
+    PersistentVoxelConfig config_;
 
-    std::array<Cell::Ptr, TerrainVoxelGrid::NUM> cloud_ = makeCells();
+    std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
     int shift_x_ = 0;
     int shift_y_ = 0;
 
@@ -168,7 +171,7 @@ namespace terrain_analysis {
     bool inited_ = false;
     bool frame_pending_ = false;
 
-    [[nodiscard]] static std::array<Cell::Ptr, TerrainVoxelGrid::NUM>
+    [[nodiscard]] static std::array<Cell::Ptr, PersistentVoxelGrid::NUM>
     makeCells();
 
     // 白盒测试需要逐阶段驱动并检查内部状态；仅授予本包测试 fixture，

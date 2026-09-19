@@ -18,7 +18,7 @@ namespace terrain_analysis {
      * 其中 h 是距局部地面的高度。两个边界都随车而异、也没有编译期约束，
      * 所以在启动时打印，便于确认节点实际加载的值。
      */
-    void logHeightParams(const PlanarVoxelConfig& config) {
+    void logHeightParams(const PerFrameHeightConfig& config) {
       RCLCPP_INFO(rclcpp::get_logger("terrain_analysis"),
                   "障碍输出高度带：%.3f <= h < %.3f m（距局部地面；下界为地面带"
                   "死区，上界按车高 + 100 mm 设定）",
@@ -31,8 +31,8 @@ namespace terrain_analysis {
       : Node("terrain_analysis", options) {
     // 参数按两半各自的读取范围分发：前半段要叶尺寸、衰减与接收带，后半段要地面
     // 估计、输出带与平面网格。minRelZ 两半都用（用途不同），故填两次。
-    TerrainVoxelConfig& voxel_config = voxel_map_.config();
-    PlanarVoxelConfig& planar_config = planar_map_.config();
+    PersistentVoxelConfig& voxel_config = voxel_map_.config();
+    PerFrameHeightConfig& planar_config = height_map_.config();
 
     voxel_config.scan_voxel_size = declare_parameter(
         "scanVoxelSize", voxel_config.scan_voxel_size);
@@ -111,14 +111,14 @@ namespace terrain_analysis {
     voxel_map_.update();
     voxel_map_.collectCloud(*collected_cloud_);
     // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。
-    planar_map_.compute(*collected_cloud_, voxel_map_.lidarPosition());
+    height_map_.compute(*collected_cloud_, voxel_map_.lidarPosition());
     publishPointCloud();
     return rclcpp::ok();
   }
 
   void TerrainAnalysis::publishPointCloud() {
     sensor_msgs::msg::PointCloud2 message;
-    pcl::toROSMsg(planar_map_.obstacleCloud(), message);
+    pcl::toROSMsg(height_map_.obstacleCloud(), message);
     message.header.stamp = rclcpp::Time(
         static_cast<int64_t>(last_stamp_ * 1e9));
     message.header.frame_id = "odom";

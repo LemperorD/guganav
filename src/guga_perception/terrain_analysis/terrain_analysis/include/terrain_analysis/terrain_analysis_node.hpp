@@ -1,7 +1,7 @@
 #pragma once
 
-#include "terrain_analysis/core/planar_voxel_map.hpp"
-#include "terrain_analysis/core/terrain_voxel_map.hpp"
+#include "terrain_analysis/core/per_frame_height_map.hpp"
+#include "terrain_analysis/core/persistent_voxel_map.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <nav_msgs/msg/odometry.hpp>
@@ -17,8 +17,8 @@ namespace terrain_analysis {
    * @brief terrain_analysis ROS2 节点封装。
    *
    * 只负责 ROS 层的接线与**逐帧数据分发**：声明参数、订阅里程计与点云、把接收
-   * 与累积交给前半段 TerrainVoxelMap、把采集结果交给后半段 PlanarVoxelMap、
-   * 发布 terrain_map。两半各自的算法状态都在它们自己内部。
+   * 与累积交给跨帧持续的 PersistentVoxelMap、把采集结果交给逐帧的
+   * PerFrameHeightMap、发布 terrain_map。两半各自的算法状态都在它们自己内部。
    */
   class TerrainAnalysis : public rclcpp::Node {
   public:
@@ -40,15 +40,15 @@ namespace terrain_analysis {
 
     /** @brief 获取最近一次生成的障碍点云。 */
     [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& obstacleCloud() const {
-      return planar_map_.obstacleCloud();
+      return height_map_.obstacleCloud();
     }
     /** @brief 前半段（本帧输入与跨帧体素地图）。 */
-    [[nodiscard]] TerrainVoxelMap& voxelMap() noexcept {
+    [[nodiscard]] PersistentVoxelMap& voxelMap() noexcept {
       return voxel_map_;
     }
     /** @brief 后半段（地面高程与障碍输出）。 */
-    [[nodiscard]] PlanarVoxelMap& planarMap() noexcept {
-      return planar_map_;
+    [[nodiscard]] PerFrameHeightMap& heightMap() noexcept {
+      return height_map_;
     }
     /** @brief 两半之间的交接数据（采集点云）。 */
     [[nodiscard]] pcl::PointCloud<pcl::PointXYZI>& collectedCloud() noexcept {
@@ -60,9 +60,9 @@ namespace terrain_analysis {
     void publishPointCloud();
 
     /** @brief 前半段：接收本帧输入并维护跨帧体素地图。 */
-    TerrainVoxelMap voxel_map_;
+    PersistentVoxelMap voxel_map_;
     /** @brief 后半段：由采集点云估计地面并生成障碍输出。 */
-    PlanarVoxelMap planar_map_;
+    PerFrameHeightMap height_map_;
     /** @brief 两半之间的交接数据（采集点云）。 */
     pcl::PointCloud<pcl::PointXYZI>::Ptr collected_cloud_ =
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();

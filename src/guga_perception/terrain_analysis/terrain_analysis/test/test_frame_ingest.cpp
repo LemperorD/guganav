@@ -1,14 +1,14 @@
-#include "terrain_analysis/core/terrain_voxel_map.hpp"
+#include "terrain_analysis/core/persistent_voxel_map.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
 
 #include <cmath>
 
 namespace terrain_analysis {
-  /** @brief 前半段（TerrainVoxelMap）的帧输入接收与裁剪。 */
+  /** @brief 前半段（PersistentVoxelMap）的帧输入接收与裁剪。 */
   class FrameIngestTest : public testing::Test {
   protected:
-    TerrainVoxelMap voxel_map_;
+    PersistentVoxelMap voxel_map_;
 
     /** @brief 首帧时刻是内部字段，测试体经 fixture 成员读取。 */
     double initTime() const {

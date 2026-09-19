@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
                                rclcpp::Parameter("ceilingClearance", 0.62)});
   auto node = std::make_unique<TerrainAnalysis>(options);
   auto& voxel_map = node->voxelMap();
-  auto& planar_map = node->planarMap();
+  auto& planar_map = node->heightMap();
   const guga_common::Point3d lidar_position{0.0, 0.0, 0.0};
   const bool ghost_mode = ghost_frame >= 0;
   const auto frame = makeFrame(ghost_mode);  // 幽灵场景下含 4.2 m 方块

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "terrain_analysis/core/planar_voxel_config.hpp"
-#include "terrain_analysis/core/planar_voxel_grid.hpp"
+#include "terrain_analysis/core/per_frame_height_config.hpp"
+#include "terrain_analysis/core/per_frame_height_grid.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
@@ -14,11 +14,13 @@
 namespace terrain_analysis {
 
   /**
-   * @brief 管线后半段：平面体素上的地面高程估计与障碍输出。
+   * @brief 管线后半段：逐帧的地面高程估计与障碍输出。
    *
-   * 持有一张 51×51 的平面网格（每格的地面候选高度与被估计出的地面高度）与输出
-   * 点云，不保留任何帧间状态：逐帧输入（采集点云、雷达位置）由调用方显式传入。
-   * 这与前半段 TerrainVoxelMap 分工相反——那边持有跨帧点云与窗口，这边只做换算。
+   * 两半的分界是**寿命**：本类逐帧重建，不保留任何帧间状态；前半段
+   * PersistentVoxelMap 跨帧持续，是唯一保留帧间状态的一侧。
+   *
+   * 持有一张 51×51 的网格（每格的地面候选高度与被估计出的地面高度）与输出点云，
+   * 每帧从头填一遍；逐帧输入（采集点云、雷达位置）由调用方显式传入。
    *
    * 三段串联，顺序不可换（后者都依赖前者的产物）：
    *   estimateTerrainGround → computePlanarElevation → computeHeightMap
@@ -28,24 +30,24 @@ namespace terrain_analysis {
    * 显式获得访问权，刻意不把这些阶段提升为公开 API——否则内部顺序会固化成对外
    * 契约。
    */
-  class PlanarVoxelMap {
+  class PerFrameHeightMap {
   public:
     /** @brief 点云容器类型（与前半段的格子同一类型）。 */
     using Cell = pcl::PointCloud<pcl::PointXYZI>;
 
-    PlanarVoxelMap() = default;
+    PerFrameHeightMap() = default;
 
-    PlanarVoxelMap(const PlanarVoxelMap&) = delete;
-    PlanarVoxelMap& operator=(const PlanarVoxelMap&) = delete;
-    PlanarVoxelMap(PlanarVoxelMap&&) = delete;
-    PlanarVoxelMap& operator=(PlanarVoxelMap&&) = delete;
+    PerFrameHeightMap(const PerFrameHeightMap&) = delete;
+    PerFrameHeightMap& operator=(const PerFrameHeightMap&) = delete;
+    PerFrameHeightMap(PerFrameHeightMap&&) = delete;
+    PerFrameHeightMap& operator=(PerFrameHeightMap&&) = delete;
 
     /** @brief 可修改的后半段参数。 */
-    [[nodiscard]] PlanarVoxelConfig& config() noexcept {
+    [[nodiscard]] PerFrameHeightConfig& config() noexcept {
       return config_;
     }
     /** @brief 只读的后半段参数。 */
-    [[nodiscard]] const PlanarVoxelConfig& config() const noexcept {
+    [[nodiscard]] const PerFrameHeightConfig& config() const noexcept {
       return config_;
     }
 
@@ -100,12 +102,12 @@ namespace terrain_analysis {
     /** @brief 用最低点估计指定平面格的地面高度。 */
     void elevateByMinimum(int cell);
 
-    PlanarVoxelConfig config_;
+    PerFrameHeightConfig config_;
 
     /** @brief 每格收集到的地面高度候选值。 */
-    std::array<std::vector<double>, PlanarVoxelGrid::NUM> point_elev_;
+    std::array<std::vector<double>, PerFrameHeightGrid::NUM> point_elev_;
     /** @brief 每格估计出的地面高度（没有候选的格保持 0）。 */
-    std::array<double, PlanarVoxelGrid::NUM> voxel_elev_{};
+    std::array<double, PerFrameHeightGrid::NUM> voxel_elev_{};
     /** @brief 障碍输出点云。 */
     Cell::Ptr obstacle_cloud_ = std::make_shared<Cell>();
 

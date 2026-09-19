@@ -2,7 +2,7 @@
 //
 // 输入只有两样——采集点云与雷达位置——都由调用方逐帧传入，本类不保留帧间状态。
 
-#include "terrain_analysis/core/planar_voxel_map.hpp"
+#include "terrain_analysis/core/per_frame_height_map.hpp"
 
 #include "terrain_analysis/core/grid_lookup.hpp"
 
@@ -12,15 +12,15 @@
 
 namespace terrain_analysis {
 
-  void PlanarVoxelMap::compute(const Cell& terrain_cloud,
-                               const guga_common::Point3d& lidar_position) {
+  void PerFrameHeightMap::compute(const Cell& terrain_cloud,
+                                  const guga_common::Point3d& lidar_position) {
     // 依赖是串联的：候选 → 逐格高程 → 输出。顺序不可换。
     estimateTerrainGround(terrain_cloud, lidar_position);
     computePlanarElevation();
     computeHeightMap(terrain_cloud, lidar_position);
   }
 
-  void PlanarVoxelMap::estimateTerrainGround(
+  void PerFrameHeightMap::estimateTerrainGround(
       const Cell& terrain_cloud, const guga_common::Point3d& lidar_position) {
     // 本阶段拥有候选集；逐格高程由 computePlanarElevation
     // 清，两份数据各有属主。
@@ -42,7 +42,7 @@ namespace terrain_analysis {
       // 高于地面的部分本就是障碍，会由 computeHeightMap 按净空处理。
       const GridIndex grid_index = gridIndex(
           point.x, point.y, lidar_position.x, lidar_position.y,
-          config_.planar_voxel_size, PlanarVoxelGrid::WIDTH);
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
       }
@@ -51,22 +51,22 @@ namespace terrain_analysis {
     }
   }
 
-  void PlanarVoxelMap::computePlanarElevation() {
+  void PerFrameHeightMap::computePlanarElevation() {
     // 本阶段拥有逐格高程：没有候选的格保持 0（见 computeHeightMap 的说明）。
     voxel_elev_.fill(0);
 
     if (config_.use_sorting) {
-      for (int i = 0; i < PlanarVoxelGrid::NUM; i++) {
+      for (int i = 0; i < PerFrameHeightGrid::NUM; i++) {
         elevateByQuantile(i);
       }
     } else {
-      for (int i = 0; i < PlanarVoxelGrid::NUM; i++) {
+      for (int i = 0; i < PerFrameHeightGrid::NUM; i++) {
         elevateByMinimum(i);
       }
     }
   }
 
-  void PlanarVoxelMap::computeHeightMap(
+  void PerFrameHeightMap::computeHeightMap(
       const Cell& terrain_cloud, const guga_common::Point3d& lidar_position) {
     const double lidar_z = lidar_position.z;
     auto& elevations = obstacle_cloud_;
@@ -75,12 +75,12 @@ namespace terrain_analysis {
     for (const auto& point : terrain_cloud.points) {
       const GridIndex grid_index = gridIndex(
           point.x, point.y, lidar_position.x, lidar_position.y,
-          config_.planar_voxel_size, PlanarVoxelGrid::WIDTH);
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
       }
-      const size_t cell = PlanarVoxelGrid::linearIndex(grid_index.row,
-                                                       grid_index.col);
+      const size_t cell = PerFrameHeightGrid::linearIndex(grid_index.row,
+                                                          grid_index.col);
       // 该点所在处的地面高度（本帧估计值），下面所有高度判据都以它为基准。
       const double ground_z = voxel_elev_[cell];
       const double height_above_ground = point.z - ground_z;
@@ -114,8 +114,9 @@ namespace terrain_analysis {
     }
   }
 
-  void PlanarVoxelMap::addToPlanarNeighborhood3x3(int row, int col, double z) {
-    constexpr int width = PlanarVoxelGrid::WIDTH;
+  void PerFrameHeightMap::addToPlanarNeighborhood3x3(int row, int col,
+                                                     double z) {
+    constexpr int width = PerFrameHeightGrid::WIDTH;
 
     for (int delta_row = -1; delta_row <= 1; delta_row++) {
       const int neighbor_row = row + delta_row;
@@ -128,14 +129,14 @@ namespace terrain_analysis {
           continue;
         }
         // 行偏移按整行换算（乘网格宽度），列偏移直接相加
-        const size_t index = PlanarVoxelGrid::linearIndex(neighbor_row,
-                                                          neighbor_col);
+        const size_t index = PerFrameHeightGrid::linearIndex(neighbor_row,
+                                                             neighbor_col);
         point_elev_[index].push_back(z);
       }
     }
   }
 
-  void PlanarVoxelMap::elevateByQuantile(int cell) {
+  void PerFrameHeightMap::elevateByQuantile(int cell) {
     auto& elevations = point_elev_[cell];
     int point_count = static_cast<int>(elevations.size());
     if (point_count == 0) {
@@ -154,7 +155,7 @@ namespace terrain_analysis {
                                                   : quantile_z;
   }
 
-  void PlanarVoxelMap::elevateByMinimum(int cell) {
+  void PerFrameHeightMap::elevateByMinimum(int cell) {
     auto& elevations = point_elev_[cell];
     if (elevations.empty()) {
       return;

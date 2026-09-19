@@ -3,13 +3,13 @@
 #include <cstddef>
 
 /**
- * @brief 前半段（TerrainVoxelMap）使用的固定网格：累积历史点云的滑动窗口。
+ * @brief 前半段（PersistentVoxelMap）使用的固定网格：累积历史点云的滑动窗口。
  *
- * 与 PlanarVoxelGrid 相互独立：本网格随车滚动、存点云，尺寸由 1 m 格决定；
+ * 与 PerFrameHeightGrid 相互独立：本网格随车滚动、存点云，尺寸由 1 m 格决定；
  * 那个网格锚定在车上、存地面高度，尺寸由 0.2 m 格决定。两者过去挤在同一个
  * TerrainGrid 里，各自的使用方看不出边界，故拆开。
  */
-struct TerrainVoxelGrid {
+struct PersistentVoxelGrid {
   /** @brief 网格边长（格数）。 */
   static constexpr int WIDTH = 21;
   /** @brief 网格半边长（格数）。 */

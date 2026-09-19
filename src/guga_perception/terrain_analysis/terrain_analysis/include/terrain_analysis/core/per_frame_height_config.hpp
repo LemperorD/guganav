@@ -1,18 +1,19 @@
 #pragma once
 
 /**
- * @brief 管线后半段（PlanarVoxelMap）读取的参数。
+ * @brief 管线后半段（PerFrameHeightMap）读取的参数。
  *
  * 后半段负责"由累积观测估计地面并判定障碍"：地面估计方式、地面带死区、障碍输出
  * 高度带、平面网格分辨率。
  *
- * `min_relative_z` 与 TerrainVoxelConfig 同名，这是有意的：它是同一个 ROS 参数
+ * `min_relative_z` 与 PersistentVoxelConfig 同名，这是有意的：它是同一个 ROS
+ * 参数
  * （`minRelZ`），但两半的用途不同——前半段用它定义接收带的下沿，后半段用它挡掉
  * 远低于雷达的穿透点（障碍输出的地板）。节点从同一个参数同时填入两处。
  *
  * 距离单位为米。
  */
-struct PlanarVoxelConfig {
+struct PerFrameHeightConfig {
   /** @brief 是否使用分位数估计地面高度，否则使用最小值。 */
   bool use_sorting = true;
   /** @brief 地面高度分位数。 */
@@ -50,7 +51,8 @@ struct PlanarVoxelConfig {
 
   /** @brief 障碍输出的地板（相对雷达）：低于该高度的点不输出，用于挡掉穿透点。
    *
-   *  与 TerrainVoxelConfig 的同名字段来自同一个 ROS 参数，用途见本结构体注释。
+   *  与 PersistentVoxelConfig 的同名字段来自同一个 ROS
+   * 参数，用途见本结构体注释。
    */
   double min_relative_z = -1.5;
 

@@ -2,7 +2,7 @@
 //
 // 本类不读任何全局状态：帧输入由 ingest() 写入，配置由调用方在启动时填入。
 
-#include "terrain_analysis/core/terrain_voxel_map.hpp"
+#include "terrain_analysis/core/persistent_voxel_map.hpp"
 
 #include "terrain_analysis/core/grid_lookup.hpp"
 
@@ -10,18 +10,18 @@
 
 namespace terrain_analysis {
 
-  std::array<TerrainVoxelMap::Cell::Ptr, TerrainVoxelGrid::NUM>
-  TerrainVoxelMap::makeCells() {
-    std::array<Cell::Ptr, TerrainVoxelGrid::NUM> cells;
+  std::array<PersistentVoxelMap::Cell::Ptr, PersistentVoxelGrid::NUM>
+  PersistentVoxelMap::makeCells() {
+    std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cells;
     for (auto& ptr : cells) {
       ptr = std::make_shared<Cell>();
     }
     return cells;
   }
 
-  void TerrainVoxelMap::ingest(const Cell& cloud,
-                               const guga_common::Point3d& lidar_position,
-                               double timestamp_sec) {
+  void PersistentVoxelMap::ingest(const Cell& cloud,
+                                  const guga_common::Point3d& lidar_position,
+                                  double timestamp_sec) {
     lidar_ = lidar_position;
     time_ = timestamp_sec;
     if (!inited_) {
@@ -31,7 +31,7 @@ namespace terrain_analysis {
 
     const double elapsed = elapsedSeconds();
     const double max_range = config_.terrain_voxel_size
-                             * (TerrainVoxelGrid::HALF_WIDTH + 1);
+                             * (PersistentVoxelGrid::HALF_WIDTH + 1);
     frame_cloud_->clear();
     for (const auto& point : cloud.points) {
       const double relative_z = point.z - lidar_.z;
@@ -52,8 +52,8 @@ namespace terrain_analysis {
     frame_pending_ = true;
   }
 
-  uint64_t TerrainVoxelMap::leafKey(double x, double y, double z,
-                                    double leaf_xy, double leaf_z) {
+  uint64_t PersistentVoxelMap::leafKey(double x, double y, double z,
+                                       double leaf_xy, double leaf_z) {
     // O(n) 融合所需的叶键：坐标除以叶宽取整后按 21 bit 打包。
     // 偏置 10^6 使 odom 负坐标也能装下，覆盖约 ±54 km 的运行范围。
     constexpr int kBits = 21;
@@ -66,10 +66,10 @@ namespace terrain_analysis {
            | index(z, leaf_z);
   }
 
-  bool TerrainVoxelMap::keepPoint(double relative_z, double distance,
-                                  double point_time,
-                                  const TerrainVoxelConfig& config,
-                                  double now_elapsed) {
+  bool PersistentVoxelMap::keepPoint(double relative_z, double distance,
+                                     double point_time,
+                                     const PersistentVoxelConfig& config,
+                                     double now_elapsed) {
     const double z_margin = config.distance_ratio_z * distance;
     if (relative_z <= config.min_relative_z - z_margin) {
       return false;
@@ -82,26 +82,26 @@ namespace terrain_analysis {
     return !(decayed && !near);
   }
 
-  void TerrainVoxelMap::update() {
+  void PersistentVoxelMap::update() {
     frame_pending_ = false;
     rollover(lidar_);
     addFrame(*frame_cloud_, lidar_);
     rebuild(lidar_, elapsedSeconds());
   }
 
-  void TerrainVoxelMap::collectCloud(Cell& out) const {
+  void PersistentVoxelMap::collectCloud(Cell& out) const {
     out.clear();
-    constexpr int HALF = TerrainVoxelGrid::HALF_WIDTH;
+    constexpr int HALF = PersistentVoxelGrid::HALF_WIDTH;
     for (int row = HALF - EXTRACT_HALF_WINDOW;
          row <= HALF + EXTRACT_HALF_WINDOW; row++) {
       for (int column = HALF - EXTRACT_HALF_WINDOW;
            column <= HALF + EXTRACT_HALF_WINDOW; column++) {
-        out += *cloud_[TerrainVoxelGrid::linearIndex(row, column)];
+        out += *cloud_[PersistentVoxelGrid::linearIndex(row, column)];
       }
     }
   }
 
-  void TerrainVoxelMap::rollover(const guga_common::Point3d& lidar) {
+  void PersistentVoxelMap::rollover(const guga_common::Point3d& lidar) {
     const double voxel_size = config_.terrain_voxel_size;
     double center_x = voxel_size * shift_x_;
     double center_y = voxel_size * shift_y_;
@@ -124,23 +124,23 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainVoxelMap::addFrame(const Cell& crop,
-                                 const guga_common::Point3d& lidar) {
+  void PersistentVoxelMap::addFrame(const Cell& crop,
+                                    const guga_common::Point3d& lidar) {
     const double voxel_size = config_.terrain_voxel_size;
     for (const auto& point : crop.points) {
       const GridIndex index = gridIndex(point.x, point.y, lidar.x, lidar.y,
-                                        voxel_size, TerrainVoxelGrid::WIDTH);
+                                        voxel_size, PersistentVoxelGrid::WIDTH);
       if (!index.valid) {
         continue;
       }
-      cloud_[TerrainVoxelGrid::linearIndex(index.row, index.col)]->push_back(
+      cloud_[PersistentVoxelGrid::linearIndex(index.row, index.col)]->push_back(
           point);
     }
   }
 
-  void TerrainVoxelMap::rebuild(const guga_common::Point3d& lidar,
-                                double now_elapsed) {
-    const TerrainVoxelConfig& config = config_;
+  void PersistentVoxelMap::rebuild(const guga_common::Point3d& lidar,
+                                   double now_elapsed) {
+    const PersistentVoxelConfig& config = config_;
     // 每个格子每帧重建一次，逐叶只保留"观测时刻最新"的那一个点。
     //
     // 时刻取最新而不是平均：叶内混有新老点时，平均会把仍在被观测的表面判成
@@ -183,16 +183,16 @@ namespace terrain_analysis {
     }
   }
 
-  void TerrainVoxelMap::shift(bool along_x, bool toward_positive) {
-    static constexpr int WIDTH = TerrainVoxelGrid::WIDTH;
+  void PersistentVoxelMap::shift(bool along_x, bool toward_positive) {
+    static constexpr int WIDTH = PersistentVoxelGrid::WIDTH;
     const int src = toward_positive ? 0 : WIDTH - 1;
     const int dst = toward_positive ? WIDTH - 1 : 0;
     const int step = toward_positive ? 1 : -1;
 
     for (int fixed = 0; fixed < WIDTH; fixed++) {
       const auto cell = [&](int m) {
-        return along_x ? TerrainVoxelGrid::linearIndex(m, fixed)
-                       : TerrainVoxelGrid::linearIndex(fixed, m);
+        return along_x ? PersistentVoxelGrid::linearIndex(m, fixed)
+                       : PersistentVoxelGrid::linearIndex(fixed, m);
       };
       auto ptr = cloud_[cell(src)];
       for (int m = src; m != dst; m += step) {

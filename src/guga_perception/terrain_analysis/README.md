@@ -5,20 +5,20 @@
 ## 架构
 
 ```
-ROS2 消息 → TerrainVoxelMap::ingest → update → collectCloud → PlanarVoxelMap::compute
+ROS2 消息 → PersistentVoxelMap::ingest → update → collectCloud → PerFrameHeightMap::compute
  (订阅)      (裁剪 + 记位置/时刻)   (A 组滚动/归格/重建)(B 组采集)  (C 组高程 + E 组输出)
                                                                               ↓
                                                       publish ← 障碍点云 → ROS2 消息
                                                       (发布)                  (terrain_map)
 ```
 
-管线按**两半**组织，各自对应一张网格：
+管线按**两半**组织，分界是**寿命**：前半段跨帧持续（唯一保留帧间状态的一侧），后半段逐帧重建、帧间不存任何东西。两半各自对应一张网格：
 
-- **TerrainVoxelMap**（`core/terrain_voxel_map.hpp`）— 前半段。持有跨帧保留的点云
+- **PersistentVoxelMap**（`core/persistent_voxel_map.hpp`）— 前半段。持有跨帧保留的点云
   （唯一一份，1 m 格、21×21，随雷达滚动）与本帧输入（裁剪点云、雷达位置、帧时刻）。
   一帧走 `ingest`（裁剪并记下锚点）→ `update`（滚动 / 归格 / 重建）→ `collectCloud`
   （取 ±5.5 m 窗口）。裁剪之所以在这里，是因为高度带与接收半径本来就在服务这张网格。
-- **PlanarVoxelMap**（`core/planar_voxel_map.hpp`）— 后半段。持有 0.2 m 格、51×51 的
+- **PerFrameHeightMap**（`core/per_frame_height_map.hpp`）— 后半段。持有 0.2 m 格、51×51 的
   平面网格（每格的地面候选与地面高度）与输出点云，不保留帧间状态；`compute` 依次跑
   C（收集候选 → 逐格高程）与 E（离地高度落在输出带内的点写入 intensity）。
 - **节点层**（`terrain_analysis_node.*`）— 只做 ROS 接线与逐帧数据分发：声明参数
@@ -30,15 +30,15 @@ ROS2 消息 → TerrainVoxelMap::ingest → update → collectCloud → PlanarVo
 ## 管线
 
 ```
-收帧（TerrainVoxelMap）        ingest（裁剪 + 记雷达位置与帧时刻）
+收帧（PersistentVoxelMap）        ingest（裁剪 + 记雷达位置与帧时刻）
                                                         ↓
-A 组（TerrainVoxelMap，跨帧）   rollover → addFrame → rebuild
+A 组（PersistentVoxelMap，跨帧）   rollover → addFrame → rebuild
                                                         ↓
-B 组（TerrainVoxelMap，逐帧）   collectCloud → F2 采集点云
+B 组（PersistentVoxelMap，逐帧）   collectCloud → F2 采集点云
                                                         ↓
-C 组（PlanarVoxelMap，逐帧）    estimateTerrainGround → computePlanarElevation
+C 组（PerFrameHeightMap，逐帧）    estimateTerrainGround → computePlanarElevation
                                                         ↓
-E 组（PlanarVoxelMap，逐帧）    computeHeightMap → 障碍点云（terrain_map）
+E 组（PerFrameHeightMap，逐帧）    computeHeightMap → 障碍点云（terrain_map）
 ```
 
 | 组 | 阶段 | 职责 |
@@ -98,13 +98,13 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 | 参考系 | 定义 | 使用位置 |
 | ------ | ---- | -------- |
-| odom 世界系 | `point.z` 绝对值 | `TerrainVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
-| 雷达系（`lidar_*` 取自雷达里程计的位置） | `relative_z = point.z − lidar_position.z` | `TerrainVoxelMap::ingest` 裁剪带、`computeHeightMap` 的地板 `minRelZ` |
+| odom 世界系 | `point.z` 绝对值 | `PersistentVoxelMap` 里体素格的存量、`planar_voxel_elev` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
+| 雷达系（`lidar_*` 取自雷达里程计的位置） | `relative_z = point.z − lidar_position.z` | `PersistentVoxelMap::ingest` 裁剪带、`computeHeightMap` 的地板 `minRelZ` |
 | 地面系 | `point.z − planar_voxel_elev[cell]` | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity |
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
 
-`TerrainVoxelMap::ingest` 的裁剪带是 `minRelZ`/`maxRelZ ± disRatioZ × distance`，**带宽随
+`PersistentVoxelMap::ingest` 的裁剪带是 `minRelZ`/`maxRelZ ± disRatioZ × distance`，**带宽随
 距离放宽**（近处 ≈ 0，远处 5 m 处 ±1.0 m）。而 `estimateTerrainGround` 原有的净空
 上界是**常数**，会把抬升的地面按车高砍掉（坡面失效）。
 
@@ -124,14 +124,14 @@ scripts/test/test_terrain_analysis_coverage.sh
 （地形属性），调其一必动另一。现已从 `estimateTerrainGround` 移除，**只由
 `computeHeightMap` 使用**，语义唯一：距**局部地面**达到该值的点不作为障碍输出。
 
-它也不再与 `maxRelZ` 竞争"上界"角色（后者现仅用于 `TerrainVoxelMap::ingest`
-与 `TerrainVoxelMap::keepPoint`）。
+它也不再与 `maxRelZ` 竞争"上界"角色（后者现仅用于 `PersistentVoxelMap::ingest`
+与 `PersistentVoxelMap::keepPoint`）。
 
 ### 风险 4（已修复）：`maxRelZ` 曾是死配置
 
 原在 `estimateTerrainGround` 与 `computeHeightMap` 中，`relative_z >= maxRelZ`
 永不生效（更紧的净空上界先行）。两处条件均已移除；`maxRelZ` 现仅在
-`TerrainVoxelMap::ingest` 与 `TerrainVoxelMap::keepPoint` 生效，不再是死参数。
+`PersistentVoxelMap::ingest` 与 `PersistentVoxelMap::keepPoint` 生效，不再是死参数。
 
 ### 障碍输出高度带（2026-09-17 起：唯一上界）
 

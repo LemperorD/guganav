@@ -1,5 +1,5 @@
-#include "terrain_analysis/core/planar_voxel_map.hpp"
-#include "terrain_analysis/core/terrain_voxel_map.hpp"
+#include "terrain_analysis/core/per_frame_height_map.hpp"
+#include "terrain_analysis/core/persistent_voxel_map.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
 
@@ -8,8 +8,8 @@
 
 #include <cmath>
 
-// 白盒测试需要逐阶段驱动两半管线；fixture 是 TerrainVoxelMap / PlanarVoxelMap
-// 的 friend，因此把这类调用收在它以内的分发器里。
+// 白盒测试需要逐阶段驱动两半管线；fixture 是 PersistentVoxelMap /
+// PerFrameHeightMap 的 friend，因此把这类调用收在它以内的分发器里。
 namespace stage {
   enum class Id {
     ROLLOVER,
@@ -33,8 +33,8 @@ namespace terrain_analysis {
     }
 
     void resetState() {
-      planar_map_ = std::make_unique<PlanarVoxelMap>();
-      voxel_map_ = std::make_unique<TerrainVoxelMap>();
+      height_map_ = std::make_unique<PerFrameHeightMap>();
+      voxel_map_ = std::make_unique<PersistentVoxelMap>();
       for (auto& ptr : voxelMap().cells()) {
         ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
       }
@@ -68,13 +68,13 @@ namespace terrain_analysis {
           voxelMap().collectCloud(*terrainCloud());
           break;
         case stage::Id::ESTIMATE_TERRAIN_GROUND:
-          planarMap().estimateTerrainGround(*terrainCloud(), lidarPosition());
+          heightMap().estimateTerrainGround(*terrainCloud(), lidarPosition());
           break;
         case stage::Id::PLANAR_ELEVATION:
-          planarMap().computePlanarElevation();
+          heightMap().computePlanarElevation();
           break;
         case stage::Id::HEIGHT_MAP:
-          planarMap().computeHeightMap(*terrainCloud(), lidarPosition());
+          heightMap().computeHeightMap(*terrainCloud(), lidarPosition());
           break;
       }
     }
@@ -93,27 +93,27 @@ namespace terrain_analysis {
     pcl::PointCloud<pcl::PointXYZI>::Ptr& frameCloud() {
       return voxel_map_->frame_cloud_;
     }
-    std::array<double, PlanarVoxelGrid::NUM>& voxelElev() {
-      return planar_map_->voxel_elev_;
+    std::array<double, PerFrameHeightGrid::NUM>& voxelElev() {
+      return height_map_->voxel_elev_;
     }
-    std::array<std::vector<double>, PlanarVoxelGrid::NUM>& pointElev() {
-      return planar_map_->point_elev_;
+    std::array<std::vector<double>, PerFrameHeightGrid::NUM>& pointElev() {
+      return height_map_->point_elev_;
     }
     pcl::PointCloud<pcl::PointXYZI>::Ptr& obstacleCloud() {
-      return planar_map_->obstacle_cloud_;
+      return height_map_->obstacle_cloud_;
     }
 
-    PlanarVoxelMap& planarMap() {
-      return *planar_map_;
+    PerFrameHeightMap& heightMap() {
+      return *height_map_;
     }
-    TerrainVoxelMap& voxelMap() {
+    PersistentVoxelMap& voxelMap() {
       return *voxel_map_;
     }
-    TerrainVoxelConfig& voxelConfig() {
+    PersistentVoxelConfig& voxelConfig() {
       return voxel_map_->config_;
     }
-    PlanarVoxelConfig& planarConfig() {
-      return planar_map_->config_;
+    PerFrameHeightConfig& planarConfig() {
+      return height_map_->config_;
     }
     pcl::PointCloud<pcl::PointXYZI>::Ptr& terrainCloud() {
       return terrain_cloud_;
@@ -127,7 +127,7 @@ namespace terrain_analysis {
 
     // 把一个点放进体素网格的中心格，再触发重建。返回该格保留的点数。
     int updateSinglePoint(double relative_z, double distance) {
-      TerrainVoxelConfig& config = voxelConfig();
+      PersistentVoxelConfig& config = voxelConfig();
       config.min_relative_z = -1.5;
       config.max_relative_z = 0.2;
       config.distance_ratio_z = 0.2;
@@ -140,8 +140,8 @@ namespace terrain_analysis {
       voxel_map_->time_ = 1.0;
       voxel_map_->init_time_ = 0.0;
 
-      int center_cell = TerrainVoxelGrid::linearIndex(
-          TerrainVoxelGrid::HALF_WIDTH, TerrainVoxelGrid::HALF_WIDTH);
+      int center_cell = PersistentVoxelGrid::linearIndex(
+          PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
       auto& cell = *voxelMap().cells()[center_cell];
       cell.clear();
       pcl::PointXYZI point;
@@ -155,8 +155,8 @@ namespace terrain_analysis {
       return static_cast<int>(voxelMap().cells()[center_cell]->points.size());
     }
 
-    std::unique_ptr<PlanarVoxelMap> planar_map_;
-    std::unique_ptr<TerrainVoxelMap> voxel_map_;
+    std::unique_ptr<PerFrameHeightMap> height_map_;
+    std::unique_ptr<PersistentVoxelMap> voxel_map_;
     /** @brief 两半之间的交接数据（采集点云），由测试持有。 */
     pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_;
   };
@@ -165,7 +165,7 @@ namespace terrain_analysis {
 using terrain_analysis::AlgorithmTest;
 
 // 雷达未移动时，体素网格不发生滚动
-TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_Stationary_NoShift) {
   lidar().x = 0;
   lidar().y = 0;
   int sx = voxelMap().shiftX();
@@ -178,7 +178,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_Stationary_NoShift) {
 }
 
 // 雷达向左超出 voxel 范围时，沿 X 负向滚动一格
-TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_LeftOfCenter_ShiftsXNegative) {
   lidar().x = -2.0;
   int sx = voxelMap().shiftX();
 
@@ -188,7 +188,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftOfCenter_ShiftsXNegative) {
 }
 
 // 雷达向右超出 voxel 范围时，沿 X 正向滚动一格
-TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_RightOfCenter_ShiftsXPositive) {
   lidar().x = 2.0;
   int sx = voxelMap().shiftX();
 
@@ -198,7 +198,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_RightOfCenter_ShiftsXPositive) {
 }
 
 // 雷达向下超出 voxel 范围时，沿 Y 负向滚动一格
-TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_BelowCenter_ShiftsYNegative) {
   lidar().y = -2.0;
   int sy = voxelMap().shiftY();
 
@@ -208,7 +208,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_BelowCenter_ShiftsYNegative) {
 }
 
 // 雷达向上超出 voxel 范围时，沿 Y 正向滚动一格
-TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_AboveCenter_ShiftsYPositive) {
   lidar().y = 2.0;
   int sy = voxelMap().shiftY();
 
@@ -218,8 +218,7 @@ TEST_F(AlgorithmTest, RolloverTerrainVoxels_AboveCenter_ShiftsYPositive) {
 }
 
 // 滚动后目标 cell 被清空，原有数据随 shift 迁移
-TEST_F(AlgorithmTest,
-       RolloverTerrainVoxels_ShiftLeft_PreservesDataFromShiftedCell) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_ShiftLeft_PreservesDataFromShiftedCell) {
   lidar().x = -2.0;
   voxelMap().cells()[0]->clear();
   pcl::PointXYZI p{0, 0, 0, 0};
@@ -232,7 +231,7 @@ TEST_F(AlgorithmTest,
 }
 
 // 雷达同时向左下方移动，X 和 Y 各滚动一格
-TEST_F(AlgorithmTest, RolloverTerrainVoxels_LeftAndDown_ShiftsBothAxes) {
+TEST_F(AlgorithmTest, RolloverVoxelMap_LeftAndDown_ShiftsBothAxes) {
   lidar().x = -2.0;
   lidar().y = -2.0;
   int sx = voxelMap().shiftX();
@@ -254,8 +253,8 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
 
   runStage(stage::Id::VOXELIZE);
 
-  size_t center = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                TerrainVoxelGrid::HALF_WIDTH);
+  size_t center = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   EXPECT_EQ(voxelMap().cells()[center]->points.size(), 1U);
 }
 
@@ -282,7 +281,7 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 
   runStage(stage::Id::VOXELIZE);
 
-  for (int i = 0; i < TerrainVoxelGrid::NUM; i++) {
+  for (int i = 0; i < PersistentVoxelGrid::NUM; i++) {
     EXPECT_TRUE(voxelMap().cells()[i]->points.empty());
   }
 }
@@ -292,8 +291,8 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   planarConfig().use_sorting = true;
   planarConfig().quantile_z = 0.5;
-  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
-                                             PlanarVoxelGrid::HALF_WIDTH);
+  size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
+                                                PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
   pointElev()[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
 
@@ -306,8 +305,8 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
 // 最小值模式下取最低点作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   planarConfig().use_sorting = false;
-  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
-                                             PlanarVoxelGrid::HALF_WIDTH);
+  size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
+                                                PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
   pointElev()[cell] = {1.5, 0.5, 1.0};
 
@@ -323,8 +322,8 @@ TEST_F(AlgorithmTest,
   planarConfig().quantile_z = 0.5;
   planarConfig().limit_ground_lift = true;
   planarConfig().max_ground_lift = 0.3;
-  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
-                                             PlanarVoxelGrid::HALF_WIDTH);
+  size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
+                                                PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
   // sorted: 0.5, 1.0, 2.0. quantile 0.5*3 = 1 → 1.0. diff 1.0-0.5=0.5 > 0.3
   pointElev()[cell] = {0.5, 2.0, 1.0};
@@ -340,8 +339,8 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
   planarConfig().use_sorting = true;
   planarConfig().quantile_z = 1.0;
   planarConfig().limit_ground_lift = false;
-  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
-                                             PlanarVoxelGrid::HALF_WIDTH);
+  size_t cell = PerFrameHeightGrid::linearIndex(PerFrameHeightGrid::HALF_WIDTH,
+                                                PerFrameHeightGrid::HALF_WIDTH);
   voxelElev().fill(999);
   // 3 points: sorted 0.1, 0.3, 0.9. quantile 1.0*3 = 3 >= 3 → clamp to 2 → 0.9
   pointElev()[cell] = {0.1, 0.9, 0.3};
@@ -544,8 +543,8 @@ TEST_F(AlgorithmTest,
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
-  size_t center = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
-                                               PlanarVoxelGrid::HALF_WIDTH);
+  size_t center = PerFrameHeightGrid::linearIndex(
+      PerFrameHeightGrid::HALF_WIDTH, PerFrameHeightGrid::HALF_WIDTH);
   EXPECT_EQ(pointElev()[center].size(), 1U);
 }
 
@@ -562,8 +561,8 @@ TEST_F(AlgorithmTest,
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
-  size_t center = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
-                                               PlanarVoxelGrid::HALF_WIDTH);
+  size_t center = PerFrameHeightGrid::linearIndex(
+      PerFrameHeightGrid::HALF_WIDTH, PerFrameHeightGrid::HALF_WIDTH);
   EXPECT_EQ(pointElev()[center].size(), 1U);
 }
 
@@ -629,7 +628,7 @@ TEST_F(AlgorithmTest, ComputeHeightMap_BelowCeilingClearance_StillObstacle) {
   EXPECT_NEAR(obstacleCloud()->points[0].intensity, 0.05F, 1e-6);
 }
 
-// ── keepTerrainVoxelPoint boundary tests (via updateTerrainVoxels) ──
+// ── keepPoint 边界测试（经 rebuild）──
 
 // 略高于下限边界的点被保留
 TEST_F(AlgorithmTest, KeepVoxelPoint_BelowLowerBoundary_Excluded) {
@@ -675,8 +674,8 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   frameTime() = 10.0;
   initTime() = 0.0;
 
-  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                  TerrainVoxelGrid::HALF_WIDTH);
+  int center_cell = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI point;
@@ -706,8 +705,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
   frameTime() = 1.2;  // 本帧
   initTime() = 0.0;
 
-  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                  TerrainVoxelGrid::HALF_WIDTH);
+  int center_cell = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   // 同一 0.05 m 叶内的三点：两个早已过期，一个本帧刚观测到
@@ -744,8 +743,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
   frameTime() = 1.0;
   initTime() = 0.0;
 
-  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                  TerrainVoxelGrid::HALF_WIDTH);
+  int center_cell = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI ground;  // 地面点，本帧观测到
@@ -781,8 +780,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
   frameTime() = 1.2;
   initTime() = 0.0;
 
-  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                  TerrainVoxelGrid::HALF_WIDTH);
+  int center_cell = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   for (double time : {0.10, 0.30}) {
@@ -813,8 +812,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
   frameTime() = 1.2;
   initTime() = 0.0;
 
-  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                  TerrainVoxelGrid::HALF_WIDTH);
+  int center_cell = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI stale;  // 上方叶：0.30 m 处，早已过期
@@ -848,8 +847,8 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   frameTime() = 10.0;
   initTime() = 0.0;
 
-  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
-                                                  TerrainVoxelGrid::HALF_WIDTH);
+  int center_cell = PersistentVoxelGrid::linearIndex(
+      PersistentVoxelGrid::HALF_WIDTH, PersistentVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI point;
