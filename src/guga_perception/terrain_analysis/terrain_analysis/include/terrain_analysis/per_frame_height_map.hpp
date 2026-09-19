@@ -86,8 +86,11 @@ namespace terrain_analysis {
      *     地面地板与穿透地板这两条筛选，含地面回波——清除射线需要的是"该方向上
      *     有一次回波"，地面回波正是"射线路径为空"的证据，它不必是障碍点。
      *
-     * 两份输出都只保留平面网格窗口内的点（与累计输出同为约 5 m 半径），
-     * intensity 都是距局部地面的高度 h。
+     * 两份输出的空间范围不同，差别来自"要不要算离地高度"：障碍点云需要离地高度
+     * 判据，因此只保留平面网格窗口内的点（约 ±5 m）；回波点云只服务于射线清除，
+     * 网格外的回波也照发——它同样证明该方向的路径为空，代价地图层会把端点裁剪到
+     * 自己的边界再画射线，把它丢掉反而会让该方向一条射线都没有。
+     * intensity 是距局部地面的高度 h；网格外没有地面估计，写 0。
      * @param frame_cloud 本帧点云，坐标位于 odom 坐标系。
      * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
      */
@@ -99,8 +102,11 @@ namespace terrain_analysis {
       return *frame_obstacle_cloud_;
     }
 
-    /** @brief 最近一次生成的当帧回波点云（含地面回波，intensity
-     * 为距局部地面的高度）。 */
+    /**
+     * @brief 最近一次生成的当帧回波点云（含地面回波）。
+     *
+     * intensity 为距局部地面的高度，网格外的点为 0（见 computeFrameOutputs）。
+     */
     [[nodiscard]] const Cell& frameReturnCloud() const noexcept {
       return *frame_return_cloud_;
     }
