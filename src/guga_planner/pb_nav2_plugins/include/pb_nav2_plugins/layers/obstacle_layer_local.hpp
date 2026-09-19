@@ -63,36 +63,36 @@ namespace pb_nav2_costmap_2d
 
 /**
  * @class ObstacleLayerLocal
- * @brief Takes in laser and pointcloud data to populate into 2D costmap
+ * @brief 接收激光与点云数据，填充到 2D 代价地图
  */
 class ObstacleLayerLocal : public nav2_costmap_2d::CostmapLayer
 {
 public:
   /**
-   * @brief A constructor
+   * @brief 构造函数
    */
   ObstacleLayerLocal()
   {
-    costmap_ = NULL;  // this is the unsigned char* member of parent class Costmap2D.
+    costmap_ = NULL;  // 这是父类 Costmap2D 中的 unsigned char* 成员
   }
 
   /**
-   * @brief A destructor
+   * @brief 析构函数
    */
   virtual ~ObstacleLayerLocal();
   /**
-   * @brief Initialization process of layer on startup
+   * @brief 节点启动时该图层的初始化流程
    */
   virtual void onInitialize();
   /**
-   * @brief Update the bounds of the master costmap by this layer's update dimensions
-   * @param robot_x X pose of robot
-   * @param robot_y Y pose of robot
-   * @param robot_yaw Robot orientation
-   * @param min_x X min map coord of the window to update
-   * @param min_y Y min map coord of the window to update
-   * @param max_x X max map coord of the window to update
-   * @param max_y Y max map coord of the window to update
+   * @brief 按本图层的更新范围扩展主代价地图的更新边界
+   * @param robot_x 机器人位姿 X
+   * @param robot_y 机器人位姿 Y
+   * @param robot_yaw 机器人朝向
+   * @param min_x 待更新窗口在地图坐标下的 X 最小值
+   * @param min_y 待更新窗口在地图坐标下的 Y 最小值
+   * @param max_x 待更新窗口在地图坐标下的 X 最大值
+   * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
   virtual void updateBounds(
     double robot_x, double robot_y, double robot_yaw, double * min_x,
@@ -100,104 +100,100 @@ public:
     double * max_x,
     double * max_y);
   /**
-   * @brief Update the costs in the master costmap in the window
-   * @param master_grid The master costmap grid to update
-   * @param min_x X min map coord of the window to update
-   * @param min_y Y min map coord of the window to update
-   * @param max_x X max map coord of the window to update
-   * @param max_y Y max map coord of the window to update
+   * @brief 更新窗口内主代价地图的代价值
+   * @param master_grid 待更新的主代价地图栅格
    */
   virtual void updateCosts(
     nav2_costmap_2d::Costmap2D & master_grid,
     int min_i, int min_j, int max_i, int max_j);
 
   /**
-   * @brief Deactivate the layer
+   * @brief 停用该图层
    */
   virtual void deactivate();
 
   /**
-   * @brief Activate the layer
+   * @brief 启用该图层
    */
   virtual void activate();
 
   /**
-   * @brief Reset this costmap
+   * @brief 复位该代价地图
    */
   virtual void reset();
 
   /**
-   * @brief If clearing operations should be processed on this layer or not
+   * @brief 该图层是否需要处理清除操作
    */
   virtual bool isClearable() {return true;}
 
   /**
-   * @brief Callback executed when a parameter change is detected
-   * @param event ParameterEvent message
+   * @brief 检测到参数变化时执行的回调
+   * @param parameters 发生变化的参数列表
    */
   rcl_interfaces::msg::SetParametersResult
   dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   /**
-   * @brief triggers the update of observations buffer
+   * @brief 触发观测缓冲的时间戳更新
    */
   void resetBuffersLastUpdated();
 
   /**
-   * @brief  A callback to handle buffering LaserScan messages
-   * @param message The message returned from a message notifier
-   * @param buffer A pointer to the observation buffer to update
+   * @brief 缓存 LaserScan 消息的回调
+   * @param message 消息过滤器返回的消息
+   * @param buffer 指向待更新观测缓冲的指针
    */
   void laserScanCallback(
     sensor_msgs::msg::LaserScan::ConstSharedPtr message,
     const std::shared_ptr<nav2_costmap_2d::ObservationBuffer> & buffer);
 
   /**
-   * @brief A callback to handle buffering LaserScan messages which need filtering to turn Inf values into range_max.
-   * @param message The message returned from a message notifier
-   * @param buffer A pointer to the observation buffer to update
+   * @brief 缓存 LaserScan 消息的回调，先把无效值 Inf 过滤成 range_max
+   * @param message 消息过滤器返回的消息
+   * @param buffer 指向待更新观测缓冲的指针
    */
   void laserScanValidInfCallback(
     sensor_msgs::msg::LaserScan::ConstSharedPtr message,
     const std::shared_ptr<nav2_costmap_2d::ObservationBuffer> & buffer);
 
   /**
-   * @brief  A callback to handle buffering PointCloud2 messages
-   * @param message The message returned from a message notifier
-   * @param buffer A pointer to the observation buffer to update
+   * @brief 缓存 PointCloud2 消息的回调
+   * @param message 消息过滤器返回的消息
+   * @param buffer 指向待更新观测缓冲的指针
    */
   void pointCloud2Callback(
     sensor_msgs::msg::PointCloud2::ConstSharedPtr message,
     const std::shared_ptr<nav2_costmap_2d::ObservationBuffer> & buffer);
 
-  // for testing purposes
+  // 仅供测试使用
   void addStaticObservation(nav2_costmap_2d::Observation & obs, bool marking, bool clearing);
   void clearStaticObservations(bool marking, bool clearing);
 
 protected:
   /**
-   * @brief  Get the observations used to mark space
-   * @param marking_observations A reference to a vector that will be populated with the observations
-   * @return True if all the observation buffers are current, false otherwise
+   * @brief 取出用于标记障碍的观测
+   * @param marking_observations 用于填入观测结果的向量引用
+   * @return 所有观测缓冲都是最新的返回 true，否则返回 false
    */
   bool getMarkingObservations(
     std::vector<nav2_costmap_2d::Observation> & marking_observations) const;
 
   /**
-   * @brief  Get the observations used to clear space
-   * @param clearing_observations A reference to a vector that will be populated with the observations
-   * @return True if all the observation buffers are current, false otherwise
+   * @brief 取出用于清除自由空间的观测
+   * @param clearing_observations 用于填入观测结果的向量引用
+   * @return 所有观测缓冲都是最新的返回 true，否则返回 false
    */
   bool getClearingObservations(
     std::vector<nav2_costmap_2d::Observation> & clearing_observations) const;
 
   /**
-   * @brief  Clear freespace based on one observation
-   * @param clearing_observation The observation used to raytrace
-   * @param min_x
-   * @param min_y
-   * @param max_x
-   * @param max_y
+   * @brief 依据单次观测清除自由空间
+   * @param clearing_observation 用于射线追踪的观测
+   * @param min_x 待更新窗口在地图坐标下的 X 最小值
+   * @param min_y 待更新窗口在地图坐标下的 Y 最小值
+   * @param max_x 待更新窗口在地图坐标下的 X 最大值
+   * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
   virtual void raytraceFreespace(
     const nav2_costmap_2d::Observation & clearing_observation,
@@ -206,7 +202,7 @@ protected:
     double * max_y);
 
   /**
-   * @brief Process update costmap with raytracing the window bounds
+   * @brief 用射线追踪的结果更新窗口边界
    */
   void updateRaytraceBounds(
     double ox, double oy, double wx, double wy, double max_range, double min_range,
@@ -217,7 +213,7 @@ protected:
   std::vector<geometry_msgs::msg::Point> transformed_footprint_;
   bool footprint_clearing_enabled_;
   /**
-   * @brief Clear costmap layer info below the robot's footprint
+   * @brief 清除机器人足迹范围内的图层信息
    */
   void updateFootprint(
     double robot_x, double robot_y, double robot_yaw, double * min_x,
@@ -225,28 +221,28 @@ protected:
     double * max_x,
     double * max_y);
 
-  std::string global_frame_;  ///< @brief The global frame for the costmap
-  double min_obstacle_height_;  ///< @brief Max Obstacle Height
-  double max_obstacle_height_;  ///< @brief Max Obstacle Height
+  std::string global_frame_;  ///< @brief 代价地图使用的全局坐标系
+  double min_obstacle_height_;  ///< @brief 障碍物最小高度
+  double max_obstacle_height_;  ///< @brief 障碍物最大高度
 
-  /// @brief Used to project laser scans into point clouds
+  /// @brief 用于把激光扫描投影成点云
   laser_geometry::LaserProjection projector_;
-  /// @brief Used for the observation message filters
+  /// @brief 用于观测消息的订阅者
   std::vector<std::shared_ptr<message_filters::SubscriberBase<rclcpp_lifecycle::LifecycleNode>>>
   observation_subscribers_;
-  /// @brief Used to make sure that transforms are available for each sensor
+  /// @brief 用于确保每个传感器都有可用的坐标变换
   std::vector<std::shared_ptr<tf2_ros::MessageFilterBase>> observation_notifiers_;
-  /// @brief Used to store observations from various sensors
+  /// @brief 用于保存各传感器产生的观测
   std::vector<std::shared_ptr<nav2_costmap_2d::ObservationBuffer>> observation_buffers_;
-  /// @brief Used to store observation buffers used for marking obstacles
+  /// @brief 用于保存标记障碍所用的观测缓冲
   std::vector<std::shared_ptr<nav2_costmap_2d::ObservationBuffer>> marking_buffers_;
-  /// @brief Used to store observation buffers used for clearing obstacles
+  /// @brief 用于保存清除障碍所用的观测缓冲
   std::vector<std::shared_ptr<nav2_costmap_2d::ObservationBuffer>> clearing_buffers_;
 
-  /// @brief Dynamic parameters handler
+  /// @brief 动态参数回调句柄
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 
-  // Used only for testing purposes
+  // 仅供测试使用
   std::vector<nav2_costmap_2d::Observation> static_clearing_observations_;
   std::vector<nav2_costmap_2d::Observation> static_marking_observations_;
 
@@ -255,6 +251,6 @@ protected:
   int combination_method_;
 };
 
-}  // namespace nav2_costmap_2d
+}  // namespace pb_nav2_costmap_2d
 
 #endif  // PB_NAV2_PLUGINS__LAYERS__OBSTACLE_LAYER_LOCAL_HPP_
