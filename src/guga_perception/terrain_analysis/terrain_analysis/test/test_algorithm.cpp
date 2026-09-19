@@ -110,9 +110,8 @@ namespace terrain_analysis {
       state.laser_cloud_time = 1.0;
       state.system_init_time = 0.0;
 
-      int center_cell = TerrainGrid::terrainVoxelIndex(
-          TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-          TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+      int center_cell = TerrainVoxelGrid::linearIndex(
+          TerrainVoxelGrid::HALF_WIDTH, TerrainVoxelGrid::HALF_WIDTH);
       auto& cell = *voxel_map_.cells()[center_cell];
       cell.clear();
       pcl::PointXYZI point;
@@ -225,9 +224,8 @@ TEST_F(AlgorithmTest, Voxelize_MapsPointToCenterCell) {
 
   runStage(stage::Id::VOXELIZE);
 
-  size_t center = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  size_t center = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                TerrainVoxelGrid::HALF_WIDTH);
   EXPECT_EQ(voxelMap().cells()[center]->points.size(), 1U);
 }
 
@@ -237,7 +235,7 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 
   runStage(stage::Id::VOXELIZE);
 
-  for (int i = 0; i < TerrainGrid::TERRAIN_VOXEL_NUM; i++) {
+  for (int i = 0; i < TerrainVoxelGrid::NUM; i++) {
     EXPECT_TRUE(voxelMap().cells()[i]->points.empty());
   }
 }
@@ -247,9 +245,8 @@ TEST_F(AlgorithmTest, Voxelize_EmptyCloud_NoChange) {
 TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
   config().use_sorting = true;
   config().quantile_z = 0.5;
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
+                                             PlanarVoxelGrid::HALF_WIDTH);
   state().planar_voxel_elev.fill(999);
   state().planar_point_elev[cell] = {0.1, 0.5, 0.3, 0.2, 0.4};
 
@@ -262,9 +259,8 @@ TEST_F(AlgorithmTest, ComputeElevation_UseSorting_ReturnsQuantile) {
 // 最小值模式下取最低点作为地面高度估计
 TEST_F(AlgorithmTest, ComputeElevation_UseMinimum_ReturnsMinimum) {
   config().use_sorting = false;
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
+                                             PlanarVoxelGrid::HALF_WIDTH);
   state().planar_voxel_elev.fill(999);
   state().planar_point_elev[cell] = {1.5, 0.5, 1.0};
 
@@ -280,9 +276,8 @@ TEST_F(AlgorithmTest,
   config().quantile_z = 0.5;
   config().limit_ground_lift = true;
   config().max_ground_lift = 0.3;
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
+                                             PlanarVoxelGrid::HALF_WIDTH);
   state().planar_voxel_elev.fill(999);
   // sorted: 0.5, 1.0, 2.0. quantile 0.5*3 = 1 → 1.0. diff 1.0-0.5=0.5 > 0.3
   state().planar_point_elev[cell] = {0.5, 2.0, 1.0};
@@ -298,9 +293,8 @@ TEST_F(AlgorithmTest, ComputeElevation_QuantileIndexAtBoundary_ClampedToLast) {
   config().use_sorting = true;
   config().quantile_z = 1.0;
   config().limit_ground_lift = false;
-  size_t cell = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  size_t cell = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
+                                             PlanarVoxelGrid::HALF_WIDTH);
   state().planar_voxel_elev.fill(999);
   // 3 points: sorted 0.1, 0.3, 0.9. quantile 1.0*3 = 3 >= 3 → clamp to 2 → 0.9
   state().planar_point_elev[cell] = {0.1, 0.9, 0.3};
@@ -479,9 +473,8 @@ TEST_F(AlgorithmTest,
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
-  size_t center = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  size_t center = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
+                                               PlanarVoxelGrid::HALF_WIDTH);
   EXPECT_EQ(state().planar_point_elev[center].size(), 1U);
 }
 
@@ -498,9 +491,8 @@ TEST_F(AlgorithmTest,
 
   runStage(stage::Id::ESTIMATE_TERRAIN_GROUND);
 
-  size_t center = TerrainGrid::planarVoxelIndex(
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH,
-      TerrainGrid::PLANAR_VOXEL_HALF_WIDTH);
+  size_t center = PlanarVoxelGrid::linearIndex(PlanarVoxelGrid::HALF_WIDTH,
+                                               PlanarVoxelGrid::HALF_WIDTH);
   EXPECT_EQ(state().planar_point_elev[center].size(), 1U);
 }
 
@@ -613,9 +605,8 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_ExpiredFarPoint_Excluded) {
   state().laser_cloud_time = 10.0;
   state().system_init_time = 0.0;
 
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                  TerrainVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI point;
@@ -646,9 +637,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_MixedAgeLeaf_KeepsNewestObservation) {
   state().laser_cloud_time = 1.2;  // 本帧
   state().system_init_time = 0.0;
 
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                  TerrainVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   // 同一 0.05 m 叶内的三点：两个早已过期，一个本帧刚观测到
@@ -686,9 +676,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_AnisotropicLeaf_KeepsLowObstacle) {
   state().laser_cloud_time = 1.0;
   state().system_init_time = 0.0;
 
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                  TerrainVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI ground;  // 地面点，本帧观测到
@@ -725,9 +714,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_OnlyStaleLeaf_Removed) {
   state().laser_cloud_time = 1.2;
   state().system_init_time = 0.0;
 
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                  TerrainVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   for (double time : {0.10, 0.30}) {
@@ -759,9 +747,8 @@ TEST_F(AlgorithmTest, UpdateVoxels_RefreshOneLeaf_DoesNotReviveAnother) {
   state().laser_cloud_time = 1.2;
   state().system_init_time = 0.0;
 
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                  TerrainVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI stale;  // 上方叶：0.30 m 处，早已过期
@@ -796,9 +783,8 @@ TEST_F(AlgorithmTest, KeepVoxelPoint_NearPointEvenIfExpired_Kept) {
   state().laser_cloud_time = 10.0;
   state().system_init_time = 0.0;
 
-  int center_cell = TerrainGrid::terrainVoxelIndex(
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH,
-      TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH);
+  int center_cell = TerrainVoxelGrid::linearIndex(TerrainVoxelGrid::HALF_WIDTH,
+                                                  TerrainVoxelGrid::HALF_WIDTH);
   auto& cell = *voxelMap().cells()[center_cell];
   cell.clear();
   pcl::PointXYZI point;

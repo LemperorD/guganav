@@ -12,9 +12,9 @@
 
 namespace terrain_analysis {
 
-  std::array<TerrainVoxelMap::Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM>
+  std::array<TerrainVoxelMap::Cell::Ptr, TerrainVoxelGrid::NUM>
   TerrainVoxelMap::makeCells() {
-    std::array<Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM> cells;
+    std::array<Cell::Ptr, TerrainVoxelGrid::NUM> cells;
     for (auto& ptr : cells) {
       ptr = std::make_shared<Cell>();
     }
@@ -62,12 +62,12 @@ namespace terrain_analysis {
 
   void TerrainVoxelMap::collectCloud(Cell& out) const {
     out.clear();
-    constexpr int HALF = TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH;
+    constexpr int HALF = TerrainVoxelGrid::HALF_WIDTH;
     for (int row = HALF - EXTRACT_HALF_WINDOW;
          row <= HALF + EXTRACT_HALF_WINDOW; row++) {
       for (int column = HALF - EXTRACT_HALF_WINDOW;
            column <= HALF + EXTRACT_HALF_WINDOW; column++) {
-        out += *cloud_[TerrainGrid::terrainVoxelIndex(row, column)];
+        out += *cloud_[TerrainVoxelGrid::linearIndex(row, column)];
       }
     }
   }
@@ -100,12 +100,11 @@ namespace terrain_analysis {
                                  double voxel_size) {
     for (const auto& point : crop.points) {
       const GridIndex index = gridIndex(point.x, point.y, lidar.x, lidar.y,
-                                        voxel_size,
-                                        TerrainGrid::TERRAIN_VOXEL_WIDTH);
+                                        voxel_size, TerrainVoxelGrid::WIDTH);
       if (!index.valid) {
         continue;
       }
-      cloud_[TerrainGrid::terrainVoxelIndex(index.row, index.col)]->push_back(
+      cloud_[TerrainVoxelGrid::linearIndex(index.row, index.col)]->push_back(
           point);
     }
   }
@@ -156,15 +155,15 @@ namespace terrain_analysis {
   }
 
   void TerrainVoxelMap::shift(bool along_x, bool toward_positive) {
-    static constexpr int WIDTH = TerrainGrid::TERRAIN_VOXEL_WIDTH;
+    static constexpr int WIDTH = TerrainVoxelGrid::WIDTH;
     const int src = toward_positive ? 0 : WIDTH - 1;
     const int dst = toward_positive ? WIDTH - 1 : 0;
     const int step = toward_positive ? 1 : -1;
 
     for (int fixed = 0; fixed < WIDTH; fixed++) {
       const auto cell = [&](int m) {
-        return along_x ? TerrainGrid::terrainVoxelIndex(m, fixed)
-                       : TerrainGrid::terrainVoxelIndex(fixed, m);
+        return along_x ? TerrainVoxelGrid::linearIndex(m, fixed)
+                       : TerrainVoxelGrid::linearIndex(fixed, m);
       };
       auto ptr = cloud_[cell(src)];
       for (int m = src; m != dst; m += step) {

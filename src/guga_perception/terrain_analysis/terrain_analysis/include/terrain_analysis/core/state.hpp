@@ -1,6 +1,6 @@
 #pragma once
 
-#include "terrain_analysis/core/grid.hpp"
+#include "terrain_analysis/core/planar_voxel_grid.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
@@ -38,10 +38,9 @@ struct TerrainState {
   pcl::PointCloud<pcl::PointXYZI>::Ptr terrain_cloud_elev =
       std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
   /** @brief 每个 Planar voxel 的估计地面高度。 */
-  std::array<double, TerrainGrid::PLANAR_VOXEL_NUM> planar_voxel_elev{};
+  std::array<double, PlanarVoxelGrid::NUM> planar_voxel_elev{};
   /** @brief 每个 Planar voxel 收集到的地面高度候选值。 */
-  std::array<std::vector<double>, TerrainGrid::PLANAR_VOXEL_NUM>
-      planar_point_elev;
+  std::array<std::vector<double>, PlanarVoxelGrid::NUM> planar_point_elev;
 
   // ---- 输入点云状态 ----
   /** @brief 最近一帧点云时间戳，单位为秒。 */

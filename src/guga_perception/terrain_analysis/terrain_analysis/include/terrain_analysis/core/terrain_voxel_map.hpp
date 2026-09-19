@@ -1,7 +1,7 @@
 #pragma once
 
 #include "terrain_analysis/core/config.hpp"
-#include "terrain_analysis/core/grid.hpp"
+#include "terrain_analysis/core/terrain_voxel_grid.hpp"
 #include "guga_common/geometry.hpp"
 
 #include <pcl/point_cloud.h>
@@ -66,12 +66,12 @@ namespace terrain_analysis {
     void collectCloud(Cell& out) const;
 
     /** @brief 只读访问所有格子。 */
-    [[nodiscard]] const std::array<Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM>&
-    cells() const noexcept {
+    [[nodiscard]] const std::array<Cell::Ptr, TerrainVoxelGrid::NUM>& cells()
+        const noexcept {
       return cloud_;
     }
     /** @brief 可修改访问所有格子（供采集阶段与测试使用）。 */
-    [[nodiscard]] std::array<Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM>&
+    [[nodiscard]] std::array<Cell::Ptr, TerrainVoxelGrid::NUM>&
     cells() noexcept {
       return cloud_;
     }
@@ -102,11 +102,11 @@ namespace terrain_analysis {
     /** @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。 */
     void shift(bool along_x, bool toward_positive);
 
-    std::array<Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM> cloud_ = makeCells();
+    std::array<Cell::Ptr, TerrainVoxelGrid::NUM> cloud_ = makeCells();
     int shift_x_ = 0;
     int shift_y_ = 0;
 
-    [[nodiscard]] static std::array<Cell::Ptr, TerrainGrid::TERRAIN_VOXEL_NUM>
+    [[nodiscard]] static std::array<Cell::Ptr, TerrainVoxelGrid::NUM>
     makeCells();
   };
 

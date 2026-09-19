@@ -42,7 +42,7 @@ namespace terrain_analysis {
 
     const double lidar_z = state_.lidar.z;
     const double max_range = config_.terrain_voxel_size
-                             * (TerrainGrid::TERRAIN_VOXEL_HALF_WIDTH + 1);
+                             * (TerrainVoxelGrid::HALF_WIDTH + 1);
     state_.laser_cloud_crop->clear();
     for (const auto& point : cloud->points) {
       double relative_z = point.z - lidar_z;
@@ -95,7 +95,7 @@ namespace terrain_analysis {
       // 高于地面的部分本就是障碍，会由 computeHeightMap 按净空处理。
       const GridIndex grid_index = gridIndex(
           point.x, point.y, state_.lidar.x, state_.lidar.y,
-          config_.planar_voxel_size, TerrainGrid::PLANAR_VOXEL_WIDTH);
+          config_.planar_voxel_size, PlanarVoxelGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
       }
@@ -109,11 +109,11 @@ namespace terrain_analysis {
     state_.planar_voxel_elev.fill(0);
 
     if (config_.use_sorting) {
-      for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
+      for (int i = 0; i < PlanarVoxelGrid::NUM; i++) {
         elevateByQuantile(i);
       }
     } else {
-      for (int i = 0; i < TerrainGrid::PLANAR_VOXEL_NUM; i++) {
+      for (int i = 0; i < PlanarVoxelGrid::NUM; i++) {
         elevateByMinimum(i);
       }
     }
@@ -127,12 +127,12 @@ namespace terrain_analysis {
     for (const auto& point : state_.terrain_cloud->points) {
       const GridIndex grid_index = gridIndex(
           point.x, point.y, state_.lidar.x, state_.lidar.y,
-          config_.planar_voxel_size, TerrainGrid::PLANAR_VOXEL_WIDTH);
+          config_.planar_voxel_size, PlanarVoxelGrid::WIDTH);
       if (!grid_index.valid) {
         continue;
       }
-      const size_t cell = TerrainGrid::planarVoxelIndex(grid_index.row,
-                                                        grid_index.col);
+      const size_t cell = PlanarVoxelGrid::linearIndex(grid_index.row,
+                                                       grid_index.col);
       // 该点所在处的地面高度（本帧估计值），下面所有高度判据都以它为基准。
       const double ground_z = state_.planar_voxel_elev[cell];
       const double height_above_ground = point.z - ground_z;
@@ -173,7 +173,7 @@ namespace terrain_analysis {
   // point_time 为该点的观测时刻（相对首帧的秒数）。对同一叶的代表点而言，
   // 它是叶内最新的观测时刻，见 updateTerrainVoxels。
   void TerrainPipeline::addToPlanarNeighborhood3x3(int row, int col, double z) {
-    constexpr int width = TerrainGrid::PLANAR_VOXEL_WIDTH;
+    constexpr int width = PlanarVoxelGrid::WIDTH;
 
     for (int delta_row = -1; delta_row <= 1; delta_row++) {
       const int neighbor_row = row + delta_row;
@@ -186,8 +186,8 @@ namespace terrain_analysis {
           continue;
         }
         // 行偏移按整行换算（乘网格宽度），列偏移直接相加
-        const size_t index = TerrainGrid::planarVoxelIndex(neighbor_row,
-                                                           neighbor_col);
+        const size_t index = PlanarVoxelGrid::linearIndex(neighbor_row,
+                                                          neighbor_col);
         state_.planar_point_elev[index].push_back(z);
       }
     }
