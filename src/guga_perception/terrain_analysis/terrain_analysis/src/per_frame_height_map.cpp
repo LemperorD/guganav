@@ -32,10 +32,7 @@ namespace terrain_analysis {
     }
 
     for (const auto& point : terrain_cloud.points) {
-      // 唯一的候选筛选是下界，且用**绝对 z**（odom）：地面在 odom 中大体水平，
-      // 地板过滤只需挡住远低于地面的穿透点，用绝对量比"相对雷达"更贴合语义，
-      // 也不随雷达上下抖动而移动。
-      if (point.z <= config_.ground_floor_z) {
+      if (!aboveGroundFloor(point.z, config_)) {
         continue;
       }
 
@@ -81,37 +78,45 @@ namespace terrain_analysis {
       }
       const size_t cell = PerFrameHeightGrid::linearIndex(grid_index.row,
                                                           grid_index.col);
-      // 下面所有高度判据都以本帧估计的该处地面高度为基准。
-      const double ground_z = voxel_elev_[cell];
-      const double height_above_ground = point.z - ground_z;
+      // 地面系：距本格局部地面的高度（voxel_elev_ 里是 odom 绝对值）。
+      const double h_ground = point.z - voxel_elev_[cell];
 
-      // 下界：地板过滤（挡掉地面以下/穿透点）。此处用**相对雷达**的高度，
-      // 因为要挡的是"远低于雷达"的穿透点，与地形无关。
-      if (point.z - lidar_z <= config_.min_relative_z) {
+      if (!abovePenetrationFloor(point.z - lidar_z, config_)) {
         continue;
       }
-      // 上界：距地面达到安全间隙的点（天花板/横梁）不输出为障碍——
-      // 净空足够时车辆可从下方通过（隧道场景）。以**局部地面**为基准：
-      // 净空是"地面到障碍下沿"的距离，这也使判据在坡面上保持一致。
-      // 这是障碍输出**唯一**的上界：不再叠加按车高的截断，否则车高与净空
-      // 之间的那一带（车高 0.52 → 净空 0.62 之间）会被漏检，而车过不去。
-      if (height_above_ground >= config_.ceiling_clearance) {
+      if (!insideOutputBand(h_ground, config_)) {
         continue;
       }
-      double height = height_above_ground;
-      if (config_.consider_drop) {
-        height = std::abs(height);
-      }
-
-      auto point_count = point_elev_[cell].size();
-      // 下界：地面带的死区，吸收地面高度估计的误差。估计值偏低时，真实地面点会
-      // 算出几厘米的正高度；若从 0 起算，它们会被当作低矮障碍标记出去。
-      if (height >= config_.min_obstacle_height
-          && point_count >= static_cast<size_t>(config_.min_block_point_num)) {
+      // 带内还要凑够该格的点数；这一条与参考系无关，是密度门限。
+      const auto point_count = point_elev_[cell].size();
+      if (point_count >= static_cast<size_t>(config_.min_block_point_num)) {
+        const double height = config_.consider_drop ? std::abs(h_ground)
+                                                    : h_ground;
         elevations->push_back(point);
         elevations->back().intensity = static_cast<float>(height);
       }
     }
+  }
+
+  bool PerFrameHeightMap::aboveGroundFloor(double z_odom,
+                                           const PerFrameHeightConfig& config) {
+    return z_odom > config.ground_floor_z;
+  }
+
+  bool PerFrameHeightMap::insideOutputBand(double h_ground,
+                                           const PerFrameHeightConfig& config) {
+    // 上界用带符号值：净空是"地面到障碍下沿"，低于地面的坑不占净空。
+    if (h_ground >= config.ceiling_clearance) {
+      return false;
+    }
+    // 死区下界用绝对值：considerDrop 打开时凹坑也算障碍。
+    const double height = config.consider_drop ? std::abs(h_ground) : h_ground;
+    return height >= config.min_obstacle_height;
+  }
+
+  bool PerFrameHeightMap::abovePenetrationFloor(
+      double z_rel_lidar, const PerFrameHeightConfig& config) {
+    return z_rel_lidar > config.min_relative_z;
   }
 
   void PerFrameHeightMap::elevateByQuantile(int cell) {

@@ -156,6 +156,28 @@ namespace terrain_analysis {
       return shift_y_;
     }
 
+    /**
+     * @brief 该点是否落在接收带内。**雷达系**：高度是相对雷达的偏移，带宽随水平
+     * 距离放宽；两侧都是严格不等，等于边界的点排除。
+     *
+     * `ingest` 的裁剪与 `rebuild` 的保留用的是同一个带，判据只此一处——两处各写
+     * 一遍正是"改了一处忘了另一处"的来源。
+     */
+    [[nodiscard]] static bool insideReceiveBand(
+        double z_rel_lidar, double distance,
+        const PersistentVoxelConfig& config);
+
+    /**
+     * @brief 该点是否应保留在该体素格中：接收带内，且未过期（近处不判年龄）。
+     * @param z_rel_lidar 相对雷达的高度（**雷达系**）。
+     * @param distance 水平距离（与参考系无关）。
+     * @param point_time 该点的观测时刻（相对首帧的秒数），现由 intensity 携带。
+     */
+    [[nodiscard]] static bool keepPoint(double z_rel_lidar, double distance,
+                                        double point_time,
+                                        const PersistentVoxelConfig& config,
+                                        double now_elapsed);
+
     std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
     // 本帧输入：由 ingest 写入，update 消费。
     Cell::Ptr frame_cloud_ = std::make_shared<Cell>();
@@ -167,12 +189,6 @@ namespace terrain_analysis {
     /** @brief 融合叶键：x/y 与 z 使用不同叶宽（垂直更细）。 */
     [[nodiscard]] static uint64_t leafKey(double x, double y, double z,
                                           double leaf_xy, double leaf_z);
-
-    /** @brief 该点是否应保留在该体素格中（高度带 + 年龄）。 */
-    [[nodiscard]] static bool keepPoint(double relative_z, double distance,
-                                        double point_time,
-                                        const PersistentVoxelConfig& config,
-                                        double now_elapsed);
 
     /**
      * @brief 把整张网格沿指定轴搬运一格，腾出的新格清空。

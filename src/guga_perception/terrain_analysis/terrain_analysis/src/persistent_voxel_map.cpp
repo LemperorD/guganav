@@ -37,12 +37,11 @@ namespace terrain_analysis {
                              * (PersistentVoxelGrid::HALF_WIDTH + 1);
     frame_cloud_->clear();
     for (const auto& point : cloud.points) {
-      const double relative_z = point.z - lidar_.z;
+      // 高度取相对雷达（雷达系），距离与参考系无关。
+      const double z_rel_lidar = point.z - lidar_.z;
       const double distance = horizontalDistance(point.x, point.y, lidar_.x,
                                                  lidar_.y);
-      const double z_margin = config_.distance_ratio_z * distance;
-      if (relative_z > config_.min_relative_z - z_margin
-          && relative_z < config_.max_relative_z + z_margin
+      if (insideReceiveBand(z_rel_lidar, distance, config_)
           && distance < max_range) {
         pcl::PointXYZI cropped = point;
         // intensity 借用来携带该点的观测时刻（相对首帧的秒数），rebuild 判年龄
@@ -69,15 +68,19 @@ namespace terrain_analysis {
            | index(z, leaf_z);
   }
 
-  bool PersistentVoxelMap::keepPoint(double relative_z, double distance,
+  bool PersistentVoxelMap::insideReceiveBand(
+      double z_rel_lidar, double distance,
+      const PersistentVoxelConfig& config) {
+    const double z_margin = config.distance_ratio_z * distance;
+    return z_rel_lidar > config.min_relative_z - z_margin
+           && z_rel_lidar < config.max_relative_z + z_margin;
+  }
+
+  bool PersistentVoxelMap::keepPoint(double z_rel_lidar, double distance,
                                      double point_time,
                                      const PersistentVoxelConfig& config,
                                      double now_elapsed) {
-    const double z_margin = config.distance_ratio_z * distance;
-    if (relative_z <= config.min_relative_z - z_margin) {
-      return false;
-    }
-    if (relative_z >= config.max_relative_z + z_margin) {
+    if (!insideReceiveBand(z_rel_lidar, distance, config)) {
       return false;
     }
     const bool near = distance < config.no_decay_distance;
@@ -170,7 +173,8 @@ namespace terrain_analysis {
       for (const auto& point : representatives.points) {
         const double distance = horizontalDistance(point.x, point.y, lidar.x,
                                                    lidar.y);
-        if (keepPoint(point.z - lidar.z, distance, point.intensity, config_,
+        const double z_rel_lidar = point.z - lidar.z;  // 保留判据用雷达系
+        if (keepPoint(z_rel_lidar, distance, point.intensity, config_,
                       now_elapsed)) {
           cell.push_back(point);
         }

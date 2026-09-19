@@ -28,6 +28,8 @@ namespace terrain_analysis {
     using PersistentVoxelMap::cells;
     using PersistentVoxelMap::elapsedSeconds;
     using PersistentVoxelMap::frameCloud;
+    using PersistentVoxelMap::insideReceiveBand;
+    using PersistentVoxelMap::keepPoint;
     using PersistentVoxelMap::PersistentVoxelMap;  // 继承构造函数
     using PersistentVoxelMap::rebuild;
     using PersistentVoxelMap::rollover;
@@ -53,9 +55,12 @@ namespace terrain_analysis {
   /** @brief 高度图的测试封装：三段阶段与网格数据转为公有。 */
   class TestHeightMap : public PerFrameHeightMap {
   public:
+    using PerFrameHeightMap::aboveGroundFloor;
+    using PerFrameHeightMap::abovePenetrationFloor;
     using PerFrameHeightMap::computeHeightMap;
     using PerFrameHeightMap::computePlanarElevation;
     using PerFrameHeightMap::estimateTerrainGround;
+    using PerFrameHeightMap::insideOutputBand;
     using PerFrameHeightMap::PerFrameHeightMap;  // 继承构造函数
 
     // 下面几个返回引用，供测试注入候选高度、检查逐格高程与清空输出。

@@ -74,6 +74,33 @@ namespace terrain_analysis {
     // ── 接缝：三段阶段与网格数据。生产代码不用，白盒测试用派生类提升为公有
     // （见 test/test_doubles.hpp），生产头文件里不出现测试类名。 ──
     /**
+     * @brief 该点是否在地面候选的入门地板之上。**odom 绝对高度**：地面在 odom
+     * 里 大体水平，这条地板用来挡住远低于地面的穿透点，也是本阶段唯一的入门筛选
+     * （把候选筛到地面系需要先有地面估计，见 README 的"两遍法"）。
+     *
+     * 严格不等：等于地板的点排除。
+     */
+    [[nodiscard]] static bool aboveGroundFloor(
+        double z_odom, const PerFrameHeightConfig& config);
+
+    /**
+     * @brief 该点是否在障碍输出带内。**地面系**：h 是距局部地面的高度。
+     *
+     * 上界用带符号的 h（低于地面的坑不占净空），死区下界用 h 的绝对值——
+     * `considerDrop` 打开时凹坑也算障碍。这个不对称是现状，语义待产品确认。
+     */
+    [[nodiscard]] static bool insideOutputBand(
+        double h_ground, const PerFrameHeightConfig& config);
+
+    /**
+     * @brief
+     * 该点是否在穿透点地板之上。**雷达系**：挡的是"远低于雷达"的穿透回波，
+     * 与地形无关，因此留在雷达系；严格不等，等于地板的点排除。
+     */
+    [[nodiscard]] static bool abovePenetrationFloor(
+        double z_rel_lidar, const PerFrameHeightConfig& config);
+
+    /**
      * @brief 收集地面高度候选：把每个地面点膨胀到 3×3 平面邻域。
      * @param terrain_cloud 采集点云。
      * @param lidar_position 雷达位置，作为平面网格锚点。

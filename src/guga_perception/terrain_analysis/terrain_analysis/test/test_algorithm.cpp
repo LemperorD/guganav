@@ -755,6 +755,74 @@ TEST_F(AlgorithmTest,
   EXPECT_LE(col, 12);
 }
 
+// ── 参考系判据的边界（谓词抽出来后逐条钉住）──
+// 三个参考系各有一处判据，名字里带系名；这里把等值点的去留写死，免得日后有人
+// 把严格不等改成非严格不等而没人发现。
+
+// 接收带（雷达系）：两侧都是严格不等，等于边界的点排除
+TEST_F(AlgorithmTest, InsideReceiveBand_Boundaries_ExcludeEqualValues) {
+  voxelConfig().min_relative_z = -1.5;
+  voxelConfig().max_relative_z = 0.5;
+  voxelConfig().distance_ratio_z = 0.2;
+  const double distance = 5.0;                 // 带宽 ±1.0 m
+  const double lower = -1.5 - 0.2 * distance;  // -2.5
+  const double upper = 0.5 + 0.2 * distance;   // 2.5
+
+  EXPECT_FALSE(voxelMap().insideReceiveBand(lower, distance, voxelConfig()));
+  EXPECT_TRUE(
+      voxelMap().insideReceiveBand(lower + 0.01, distance, voxelConfig()));
+  EXPECT_FALSE(voxelMap().insideReceiveBand(upper, distance, voxelConfig()));
+  EXPECT_TRUE(
+      voxelMap().insideReceiveBand(upper - 0.01, distance, voxelConfig()));
+}
+
+// 接收带随距离放宽：同样的高度在近处出界、在远处进界
+TEST_F(AlgorithmTest, InsideReceiveBand_WidensWithDistance) {
+  voxelConfig().min_relative_z = -1.5;
+  voxelConfig().max_relative_z = 0.2;
+  voxelConfig().distance_ratio_z = 0.2;
+
+  const double z_rel_lidar = 0.5;  // 相对雷达 0.5 m
+  EXPECT_FALSE(voxelMap().insideReceiveBand(z_rel_lidar, 0.5, voxelConfig()));
+  EXPECT_TRUE(voxelMap().insideReceiveBand(z_rel_lidar, 5.0, voxelConfig()));
+}
+
+// 地面候选地板（odom 绝对）：等于地板的点排除
+TEST_F(AlgorithmTest, AboveGroundFloor_EqualValueExcluded) {
+  heightConfig().ground_floor_z = -0.2;
+  EXPECT_FALSE(heightMap().aboveGroundFloor(-0.2, heightConfig()));
+  EXPECT_TRUE(heightMap().aboveGroundFloor(-0.19, heightConfig()));
+  EXPECT_FALSE(heightMap().aboveGroundFloor(-5.0, heightConfig()));
+}
+
+// 穿透点地板（雷达系）：等于地板的点排除
+TEST_F(AlgorithmTest, AbovePenetrationFloor_EqualValueExcluded) {
+  heightConfig().min_relative_z = -1.5;
+  EXPECT_FALSE(heightMap().abovePenetrationFloor(-1.5, heightConfig()));
+  EXPECT_TRUE(heightMap().abovePenetrationFloor(-1.49, heightConfig()));
+}
+
+// 障碍输出带（地面系）：下界含等值、上界不含等值；
+// considerDrop 打开时下界取绝对值，上界仍用带符号值（现状，语义待确认）
+TEST_F(AlgorithmTest, InsideOutputBand_BoundariesAndConsiderDrop) {
+  heightConfig().min_obstacle_height = 0.04;
+  heightConfig().ceiling_clearance = 0.62;
+  heightConfig().consider_drop = false;
+  EXPECT_FALSE(heightMap().insideOutputBand(0.039, heightConfig()));
+  EXPECT_TRUE(heightMap().insideOutputBand(0.04, heightConfig()));
+  EXPECT_TRUE(heightMap().insideOutputBand(0.619, heightConfig()));
+  EXPECT_FALSE(heightMap().insideOutputBand(0.62, heightConfig()));
+
+  heightConfig().consider_drop = true;
+  EXPECT_TRUE(heightMap().insideOutputBand(-0.1, heightConfig()));  // |h| = 0.1
+  EXPECT_FALSE(
+      heightMap().insideOutputBand(-0.02, heightConfig()));  // |h| = 0.02
+  // 上界只作用于"地面上方"的带符号值（h ≥ 0.62 才排除），所以深坑按 |h|
+  // 照样输出、 输出的 intensity 可以超过
+  // ceilingClearance。这是现状，语义待产品确认后再统一。
+  EXPECT_TRUE(heightMap().insideOutputBand(-0.7, heightConfig()));
+}
+
 // ── keepPoint 边界测试（经 rebuild）──
 
 // 略高于下限边界的点被保留

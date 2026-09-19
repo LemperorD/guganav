@@ -34,16 +34,15 @@ struct PersistentVoxelConfig {
   /** @brief 在该距离内不执行时间衰减。 */
   double no_decay_distance = 4.0;
 
-  /** @brief 接收点云相对雷达的高度下限（相对 lidar_z 的偏移量）。
+  /** @brief 接收带的下沿。**雷达系**：相对雷达高度（`point.z − lidar_z`）。
    *
-   *  两处共用：ingest 的裁剪带、rebuild 的体素点保留判定（keepPoint）。
-   *  地面候选的地板不用它——那是绝对高度 ground_floor_z，属于
-   * PerFrameHeightConfig。 */
+   *  两处共用同一判据（`PersistentVoxelMap::insideReceiveBand`）：ingest
+   * 的裁剪、 rebuild 的保留。地面候选的地板不用它——那是 **odom 绝对**的
+   * ground_floor_z， 属于 PerFrameHeightConfig。 */
   double min_relative_z = -1.5;
-  /** @brief 接收点云相对雷达的高度上限（相对 lidar_z 的偏移量）。
-   *  **仅由 ingest 的裁剪带与 keepPoint 使用**。 */
+  /** @brief 接收带的上沿。**雷达系**，与下沿同一个判据。 */
   double max_relative_z = 0.2;
-  /** @brief 随水平距离放宽高度范围的比例。 */
+  /** @brief 接收带随水平距离放宽的比例（带宽 = 该比例 × 水平距离）。 */
   double distance_ratio_z = 0.2;
 
   /** @brief 地形体素边长（同时也是接收半径的基准）。 */
@@ -77,7 +76,8 @@ struct PerFrameHeightConfig {
 
   /** @brief planar voxel 的最小有效点数。 */
   int min_block_point_num = 10;
-  /** @brief 障碍输出下界：距**局部地面**小于该值的点不作为障碍输出。
+  /** @brief 障碍输出下界。**地面系**：距局部地面小于该值的点不作为障碍输出
+   *  （判据 `PerFrameHeightMap::insideOutputBand`）。
    *
    *  作为"地面带"的死区使用，吸收地面高度估计的误差：估计值偏低时，真实地面点
    *  会算出几厘米的正高度，若下界为 0，这些点会被当作低矮障碍标记出去。
@@ -87,13 +87,15 @@ struct PerFrameHeightConfig {
    *  路径为空"的证据），见设计文档 R4 对 marking / clearing 两份点云的区分。
    *  `consider_drop` 打开时高度取绝对值，本下界对凹坑同样成立。 */
   double min_obstacle_height = 0.04;
-  /** @brief 障碍输出上界：距**局部地面**达到该值的点不作为障碍（车辆可从其
-   *  下方通过，或高于车体不构成碰撞威胁）。
+  /** @brief 障碍输出上界。**地面系**：距**局部地面**达到该值的点不作为障碍
+   *  （车辆可从其下方通过，或高于车体不构成碰撞威胁）。
    *
    *  按实车车体高度 + 100 mm 安全间隙设定（车高 520 mm → 0.62）。因车高随车
    *  而异（后续有第二台车），故为 ROS 参数而非编译期常量。
    *
-   *  这是障碍输出**唯一**的高度上界。曾另有一条 `height < vehicle_height` 的
+   *  这是障碍输出**唯一**的高度上界，且只作用于**地面上方**的点（判据里的 h 带
+   *  符号）；`consider_drop` 打开时凹坑按 |h| 输出，其 intensity 可以超过本值。
+   *  曾另有一条 `height < vehicle_height` 的
    *  截断，它与本值重叠且更严（0.52 < 0.62），会把车高与净空之间那一带的点
    *  一并丢掉，而那个高度上的悬空结构车是过不去的——该截断已移除，参数一并
    *  删除。换车只需重设本值。 */
@@ -118,8 +120,8 @@ struct PerFrameHeightConfig {
    *  +0.230，即 base_footprint→front_mid360 的安装高度），不是本值的参考基准。
    *  下坡或地面下沉时，真实地面会低于该地板而被排除，坡面场景需重设。
    *  若换车或改安装，需按新实测值重设。 */
-  double ground_floor_z = -0.2;
+  double ground_floor_z = -0.2;  // 判据见 aboveGroundFloor（odom 绝对）
 
-  /** @brief planar voxel 边长。 */
+  /** @brief 高度网格（planar voxel）的边长；归格分辨率。 */
   double planar_voxel_size = 0.2;
 };

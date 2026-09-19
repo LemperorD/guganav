@@ -110,9 +110,13 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 | 参考系                                   | 定义                                      | 使用位置                                                                                                 |
 | ---------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| odom 世界系                              | `point.z` 绝对值                          | `PersistentVoxelMap` 里体素格的存量、`voxel_elev_` 的数值、`estimateTerrainGround` 的地板 `groundFloorZ` |
-| 雷达系（`lidar_*` 取自雷达里程计的位置） | `relative_z = point.z − lidar_position.z` | `PersistentVoxelMap::ingest` 裁剪带、`computeHeightMap` 的地板 `minRelZ`                                 |
-| 地面系                                   | `point.z − voxel_elev_[cell]`             | `computeHeightMap` 的净空判据与 `height_above_ground`、输出 intensity                                    |
+| odom 世界系                              | `z_odom = point.z`（绝对）                | 体素格的存量、`voxel_elev_` 的数值、地面候选地板 `groundFloorZ`（判据 `aboveGroundFloor`）                |
+| 雷达系（`lidar_*` 取自雷达里程计的位置） | `z_rel_lidar = point.z − lidar_position.z` | `ingest` 裁剪带与 `keepPoint`（判据 `insideReceiveBand`）、穿透点地板 `minRelZ`（`abovePenetrationFloor`） |
+| 地面系                                   | `h_ground = point.z − voxel_elev_[cell]`  | 障碍输出带（判据 `insideOutputBand`）、输出 `intensity`                                                  |
+
+每个判据都抽成了具名谓词，名字里带所属参考系，而且每处判据只有一份实现——
+`ingest` 的裁剪与 `rebuild` 的保留共用 `insideReceiveBand`，改判据只需改一处。
+局部变量也按系命名（`z_odom` / `z_rel_lidar` / `h_ground`），混用一眼能看出来。
 
 ### 风险 1（已部分修复）：前置筛选带宽随距离放宽、净空曾是常数
 
@@ -167,19 +171,23 @@ scripts/test/test_terrain_analysis_coverage.sh
 
 ### 风险 5：索引相对、数值绝对
 
-`point_elev_[cell]` 的行列下标来自 `point − lidar`（相对），
-压入的却是 `point.z`（odom 绝对）。自洽（后续两个绝对值相减），
-但极易被改成 `point.z − lidar_z` 而全错。
+`point_elev_[cell]` 的行列下标来自 `point − lidar`（相对），压入的却是 `point.z`
+（odom 绝对）。自洽（后续两个绝对值相减），但极易被改成 `point.z − lidar_z` 而全错。
+现在按系命名后这类混用更容易看出来，但"下标相对、数值绝对"本身没变，改动时仍需留意。
 
-### 建议的统一方向（尚未实施）
+### 建议的统一方向（分三段，第 1 段已完成）
 
-1. **判据统一到地面系**：障碍高度与地面候选筛选都以"距局部地面"为准；
-2. **两遍法破循环**：先用最低点估粗地面（最低点对障碍不敏感、坡面稳定），
-   再以粗地面为基准筛候选，最后用分位数正式估 `elev`；
+1. ~~**判据具名、按系命名**~~ **已完成**：三处判据抽成带系名的谓词，`ingest` 与
+   `keepPoint` 共用同一个带判据；参数注释与本节表格写明每个量属于哪个系；
+2. **判据统一到地面系（待做）**：地面候选筛选现在仍以 odom 绝对地板
+   `groundFloorZ` 入门，下坡时真实地面会低于它而被整体排除；
 3. ~~**拆开 `ceilingClearance`**~~ **已完成**：净空判据已从地面估计阶段移除，
    现只用于障碍输出（见风险 3）；
-4. 雷达系只保留给**传感器自身的量**：点云裁剪窗口（安装关系），
-   以及以局部地面为基准表达的车顶净空。
+4. **两遍法破循环（待做）**：先用低分位/最低点估粗地面，再以粗地面为基准筛候选，
+   最后用分位数正式估 `voxel_elev_`——这是第 2 项的前提；
+5. **雷达系收窄（部分完成）**：裁剪窗口与穿透点地板都属于传感器自身的量，留在雷达系
+   是合理的；但裁剪带宽是 `disRatioZ × 距离`，近处趋近于 0，于是近处地面点能否进管线
+   完全由 `lidar_z` 标定决定（风险 1 的近处部分），需要补一个最小带宽。
 
 ### 无需担心的前提
 
