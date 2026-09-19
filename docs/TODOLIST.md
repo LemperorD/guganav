@@ -4,10 +4,10 @@
 | --- | --- | --- |
 | 感知 | 坡面识别：让哨兵上坡时对准坡面法线，可参考川大开源 | `terrain_analysis` |
 | 感知 | Point-LIO 重构：代码太乱，不急，可先当黑盒用 | `point_lio` |
-| 感知（实车） | 低矮障碍物无法识别；方向：重构 terrain、调参 | `terrain_analysis` / `rog_map_layer` |
+| 感知（实车） | ~~低矮障碍物无法识别~~ **已解决**：重构 terrain 与调参（见 [ARCHIVE.md](ARCHIVE.md)） | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | 眼前（近距）障碍物识别异常 | `terrain_analysis` / `rog_map_layer` |
 | 感知（实车） | **已实测确认**：`odom → base_footprint` 为单位变换 ⇒ odom 原点即 base_footprint，平地地面 z ≈ 0；`lidar_z` 是**雷达**高度（≈ +0.230），原按"O 离地 255 mm"推算的 −0.230 符号相反，已改正 | `terrain_analysis` |
-| 建图 | 建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留）；方向：射线追踪 | `slam_toolbox`（外部依赖）/ `terrain_analysis` |
+| 建图 | ~~建图模式无法清除伪静态障碍物（动态目标轨迹被当静态地图保留）~~ **已解决**：射线追踪（见 [ARCHIVE.md](ARCHIVE.md)） | `slam_toolbox`（外部依赖）/ `terrain_analysis` |
 | 感知 | ~~`terrain_analysis_ext` 退化为近场半径过滤器~~ **已删除**（2026-09-17）：消费者（`global_costmap`、`pointcloud_to_laserscan`）改指 `terrain_map`，属严格放宽（4 m → ≤±5.1 m） | `terrain_analysis` |
 | 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价 | `terrain_analysis` |
 | 控制 | MPPI 的 GPU 方案（MPPI 本体已接入） | `nav2_mppi_controller` |
