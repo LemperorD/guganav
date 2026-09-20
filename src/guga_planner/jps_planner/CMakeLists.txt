@@ -20,11 +20,12 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 ament_auto_add_library(jps_planner SHARED
-  src/jps_planner.cpp
+  src/jps_planner_node.cpp
   src/jps_algorithm.cpp
   src/detail/jps_obstacle.cpp
   src/detail/jps_neighbor.cpp
   src/detail/jps_jump.cpp
+  src/detail/jps_path.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/bspline_optimizer.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/detail/grid_utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/detail/esdf_utils.cpp
