@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-namespace jps_planner{
-    SearchNode* JPSAlgorithm::jump(const JPSConfig& c, JPSState& s, int x, int y, int dx,
-                   int dy, int gx, int gy, double& acc) {
+namespace jps_planner {
+  SearchNode* JPSAlgorithm::jump(const JPSConfig& c, JPSState& s, int x, int y,
+                                 int dx, int dy, int gx, int gy, double& acc) {
     int nx = x + dx;
     int ny = y + dy;
 
@@ -137,8 +137,8 @@ namespace jps_planner{
   }
 
   /** @brief 从终点沿父指针回溯到起点, 构建路径 (格元中心坐标)。 */
-  void JPSAlgorithm::backtracePath(const SearchNode* goal,
-                     std::vector<std::pair<double, double>>& path) {
+  void JPSAlgorithm::backtracePath(
+      const SearchNode* goal, std::vector<std::pair<double, double>>& path) {
     path.clear();
     const SearchNode* n = goal;
     while (n != nullptr) {
@@ -150,4 +150,4 @@ namespace jps_planner{
     // 反转: 从起点到终点
     std::reverse(path.begin(), path.end());
   }
-}
+}  // namespace jps_planner

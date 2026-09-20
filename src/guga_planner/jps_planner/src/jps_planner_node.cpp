@@ -152,8 +152,6 @@ namespace jps_planner {
     is_active_ = false;
   }
 
- 
-
   nav_msgs::msg::Path JPSPlanner::linearInterpolation(
       const std::vector<std::pair<double, double>>& raw_path,
       double resolution) {

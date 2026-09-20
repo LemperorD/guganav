@@ -4,8 +4,8 @@
 #include <cmath>
 #include <cstring>
 
-namespace jps_planner{
-// ══════════════════════════════════════════════════════════════════════════════
+namespace jps_planner {
+  // ══════════════════════════════════════════════════════════════════════════════
   // 强制邻居检测 (Forced Neighbour Detection)
   //
   // JPS 的核心创新之一。当跳跃方向旁边的格元被阻塞、但其对角位置
@@ -29,7 +29,7 @@ namespace jps_planner{
   //
   // 跳跃路径上的通行代价通过 acc 累计传出。
   // ══════════════════════════════════════════════════════════════════════════════
-     /**
+  /**
    * @brief 检测水平直行方向 (dx = ±1, dy = 0) 的强制邻居。
    * 当跳跃方向旁边的格元被阻塞、但其对角线远处格元空闲时触发。 */
   bool JPSAlgorithm::hasForcedNeighborHoriz(const JPSConfig& c,
@@ -91,9 +91,9 @@ namespace jps_planner{
   // 同时检查被裁剪方向上是否存在强制邻居, 有则加入方向集合。
   // ══════════════════════════════════════════════════════════════════════════════
 
-  void JPSAlgorithm::pruneNeighbors(const JPSConfig& c, const JPSState& s, int x, int y,
-                      int dx, int dy,
-                      std::vector<std::pair<int, int>>& directions) {
+  void JPSAlgorithm::pruneNeighbors(
+      const JPSConfig& c, const JPSState& s, int x, int y, int dx, int dy,
+      std::vector<std::pair<int, int>>& directions) {
     directions.clear();
 
     // 水平直行父方向 (dx = ±1, dy = 0)
@@ -147,4 +147,4 @@ namespace jps_planner{
       return;
     }
   }
-}
+}  // namespace jps_planner

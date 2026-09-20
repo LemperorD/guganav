@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 #include <limits>
-namespace jps_planner{
-    
+namespace jps_planner {
+
   /// 无穷大代价 (初始值, 用于 A* 的 g/h/f)
   constexpr double INF_COST = std::numeric_limits<double>::infinity();
 
@@ -84,4 +84,4 @@ namespace jps_planner{
 
     JPSDebug debug_{};  // 可选的调试数据收集
   };
-}
+}  // namespace jps_planner

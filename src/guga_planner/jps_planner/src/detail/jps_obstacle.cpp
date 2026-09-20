@@ -4,30 +4,30 @@
 #include <cmath>
 #include <cstring>
 
-namespace jps_planner{
-     // ── 代价地图查询 ──
+namespace jps_planner {
+  // ── 代价地图查询 ──
   /** @brief 判断格元是否被阻塞 (cost ≥ 253 = 障碍物或膨胀区域)。
    *  allow_unknown=true 时, 未知空间 (255) 视为可通行。 */
-      // ══════════════════════════════════════════════════════════════════════════════
-// isTraversable — 单格元可通行性检查
-// ══════════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════════
+  // isTraversable — 单格元可通行性检查
+  // ══════════════════════════════════════════════════════════════════════════════
 
-  bool JPSAlgorithm::isTraversable(const JPSConfig& c, const JPSState& s,
-                                   int x,int y) {
-     if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) {
-        return false;
-      }
-      auto cost = getCost(s, x, y);
-      // 未知空间: 由 allow_unknown 决定
-      if (cost == UNKNOWN_COST) {
-        return c.allow_unknown;
-      }
-      // 代价值 < 253 的格元可通行
-      return cost < INSCRIBED_COST;
+  bool JPSAlgorithm::isTraversable(const JPSConfig& c, const JPSState& s, int x,
+                                   int y) {
+    if (x < 0 || x >= s.size_x || y < 0 || y >= s.size_y) {
+      return false;
+    }
+    auto cost = getCost(s, x, y);
+    // 未知空间: 由 allow_unknown 决定
+    if (cost == UNKNOWN_COST) {
+      return c.allow_unknown;
+    }
+    // 代价值 < 253 的格元可通行
+    return cost < INSCRIBED_COST;
   }
-  bool JPSAlgorithm::isObstacle(const JPSConfig& c,
-                                const JPSState& s, int x, int y) {
-    auto cost = getCost(s, x, y); 
+  bool JPSAlgorithm::isObstacle(const JPSConfig& c, const JPSState& s, int x,
+                                int y) {
+    auto cost = getCost(s, x, y);
     if (cost == UNKNOWN_COST && c.allow_unknown) {
       return false;
     }
@@ -39,16 +39,14 @@ namespace jps_planner{
   /** @brief 判断格元是否可作为可穿越落点。越界始终不可通行。 */
 
   /** @brief 判断格元是否阻断移动。越界视为阻断, 不受 allow_unknown 影响。 */
-  bool JPSAlgorithm::isBlockedCell(const JPSConfig& c,
-                                                 const JPSState& s, int x,
-                                                 int y) {
+  bool JPSAlgorithm::isBlockedCell(const JPSConfig& c, const JPSState& s, int x,
+                                   int y) {
     return !isTraversableCell(c, s, x, y);
   }
 
   /** @brief 判断从 (x,y) 沿 (dx,dy) 前进一步是否合法。 */
-  bool JPSAlgorithm::canStep(const JPSConfig& c,
-                                           const JPSState& s, int x, int y,
-                                           int dx, int dy) {
+  bool JPSAlgorithm::canStep(const JPSConfig& c, const JPSState& s, int x,
+                             int y, int dx, int dy) {
     int nx = x + dx;
     int ny = y + dy;
     if (!isTraversableCell(c, s, nx, ny)) {
@@ -77,15 +75,14 @@ namespace jps_planner{
 
   /** @brief 单个格元的加权通行代价: t(c) = w_t · s(c)。
    *  以跳转点为单位的跳跃路径累计此代价。 */
-  double JPSAlgorithm::traversalCost(const JPSConfig& c,
-                                            unsigned char raw) {
+  double JPSAlgorithm::traversalCost(const JPSConfig& c, unsigned char raw) {
     return c.w_traversal_cost * scaledCost(raw);
   }
 
   /** @brief 加权欧几里得距离启发函数: h = w_h · √((Δx)² + (Δy)²)。
    *  使用欧几里得距离 (而非曼哈顿), 在 8 连通网格上保证 admissible。 */
-  double JPSAlgorithm::heuristic(const JPSConfig& c, int x1, int y1,
-                                        int x2, int y2) {
+  double JPSAlgorithm::heuristic(const JPSConfig& c, int x1, int y1, int x2,
+                                 int y2) {
     return c.w_heuristic_cost
            * std::hypot(static_cast<double>(x2 - x1),
                         static_cast<double>(y2 - y1));
@@ -93,10 +90,10 @@ namespace jps_planner{
 
   /** @brief 两格元间的加权欧几里得距离: d = w_e · √((Δx)² + (Δy)²)。
    *  在 g 值更新时作为跳转点间的候选距离代价。 */
-  double JPSAlgorithm::euclideanCost(const JPSConfig& c, int ax, int ay,
-                                            int bx, int by) {
+  double JPSAlgorithm::euclideanCost(const JPSConfig& c, int ax, int ay, int bx,
+                                     int by) {
     return c.w_euc_cost
            * std::hypot(static_cast<double>(ax - bx),
                         static_cast<double>(ay - by));
   }
-}
+}  // namespace jps_planner

@@ -11,145 +11,141 @@
 #include "bspline_opt/bspline_optimizer.hpp"
 #include "nav2_util/geometry_utils.hpp"
 
-namespace jps_planner{
-    constexpr unsigned char UNKNOWN_COST = 255;
-    constexpr size_t MIN_BSPLINE_WAYPOINTS = 8;
-    constexpr double BSPLINE_DENSIFY_STEP_CELLS = 2.0;
-    constexpr double MIN_DENSIFY_STEP_CELLS = 0.5;
+namespace jps_planner {
+  constexpr unsigned char UNKNOWN_COST = 255;
+  constexpr size_t MIN_BSPLINE_WAYPOINTS = 8;
+  constexpr double BSPLINE_DENSIFY_STEP_CELLS = 2.0;
+  constexpr double MIN_DENSIFY_STEP_CELLS = 0.5;
 
-    double pathLengthCells(
-        const std::vector<std::pair<double, double>>& path) {
-      double length{};
-      for (size_t i = 1; i < path.size(); ++i) {
-        length += std::hypot(path[i].first - path[i - 1].first,
-                             path[i].second - path[i - 1].second);
+  double pathLengthCells(const std::vector<std::pair<double, double>>& path) {
+    double length{};
+    for (size_t i = 1; i < path.size(); ++i) {
+      length += std::hypot(path[i].first - path[i - 1].first,
+                           path[i].second - path[i - 1].second);
+    }
+    return length;
+  }
+
+  std::vector<std::pair<double, double>> densifyMapPath(
+      const std::vector<std::pair<double, double>>& path, double max_step_cells,
+      size_t target_min_points) {
+    const double total_length = pathLengthCells(path);
+    if (path.size() < 2 || total_length < 1e-9) {
+      return path;
+    }
+    double step = max_step_cells;
+    if (target_min_points > path.size()) {
+      step = std::min(
+          step, total_length / static_cast<double>(target_min_points - 1));
+    }
+    step = std::max(step, MIN_DENSIFY_STEP_CELLS);
+
+    std::vector<std::pair<double, double>> dense_path{};
+    dense_path.reserve(std::max(
+        path.size(), static_cast<size_t>(std::ceil(total_length / step)) + 1));
+    dense_path.push_back(path.front());
+
+    for (size_t i = 1; i < path.size(); ++i) {
+      const double x0 = path[i - 1].first;
+      const double y0 = path[i - 1].second;
+      const double x1 = path[i].first;
+      const double y1 = path[i].second;
+      const double dx = x1 - x0;
+      const double dy = y1 - y0;
+      const double segment_length = std::hypot(dx, dy);
+      if (segment_length < 1e-9) {
+        continue;
       }
-      return length;
+
+      const int steps = std::max(
+          1, static_cast<int>(std::ceil(segment_length / step)));
+      for (int s = 1; s <= steps; ++s) {
+        const double t = static_cast<double>(s) / static_cast<double>(steps);
+        dense_path.emplace_back(x0 + (t * dx), y0 + (t * dy));
+      }
     }
 
-    std::vector<std::pair<double, double>> densifyMapPath(
-        const std::vector<std::pair<double, double>>& path,
-        double max_step_cells, size_t target_min_points) {
-     const double total_length = pathLengthCells(path);
-      if (path.size() < 2||total_length < 1e-9) {
-        return path;
-      }
-      double step = max_step_cells;
-      if (target_min_points > path.size()) {
-        step = std::min(
-            step, total_length / static_cast<double>(target_min_points - 1));
-      }
-      step = std::max(step, MIN_DENSIFY_STEP_CELLS);
+    return dense_path;
+  }
 
-      std::vector<std::pair<double, double>> dense_path{};
-      dense_path.reserve(
-          std::max(path.size(),
-                   static_cast<size_t>(std::ceil(total_length / step)) + 1));
-      dense_path.push_back(path.front());
+  std::pair<double, double> mapContinuousToWorld(
+      const nav2_costmap_2d::Costmap2D& costmap, double x, double y) {
+    return {costmap.getOriginX() + (x * costmap.getResolution()),
+            costmap.getOriginY() + (y * costmap.getResolution())};
+  }
 
-      for (size_t i = 1; i < path.size(); ++i) {
-        const double x0 = path[i - 1].first;
-        const double y0 = path[i - 1].second;
-        const double x1 = path[i].first;
-        const double y1 = path[i].second;
-        const double dx = x1 - x0;
-        const double dy = y1 - y0;
-        const double segment_length = std::hypot(dx, dy);
-        if (segment_length < 1e-9) {
-          continue;
-        }
+  std::vector<std::pair<double, double>> mapPathToWorld(
+      const nav2_costmap_2d::Costmap2D& costmap,
+      const std::vector<std::pair<double, double>>& map_path) {
+    std::vector<std::pair<double, double>> world_path{};
+    world_path.reserve(map_path.size());
+    for (const auto& [x, y] : map_path) {
+      world_path.emplace_back(mapContinuousToWorld(costmap, x, y));
+    }
+    return world_path;
+  }
 
-        const int steps = std::max(
-            1, static_cast<int>(std::ceil(segment_length / step)));
-        for (int s = 1; s <= steps; ++s) {
-          const double t = static_cast<double>(s) / static_cast<double>(steps);
-          dense_path.emplace_back(x0 + (t * dx), y0 + (t * dy));
-        }
-      }
-
-      return dense_path;
+  bool isWorldPointAllowed(const nav2_costmap_2d::Costmap2D& costmap, double wx,
+                           double wy, bool allow_unknown, int cost_threshold) {
+    unsigned int mx{};
+    unsigned int my{};
+    if (!costmap.worldToMap(wx, wy, mx, my)) {
+      return false;
     }
 
-    std::pair<double, double> mapContinuousToWorld(
-        const nav2_costmap_2d::Costmap2D& costmap, double x, double y) {
-      return {costmap.getOriginX() + (x * costmap.getResolution()),
-              costmap.getOriginY() + (y * costmap.getResolution())};
+    unsigned char cost = costmap.getCost(mx, my);
+    if (cost == UNKNOWN_COST) {
+      return allow_unknown;
     }
+    return cost < cost_threshold;
+  }
 
-    std::vector<std::pair<double, double>> mapPathToWorld(
-        const nav2_costmap_2d::Costmap2D& costmap,
-        const std::vector<std::pair<double, double>>& map_path) {
-      std::vector<std::pair<double, double>> world_path{};
-      world_path.reserve(map_path.size());
-      for (const auto& [x, y] : map_path) {
-        world_path.emplace_back(mapContinuousToWorld(costmap, x, y));
+  bool isWorldSegmentAllowed(const nav2_costmap_2d::Costmap2D& costmap,
+                             double x0, double y0, double x1, double y1,
+                             bool allow_unknown, int cost_threshold) {
+    double length = std::hypot(x1 - x0, y1 - y0);
+    double step = std::max(costmap.getResolution() * 0.5, 1e-3);
+    int samples = std::max(1, static_cast<int>(std::ceil(length / step)));
+
+    for (int i = 0; i <= samples; ++i) {
+      double t = static_cast<double>(i) / static_cast<double>(samples);
+      double wx = x0 + (t * (x1 - x0));
+      double wy = y0 + (t * (y1 - y0));
+      if (!isWorldPointAllowed(costmap, wx, wy, allow_unknown,
+                               cost_threshold)) {
+        return false;
       }
-      return world_path;
+    }
+    return true;
+  }
+
+  bool isPathCollisionFree(const nav_msgs::msg::Path& plan,
+                           const nav2_costmap_2d::Costmap2D& costmap,
+                           bool allow_unknown, int cost_threshold) {
+    if (plan.poses.empty()) {
+      return false;
     }
 
-    bool isWorldPointAllowed(
-        const nav2_costmap_2d::Costmap2D& costmap, double wx, double wy,
-        bool allow_unknown, int cost_threshold) {
-      unsigned int mx{};
-      unsigned int my{};
-      if (!costmap.worldToMap(wx, wy, mx, my)) {
+    for (size_t i = 0; i < plan.poses.size(); ++i) {
+      const auto& point = plan.poses[i].pose.position;
+      if (!isWorldPointAllowed(costmap, point.x, point.y, allow_unknown,
+                               cost_threshold)) {
         return false;
       }
 
-      unsigned char cost = costmap.getCost(mx, my);
-      if (cost == UNKNOWN_COST) {
-        return allow_unknown;
+      if (i == 0) {
+        continue;
       }
-      return cost < cost_threshold;
-    }
 
-    bool isWorldSegmentAllowed(
-        const nav2_costmap_2d::Costmap2D& costmap, double x0, double y0,
-        double x1, double y1, bool allow_unknown, int cost_threshold) {
-      double length = std::hypot(x1 - x0, y1 - y0);
-      double step = std::max(costmap.getResolution() * 0.5, 1e-3);
-      int samples = std::max(1, static_cast<int>(std::ceil(length / step)));
-
-      for (int i = 0; i <= samples; ++i) {
-        double t = static_cast<double>(i) / static_cast<double>(samples);
-        double wx = x0 + (t * (x1 - x0));
-        double wy = y0 + (t * (y1 - y0));
-        if (!isWorldPointAllowed(costmap, wx, wy, allow_unknown,
-                                 cost_threshold)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    bool isPathCollisionFree(
-        const nav_msgs::msg::Path& plan,
-        const nav2_costmap_2d::Costmap2D& costmap, bool allow_unknown,
-        int cost_threshold) {
-      if (plan.poses.empty()) {
+      const auto& prev = plan.poses[i - 1].pose.position;
+      if (!isWorldSegmentAllowed(costmap, prev.x, prev.y, point.x, point.y,
+                                 allow_unknown, cost_threshold)) {
         return false;
       }
-
-      for (size_t i = 0; i < plan.poses.size(); ++i) {
-        const auto& point = plan.poses[i].pose.position;
-        if (!isWorldPointAllowed(costmap, point.x, point.y, allow_unknown,
-                                 cost_threshold)) {
-          return false;
-        }
-
-        if (i == 0) {
-          continue;
-        }
-
-        const auto& prev = plan.poses[i - 1].pose.position;
-        if (!isWorldSegmentAllowed(costmap, prev.x, prev.y, point.x, point.y,
-                                   allow_unknown, cost_threshold)) {
-          return false;
-        }
-      }
-      return true;
     }
-     // ══════════════════════════════════════════════════════════════════════════════
+    return true;
+  }
+  // ══════════════════════════════════════════════════════════════════════════════
   // createPlan — JPS 搜索 + B-spline 平滑 + ESDF 梯度优化
   //
   // 完整数据流:
@@ -235,9 +231,9 @@ namespace jps_planner{
     }
 
     // 贴障碍的对角段改写为正交移动, 避免 B-spline 平滑切角产生锯齿/回退
-    map_path = JPSAlgorithm::detourCornerHuggingDiagonals(map_path, state.costmap_data,
-                                            state.size_x, state.size_y,
-                                            config_.allow_unknown);
+    map_path = JPSAlgorithm::detourCornerHuggingDiagonals(
+        map_path, state.costmap_data, state.size_x, state.size_y,
+        config_.allow_unknown);
 
     RCLCPP_INFO(logger_, "JPSPlanner: path found with %zu waypoints",
                 map_path.size());
@@ -458,4 +454,4 @@ namespace jps_planner{
 
     return plan;
   }
-}
+}  // namespace jps_planner
