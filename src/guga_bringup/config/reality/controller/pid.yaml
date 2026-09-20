@@ -174,7 +174,7 @@ global_costmap:
         enabled: true
         footprint_clearing_enabled: true
         combination_method: 1
-        observation_sources: terrain_map
+        observation_sources: terrain_map terrain_returns_current
         terrain_map:
           data_type: "PointCloud2"
           # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
@@ -192,6 +192,23 @@ global_costmap:
           raytrace_min_range: 0.2
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
+        terrain_returns_current:
+          data_type: "PointCloud2"
+          topic: <robot_namespace>/terrain_returns_current
+          # 当帧回波云（含地面回波），只做清除。terrain_map 里只有障碍点，某方位视野内
+          # 没有障碍时该方位一个端点都没有，落在那条路径上的旧标记清不掉；回波给出的
+          # 是"该方位路径为空"这一证据。与 local 那条链的配置保持一致。
+          sensor_frame: front_mid360
+          marking: false
+          clearing: true
+          observation_persistence: 0.0   # 只留最新一帧：清除用的是当帧观测
+          obstacle_min_range: 0.2
+          obstacle_max_range: 10.0
+          raytrace_min_range: 0.2
+          raytrace_max_range: 10.5
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面回波在 ObservationBuffer 里滤掉。
+          min_obstacle_height: -3.0
+          max_obstacle_height: 3.0
         # 原第三方层 pb_nav2_costmap_2d::IntensityVoxelLayer 的参数（若要切回，本块换成这些）：
         #   track_unknown_space: true, publish_voxel_map: false, combination_method: 1,
         #   mark_threshold: 0, origin_z: 0.0, unknown_threshold: 5,
