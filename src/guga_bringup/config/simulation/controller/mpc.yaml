@@ -184,7 +184,7 @@ global_costmap:
           clearing: true
           obstacle_max_range: 10.0
           obstacle_min_range: 0.2
-          raytrace_max_range: 7.5    # 与标记可达范围同步：标记受平面网格限（每轴 ±5.1 m、对角约 7.2 m），取 7.5 覆盖到角点
+          raytrace_max_range: 5.0    # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
           raytrace_min_range: 0.2
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
@@ -201,7 +201,7 @@ global_costmap:
           obstacle_min_range: 0.2
           obstacle_max_range: 10.0
           raytrace_min_range: 0.2
-          raytrace_max_range: 7.5    # 与标记可达范围同步：标记受平面网格限（每轴 ±5.1 m、对角约 7.2 m），取 7.5 覆盖到角点
+          raytrace_max_range: 5.0    # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
           # 源级高度范围是 odom 绝对高度：留 0 会把地面回波在 ObservationBuffer 里滤掉。
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
