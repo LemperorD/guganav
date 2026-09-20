@@ -30,16 +30,16 @@ namespace terrain_analysis {
    * 这张网格的接收范围：接收半径就是网格宽度，高度带与 rebuild 的 keepPoint
    * 同源。
    *
-   * 一帧的流程：ingest() 收帧 → update()（滚动 / 归格 / 重建三步）→
-   * collectCloud() 取窗口。update() 用 ingest() 记下的同一个锚点完成三步，
-   * 调用方无法把不同的锚点混进同一帧。
+   * 一帧的流程：receiveFrame() 收帧 → update()（滚动 / 归格 / 重建三步）→
+   * collectCloud() 取窗口。update() 用 receiveFrame()
+   * 记下的同一个锚点完成三步， 调用方无法把不同的锚点混进同一帧。
    *
    * 对外只有上面这些入口；逐阶段方法与内部数据放在 protected 的"接缝"区，
    * 需要白盒验证的测试用派生类把它们提升为公有（见 test/test_doubles.hpp），
    * 生产头文件里不出现测试类名。
    *
-   * 线程模型：本类不做同步，调用方必须保证 ingest 与 update 不并发执行（当前由
-   * 节点在单线程执行器中串行调用满足）。
+   * 线程模型：本类不做同步，调用方必须保证 receiveFrame 与 update
+   * 不并发执行（当前由 节点在单线程执行器中串行调用满足）。
    */
   class PersistentVoxelMap {
   public:
@@ -71,8 +71,9 @@ namespace terrain_analysis {
      * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
      * @param timestamp_sec 本帧时间戳，单位为秒。
      */
-    void ingest(const Cell& cloud, const guga_common::Point3d& lidar_position,
-                double timestamp_sec);
+    void receiveFrame(const Cell& cloud,
+                      const guga_common::Point3d& lidar_position,
+                      double timestamp_sec);
 
     /** @brief 最近一帧的雷达位置（odom 下）；后半段以它作平面网格锚点。 */
     [[nodiscard]] const guga_common::Point3d& lidarPosition() const noexcept {
@@ -86,7 +87,7 @@ namespace terrain_analysis {
     /**
      * @brief 本帧维护：滚动窗口 → 本帧点云归格 → 逐格重建。
      *
-     * 使用 ingest() 记下的雷达位置与时刻，以及构造时注入的配置。
+     * 使用 receiveFrame() 记下的雷达位置与时刻，以及构造时注入的配置。
      */
     void update();
 
@@ -103,7 +104,8 @@ namespace terrain_analysis {
     /**
      * @brief 裁剪后的本帧点云（intensity 为观测时刻，相对首帧的秒数）。
      *
-     * 节点用它生成两份当帧输出（见 PerFrameHeightMap::computeFrameOutputs）：
+     * 节点用它生成当帧返回的雷达射线点云（见
+     * PerFrameHeightMap::computeFrameReturns）：
      * 累计云代表"感知历史"，而射线清除需要的是本帧这一份观测。
      */
     [[nodiscard]] const Cell& frameCloud() const noexcept {
@@ -117,8 +119,8 @@ namespace terrain_analysis {
     // ── 接缝：本类内部编排与数据。生产代码不用，白盒测试用派生类把它们提升为
     // 公有（见 test/test_doubles.hpp）——与 nav2_mppi_controller 的做法一致：
     // 生产头文件里不出现测试类名，封口也不靠 friend 名单维护。 ──
-    // 三个阶段都作用在"本帧"上：锚点、本帧点云与时刻已由 ingest() 记在成员里，
-    // 因此它们不收参数——地图持有这一帧，成员函数直接读它。
+    // 三个阶段都作用在"本帧"上：锚点、本帧点云与时刻已由 receiveFrame()
+    // 记在成员里， 因此它们不收参数——地图持有这一帧，成员函数直接读它。
     /** @brief 滚动网格，维持以雷达为中心的窗口（update 的第一步）。 */
     void rollover();
 
@@ -168,7 +170,8 @@ namespace terrain_analysis {
      * @brief 该点是否落在接收带内。**雷达系**：高度是相对雷达的偏移，带宽随水平
      * 距离放宽；两侧都是严格不等，等于边界的点排除。
      *
-     * `ingest` 的裁剪与 `rebuild` 的保留用的是同一个带，判据只此一处——两处各写
+     * `receiveFrame` 的裁剪与 `rebuild`
+     * 的保留用的是同一个带，判据只此一处——两处各写
      * 一遍正是"改了一处忘了另一处"的来源。
      */
     [[nodiscard]] bool insideReceiveBand(double z_rel_lidar, double distance);
@@ -186,7 +189,7 @@ namespace terrain_analysis {
                                  double point_time, double now_elapsed);
 
     std::array<Cell::Ptr, PersistentVoxelGrid::NUM> cloud_ = makeCells();
-    // 本帧输入：由 ingest 写入，update 消费。
+    // 本帧输入：由 receiveFrame 写入，update 消费。
     Cell::Ptr frame_cloud_ = std::make_shared<Cell>();
     guga_common::Point3d lidar_;
     double time_ = 0.0;

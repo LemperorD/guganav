@@ -125,8 +125,8 @@ int main(int argc, char** argv) {
   for (int i = 0; i < frames; i++) {
     const double t = i * 0.1;  // 10 Hz
     const bool ghost_present = ghost_frame < 0 || i < ghost_frame;
-    voxel_map.ingest(ghost_present ? *frame : *frame_no_ghost, lidar_position,
-                     t);
+    voxel_map.receiveFrame(ghost_present ? *frame : *frame_no_ghost,
+                           lidar_position, t);
 
     const auto t0 = std::chrono::steady_clock::now();
     voxel_map.update();

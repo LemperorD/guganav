@@ -76,9 +76,9 @@ if(BUILD_TESTING)
   target_include_directories(test_terrain_analysis PRIVATE test)
   target_link_libraries(test_terrain_analysis terrain_analysis_lib)
 
-  ament_add_gtest(test_frame_ingest test/test_frame_ingest.cpp)
-  target_include_directories(test_frame_ingest PRIVATE test)
-  target_link_libraries(test_frame_ingest terrain_analysis_lib)
+  ament_add_gtest(test_frame_receive test/test_frame_receive.cpp)
+  target_include_directories(test_frame_receive PRIVATE test)
+  target_link_libraries(test_frame_receive terrain_analysis_lib)
 
   ament_add_gtest(test_algorithm test/test_algorithm.cpp)
   target_include_directories(test_algorithm PRIVATE test)

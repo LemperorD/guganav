@@ -34,7 +34,7 @@ struct PersistentVoxelConfig {
 
   /** @brief 接收带的下沿。**雷达系**：相对雷达高度（`point.z − lidar_z`）。
    *
-   *  两处共用同一判据（`PersistentVoxelMap::insideReceiveBand`）：ingest
+   *  两处共用同一判据（`PersistentVoxelMap::insideReceiveBand`）：receiveFrame
    * 的裁剪、 rebuild 的保留。地面候选的地板不用它——那是 **odom 绝对**的
    * ground_floor_z， 属于 PerFrameHeightConfig。 */
   double min_relative_z = -1.5;
@@ -81,7 +81,7 @@ struct PerFrameHeightConfig {
    *  会算出几厘米的正高度，若下界为 0，这些点会被当作低矮障碍标记出去。
    *  实车取值 0.04 m。
    *
-   *  注意与清除用途的分工：清除用的回波**不应**受本下界约束（地面回波正是"射线
+   *  注意与清除用途的分工：清除用的返回的雷达射线**不应**受本下界约束（地面返回的雷达射线正是"射线
    *  路径为空"的证据），见设计文档 R4 对 marking / clearing 两份点云的区分。
    *  `consider_drop` 打开时高度取绝对值，本下界对凹坑同样成立。 */
   double min_obstacle_height = 0.04;

@@ -64,7 +64,7 @@ done
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Generate coverage report ===" | tee -a "$RESULT_FILE"
 cd "$WS"
-FILTER_BASE='src/guga_perception/terrain_analysis/terrain_analysis'
+FILTER_BASE='src/guga_perception/terrain_analysis'
 gcovr \
   --root . \
   --object-directory build/terrain_analysis \

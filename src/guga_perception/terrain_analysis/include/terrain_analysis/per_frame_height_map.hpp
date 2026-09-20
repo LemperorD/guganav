@@ -26,9 +26,9 @@ namespace terrain_analysis {
    * 三段串联，顺序不可换（后者都依赖前者的产物）：
    *   estimateTerrainGround → computePlanarElevation → computeHeightMap
    *
-   * computeFrameOutputs 是第二条入口，把**本帧**点云过滤成两份当帧输出（供代价
-   * 地图分别做标记与清除），地面场直接复用上面那条流水线算好的 voxel_elev_，
-   * 因此必须在 compute() 之后调用。
+   * computeFrameReturns
+   * 是第二条入口，把**本帧**点云过滤成当帧返回的雷达射线点云
+   * （供代价地图清除）；它不计离地高度，因此与上面那条流水线无关，也不要求先后顺序。
    *
    * 可见性契约：三段是实现细节，一律 private，可自由重构签名而不影响调用方；
    * 外部只走 compute() 与 obstacleCloud()。三段与网格数据放在 protected 的
@@ -75,37 +75,31 @@ namespace terrain_analysis {
     }
 
     /**
-     * @brief 由本帧点云生成两份当帧输出：障碍点云与回波点云。
+     * @brief 由本帧点云生成当帧返回的雷达射线点云。
      *
-     * 与 compute() 产出的累计障碍云有三处不同，都是"当帧"这条语义要求的：
+     * 与 compute() 产出的累计障碍云有两处不同，都是"当帧"这条语义要求的：
      *   -
      * 输入是本帧点云（PersistentVoxelMap::frameCloud），不是采集到的累计云；
      *   - 不做逐格点数门限：min_block_point_num 是按累计云的逐格点数定的，单帧
-     *     每格点数远小于它，套用会几乎没有输出；
-     *   - 同时产出两份。障碍点云再套一层输出带，供代价地图标记；回波点云只保留
-     *     地面地板与穿透地板这两条筛选，含地面回波——清除射线需要的是"该方向上
-     *     有一次回波"，地面回波正是"射线路径为空"的证据，它不必是障碍点。
+     *     每格点数远小于它，套用会几乎没有输出。
      *
-     * 两份输出的空间范围不同，差别来自"要不要算离地高度"：障碍点云需要离地高度
-     * 判据，因此只保留平面网格窗口内的点（约 ±5 m）；回波点云只服务于射线清除，
-     * 网格外的回波也照发——它同样证明该方向的路径为空，代价地图层会把端点裁剪到
-     * 自己的边界再画射线，把它丢掉反而会让该方向一条射线都没有。
-     * intensity 是距局部地面的高度 h；网格外没有地面估计，写 0。
+     * 它只保留地面地板与穿透地板这两条筛选，含地面返回的雷达射线——清除射线需要的是"该方向上
+     * 有一次返回的雷达射线"，地面返回的雷达射线正是"射线路径为空"的证据，它不必是障碍点。
+     *
+     * 不计离地高度，因此不依赖平面网格与地面场，也不受网格边界限制：网格外的返回的雷达射线
+     * 也照发，它同样证明该方向的路径为空，代价地图层会把端点裁剪到自己的边界再画射线，
+     * 把它丢掉反而会让该方向一条射线都没有。
      * @param frame_cloud 本帧点云，坐标位于 odom 坐标系。
      * @param lidar_position 雷达在 odom 下的位置（不是车体位置）。
      */
-    void computeFrameOutputs(const Cell& frame_cloud,
+    void computeFrameReturns(const Cell& frame_cloud,
                              const guga_common::Point3d& lidar_position);
 
-    /** @brief 最近一次生成的当帧障碍点云（intensity 为距局部地面的高度）。 */
-    [[nodiscard]] const Cell& frameObstacleCloud() const noexcept {
-      return *frame_obstacle_cloud_;
-    }
-
     /**
-     * @brief 最近一次生成的当帧回波点云（含地面回波）。
+     * @brief 最近一次生成的当帧返回的雷达射线点云（含地面返回的雷达射线）。
      *
-     * intensity 为距局部地面的高度，网格外的点为 0（见 computeFrameOutputs）。
+     * intensity 恒为 0：本云只用于代价地图射线清除，没有高度语义；输入云借
+     * intensity 携带的观测时刻不能外泄。
      */
     [[nodiscard]] const Cell& frameReturnCloud() const noexcept {
       return *frame_return_cloud_;
@@ -135,7 +129,7 @@ namespace terrain_analysis {
 
     /**
      * @brief
-     * 该点是否在穿透点地板之上。**雷达系**：挡的是"远低于雷达"的穿透回波，
+     * 该点是否在穿透点地板之上。**雷达系**：挡的是"远低于雷达"的穿透返回的雷达射线，
      * 与地形无关，因此留在雷达系；严格不等，等于地板的点排除。
      */
     [[nodiscard]] static bool abovePenetrationFloor(
@@ -165,9 +159,9 @@ namespace terrain_analysis {
     /** @brief 每格估计出的地面高度（没有候选的格保持 0）。 */
     std::array<double, PerFrameHeightGrid::NUM> voxel_elev_{};
     Cell::Ptr obstacle_cloud_ = std::make_shared<Cell>();
-    /** @brief 当帧输出：带内的障碍点，供代价地图标记。 */
-    Cell::Ptr frame_obstacle_cloud_ = std::make_shared<Cell>();
-    /** @brief 当帧输出：全部有效回波（含地面回波），供代价地图射线清除。 */
+    /** @brief
+     * 当帧输出：全部有效返回的雷达射线（含地面返回的雷达射线），供代价地图射线清除。
+     */
     Cell::Ptr frame_return_cloud_ = std::make_shared<Cell>();
 
   private:

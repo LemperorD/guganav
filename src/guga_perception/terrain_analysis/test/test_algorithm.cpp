@@ -593,8 +593,9 @@ TEST_F(AlgorithmTest,
   // 阶段移除，只保留在 computeHeightMap（障碍输出）。
   // 理由：净空是"障碍能否通过"的判据，与"哪些点属于地面"无关；留在这里会按
   // 车高砍掉抬升的地面（坡面），并让候选数随车高漂移、经分位数放大成 elev
-  // 偏差。 新暴露的风险：隧道天花板若未被 ingest 的高度过滤挡下，会抬高 elev
-  // 使真实 地面点丢失——实车偏置下 ingest 上界(z≈0.27)已先挡掉，故暂不构成问题。
+  // 偏差。 新暴露的风险：隧道天花板若未被 receiveFrame 的高度过滤挡下，会抬高
+  // elev 使真实 地面点丢失——实车偏置下 receiveFrame
+  // 上界(z≈0.27)已先挡掉，故暂不构成问题。
   heightConfig().ceiling_clearance = 0.2;  // 压低净空，使下面这点确实高于它
   terrainCloud()->push_back({0.0F, 0.0F, 0.26F, 0.0F});
 

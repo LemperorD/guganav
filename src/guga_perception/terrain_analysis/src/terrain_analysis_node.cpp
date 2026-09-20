@@ -1,6 +1,4 @@
-// 主线位置：ROS 回调收帧 → processOnce() 跑一帧（前半段累积 → 采集 → 后半段估计
-// 并输出）→ 发布累计的 terrain_map 与两条当帧点云。整个包的入口就是本文件里的
-// 这两条订阅与 processOnce。
+// 主线位置：ROS 回调收帧 → processOnce() 跑一帧并发布三条点云。
 //
 // Copyright 2024 Hongbiao Zhu
 //
@@ -15,13 +13,7 @@ namespace terrain_analysis {
 
   namespace {
 
-    /**
-     * @brief 启动时提示障碍输出的现行高度带。
-     *
-     * computeHeightMap 只保留 minObstacleHeight <= h < ceilingClearance 的点，
-     * 其中 h 是距局部地面的高度。两个边界都随车而异、也没有编译期约束，
-     * 所以在启动时打印，便于确认节点实际加载的值。
-     */
+    // 高度带两个边界都随车而异，启动时打印实际生效的值。
     void logHeightParams(const PerFrameHeightConfig& config) {
       RCLCPP_INFO(rclcpp::get_logger("terrain_analysis"),
                   "障碍输出高度带：%.3f <= h < %.3f m（距局部地面；下界为地面带"
@@ -41,8 +33,7 @@ namespace terrain_analysis {
     config.max_relative_z = declare_parameter("maxRelZ", config.max_relative_z);
     config.distance_ratio_z = declare_parameter("disRatioZ",
                                                 config.distance_ratio_z);
-    // minRelZ
-    // 两半都用（用途不同）：前半段用它定义接收带下沿，后半段用它挡穿透点。
+
     config.min_relative_z = declare_parameter("minRelZ", config.min_relative_z);
     return config;
   }
@@ -65,7 +56,7 @@ namespace terrain_analysis {
                                                  config.ceiling_clearance);
     config.ground_floor_z = declare_parameter("groundFloorZ",
                                               config.ground_floor_z);
-    // minRelZ 两半共用，已在前半段那侧声明；这里直接取用，不重复声明。
+
     config.min_relative_z = min_relative_z;
 
     logHeightParams(config);
@@ -74,8 +65,6 @@ namespace terrain_analysis {
 
   TerrainAnalysis::TerrainAnalysis(const rclcpp::NodeOptions& options)
       : Node("terrain_analysis", options),
-        // 参数在初始化列表里一次声明并填好，两半随后绑定它们的常量引用；
-        // 因此节点的构造函数体里不再出现任何参数声明。
         voxel_config_(getVoxelConfig()),
         height_config_(getHeightConfig(voxel_config_.min_relative_z)),
         persistent_voxel_map_(voxel_config_),
@@ -83,9 +72,8 @@ namespace terrain_analysis {
     sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "lidar_odometry", 5,
         [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
-          // terrain 订阅的是雷达里程计，位置直接采用，不在这里做坐标变换。
-          // 姿态没有被任何阶段使用（地面估计与障碍判定只用位置与点云），
-          // 因此不再解析四元数。
+          // 姿态没有任何阶段使用。
+          // 位置直接采用，不做坐标变换。
           const auto& position = msg->pose.pose.position;
           lidar_position_.x = position.x;
           lidar_position_.y = position.y;
@@ -97,15 +85,13 @@ namespace terrain_analysis {
         [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
           auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
           pcl::fromROSMsg(*msg, *cloud);
-          ingestFrame(*cloud, lidar_position_,
-                      rclcpp::Time(msg->header.stamp).seconds());
+          // 每次只接收限定范围内的点云
+          receiveFrame(*cloud, lidar_position_,
+                       rclcpp::Time(msg->header.stamp).seconds());
         });
 
     pub_terrain_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
         "terrain_map", 2);
-    pub_terrain_obstacles_current_ =
-        this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            "terrain_obstacles_current", 2);
     pub_terrain_returns_current_ =
         this->create_publisher<sensor_msgs::msg::PointCloud2>(
             "terrain_returns_current", 2);
@@ -114,18 +100,18 @@ namespace terrain_analysis {
                                      [this]() { processOnce(); });
   }
 
-  void TerrainAnalysis::ingestFrame(
+  void TerrainAnalysis::receiveFrame(
       const pcl::PointCloud<pcl::PointXYZI>& cloud,
       const guga_common::Point3d& lidar_position, double timestamp_sec) {
     lidar_position_ = lidar_position;
     last_stamp_ = timestamp_sec;
-    persistent_voxel_map_.ingest(cloud, lidar_position_, last_stamp_);
+    persistent_voxel_map_.receiveFrame(cloud, lidar_position_, last_stamp_);
   }
 
   bool TerrainAnalysis::processFrame(
       const pcl::PointCloud<pcl::PointXYZI>& cloud,
       const guga_common::Point3d& lidar_position, double timestamp_sec) {
-    ingestFrame(cloud, lidar_position, timestamp_sec);
+    receiveFrame(cloud, lidar_position, timestamp_sec);
     return processOnce();
   }
 
@@ -136,12 +122,13 @@ namespace terrain_analysis {
 
     persistent_voxel_map_.update();
     persistent_voxel_map_.collectCloud(*collected_cloud_);
-    // 锚点用前半段记下的那份，避免节点再存一份、两处不同步。
+
+    // 使用上文雷达位置,确保同步
     const guga_common::Point3d& lidar_position =
         persistent_voxel_map_.lidarPosition();
+
     per_frame_height_map_.compute(*collected_cloud_, lidar_position);
-    // 当帧输出取自本帧点云，地面场复用上一行的结果，因此必须紧随其后。
-    per_frame_height_map_.computeFrameOutputs(
+    per_frame_height_map_.computeFrameReturns(
         persistent_voxel_map_.frameCloud(), lidar_position);
     publishClouds();
     return rclcpp::ok();
@@ -149,7 +136,6 @@ namespace terrain_analysis {
 
   void TerrainAnalysis::publishClouds() {
     publishCloud(pub_terrain_map_, obstacleCloud());
-    publishCloud(pub_terrain_obstacles_current_, frameObstacleCloud());
     publishCloud(pub_terrain_returns_current_, frameReturnCloud());
   }
 

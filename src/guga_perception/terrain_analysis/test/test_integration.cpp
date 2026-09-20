@@ -1,5 +1,5 @@
-// 集成测试：只通过 ROS 话题驱动节点，不直接调用 ingest / update / compute /
-// 体素地图。
+// 集成测试：只通过 ROS 话题驱动节点，不直接调用 receiveFrame / update / compute
+// / 体素地图。
 //
 // 覆盖的是单元测试看不到的那一层：话题订阅与消息转换（Odometry → 雷达位置、
 // PointCloud2 → PCL 点云与时间戳）、节点的逐帧数据分发（前半段收帧与累积、

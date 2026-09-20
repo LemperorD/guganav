@@ -18,11 +18,10 @@ namespace terrain_analysis {
    *
    * 只负责 ROS 层的接线与**逐帧数据分发**：声明参数、订阅里程计与点云、把接收
    * 与累积交给跨帧持续的 PersistentVoxelMap、把采集结果与当帧点云交给逐帧的
-   * PerFrameHeightMap，发布三条点云：
+   * PerFrameHeightMap，发布两条点云：
    *   - terrain_map：累计云的障碍输出，供全局代价地图等既有消费者使用；
-   *   - terrain_obstacles_current：本帧带内的障碍点，供代价地图标记；
    *   -
-   * terrain_returns_current：本帧全部有效回波（含地面回波），供代价地图清除。
+   * terrain_returns_current：本帧全部有效返回的雷达射线（含地面返回的雷达射线），供代价地图清除。
    * 两半各自的算法状态都在它们自己内部。
    */
   class TerrainAnalysis : public rclcpp::Node {
@@ -60,14 +59,9 @@ namespace terrain_analysis {
       return per_frame_height_map_.obstacleCloud();
     }
 
-    /** @brief 最近一帧的带内障碍点云；intensity 为距局部地面的高度。 */
-    [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& frameObstacleCloud()
-        const {
-      return per_frame_height_map_.frameObstacleCloud();
-    }
-
     /**
-     * @brief 最近一帧的有效回波点云（含地面回波）；intensity
+     * @brief
+     * 最近一帧的有效返回的雷达射线点云（含地面返回的雷达射线）；intensity
      * 为距局部地面的高度。
      */
     [[nodiscard]] const pcl::PointCloud<pcl::PointXYZI>& frameReturnCloud()
@@ -85,9 +79,9 @@ namespace terrain_analysis {
                       const pcl::PointCloud<pcl::PointXYZI>& cloud);
 
     /** @brief 两条订阅与 processFrame 共用这一处收帧。 */
-    void ingestFrame(const pcl::PointCloud<pcl::PointXYZI>& cloud,
-                     const guga_common::Point3d& lidar_position,
-                     double timestamp_sec);
+    void receiveFrame(const pcl::PointCloud<pcl::PointXYZI>& cloud,
+                      const guga_common::Point3d& lidar_position,
+                      double timestamp_sec);
 
     /** @brief 声明前半段读取的 ROS 参数并返回填好的配置。 */
     PersistentVoxelConfig getVoxelConfig();
@@ -123,10 +117,7 @@ namespace terrain_analysis {
         sub_laser_cloud_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
         pub_terrain_map_;
-    /** @brief 当帧障碍点云：代价地图的标记来源。 */
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
-        pub_terrain_obstacles_current_;
-    /** @brief 当帧回波点云：代价地图射线清除的来源。 */
+    /** @brief 当帧返回的雷达射线点云：代价地图射线清除的来源。 */
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
         pub_terrain_returns_current_;
     rclcpp::TimerBase::SharedPtr timer_;
