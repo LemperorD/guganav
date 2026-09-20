@@ -28,7 +28,7 @@ find_package(pluginlib REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 
-# 依赖包（IntensityVoxelLayer 所在的包）
+# 依赖包（同仓库的 Nav2 插件包）
 find_package(pb_nav2_plugins REQUIRED)
 
 # interfaces 依赖（用于 MINCO 轨迹消息）

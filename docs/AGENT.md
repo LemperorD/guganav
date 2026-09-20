@@ -78,7 +78,7 @@ guganav/
 │   │   └── nav2_mppi_controller/ #  MPPI 控制器（输出 nonrotating 系速度）
 │   │
 │   ├── guga_planner/          # [规划层]
-│   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up, intensity_voxel)
+│   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up_free_space, obstacle_layer_local)
 │   │   └── minco_smoother/    #   MINCO 轨迹平滑器
 │   │
 │   ├── guga_decision/         # [决策层]

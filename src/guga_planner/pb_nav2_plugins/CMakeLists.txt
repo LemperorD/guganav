@@ -21,7 +21,6 @@ ament_auto_add_library(pb_back_up_frees_space_behavior SHARED
 # 库名不能叫 "layers"：会与系统 Nav2 的 liblayers.so（提供 Static/Obstacle/Voxel/Inflation
 # 层）同名冲突，导致 pluginlib 加载本包库时无法解析继承自 ObstacleLayer 的符号。
 ament_auto_add_library(pb_nav2_layers SHARED
-  src/layers/intensity_voxel_layer.cpp
   src/layers/obstacle_layer_local.cpp
 )
 

@@ -21,7 +21,7 @@
 ┌─────────────────────────────────────────────────┐
 │              Nav2 Costmap Pipeline               │
 │                                                  │
-│  static_layer → intensity_voxel_layer             │
+│  static_layer → obstacle_layer                    │
 │                     ↓                            │
 │              esdf_layer  ← (本插件)               │
 │                     ↓                            │
@@ -175,7 +175,7 @@ esdf_layer:
 ### layer 顺序
 
 ```yaml
-plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
 ```
 
 ESDF 层放在 obstacle 层之后、inflation 层之前。可选移除 `inflation_layer`，由 ESDF 直接提供距离代价。
