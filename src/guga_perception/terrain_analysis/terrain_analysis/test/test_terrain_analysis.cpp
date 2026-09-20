@@ -165,4 +165,30 @@ namespace terrain_analysis {
     EXPECT_FALSE(terrain_->obstacleCloud().points.empty())
         << "该障碍仍在累计云的衰减窗口内";
   }
+
+  // 网格外的回波仍要进入清除云：它同样证明该方向的路径为空，代价地图层会把端点
+  // 裁剪到自己的边界再画射线；丢掉它，该方向就一条射线都没有。障碍云需要离地高度，
+  // 因此不含网格外的点，其 intensity 也按 0 输出。
+  TEST_F(TerrainAnalysisTest, Run_ReturnOutsideGrid_StillUsedForClearing) {
+    sendOdom(0, 0, 0);
+
+    auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    for (double x = 6.0; x <= 8.0; x += 0.2) {
+      pcl::PointXYZI p;
+      p.x = static_cast<float>(x);
+      p.y = 0.0F;
+      p.z = 0.01F;
+      p.intensity = 0;
+      cloud->push_back(p);
+    }
+    sendCloud(cloud, 100.0);
+
+    EXPECT_EQ(terrain_->frameReturnCloud().points.size(), cloud->size())
+        << "网格外的回波应全部进入清除云";
+    EXPECT_TRUE(terrain_->frameObstacleCloud().points.empty())
+        << "网格外没有地面估计，不该输出障碍点";
+    for (const auto& p : terrain_->frameReturnCloud().points) {
+      EXPECT_FLOAT_EQ(p.intensity, 0.0F) << "网格外的点没有离地高度，按 0 输出";
+    }
+  }
 }  // namespace terrain_analysis

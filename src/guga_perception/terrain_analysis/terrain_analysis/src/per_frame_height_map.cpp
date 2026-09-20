@@ -29,33 +29,37 @@ namespace terrain_analysis {
     frame_return_cloud_->clear();
 
     for (const auto& point : frame_cloud.points) {
-      const GridIndex grid_index = gridIndex(
-          point.x, point.y, lidar_position.x, lidar_position.y,
-          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
-      // 平面网格是这两份输出的空间界：格无效即超出约 5 m 窗口。
-      if (!grid_index.valid) {
-        continue;
-      }
-      // 地面场来自 compute()：本阶段不重估地面，只按同一套判据分类。
-      const double h_ground = point.z
-                              - voxel_elev_[PerFrameHeightGrid::linearIndex(
-                                  grid_index.row, grid_index.col)];
       if (!abovePenetrationFloor(point.z - lidar_position.z, config_)) {
         continue;
       }
       if (!aboveGroundFloor(point.z, config_)) {
         continue;
       }
-      const float height = static_cast<float>(
-          config_.consider_drop ? std::abs(h_ground) : h_ground);
 
+      // 地面场来自 compute()：本阶段不重估地面，只按同一套判据分类。网格外没有
+      // 地面估计，因此只有格内的点才谈得上离地高度。
+      const GridIndex grid_index = gridIndex(
+          point.x, point.y, lidar_position.x, lidar_position.y,
+          config_.planar_voxel_size, PerFrameHeightGrid::WIDTH);
+
+      float height = 0.0F;
+      if (grid_index.valid) {
+        const double h_ground = point.z
+                                - voxel_elev_[PerFrameHeightGrid::linearIndex(
+                                    grid_index.row, grid_index.col)];
+        height = static_cast<float>(config_.consider_drop ? std::abs(h_ground)
+                                                          : h_ground);
+        // 障碍点供代价地图标记，必须能算出离地高度，所以仍受网格限制。
+        if (insideOutputBand(h_ground, config_)) {
+          frame_obstacle_cloud_->push_back(point);
+          frame_obstacle_cloud_->back().intensity = height;
+        }
+      }
+
+      // 回波云不受网格限制：窗口外的回波仍是"该方向路径为空"的证据，官方层会把
+      // 端点裁剪到代价地图边界后再画射线。把它丢掉，该方向就一条射线都没有。
       frame_return_cloud_->push_back(point);
       frame_return_cloud_->back().intensity = height;
-
-      if (insideOutputBand(h_ground, config_)) {
-        frame_obstacle_cloud_->push_back(point);
-        frame_obstacle_cloud_->back().intensity = height;
-      }
     }
   }
 
