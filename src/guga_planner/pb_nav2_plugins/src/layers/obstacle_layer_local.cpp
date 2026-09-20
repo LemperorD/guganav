@@ -36,13 +36,14 @@
  *         David V. Lu!!
  *         Steve Macenski
  *********************************************************************/
+#include "pb_nav2_plugins/layers/obstacle_layer_local.hpp"
+
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "nav2_costmap_2d/costmap_math.hpp"
-#include "pb_nav2_plugins/layers/obstacle_layer_local.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 
@@ -84,6 +85,7 @@ void ObstacleLayerLocal::onInitialize()
   declareParameter("observation_sources", rclcpp::ParameterValue(std::string("")));
 
   auto node = node_.lock();
+
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
   }
@@ -552,7 +554,8 @@ void ObstacleLayerLocal::clearStaticObservations(bool marking, bool clearing)
   }
 }
 
-bool ObstacleLayerLocal::getMarkingObservations(std::vector<Observation> & marking_observations) const
+bool ObstacleLayerLocal::getMarkingObservations(
+  std::vector<Observation> & marking_observations) const
 {
   bool current = true;
   // get the marking observations
@@ -568,7 +571,8 @@ bool ObstacleLayerLocal::getMarkingObservations(std::vector<Observation> & marki
   return current;
 }
 
-bool ObstacleLayerLocal::getClearingObservations(std::vector<Observation> & clearing_observations) const
+bool ObstacleLayerLocal::getClearingObservations(
+  std::vector<Observation> & clearing_observations) const
 {
   bool current = true;
   // get the clearing observations

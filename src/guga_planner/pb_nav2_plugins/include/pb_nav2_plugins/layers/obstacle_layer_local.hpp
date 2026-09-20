@@ -42,21 +42,21 @@
 #include <string>
 #include <vector>
 
-#include "rclcpp/rclcpp.hpp"
 #include "laser_geometry/laser_geometry.hpp"
+#include "rclcpp/rclcpp.hpp"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreorder"
 #include "tf2_ros/message_filter.h"
 #pragma GCC diagnostic pop
 #include "message_filters/subscriber.h"
+#include "nav2_costmap_2d/costmap_layer.hpp"
+#include "nav2_costmap_2d/footprint.hpp"
+#include "nav2_costmap_2d/layered_costmap.hpp"
+#include "nav2_costmap_2d/observation_buffer.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/point_cloud.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
-#include "nav2_costmap_2d/costmap_layer.hpp"
-#include "nav2_costmap_2d/layered_costmap.hpp"
-#include "nav2_costmap_2d/observation_buffer.hpp"
-#include "nav2_costmap_2d/footprint.hpp"
 
 namespace pb_nav2_costmap_2d
 {
@@ -95,17 +95,14 @@ public:
    * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
   virtual void updateBounds(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y,
-    double * max_x,
-    double * max_y);
+    double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y,
+    double * max_x, double * max_y);
   /**
    * @brief 更新窗口内主代价地图的代价值
    * @param master_grid 待更新的主代价地图栅格
    */
   virtual void updateCosts(
-    nav2_costmap_2d::Costmap2D & master_grid,
-    int min_i, int min_j, int max_i, int max_j);
+    nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j);
 
   /**
    * @brief 停用该图层
@@ -125,14 +122,14 @@ public:
   /**
    * @brief 该图层是否需要处理清除操作
    */
-  virtual bool isClearable() {return true;}
+  virtual bool isClearable() { return true; }
 
   /**
    * @brief 检测到参数变化时执行的回调
    * @param parameters 发生变化的参数列表
    */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
+    std::vector<rclcpp::Parameter> parameters);
 
   /**
    * @brief 触发观测缓冲的时间戳更新
@@ -196,19 +193,15 @@ protected:
    * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
   virtual void raytraceFreespace(
-    const nav2_costmap_2d::Observation & clearing_observation,
-    double * min_x, double * min_y,
-    double * max_x,
-    double * max_y);
+    const nav2_costmap_2d::Observation & clearing_observation, double * min_x, double * min_y,
+    double * max_x, double * max_y);
 
   /**
    * @brief 用射线追踪的结果更新窗口边界
    */
   void updateRaytraceBounds(
-    double ox, double oy, double wx, double wy, double max_range, double min_range,
-    double * min_x, double * min_y,
-    double * max_x,
-    double * max_y);
+    double ox, double oy, double wx, double wy, double max_range, double min_range, double * min_x,
+    double * min_y, double * max_x, double * max_y);
 
   std::vector<geometry_msgs::msg::Point> transformed_footprint_;
   bool footprint_clearing_enabled_;
@@ -216,12 +209,10 @@ protected:
    * @brief 清除机器人足迹范围内的图层信息
    */
   void updateFootprint(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y,
-    double * max_x,
-    double * max_y);
+    double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y,
+    double * max_x, double * max_y);
 
-  std::string global_frame_;  ///< @brief 代价地图使用的全局坐标系
+  std::string global_frame_;    ///< @brief 代价地图使用的全局坐标系
   double min_obstacle_height_;  ///< @brief 障碍物最小高度
   double max_obstacle_height_;  ///< @brief 障碍物最大高度
 
@@ -229,7 +220,7 @@ protected:
   laser_geometry::LaserProjection projector_;
   /// @brief 用于观测消息的订阅者
   std::vector<std::shared_ptr<message_filters::SubscriberBase<rclcpp_lifecycle::LifecycleNode>>>
-  observation_subscribers_;
+    observation_subscribers_;
   /// @brief 用于确保每个传感器都有可用的坐标变换
   std::vector<std::shared_ptr<tf2_ros::MessageFilterBase>> observation_notifiers_;
   /// @brief 用于保存各传感器产生的观测
