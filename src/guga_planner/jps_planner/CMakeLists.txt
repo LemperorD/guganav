@@ -22,6 +22,9 @@ find_package(Eigen3 REQUIRED)
 ament_auto_add_library(jps_planner SHARED
   src/jps_planner.cpp
   src/jps_algorithm.cpp
+  src/detail/jps_obstacle.cpp
+  src/detail/jps_neighbor.cpp
+  src/detail/jps_jump.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/bspline_optimizer.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/detail/grid_utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/detail/esdf_utils.cpp
@@ -48,6 +51,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_jps
     test/test_jps.cpp
     src/jps_algorithm.cpp
+    src/detail/jps_obstacle.cpp
+    src/detail/jps_neighbor.cpp
+    src/detail/jps_jump.cpp
   )
   target_include_directories(test_jps PRIVATE include test)
   target_compile_definitions(test_jps PRIVATE TESTING)
@@ -56,6 +62,9 @@ if(BUILD_TESTING)
   add_executable(jps_viz_exporter
     test/jps_viz_exporter.cpp
     src/jps_algorithm.cpp
+    src/detail/jps_obstacle.cpp
+    src/detail/jps_neighbor.cpp
+    src/detail/jps_jump.cpp
   )
   target_include_directories(jps_viz_exporter PRIVATE include test)
   target_compile_definitions(jps_viz_exporter PRIVATE TESTING)

@@ -386,7 +386,7 @@ namespace jps_planner {
     }
 
     // 贴障碍的对角段改写为正交移动, 避免 B-spline 平滑切角产生锯齿/回退
-    map_path = detourCornerHuggingDiagonals(map_path, state.costmap_data,
+    map_path = JPSAlgorithm::detourCornerHuggingDiagonals(map_path, state.costmap_data,
                                             state.size_x, state.size_y,
                                             config_.allow_unknown);
 
