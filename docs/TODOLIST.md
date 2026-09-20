@@ -1,11 +1,13 @@
 # TODOLIST
 
-| 分类         | 任务                                                                                                   | 所属包                           |
-| ------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------- |
-| 感知         | 坡面识别：让哨兵上坡时对准坡面法线，可参考川大开源                                                     | `terrain_analysis`               |
-| 感知         | Point-LIO 重构：代码太乱，不急，可先当黑盒用                                                           | `point_lio`                      |
-| 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价 | `terrain_analysis`               |
-| 控制         | MPPI 的 GPU 方案（MPPI 本体已接入）                                                                    | `nav2_mppi_controller`           |
-| 控制（实车） | 避障后退方向错误：朝 chassis 后方运动，而非背离障碍物                                                  | `pb_omni_pid_pursuit_controller` |
-| 重构         | `ui_types.hpp` 里全是魔法数字，待修复                                                                  | `guga_ui_common`                 |
-
+| 分类         | 任务                                                                                                                                                                                                                                 | 所属包                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| 感知         | 坡面识别：让哨兵上坡时对准坡面法线，可参考川大开源                                                                                                                                                                                   | `terrain_analysis`                             |
+| 感知         | Point-LIO 重构：代码太乱，不急，可先当黑盒用                                                                                                                                                                                         | `point_lio`                                    |
+| 感知（待定） | Terrain voxel 网格 21×21 是否有必要：它同时承担"前瞻预存"与"每帧空转 72% 格子"两重角色，缩小有行为代价                                                                                                                               | `terrain_analysis`                             |
+| 视觉（待定） | 动态轨迹预测：`guga_vision` README 里已列"预测器"，尚无实现；`tracker/target` 与 `detector/armors` 目前没有发布者                                                                                                                    | `guga_vision`                                  |
+| 控制         | MPPI 的 GPU 方案（MPPI 本体已接入）                                                                                                                                                                                                  | `nav2_mppi_controller`                         |
+| 控制（实车） | 避障后退方向错误：朝 chassis 后方运动，而非背离障碍物                                                                                                                                                                                | `pb_omni_pid_pursuit_controller`               |
+| 控制（配置） | 小陀螺转速入口规范化：决策 `spin_speed`（经 `cmd_spin`，决策 READY 后才发）与 launch 内联 `init_spin_speed`（mppi/mpc 3.14、pid 0.0）两个来源需对齐；`pid.yaml` 的 `FollowPath.spin_speed` 无人读取；`AGENT.md` 记的 6.28 与代码不符 | `nonrotating_vel_transform`、`simple_decision` |
+| 控制（实车） | 小陀螺转速台架可调：`require_game_running` 与 `start_delay_sec` 未满足时决策不发 `cmd_spin`，需给出不依赖比赛状态的调参路径                                                                                                          | `simple_decision`、`guga_bringup`              |
+| 重构         | `ui_types.hpp` 里全是魔法数字，待修复                                                                                                                                                                                                | `guga_ui_common`                               |
