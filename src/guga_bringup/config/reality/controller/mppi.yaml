@@ -36,7 +36,7 @@ controller_server:
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.166666667  
+      model_dt: 0.166666667
       batch_size: 1200
       vx_std: 0.5
       vy_std: 0.5
@@ -58,7 +58,14 @@ controller_server:
         time_step: 3
       Omni:
         plugin: "mppi::OmniMotionModel"
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "PathAlignCritic", "PathFollowCritic"]
+      critics:
+        [
+          "ConstraintCritic",
+          "CostCritic",
+          "GoalCritic",
+          "PathAlignCritic",
+          "PathFollowCritic",
+        ]
       ConstraintCritic:
         enabled: true
         cost_power: 1
@@ -133,7 +140,6 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-
       use_sim_time: False
 
       update_frequency: 10.0
@@ -152,7 +158,7 @@ local_costmap:
 
       resolution: 0.05
 
-      robot_radius: 0.464   # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
+      robot_radius: 0.464 # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -170,7 +176,7 @@ local_costmap:
           # 机器人离开 odom 原点超过代价地图半宽后，标记与清除都会因原点越界被跳过。
           sensor_frame: front_mid360
           marking: true
-          clearing: false  # 清除改由当帧回波云 terrain_returns_current 承担
+          clearing: false # 清除改由当帧返回的雷达射线云 terrain_returns_current 承担
           obstacle_max_range: 5.0
           obstacle_min_range: 0.2
           raytrace_max_range: 5.5
@@ -180,17 +186,17 @@ local_costmap:
         terrain_returns_current:
           data_type: "PointCloud2"
           topic: <robot_namespace>/terrain_returns_current
-          # 当帧回波云，含地面回波。清除射线只要求"该方向上有一次回波"，
-          # 地面回波正是射线路径为空的证据，因此它不必是障碍点。
+          # 当帧返回的雷达射线云，含地面返回的雷达射线。清除射线只要求"该方向上有一次返回的雷达射线"，
+          # 地面返回的雷达射线正是射线路径为空的证据，因此它不必是障碍点。
           sensor_frame: front_mid360
           marking: false
           clearing: true
-          observation_persistence: 0.0   # 只留最新一帧：清除用的是当帧观测
+          observation_persistence: 0.0 # 只留最新一帧：清除用的是当帧观测
           obstacle_min_range: 0.2
           obstacle_max_range: 5.0
           raytrace_min_range: 0.2
           raytrace_max_range: 5.5
-          # 源级高度范围是 odom 绝对高度：留 0 会把地面回波（绝对 z 略低于 0）
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线（绝对 z 略低于 0）
           # 在 ObservationBuffer 里滤掉，清除就失去这些射线。
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
@@ -207,14 +213,13 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.5   # 实车 MPPI 保守起步（仿真 0.40）
+        inflation_radius: 0.5 # 实车 MPPI 保守起步（仿真 0.40）
 
       always_send_full_costmap: False
 
 global_costmap:
   global_costmap:
     ros__parameters:
-
       use_sim_time: False
 
       update_frequency: 5.0
@@ -225,7 +230,7 @@ global_costmap:
 
       robot_base_frame: base_footprint_nonrotating
 
-      robot_radius: 0.464   # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
+      robot_radius: 0.464 # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
 
       resolution: 0.05
 
@@ -250,25 +255,25 @@ global_costmap:
           clearing: true
           obstacle_max_range: 10.0
           obstacle_min_range: 0.2
-          raytrace_max_range: 5.0    # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
+          raytrace_max_range: 5.0 # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
           raytrace_min_range: 0.2
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
         terrain_returns_current:
           data_type: "PointCloud2"
           topic: <robot_namespace>/terrain_returns_current
-          # 当帧回波云（含地面回波），只做清除。terrain_map 里只有障碍点，某方位视野内
-          # 没有障碍时该方位一个端点都没有，落在那条路径上的旧标记清不掉；回波给出的
+          # 当帧返回的雷达射线云（含地面返回的雷达射线），只做清除。terrain_map 里只有障碍点，某方位视野内
+          # 没有障碍时该方位一个端点都没有，落在那条路径上的旧标记清不掉；返回的雷达射线给出的
           # 是"该方位路径为空"这一证据。与 local 那条链的配置保持一致。
           sensor_frame: front_mid360
           marking: false
           clearing: true
-          observation_persistence: 0.0   # 只留最新一帧：清除用的是当帧观测
+          observation_persistence: 0.0 # 只留最新一帧：清除用的是当帧观测
           obstacle_min_range: 0.2
           obstacle_max_range: 10.0
           raytrace_min_range: 0.2
-          raytrace_max_range: 5.0    # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
-          # 源级高度范围是 odom 绝对高度：留 0 会把地面回波在 ObservationBuffer 里滤掉。
+          raytrace_max_range: 5.0 # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线在 ObservationBuffer 里滤掉。
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
         # 原第三方层 pb_nav2_costmap_2d::IntensityVoxelLayer 的参数（若要切回，本块换成这些）：
@@ -294,7 +299,6 @@ global_costmap:
 
 smoother_server:
   ros__parameters:
-
     use_sim_time: False
 
     smoother_plugins: ["simple_smoother"]
@@ -307,7 +311,6 @@ smoother_server:
 
 behavior_server:
   ros__parameters:
-
     use_sim_time: False
 
     local_costmap_topic: local_costmap/costmap_raw
@@ -320,7 +323,8 @@ behavior_server:
 
     cycle_frequency: 10.0
 
-    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    behavior_plugins:
+      ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
 
     spin:
       plugin: "nav2_behaviors/Spin"
@@ -362,7 +366,6 @@ behavior_server:
 
 velocity_smoother:
   ros__parameters:
-
     use_sim_time: False
 
     smoothing_frequency: 20.0
@@ -386,4 +389,3 @@ velocity_smoother:
     deadband_velocity: [0.0, 0.0, 0.0]
 
     velocity_timeout: 1.0
-

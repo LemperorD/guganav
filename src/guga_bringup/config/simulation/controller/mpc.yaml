@@ -2,7 +2,6 @@
 local_costmap:
   local_costmap:
     ros__parameters:
-
       robot_base_frame: base_footprint_nonrotating
 
       width: 5
@@ -27,7 +26,7 @@ local_costmap:
           # 机器人离开 odom 原点超过代价地图半宽后，标记与清除都会因原点越界被跳过。
           sensor_frame: front_mid360
           marking: true
-          clearing: false  # 清除改由当帧回波云 terrain_returns_current 承担
+          clearing: false # 清除改由当帧返回的雷达射线云 terrain_returns_current 承担
           obstacle_max_range: 5.0
           obstacle_min_range: 0.2
           raytrace_max_range: 5.5
@@ -37,17 +36,17 @@ local_costmap:
         terrain_returns_current:
           data_type: "PointCloud2"
           topic: <robot_namespace>/terrain_returns_current
-          # 当帧回波云，含地面回波。清除射线只要求"该方向上有一次回波"，
-          # 地面回波正是射线路径为空的证据，因此它不必是障碍点。
+          # 当帧返回的雷达射线云，含地面返回的雷达射线。清除射线只要求"该方向上有一次返回的雷达射线"，
+          # 地面返回的雷达射线正是射线路径为空的证据，因此它不必是障碍点。
           sensor_frame: front_mid360
           marking: false
           clearing: true
-          observation_persistence: 0.0   # 只留最新一帧：清除用的是当帧观测
+          observation_persistence: 0.0 # 只留最新一帧：清除用的是当帧观测
           obstacle_min_range: 0.2
           obstacle_max_range: 5.0
           raytrace_min_range: 0.2
           raytrace_max_range: 5.5
-          # 源级高度范围是 odom 绝对高度：留 0 会把地面回波（绝对 z 略低于 0）
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线（绝对 z 略低于 0）
           # 在 ObservationBuffer 里滤掉，清除就失去这些射线。
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
@@ -65,24 +64,23 @@ local_costmap:
 
 smoother_server:
   ros__parameters:
-
     SmoothPath:
       plugin: "nav2_constrained_smoother/ConstrainedSmoother"
-      reversing_enabled: true       # whether to detect forward/reverse direction and cusps. Should be set to false for paths without orientations assigned
-      path_downsampling_factor: 3   # every n-th node of the path is taken. Useful for speed-up
-      path_upsampling_factor: 1     # 0 - path remains downsampled, 1 - path is upsampled back to original granularity using cubic bezier, 2... - more upsampling
-      keep_start_orientation: true  # whether to prevent the start orientation from being smoothed
-      keep_goal_orientation: true   # whether to prevent the gpal orientation from being smoothed
-      minimum_turning_radius: 0.40  # minimum turning radius the robot can perform. Can be set to 0.0 (or w_curve can be set to 0.0 with the same effect) for diff-drive/holonomic robots
-      w_curve: 30.0                 # weight to enforce minimum_turning_radius
-      w_dist: 0.0                   # weight to bind path to original as optional replacement for cost weight
-      w_smooth: 2000000.0           # weight to maximize smoothness of path
-      w_cost: 0.015                 # weight to steer robot away from collision and cost
+      reversing_enabled: true # whether to detect forward/reverse direction and cusps. Should be set to false for paths without orientations assigned
+      path_downsampling_factor: 3 # every n-th node of the path is taken. Useful for speed-up
+      path_upsampling_factor: 1 # 0 - path remains downsampled, 1 - path is upsampled back to original granularity using cubic bezier, 2... - more upsampling
+      keep_start_orientation: true # whether to prevent the start orientation from being smoothed
+      keep_goal_orientation: true # whether to prevent the gpal orientation from being smoothed
+      minimum_turning_radius: 0.40 # minimum turning radius the robot can perform. Can be set to 0.0 (or w_curve can be set to 0.0 with the same effect) for diff-drive/holonomic robots
+      w_curve: 30.0 # weight to enforce minimum_turning_radius
+      w_dist: 0.0 # weight to bind path to original as optional replacement for cost weight
+      w_smooth: 2000000.0 # weight to maximize smoothness of path
+      w_cost: 0.015 # weight to steer robot away from collision and cost
 
       # Parameters used to improve obstacle avoidance near cusps (forward/reverse movement changes)
       # See the [docs page](https://docs.nav2.org/configuration/packages/configuring-constrained-smoother) for further clarification
-      w_cost_cusp_multiplier: 3.0   # option to have higher weight during forward/reverse direction change which is often accompanied with dangerous rotations
-      cusp_zone_length: 2.5         # length of the section around cusp in which nodes use w_cost_cusp_multiplier (w_cost rises gradually inside the zone towards the cusp point, whose costmap weight equals w_cost*w_cost_cusp_multiplier)
+      w_cost_cusp_multiplier: 3.0 # option to have higher weight during forward/reverse direction change which is often accompanied with dangerous rotations
+      cusp_zone_length: 2.5 # length of the section around cusp in which nodes use w_cost_cusp_multiplier (w_cost rises gradually inside the zone towards the cusp point, whose costmap weight equals w_cost*w_cost_cusp_multiplier)
 
       # Points in robot frame to grab costmap values from. Format: [x1, y1, weight1, x2, y2, weight2, ...]
       # IMPORTANT: Requires much higher number of iterations to actually improve the path. Uncomment only if you really need it (highly elongated/asymmetric robots)
@@ -90,15 +88,14 @@ smoother_server:
       # cost_check_points: [-0.185, 0.0, 1.0]
 
       optimizer:
-        max_iterations: 70            # max iterations of smoother
-        debug_optimizer: false        # print debug info
+        max_iterations: 70 # max iterations of smoother
+        debug_optimizer: false # print debug info
         gradient_tol: 5.0e+3
         fn_tol: 1.0e-15
         param_tol: 1.0e-20
 
 controller_server:
   ros__parameters:
-
     use_sim_time: True
 
     controller_frequency: 60.0
@@ -150,7 +147,6 @@ controller_server:
 
 velocity_smoother:
   ros__parameters:
-
     smoothing_frequency: 60.0
 
     scale_velocities: False
@@ -162,7 +158,6 @@ velocity_smoother:
 global_costmap:
   global_costmap:
     ros__parameters:
-
       robot_base_frame: base_footprint_nonrotating
 
       obstacle_layer:
@@ -184,25 +179,25 @@ global_costmap:
           clearing: true
           obstacle_max_range: 10.0
           obstacle_min_range: 0.2
-          raytrace_max_range: 5.0    # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
+          raytrace_max_range: 5.0 # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
           raytrace_min_range: 0.2
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
         terrain_returns_current:
           data_type: "PointCloud2"
           topic: <robot_namespace>/terrain_returns_current
-          # 当帧回波云（含地面回波），只做清除。terrain_map 里只有障碍点，某方位视野内
-          # 没有障碍时该方位一个端点都没有，落在那条路径上的旧标记清不掉；回波给出的
+          # 当帧返回的雷达射线云（含地面返回的雷达射线），只做清除。terrain_map 里只有障碍点，某方位视野内
+          # 没有障碍时该方位一个端点都没有，落在那条路径上的旧标记清不掉；返回的雷达射线给出的
           # 是"该方位路径为空"这一证据。与 local 那条链的配置保持一致。
           sensor_frame: front_mid360
           marking: false
           clearing: true
-          observation_persistence: 0.0   # 只留最新一帧：清除用的是当帧观测
+          observation_persistence: 0.0 # 只留最新一帧：清除用的是当帧观测
           obstacle_min_range: 0.2
           obstacle_max_range: 10.0
           raytrace_min_range: 0.2
-          raytrace_max_range: 5.0    # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
-          # 源级高度范围是 odom 绝对高度：留 0 会把地面回波在 ObservationBuffer 里滤掉。
+          raytrace_max_range: 5.0 # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线在 ObservationBuffer 里滤掉。
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
         # 原第三方层 pb_nav2_costmap_2d::IntensityVoxelLayer 的参数（若要切回，本块换成这些）：
@@ -216,4 +211,3 @@ global_costmap:
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
         num_threads: 4
-
