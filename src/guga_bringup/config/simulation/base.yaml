@@ -118,7 +118,7 @@ terrain_analysis:
     minRelZ: -1.5 # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理
     groundFloorZ: -0.2 # 地面候选的绝对高度地板(odom z)：低于此值的点不参与地面估计，也是该阶段唯一的候选筛选。须贴近实际地面z：odom原点与base_footprint重合（实测 odom→base_footprint 为单位变换），平地地面z≈0，故取地面下方约0.2m。注意 lidar_z 是雷达高度(平地+0.230)，不是本值的基准；下坡时地面会低于该地板而被排除，坡面需重设
     maxRelZ: 0.5
-    disRatioZ: 0.2 # Z 值的最大最小范围由这两个值决定，但是并不等于这两个值，是有一个比例关系的，距离机器人越远，限定范围就越大，这其中考虑了坡度
+    disRatioZ: 0.0 # Z 值的最大最小范围由这两个值决定，但是并不等于这两个值，是有一个比例关系的，距离机器人越远，限定范围就越大，这其中考虑了坡度
 
 small_gicp_relocalization:
   ros__parameters:

@@ -89,32 +89,7 @@ loam_interface
 两条输出链：`terrain_map` 是累计障碍云（`intensity` = 距局部地面的高度），`terrain_returns_current` 是当帧返回的雷达射线云（`intensity` 恒 0，供代价地图射线清除）。
 
 
-## 测试
 
-```bash
-# 单元测试（构建 terrain_analysis 包并运行其测试）
-scripts/pre-commit/run_terrain_analysis_tests.sh
-
-# 覆盖率（编译 + 运行 + gcovr 报告）
-scripts/test/test_terrain_analysis_coverage.sh
-```
-
-| 输出            | 路径                                         |
-| --------------- | -------------------------------------------- |
-| Html 覆盖率报告 | `build/terrain_analysis/coverage.html`       |
-| lcov 信息       | `lcov.info`                                  |
-| 测试日志        | `build/terrain_analysis/coverage_result.ans` |
-
-当前 `terrain_analysis` 测试套件：
-
-- `test_terrain_analysis`：完整管线行为
-- `test_frame_receive`：前半段的帧输入（雷达位置与帧时刻、首帧时刻、观测时刻写进
-  intensity、越界裁剪、`update` 清待处理标记）
-- `test_algorithm`：体素、地面高程估计与边界处理
-- `test_integration`：只通过 ROS 话题驱动节点（不直接调 receiveFrame / update / compute），覆盖订阅与消息转换、逐帧数据分发、发布消息的 frame_id/stamp，以及跨帧的幽灵点清除与体素窗口滚动
-
-`estimateTerrainGround` 与 `computeHeightMap` 都经 `gridIndex(...)` 统一做越界判定；
-超出 `51×51` planar 网格的点会被忽略，避免数组越界。
 
 
 
@@ -146,3 +121,29 @@ scripts/test/test_terrain_analysis_coverage.sh
 结构体，跑的是默认值而不是实车工况。
 
 
+## 测试
+
+```bash
+# 单元测试（构建 terrain_analysis 包并运行其测试）
+scripts/pre-commit/run_terrain_analysis_tests.sh
+
+# 覆盖率（编译 + 运行 + gcovr 报告）
+scripts/test/test_terrain_analysis_coverage.sh
+```
+
+| 输出            | 路径                                         |
+| --------------- | -------------------------------------------- |
+| Html 覆盖率报告 | `build/terrain_analysis/coverage.html`       |
+| lcov 信息       | `lcov.info`                                  |
+| 测试日志        | `build/terrain_analysis/coverage_result.ans` |
+
+当前 `terrain_analysis` 测试套件：
+
+- `test_terrain_analysis`：完整管线行为
+- `test_frame_receive`：前半段的帧输入（雷达位置与帧时刻、首帧时刻、观测时刻写进
+  intensity、越界裁剪、`update` 清待处理标记）
+- `test_algorithm`：体素、地面高程估计与边界处理
+- `test_integration`：只通过 ROS 话题驱动节点（不直接调 receiveFrame / update / compute），覆盖订阅与消息转换、逐帧数据分发、发布消息的 frame_id/stamp，以及跨帧的幽灵点清除与体素窗口滚动
+
+`estimateTerrainGround` 与 `computeHeightMap` 都经 `gridIndex(...)` 统一做越界判定；
+超出 `51×51` planar 网格的点会被忽略，避免数组越界。
