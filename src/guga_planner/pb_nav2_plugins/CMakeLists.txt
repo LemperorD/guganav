@@ -40,6 +40,14 @@ if(BUILD_TESTING)
   target_link_libraries(back_up_free_space_test
     pb_back_up_frees_space_behavior
   )
+
+  ament_add_gtest(obstacle_tests test/obstacle_tests.cpp)
+  target_include_directories(obstacle_tests PRIVATE test)
+  target_link_libraries(obstacle_tests pb_nav2_layers)
+  ament_target_dependencies(obstacle_tests
+    nav2_costmap_2d nav2_util rclcpp tf2_ros tf2_geometry_msgs
+    message_filters sensor_msgs geometry_msgs laser_geometry
+  )
 endif()
 
 pluginlib_export_plugin_description_file(nav2_core behavior_plugin.xml)
