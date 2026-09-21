@@ -1,3 +1,18 @@
+// Copyright 2025 Lihan Chen
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// 实现正文取自 nav2_costmap_2d 的 ObstacleLayer（BSD-3-Clause，见下方原始版权块）。
 /*********************************************************************
  *
  * Software License Agreement (BSD License)
@@ -99,8 +114,10 @@ void ObstacleLayerLocal::onInitialize()
   node->get_parameter("transform_tolerance", transform_tolerance);
   node->get_parameter(name_ + "." + "observation_sources", topics_string);
 
-  dyn_params_handler_ = node->add_on_set_parameters_callback(
-    std::bind(&ObstacleLayerLocal::dynamicParametersCallback, this, std::placeholders::_1));
+  dyn_params_handler_ =
+    node->add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter> & parameters) {
+      return dynamicParametersCallback(parameters);
+    });
 
   RCLCPP_INFO(logger_, "Subscribed to Topics: %s", topics_string.c_str());
 
@@ -180,12 +197,11 @@ void ObstacleLayerLocal::onInitialize()
       topic.c_str(), sensor_frame.c_str());
 
     // create an observation buffer
-    observation_buffers_.push_back(
-      std::shared_ptr<ObservationBuffer>(new ObservationBuffer(
-        node, topic, observation_keep_time, expected_update_rate, min_obstacle_height,
-        max_obstacle_height, obstacle_max_range, obstacle_min_range, raytrace_max_range,
-        raytrace_min_range, *tf_, global_frame_, sensor_frame,
-        tf2::durationFromSec(transform_tolerance))));
+    observation_buffers_.push_back(std::shared_ptr<ObservationBuffer>(new ObservationBuffer(
+      node, topic, observation_keep_time, expected_update_rate, min_obstacle_height,
+      max_obstacle_height, obstacle_max_range, obstacle_min_range, raytrace_max_range,
+      raytrace_min_range, *tf_, global_frame_, sensor_frame,
+      tf2::durationFromSec(transform_tolerance))));
 
     // check if we'll add this buffer to our marking observation buffers
     if (marking) {
@@ -218,17 +234,15 @@ void ObstacleLayerLocal::onInitialize()
         *sub, *tf_, global_frame_, 50, node->get_node_logging_interface(),
         node->get_node_clock_interface(), tf2::durationFromSec(transform_tolerance));
 
+      const auto & buffer = observation_buffers_.back();
       if (inf_is_valid) {
-        filter->registerCallback(
-          std::bind(
-            &ObstacleLayerLocal::laserScanValidInfCallback, this, std::placeholders::_1,
-            observation_buffers_.back()));
-
+        filter->registerCallback([this, buffer](sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {
+          laserScanValidInfCallback(msg, buffer);
+        });
       } else {
-        filter->registerCallback(
-          std::bind(
-            &ObstacleLayerLocal::laserScanCallback, this, std::placeholders::_1,
-            observation_buffers_.back()));
+        filter->registerCallback([this, buffer](sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {
+          laserScanCallback(msg, buffer);
+        });
       }
 
       observation_subscribers_.push_back(sub);
@@ -252,10 +266,10 @@ void ObstacleLayerLocal::onInitialize()
         *sub, *tf_, global_frame_, 50, node->get_node_logging_interface(),
         node->get_node_clock_interface(), tf2::durationFromSec(transform_tolerance));
 
-      filter->registerCallback(
-        std::bind(
-          &ObstacleLayerLocal::pointCloud2Callback, this, std::placeholders::_1,
-          observation_buffers_.back()));
+      const auto & buffer = observation_buffers_.back();
+      filter->registerCallback([this, buffer](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
+        pointCloud2Callback(msg, buffer);
+      });
 
       observation_subscribers_.push_back(sub);
       observation_notifiers_.push_back(filter);
@@ -270,13 +284,13 @@ void ObstacleLayerLocal::onInitialize()
   }
 }
 
-rcl_interfaces::msg::SetParametersResult ObstacleLayerLocal::dynamicParametersCallback(
+rcl_interfaces::msg::SetParametersResult ObstacleLayerLocal::dynamicParametersCallback(  // 动态调参
   std::vector<rclcpp::Parameter> parameters)
 {
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
   rcl_interfaces::msg::SetParametersResult result;
 
-  for (auto parameter : parameters) {
+  for (const auto & parameter : parameters) {
     const auto & param_type = parameter.get_type();
     const auto & param_name = parameter.get_name();
 
@@ -344,10 +358,9 @@ void ObstacleLayerLocal::laserScanValidInfCallback(
   // Filter positive infinities ("Inf"s) to max_range.
   float epsilon = 0.0001;  // a tenth of a millimeter
   sensor_msgs::msg::LaserScan message = *raw_message;
-  for (size_t i = 0; i < message.ranges.size(); i++) {
-    float range = message.ranges[i];
+  for (auto & range : message.ranges) {
     if (!std::isfinite(range) && range > 0) {
-      message.ranges[i] = message.range_max - epsilon;
+      range = message.range_max - epsilon;
     }
   }
 
@@ -393,12 +406,13 @@ void ObstacleLayerLocal::updateBounds(
   double * max_y)
 {
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
-  if (rolling_window_) {
+  if (rolling_window_) {  // 移动代价地图
     updateOrigin(robot_x - getSizeInMetersX() / 2, robot_y - getSizeInMetersY() / 2);
   }
   if (!enabled_) {
     return;
   }
+  // 处理特殊情况
   useExtraBounds(min_x, min_y, max_x, max_y);
 
   bool current = true;
@@ -414,15 +428,12 @@ void ObstacleLayerLocal::updateBounds(
   current_ = current;
 
   // raytrace freespace
-  for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
-    raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
+  for (const auto & observation : clearing_observations) {
+    raytraceFreespace(observation, min_x, min_y, max_x, max_y);
   }
 
   // place the new obstacles into a priority queue... each with a priority of zero to begin with
-  for (std::vector<Observation>::const_iterator it = observations.begin(); it != observations.end();
-       ++it) {
-    const Observation & obs = *it;
-
+  for (auto & obs : observations) {
     const sensor_msgs::msg::PointCloud2 & cloud = *(obs.cloud_);
 
     const unsigned int max_range_cells = cellDistance(obs.obstacle_max_range_);
@@ -498,8 +509,8 @@ void ObstacleLayerLocal::updateFootprint(
   }
   transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(), transformed_footprint_);
 
-  for (unsigned int i = 0; i < transformed_footprint_.size(); i++) {
-    touch(transformed_footprint_[i].x, transformed_footprint_[i].y, min_x, min_y, max_x, max_y);
+  for (const auto & point : transformed_footprint_) {
+    touch(point.x, point.y, min_x, min_y, max_x, max_y);
   }
 }
 
@@ -517,7 +528,7 @@ void ObstacleLayerLocal::updateCosts(
     current_ = true;
   }
 
-  if (footprint_clearing_enabled_) {
+  if (footprint_clearing_enabled_) {  // 将所在位置设置为 FREE_SPACE，避免机器人被自己占据的空间阻挡
     setConvexPolygonCost(transformed_footprint_, nav2_costmap_2d::FREE_SPACE);
   }
 
@@ -528,7 +539,7 @@ void ObstacleLayerLocal::updateCosts(
     case 1:  // Maximum
       updateWithMax(master_grid, min_i, min_j, max_i, max_j);
       break;
-    default:  // Nothing
+    default:  // Not combine
       break;
   }
 }
@@ -559,11 +570,11 @@ bool ObstacleLayerLocal::getMarkingObservations(
 {
   bool current = true;
   // get the marking observations
-  for (unsigned int i = 0; i < marking_buffers_.size(); ++i) {
-    marking_buffers_[i]->lock();
-    marking_buffers_[i]->getObservations(marking_observations);
-    current = marking_buffers_[i]->isCurrent() && current;
-    marking_buffers_[i]->unlock();
+  for (const auto & buffer : marking_buffers_) {
+    buffer->lock();
+    buffer->getObservations(marking_observations);
+    current = buffer->isCurrent() && current;
+    buffer->unlock();
   }
   marking_observations.insert(
     marking_observations.end(), static_marking_observations_.begin(),
@@ -576,11 +587,11 @@ bool ObstacleLayerLocal::getClearingObservations(
 {
   bool current = true;
   // get the clearing observations
-  for (unsigned int i = 0; i < clearing_buffers_.size(); ++i) {
-    clearing_buffers_[i]->lock();
-    clearing_buffers_[i]->getObservations(clearing_observations);
-    current = clearing_buffers_[i]->isCurrent() && current;
-    clearing_buffers_[i]->unlock();
+  for (const auto & buffer : clearing_buffers_) {
+    buffer->lock();
+    buffer->getObservations(clearing_observations);
+    current = buffer->isCurrent() && current;
+    buffer->unlock();
   }
   clearing_observations.insert(
     clearing_observations.end(), static_clearing_observations_.begin(),
@@ -679,9 +690,9 @@ void ObstacleLayerLocal::activate()
   }
 
   // if we're stopped we need to re-subscribe to topics
-  for (unsigned int i = 0; i < observation_subscribers_.size(); ++i) {
-    if (observation_subscribers_[i] != NULL) {
-      observation_subscribers_[i]->subscribe();
+  for (const auto & subscriber : observation_subscribers_) {
+    if (subscriber != nullptr) {
+      subscriber->subscribe();
     }
   }
   resetBuffersLastUpdated();
@@ -689,9 +700,9 @@ void ObstacleLayerLocal::activate()
 
 void ObstacleLayerLocal::deactivate()
 {
-  for (unsigned int i = 0; i < observation_subscribers_.size(); ++i) {
-    if (observation_subscribers_[i] != NULL) {
-      observation_subscribers_[i]->unsubscribe();
+  for (const auto & subscriber : observation_subscribers_) {
+    if (subscriber != nullptr) {
+      subscriber->unsubscribe();
     }
   }
 }
@@ -720,9 +731,9 @@ void ObstacleLayerLocal::reset()
 
 void ObstacleLayerLocal::resetBuffersLastUpdated()
 {
-  for (unsigned int i = 0; i < observation_buffers_.size(); ++i) {
-    if (observation_buffers_[i]) {
-      observation_buffers_[i]->resetLastUpdated();
+  for (const auto & buffer : observation_buffers_) {
+    if (buffer) {
+      buffer->resetLastUpdated();
     }
   }
 }

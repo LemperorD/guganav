@@ -77,7 +77,7 @@ ros__parameters:
 
 #### 2.2.1 ObstacleLayerLocal
 
-现用层是 `pb_nav2_costmap_2d::ObstacleLayerLocal`：继承官方 `nav2_costmap_2d::ObstacleLayer`，只改了插件名与命名空间，参数语义与官方一致（按绝对高度 `min/max_obstacle_height` 与源级范围过滤，不读点云 intensity）。输入与参数见 `src/guga_bringup/config/*/controller/*.yaml` 的 `obstacle_layer` 段。
+现用层是 `pb_nav2_costmap_2d::ObstacleLayerLocal`：实现正文取自官方 `nav2_costmap_2d::ObstacleLayer`，但直接继承 `nav2_costmap_2d::CostmapLayer`，自己做全部接线与处理；参数语义与官方一致（按绝对高度 `min/max_obstacle_height` 与源级范围过滤，不读点云 intensity）。输入与参数见 `src/guga_bringup/config/*/controller/*.yaml` 的 `obstacle_layer` 段。
 
 ## Acknowledgements
 

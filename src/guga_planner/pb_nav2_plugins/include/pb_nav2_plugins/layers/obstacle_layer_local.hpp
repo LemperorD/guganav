@@ -1,3 +1,18 @@
+// Copyright 2025 Lihan Chen
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// 实现正文取自 nav2_costmap_2d 的 ObstacleLayer（BSD-3-Clause，见下方原始版权块）。
 /*********************************************************************
  *
  * Software License Agreement (BSD License)
@@ -73,17 +88,17 @@ public:
    */
   ObstacleLayerLocal()
   {
-    costmap_ = NULL;  // 这是父类 Costmap2D 中的 unsigned char* 成员
+    costmap_ = nullptr;  // 这是父类 Costmap2D 中的 unsigned char* 成员
   }
 
   /**
    * @brief 析构函数
    */
-  virtual ~ObstacleLayerLocal();
+  ~ObstacleLayerLocal() override;
   /**
    * @brief 节点启动时该图层的初始化流程
    */
-  virtual void onInitialize();
+  void onInitialize() override;
   /**
    * @brief 按本图层的更新范围扩展主代价地图的更新边界
    * @param robot_x 机器人位姿 X
@@ -94,35 +109,35 @@ public:
    * @param max_x 待更新窗口在地图坐标下的 X 最大值
    * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
-  virtual void updateBounds(
+  void updateBounds(
     double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y,
-    double * max_x, double * max_y);
+    double * max_x, double * max_y) override;
   /**
    * @brief 更新窗口内主代价地图的代价值
    * @param master_grid 待更新的主代价地图栅格
    */
-  virtual void updateCosts(
-    nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j);
+  void updateCosts(
+    nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) override;
 
   /**
    * @brief 停用该图层
    */
-  virtual void deactivate();
+  void deactivate() override;
 
   /**
    * @brief 启用该图层
    */
-  virtual void activate();
+  void activate() override;
 
   /**
    * @brief 复位该代价地图
    */
-  virtual void reset();
+  void reset() override;
 
   /**
    * @brief 该图层是否需要处理清除操作
    */
-  virtual bool isClearable() { return true; }
+  bool isClearable() override { return true; }
 
   /**
    * @brief 检测到参数变化时执行的回调
@@ -192,7 +207,7 @@ protected:
    * @param max_x 待更新窗口在地图坐标下的 X 最大值
    * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
-  virtual void raytraceFreespace(
+  void raytraceFreespace(
     const nav2_costmap_2d::Observation & clearing_observation, double * min_x, double * min_y,
     double * max_x, double * max_y);
 
