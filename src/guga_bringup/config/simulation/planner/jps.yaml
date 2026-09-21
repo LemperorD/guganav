@@ -15,7 +15,7 @@ planner_server:
       esdf_weight: 200.0
       esdf_safe_distance: 1.5
       corridor_halfwidth: 15.0
-      smoothness_weight: 20.0
+      smoothness_weight: 40.0
       distance_weight: 0.3
       max_control_points: 24
       max_iterations: 300

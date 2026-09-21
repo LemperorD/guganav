@@ -1,5 +1,5 @@
 #include "bspline_opt/bspline_optimizer.hpp"
-
+#include "bspline_opt/basis_cache.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -35,7 +35,7 @@ bool BSplineOptimizer::fit(
 
   // ── 短路径回退 (线性) ──
   if (n_pts < 8) {
-    state_.effective_degree = 1;
+    state_.effective_degree = n_pts-1;
     state_.original_points.reserve(n_pts);
     for (const auto & [x, y] : path) {
       state_.original_points.emplace_back(x, y);
@@ -244,31 +244,47 @@ BSplineResult BSplineOptimizer::optimize(int num_samples)
 
     bool converged{};
     int iters_out{};
-    const auto cc = buildCostCache(
+    BasisCache basis;
+    const auto cc = basis.buildCostCache(
       state_.knots, M, state_.original_points, state_.parameters);
     // 归一化标度: 各代价项除以其初始值, 使权重无量纲且与路径长度/格网无关
-    double js0{};
-    double jd0{};
-    double je0{};
+    CostNormal costnormal{};
+
+    EndPoints endpoints{};
+    endpoints.first_x=fx;
+    endpoints.last_x=lx;
+    endpoints.first_y=fy;
+    endpoints.last_y=ly;
+
+    EsdfData esdfdata{};
+    esdfdata.esdf_dist=state_.esdf_distance;
+    esdfdata.esdf_w=state_.esdf_w;
+    esdfdata.esdf_h=state_.esdf_h;
+    esdfdata.esdf_max=state_.esdf_max_distance;
+    esdfdata.esdf_ox=state_.esdf_origin_x;
+    esdfdata.esdf_oy=state_.esdf_origin_y;
+    esdfdata.esdf_res=state_.esdf_resolution;
+    esdfdata.esdf_safe_dist=config_.esdf_safe_distance;
+    
+    Weight weight{};
+    weight.w_dist=config_.distance_weight;
+    weight.w_esdf=config_.esdf_weight;
+    weight.w_smooth=config_.smoothness_weight;
+
     evalTerms(
-      params, cc, fx, fy, lx, ly,
-      state_.esdf_distance, state_.esdf_w, state_.esdf_h,
-      state_.esdf_resolution, state_.esdf_origin_x, state_.esdf_origin_y,
-      state_.esdf_max_distance, config_.esdf_safe_distance,
-      js0, jd0, je0);
-    if (js0 < 1e-12) {js0 = 1.0;}
-    if (jd0 < 1e-12) {jd0 = 1.0;}
-    if (je0 < 1e-12) {je0 = 1.0;}
+      params, cc,
+      endpoints,esdfdata,costnormal.js0,costnormal.jd0,costnormal.je0);
+
+    if (costnormal.js0 < 1e-12) {costnormal.js0 = 1.0;}
+    if (costnormal.jd0 < 1e-12) {costnormal.jd0 = 1.0;}
+    if (costnormal.je0 < 1e-12) {costnormal.je0 = 1.0;}
     auto opt = gradientDescent(
       params, cc,
-      fx, fy, lx, ly,
-      config_.smoothness_weight, config_.distance_weight,
-      state_.esdf_distance, state_.esdf_gradient_x, state_.esdf_gradient_y,
-      state_.esdf_w, state_.esdf_h,
-      state_.esdf_resolution, state_.esdf_origin_x, state_.esdf_origin_y,
-      state_.esdf_max_distance,
-      config_.esdf_safe_distance, config_.esdf_weight,
-      js0, jd0, je0,
+      endpoints,
+      weight,
+      state_.esdf_gradient_x, state_.esdf_gradient_y,
+      esdfdata,
+      costnormal,
       config_.max_iterations, config_.corridor_halfwidth, converged, iters_out);
     result.iterations = iters_out;
 

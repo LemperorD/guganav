@@ -17,6 +17,7 @@ Checks:          '-*,
                   readability-simplify-boolean-expr,
                   readability-container-size-empty,
                   readability-identifier-naming,
+                  -readability-math-missing-parentheses,
                   '
 HeaderFilterRegex: ''
 CheckOptions:

@@ -1,50 +1,48 @@
 #include "bspline_opt/detail/cost_function.hpp"
 #include "bspline_opt/detail/esdf_utils.hpp"
+#include "bspline_opt/basis_cache.hpp"
 
-namespace bspline_opt
-{
-namespace detail
+namespace bspline_opt::detail
 {
 
 void evalTerms(
   const std::vector<double> & params, const CostCache & cc,
-  double first_x, double first_y, double last_x, double last_y,
-  const float * esdf_dist, int esdf_w, int esdf_h,
-  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
-  double esdf_safe_dist,
-  double & js, double & jd, double & je)
+  EndPoints & endpoints,
+  EsdfData & esdfdata,
+   double & j_smooth, double & j_distance, double & j_esdf)
 {
   const int M = cc.M;
   Eigen::MatrixXd ctrl;
-  fillCtrl(params, first_x, first_y, last_x, last_y, M, ctrl);
-  js = 0.0; jd = 0.0; je = 0.0;
+  BasisCache basis;
+  basis.fillCtrl(params, endpoints.first_x, endpoints.first_y, endpoints.last_x, endpoints.last_y, M, ctrl);
+  j_smooth = 0.0; j_distance = 0.0; j_esdf = 0.0;
 
   for (const auto & row : cc.d2_smooth) {
-    double ddx = bandedDot(row, ctrl, 0);
-    double ddy = bandedDot(row, ctrl, 1);
-    js += ddx * ddx + ddy * ddy;
+    double ddx = basis.bandedDot(row, ctrl, 0);
+    double ddy = basis.bandedDot(row, ctrl, 1);
+    j_smooth += ddx * ddx + ddy * ddy;
   }
-  js /= static_cast<double>(cc.d2_smooth.size());
+  j_smooth /= static_cast<double>(cc.d2_smooth.size());
 
-  for (size_t i = 0; i < cc.b_dist.size(); ++i) {
-    double px = bandedDot(cc.b_dist[i], ctrl, 0);
-    double py = bandedDot(cc.b_dist[i], ctrl, 1);
+  for (size_t i = 0; i < cc.basis_dist.size(); ++i) {
+    double px = basis.bandedDot(cc.basis_dist[i], ctrl, 0);
+    double py = basis.bandedDot(cc.basis_dist[i], ctrl, 1);
     double dx = px - cc.dist_q[i].x();
     double dy = py - cc.dist_q[i].y();
-    jd += dx * dx + dy * dy;
+    j_distance += dx * dx + dy * dy;
   }
 
-  if (esdf_dist) {
-    for (const auto & row : cc.b_esdf) {
-      double px = bandedDot(row, ctrl, 0);
-      double py = bandedDot(row, ctrl, 1);
-      double wx = px * esdf_res + esdf_ox;
-      double wy = py * esdf_res + esdf_oy;
+  if (esdfdata.esdf_dist) {
+    for (const auto & row : cc.basis_esdf) {
+      double px = basis.bandedDot(row, ctrl, 0);
+      double py = basis.bandedDot(row, ctrl, 1);
+      double wx = (px * esdfdata.esdf_res) + esdfdata.esdf_ox;
+      double wy = (py * esdfdata.esdf_res) + esdfdata.esdf_oy;
       float dist = esdfDistanceAt(
-        esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, wx, wy, esdf_max);
-      if (dist < static_cast<float>(esdf_safe_dist)) {
-        double violation = esdf_safe_dist - static_cast<double>(dist);
-        je += violation * violation;
+        esdfdata, wx, wy);
+      if (dist < static_cast<float>(esdfdata.esdf_safe_dist)) {
+        double violation = esdfdata.esdf_safe_dist - static_cast<double>(dist);
+        j_esdf += violation * violation;
       }
     }
   }
@@ -53,40 +51,38 @@ void evalTerms(
 
 double evalCost(
   const std::vector<double> & params, const CostCache & cc,
-  double first_x, double first_y, double last_x, double last_y,
-  double w_smooth, double w_dist,
-  const float * esdf_dist, int esdf_w, int esdf_h,
-  double esdf_res, double esdf_ox, double esdf_oy, double esdf_max,
-  double esdf_safe_dist, double w_esdf,
-  double js0, double jd0, double je0)
+  EndPoints & endpoints,
+  Weight & weight,
+  EsdfData & esdfdata, 
+  CostNormal & costnormal)
 {
   double js, jd, je;
   evalTerms(
-    params, cc, first_x, first_y, last_x, last_y,
-    esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, esdf_max,
-    esdf_safe_dist, js, jd, je);
+    params,cc, 
+    endpoints,esdfdata,js, jd, je);
   double cost = 0.0;
-  if (w_smooth > 0.0 && js0 > 1e-12) {cost += w_smooth * (js / js0);}
-  if (w_dist > 0.0 && jd0 > 1e-12) {cost += w_dist * (jd / jd0);}
-  if (w_esdf > 0.0 && je0 > 1e-12) {cost += w_esdf * (je / je0);}
+  if (weight.w_smooth > 0.0 && costnormal.js0 > 1e-12) {cost += weight.w_smooth * (js / costnormal.js0);}
+  if (weight.w_dist > 0.0 && costnormal.jd0 > 1e-12) {cost += weight.w_dist * (jd / costnormal.jd0);}
+  if (weight.w_esdf > 0.0 && costnormal.je0 > 1e-12) {cost += weight.w_esdf * (je / costnormal.je0);}
   return cost;
 }
 
 
 void computeGradient(
-  const std::vector<double> & params, const CostCache & cc,
-  double first_x, double first_y, double last_x, double last_y,
-  double w_smooth, double w_dist,
-  const float * esdf_dist, const float * esdf_gx, const float * esdf_gy,
-  int esdf_w, int esdf_h, double esdf_res, double esdf_ox, double esdf_oy,
-  double esdf_max, double esdf_safe_dist, double w_esdf,
-  double js0, double jd0, double je0,
-  std::vector<double> & grad)
+  const std::vector<double> & params, 
+  const CostCache & cc,
+  EndPoints & endpoints, 
+  Weight & weight,
+  EsdfData & esdfdata, 
+  CostNormal & costnormal,
+  std::vector<double> & grad,
+  const float * esdf_gx,const float * esdf_gy)
 {
+  BasisCache basis;
   const int M = cc.M;
   grad.assign(static_cast<size_t>(2 * (M - 2)), 0.0);
   Eigen::MatrixXd ctrl;
-  fillCtrl(params, first_x, first_y, last_x, last_y, M, ctrl);
+  basis.fillCtrl(params, endpoints.first_x, endpoints.first_y, endpoints.last_x, endpoints.last_y, M, ctrl);
 
   auto accum = [&](int j, double gx, double gy) {
       if (j >= 1 && j <= M - 2) {
@@ -95,71 +91,69 @@ void computeGradient(
       }
     };
 
-  if (w_smooth > 0.0 && js0 > 1e-12) {
-    const double fac = 2.0 * w_smooth / (js0 * static_cast<double>(cc.d2_smooth.size()));
+  if (weight.w_smooth > 0.0 && costnormal.js0 > 1e-12) {
+    const double fac = 2.0 * weight.w_smooth / (costnormal.js0 * static_cast<double>(cc.d2_smooth.size()));
     for (const auto & row : cc.d2_smooth) {
-      double ddx = bandedDot(row, ctrl, 0);
-      double ddy = bandedDot(row, ctrl, 1);
+      double ddx = basis.bandedDot(row, ctrl, 0);
+      double ddy = basis.bandedDot(row, ctrl, 1);
       for (int k = 0; k < row.count; ++k) {
-        accum(row.start + k, fac * ddx * row.val[k], fac * ddy * row.val[k]);
+        accum(row.start + k, fac * ddx * row.value[k], fac * ddy * row.value[k]);
       }
     }
   }
 
-  if (w_dist > 0.0 && jd0 > 1e-12) {
-    const double fac = 2.0 * w_dist / jd0;
-    for (size_t i = 0; i < cc.b_dist.size(); ++i) {
-      const auto & row = cc.b_dist[i];
-      double px = bandedDot(row, ctrl, 0);
-      double py = bandedDot(row, ctrl, 1);
+  if (weight.w_dist > 0.0 && costnormal.jd0 > 1e-12) {
+    const double fac = 2.0 * weight.w_dist / costnormal.jd0;
+    for (size_t i = 0; i < cc.basis_dist.size(); ++i) {
+      const auto & row = cc.basis_dist[i];
+      double px = basis.bandedDot(row, ctrl, 0);
+      double py = basis.bandedDot(row, ctrl, 1);
       double ex = px - cc.dist_q[i].x();
       double ey = py - cc.dist_q[i].y();
       for (int k = 0; k < row.count; ++k) {
         accum(
-          row.start + k, fac * ex * row.val[k], fac * ey * row.val[k]);
+          row.start + k, fac * ex * row.value[k], fac * ey * row.value[k]);
       }
     }
   }
 
-  if (w_esdf > 0.0 && je0 > 1e-12 && esdf_dist) {
+  if (weight.w_esdf > 0.0 && costnormal.je0 > 1e-12 && esdfdata.esdf_dist) {
     // 梯度下降沿 -∇J 移动; ∇J_esdf = -2·w·(d_safe-d)·∇d,
     // 因此系数必须为负, 使曲线朝远离障碍物的方向移动。
-    const double fac = -2.0 * w_esdf / je0;
-    for (const auto & row : cc.b_esdf) {
-      double px = bandedDot(row, ctrl, 0);
-      double py = bandedDot(row, ctrl, 1);
-      double wx = px * esdf_res + esdf_ox;
-      double wy = py * esdf_res + esdf_oy;
+    const double fac = -2.0 * weight.w_esdf / costnormal.je0;
+    for (const auto & row : cc.basis_esdf) {
+      double px = basis.bandedDot(row, ctrl, 0);
+      double py = basis.bandedDot(row, ctrl, 1);
+      double wx = px * esdfdata.esdf_res + esdfdata.esdf_ox;
+      double wy = py * esdfdata.esdf_res + esdfdata.esdf_oy;
       float dist = esdfDistanceAt(
-        esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy, wx, wy, esdf_max);
-      if (dist < static_cast<float>(esdf_safe_dist)) {
+        esdfdata, wx, wy);
+      if (dist < static_cast<float>(esdfdata.esdf_safe_dist)) {
         double gd_x{};
         double gd_y{};
         if (esdf_gx && esdf_gy) {
           esdfGradientAt(
-            esdf_gx, esdf_gy, esdf_w, esdf_h, esdf_res, esdf_ox, esdf_oy,
-            wx, wy, gd_x, gd_y);
+            esdf_gx, esdf_gy, 
+            esdfdata,
+            wx, wy, 
+            gd_x, gd_y);
         } else {
           gd_x = 0.5 * static_cast<double>(
             esdfDistanceAt(
-              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
-              esdf_oy, wx + esdf_res, wy, esdf_max) -
+              esdfdata, wx + esdfdata.esdf_res, wy) -
             esdfDistanceAt(
-              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
-              esdf_oy, wx - esdf_res, wy, esdf_max));
+              esdfdata, wx - esdfdata.esdf_res, wy));
           gd_y = 0.5 * static_cast<double>(
             esdfDistanceAt(
-              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
-              esdf_oy, wx, wy + esdf_res, esdf_max) -
+              esdfdata, wx, wy + esdfdata.esdf_res) -
             esdfDistanceAt(
-              esdf_dist, esdf_w, esdf_h, esdf_res, esdf_ox,
-              esdf_oy, wx, wy - esdf_res, esdf_max));
+              esdfdata, wx, wy - esdfdata.esdf_res));
         }
-        double violation = esdf_safe_dist - static_cast<double>(dist);
+        double violation = esdfdata.esdf_safe_dist - static_cast<double>(dist);
         for (int k = 0; k < row.count; ++k) {
           accum(
-            row.start + k, fac * violation * gd_x * row.val[k],
-            fac * violation * gd_y * row.val[k]);
+            row.start + k, fac * violation * gd_x * row.value[k],
+            fac * violation * gd_y * row.value[k]);
         }
       }
     }
@@ -167,4 +161,4 @@ void computeGradient(
 }
 
 }  // namespace detail
-}  // namespace bspline_opt
+
