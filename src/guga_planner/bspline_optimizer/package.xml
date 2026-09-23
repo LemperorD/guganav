@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>bspline_opt</name>
+  <name>bspline_optimizer</name>
   <version>0.0.0</version>
   <description>B-spline trajectory optimization for path smoothing</description>
   <maintainer email="ld2382619813@163.com">ld</maintainer>

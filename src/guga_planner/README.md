@@ -15,11 +15,11 @@
 
 不同 planner/controller 组合对应不同参数文件，planner 各不同：
 
-| planner 参数 | planner | 典型 controller |
-|---------|---------|-----------|
-| `planner/jps.yaml`（默认） | `jps_planner/JPSPlanner` | `pid`（`pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode`） |
-| `planner/smac2d.yaml` | `nav2_smac_planner/SmacPlanner2D` | `mppi`（`guga_source_mppi_controller::MPPIController`） |
-| `planner/smachybrid.yaml` | `nav2_smac_planner/SmacPlannerHybrid`（JPS 已注释） | `mpc`（`mpc_controller::MpcControllerNode`） |
+| planner 参数               | planner                                             | 典型 controller                                                         |
+| -------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `planner/jps.yaml`（默认） | `jps_planner/JPSPlanner`                            | `pid`（`pb_omni_pid_pursuit_controller::OmniPidPursuitControllerNode`） |
+| `planner/smac2d.yaml`      | `nav2_smac_planner/SmacPlanner2D`                   | `mppi`（`guga_source_mppi_controller::MPPIController`）                 |
+| `planner/smachybrid.yaml`  | `nav2_smac_planner/SmacPlannerHybrid`（JPS 已注释） | `mpc`（`mpc_controller::MpcControllerNode`）                            |
 
 > 实车 `reality/planner/jps.yaml` 与默认仿真 profile 一样挂 `jps_planner/JPSPlanner`。
 
@@ -80,7 +80,7 @@ planner_server:
 ## 相关能力
 
 - `jps_planner`：当前主用的全局规划器
-- `bspline_opt`：B-spline 平滑与优化工具
+- `bspline_optimizer`：B-spline 平滑与优化工具
 - `pb_nav2_plugins`：Nav2 额外行为和 costmap 插件
 
 ## TODO

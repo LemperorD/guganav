@@ -5,7 +5,7 @@
  * before/after metrics, and writes visualization data files.
  */
 
-#include "bspline_opt/bspline_optimizer.hpp"
+#include "bspline_optimizer/bspline_optimizer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,87 +17,89 @@
 #include <vector>
 #include <sys/stat.h>
 
-namespace
-{
+namespace {
 
-std::vector<std::pair<double, double>> readPath(const std::string & fname)
-{
-  std::vector<std::pair<double, double>> out{};
-  std::ifstream f(fname);
-  if (!f) {return out;}
-  double x{}, y{};
-  while (f >> x >> y) {out.emplace_back(x, y);}
-  return out;
-}
-
-void writePath(
-  const std::vector<std::pair<double, double>> & path,
-  const std::string & fname)
-{
-  std::ofstream f(fname);
-  for (auto [x, y] : path) {
-    f << x << " " << y << "\n";
+  std::vector<std::pair<double, double>> readPath(const std::string& fname) {
+    std::vector<std::pair<double, double>> out{};
+    std::ifstream f(fname);
+    if (!f) {
+      return out;
+    }
+    double x{}, y{};
+    while (f >> x >> y) {
+      out.emplace_back(x, y);
+    }
+    return out;
   }
-}
 
-void writeCurvature(
-  const std::vector<double> & curv, const std::string & fname)
-{
-  std::ofstream f(fname);
-  f << "arc_param,curvature\n";
-  for (size_t i = 0; i < curv.size(); ++i) {
-    f << static_cast<double>(i) / static_cast<double>(curv.size() - 1)
-      << "," << curv[i] << "\n";
+  void writePath(const std::vector<std::pair<double, double>>& path,
+                 const std::string& fname) {
+    std::ofstream f(fname);
+    for (auto [x, y] : path) {
+      f << x << " " << y << "\n";
+    }
   }
-}
 
-double pathMaxCurvature(
-  const std::vector<std::pair<double, double>> & path)
-{
-  if (path.size() < 3) {return 0.0;}
-  double max_k{};
-  for (size_t i = 1; i < path.size() - 1; ++i) {
-    double dx1 = path[i].first - path[i - 1].first;
-    double dy1 = path[i].second - path[i - 1].second;
-    double dx2 = path[i + 1].first - path[i].first;
-    double dy2 = path[i + 1].second - path[i].second;
-    double l1 = std::hypot(dx1, dy1);
-    double l2 = std::hypot(dx2, dy2);
-    if (l1 < 1e-9 || l2 < 1e-9) {continue;}
-    double dot = (dx1 * dx2 + dy1 * dy2) / (l1 * l2);
-    double angle = std::acos(std::clamp(dot, -1.0, 1.0));
-    double k = angle / (0.5 * (l1 + l2));
-    max_k = std::max(max_k, k);
+  void writeCurvature(const std::vector<double>& curv,
+                      const std::string& fname) {
+    std::ofstream f(fname);
+    f << "arc_param,curvature\n";
+    for (size_t i = 0; i < curv.size(); ++i) {
+      f << static_cast<double>(i) / static_cast<double>(curv.size() - 1) << ","
+        << curv[i] << "\n";
+    }
   }
-  return max_k;
-}
 
-double pathLength(const std::vector<std::pair<double, double>> & path)
-{
-  double len{};
-  for (size_t i = 1; i < path.size(); ++i) {
-    len += std::hypot(
-      path[i].first - path[i - 1].first,
-      path[i].second - path[i - 1].second);
+  double pathMaxCurvature(const std::vector<std::pair<double, double>>& path) {
+    if (path.size() < 3) {
+      return 0.0;
+    }
+    double max_k{};
+    for (size_t i = 1; i < path.size() - 1; ++i) {
+      double dx1 = path[i].first - path[i - 1].first;
+      double dy1 = path[i].second - path[i - 1].second;
+      double dx2 = path[i + 1].first - path[i].first;
+      double dy2 = path[i + 1].second - path[i].second;
+      double l1 = std::hypot(dx1, dy1);
+      double l2 = std::hypot(dx2, dy2);
+      if (l1 < 1e-9 || l2 < 1e-9) {
+        continue;
+      }
+      double dot = (dx1 * dx2 + dy1 * dy2) / (l1 * l2);
+      double angle = std::acos(std::clamp(dot, -1.0, 1.0));
+      double k = angle / (0.5 * (l1 + l2));
+      max_k = std::max(max_k, k);
+    }
+    return max_k;
   }
-  return len;
-}
+
+  double pathLength(const std::vector<std::pair<double, double>>& path) {
+    double len{};
+    for (size_t i = 1; i < path.size(); ++i) {
+      len += std::hypot(path[i].first - path[i - 1].first,
+                        path[i].second - path[i - 1].second);
+    }
+    return len;
+  }
 
 }  // namespace
 
-int main(int argc, char ** argv)
-{
-  using namespace bspline_opt;
+int main(int argc, char** argv) {
+  using namespace bspline_optimizer;
 
   std::string data_dir = "../../jps_planner/test/jps_viz_data";
   std::string out_dir = "bspline_viz_data";
-  if (argc > 1) {data_dir = argv[1];}
-  if (argc > 2) {out_dir = argv[2];}
+  if (argc > 1) {
+    data_dir = argv[1];
+  }
+  if (argc > 2) {
+    out_dir = argv[2];
+  }
   mkdir(out_dir.c_str(), 0755);
 
-  const char * scenarios[] = {
-    "s1_empty_diag", "s2_wall_gap", "s3_maze",
-    "s4_obstaclefield", "s5_large_empty", "s6_costband"};
+  const char* scenarios[] = {"s1_empty_diag",  "s2_wall_gap",
+                             "s3_maze",        "s4_obstaclefield",
+                             "s5_large_empty", "s6_costband"};
 
   BSplineConfig cfg{};  // default: exact interpolation, no gradient descent
 
@@ -110,7 +112,7 @@ int main(int argc, char ** argv)
   std::cout << "Input: " << data_dir << "\n";
   std::cout << "Output: " << out_dir << "\n\n";
 
-  for (const auto * sc : scenarios) {
+  for (const auto* sc : scenarios) {
     std::string in_path = data_dir + "/" + sc + "_path.dat";
     auto path = readPath(in_path);
     if (path.empty()) {
@@ -143,7 +145,8 @@ int main(int argc, char ** argv)
         }
         grid_data.assign(static_cast<size_t>(gw * gh), 0);
         for (auto [cx, cy, c] : cells) {
-          grid_data[static_cast<size_t>(cy * gw + cx)] = static_cast<unsigned char>(c);
+          grid_data[static_cast<size_t>(cy * gw + cx)] =
+              static_cast<unsigned char>(c);
         }
       }
     }
@@ -165,7 +168,8 @@ int main(int argc, char ** argv)
     writePath(path, out_dir + "/" + sc + "_orig_path.dat");
     writePath(result.smoothed_path, out_dir + "/" + sc + "_smooth_path.dat");
     writePath(result.control_points_xy, out_dir + "/" + sc + "_ctrl_pts.dat");
-    writeCurvature(result.curvature_profile, out_dir + "/" + sc + "_curvature.csv");
+    writeCurvature(result.curvature_profile,
+                   out_dir + "/" + sc + "_curvature.csv");
 
     std::ofstream sg(out_dir + "/" + sc + "_startgoal.dat");
     sg << path.front().first << " " << path.front().second << " start\n";
@@ -188,12 +192,10 @@ int main(int argc, char ** argv)
     double orig_len = pathLength(path);
     double smooth_len = pathLength(result.smoothed_path);
 
-    bench << sc << "," << path.size() << ","
-          << result.smoothed_path.size() << ","
-          << orig_max_k << "," << smooth_max_k << ","
-          << orig_len << "," << smooth_len << ","
-          << result.cost_initial << "," << result.cost_final << ","
-          << (result.converged ? 1 : 0) << "\n";
+    bench << sc << "," << path.size() << "," << result.smoothed_path.size()
+          << "," << orig_max_k << "," << smooth_max_k << "," << orig_len << ","
+          << smooth_len << "," << result.cost_initial << ","
+          << result.cost_final << "," << (result.converged ? 1 : 0) << "\n";
 
     std::cout << "OK  curv: " << orig_max_k << "→" << smooth_max_k
               << "  len: " << orig_len << "→" << smooth_len << "\n";

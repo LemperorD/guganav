@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "bspline_opt/bspline_optimizer.hpp"
+#include "bspline_optimizer/bspline_optimizer.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav2_util/geometry_utils.hpp"

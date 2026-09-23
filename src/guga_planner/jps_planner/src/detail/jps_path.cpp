@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "bspline_opt/bspline_optimizer.hpp"
+#include "bspline_optimizer/bspline_optimizer.hpp"
 #include "nav2_util/geometry_utils.hpp"
 
 namespace jps_planner {
@@ -322,7 +322,7 @@ namespace jps_planner {
       const unsigned char* costmap_data, int cm_w, int cm_h,
       double resolution) {
     nav_msgs::msg::Path plan;
-    bspline_opt::BSplineConfig runtime_config = bspline_config_;
+    bspline_optimizer::BSplineConfig runtime_config = bspline_config_;
     runtime_config.corridor_halfwidth = corridor_halfwidth_;
     const rog_map_layer::EsdfMap* esdf_map = nullptr;
     double esdf_max_distance = 0.0;
@@ -333,32 +333,32 @@ namespace jps_planner {
     // BSplineOptimizer 在构造时复制配置, 所以必须先确定本次规划是否
     // 能拿到 EsdfLayer, 再创建 optimizer。否则当前规划会漏掉 ESDF 代价。
     // ════════════════════════════════════════════════════════════════════════
-    if (enable_esdf_&&costmap_ros_->getLayeredCostmap()!=nullptr) {
+    if (enable_esdf_ && costmap_ros_->getLayeredCostmap() != nullptr) {
       auto* layered_costmap = costmap_ros_->getLayeredCostmap();
       auto* plugins = layered_costmap->getPlugins();
-        if (plugins != nullptr) {
-          for (auto& plugin : *plugins) {
-            auto esdf_layer =
-                std::dynamic_pointer_cast<rog_map_layer::EsdfLayer>(plugin);
-            if (esdf_layer&&esdf_layer->getEsdfMapRaw()!=nullptr) {
-              esdf_map = esdf_layer->getEsdfMapRaw();
-              const auto& esdf_cfg = esdf_layer->config();
-              esdf_max_distance = esdf_cfg.max_distance;
-              runtime_config.enable_esdf = true;
-              runtime_config.enable_gradient_descent = true;
-              runtime_config.esdf_weight = esdf_weight_;
-              runtime_config.esdf_safe_distance = esdf_safe_distance_;
-              RCLCPP_INFO(
-                    logger_,
-                    "JPSPlanner: ESDF layer found, enabling gradient descent "
-                    "with w_esdf=%.1f safe_dist=%.2f corridor=%.1f cells",
-                    esdf_weight_, esdf_safe_distance_,
-                    runtime_config.corridor_halfwidth);
-              break;
-            }
+      if (plugins != nullptr) {
+        for (auto& plugin : *plugins) {
+          auto esdf_layer = std::dynamic_pointer_cast<rog_map_layer::EsdfLayer>(
+              plugin);
+          if (esdf_layer && esdf_layer->getEsdfMapRaw() != nullptr) {
+            esdf_map = esdf_layer->getEsdfMapRaw();
+            const auto& esdf_cfg = esdf_layer->config();
+            esdf_max_distance = esdf_cfg.max_distance;
+            runtime_config.enable_esdf = true;
+            runtime_config.enable_gradient_descent = true;
+            runtime_config.esdf_weight = esdf_weight_;
+            runtime_config.esdf_safe_distance = esdf_safe_distance_;
+            RCLCPP_INFO(
+                logger_,
+                "JPSPlanner: ESDF layer found, enabling gradient descent "
+                "with w_esdf=%.1f safe_dist=%.2f corridor=%.1f cells",
+                esdf_weight_, esdf_safe_distance_,
+                runtime_config.corridor_halfwidth);
+            break;
           }
         }
-      
+      }
+
       if (!runtime_config.enable_esdf) {
         RCLCPP_WARN(logger_,
                     "JPSPlanner: ESDF enabled but EsdfLayer not found in "
@@ -370,7 +370,7 @@ namespace jps_planner {
     // ── 第 2 步: 创建 B-spline 优化器并拟合 JPS 路径 ──
     // fit() 使用 chord-length 参数化 + Eigen SplineFitting::Interpolate,
     // 将 JPS 航点精确插值为 7 阶 C2 连续 B-spline 曲线
-    bspline_opt::BSplineOptimizer opt(runtime_config);
+    bspline_optimizer::BSplineOptimizer opt(runtime_config);
     if (!opt.fit(map_path)) {
       RCLCPP_WARN(
           logger_,
