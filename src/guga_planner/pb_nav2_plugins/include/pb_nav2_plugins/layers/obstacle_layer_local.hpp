@@ -207,7 +207,7 @@ protected:
    * @param max_x 待更新窗口在地图坐标下的 X 最大值
    * @param max_y 待更新窗口在地图坐标下的 Y 最大值
    */
-  void raytraceFreespace(
+  virtual void raytraceFreespace(
     const nav2_costmap_2d::Observation & clearing_observation, double * min_x, double * min_y,
     double * max_x, double * max_y);
 
