@@ -333,36 +333,32 @@ namespace jps_planner {
     // BSplineOptimizer 在构造时复制配置, 所以必须先确定本次规划是否
     // 能拿到 EsdfLayer, 再创建 optimizer。否则当前规划会漏掉 ESDF 代价。
     // ════════════════════════════════════════════════════════════════════════
-    if (enable_esdf_) {
+    if (enable_esdf_&&costmap_ros_->getLayeredCostmap()!=nullptr) {
       auto* layered_costmap = costmap_ros_->getLayeredCostmap();
-      if (layered_costmap != nullptr) {
-        auto* plugins = layered_costmap->getPlugins();
+      auto* plugins = layered_costmap->getPlugins();
         if (plugins != nullptr) {
           for (auto& plugin : *plugins) {
             auto esdf_layer =
                 std::dynamic_pointer_cast<rog_map_layer::EsdfLayer>(plugin);
-            if (esdf_layer) {
+            if (esdf_layer&&esdf_layer->getEsdfMapRaw()!=nullptr) {
               esdf_map = esdf_layer->getEsdfMapRaw();
-              if (esdf_map != nullptr) {
-                const auto& esdf_cfg = esdf_layer->config();
-                esdf_max_distance = esdf_cfg.max_distance;
-                runtime_config.enable_esdf = true;
-                runtime_config.enable_gradient_descent = true;
-                runtime_config.esdf_weight = esdf_weight_;
-                runtime_config.esdf_safe_distance = esdf_safe_distance_;
-
-                RCLCPP_INFO(
+              const auto& esdf_cfg = esdf_layer->config();
+              esdf_max_distance = esdf_cfg.max_distance;
+              runtime_config.enable_esdf = true;
+              runtime_config.enable_gradient_descent = true;
+              runtime_config.esdf_weight = esdf_weight_;
+              runtime_config.esdf_safe_distance = esdf_safe_distance_;
+              RCLCPP_INFO(
                     logger_,
                     "JPSPlanner: ESDF layer found, enabling gradient descent "
                     "with w_esdf=%.1f safe_dist=%.2f corridor=%.1f cells",
                     esdf_weight_, esdf_safe_distance_,
                     runtime_config.corridor_halfwidth);
-              }
               break;
             }
           }
         }
-      }
+      
       if (!runtime_config.enable_esdf) {
         RCLCPP_WARN(logger_,
                     "JPSPlanner: ESDF enabled but EsdfLayer not found in "
