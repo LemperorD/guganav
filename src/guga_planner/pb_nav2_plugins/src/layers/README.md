@@ -76,7 +76,7 @@ terrain_analysis ─┬─(terrain_map)────────────┐
 其中 `raytraceFreespace` 的名字与语义对标官方 `ObstacleLayer` 的虚函数（`VoxelLayer` 就是重写它），但本类不继承那层，所以在本类里只是同名成员，不能标 `override`；本层仍保留 `virtual`，以留住同一个扩展点。
 
 ## 参数
-
+[Obstacle_layer 官方参数](https://docs.nav2.org/rolling/configuration_and_development/configuration_guide/core_servers/costmap_2d/costmap_plugins/obstacle/)
 ### Nav2参数
 
 | 参数                                          | 默认值        | 实车值                                   | 生效时机   | 作用                                                                                                     |

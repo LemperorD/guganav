@@ -16,6 +16,7 @@ local_costmap:
         footprint_clearing_enabled: true
         combination_method: 1
         observation_sources: terrain_map terrain_returns_current
+
         terrain_map:
           data_type: "PointCloud2"
           # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
@@ -33,6 +34,7 @@ local_costmap:
           raytrace_min_range: 0.2
           min_obstacle_height: 0.0
           max_obstacle_height: 2.0
+
         terrain_returns_current:
           data_type: "PointCloud2"
           topic: <robot_namespace>/terrain_returns_current
