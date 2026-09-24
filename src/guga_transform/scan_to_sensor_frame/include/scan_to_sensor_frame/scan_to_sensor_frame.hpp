@@ -1,5 +1,5 @@
-#ifndef SENSOR_SCAN_GENERATION__SENSOR_SCAN_GENERATION_HPP_
-#define SENSOR_SCAN_GENERATION__SENSOR_SCAN_GENERATION_HPP_
+#ifndef SCAN_TO_SENSOR_FRAME__SCAN_TO_SENSOR_FRAME_HPP_
+#define SCAN_TO_SENSOR_FRAME__SCAN_TO_SENSOR_FRAME_HPP_
 
 // #define BACKWARD_DEBUG_GUGUGAGA
 // #define TEST_TIME
@@ -28,13 +28,13 @@ namespace backward {
 }  // namespace backward
 #endif
 
-namespace sensor_scan_generation {
+namespace scan_to_sensor_frame {
 
-class SensorScanGenerationNode : public rclcpp::Node
+class ScanToSensorFrameNode : public rclcpp::Node
 {
 public:
-  explicit SensorScanGenerationNode(const rclcpp::NodeOptions& options);
-  ~SensorScanGenerationNode();
+  explicit ScanToSensorFrameNode(const rclcpp::NodeOptions& options);
+  ~ScanToSensorFrameNode();
 
 private:
   void laserCloudAndOdometryHandler(
@@ -134,6 +134,6 @@ private:  // 优化: 使用单独的四个线程执行本功能包的四个并�
   bool robot_base_odom_ready_{false};
 };
 
-}  // namespace sensor_scan_generation
+}  // namespace scan_to_sensor_frame
 
-#endif  // SENSOR_SCAN_GENERATION__SENSOR_SCAN_GENERATION_HPP_
+#endif  // SCAN_TO_SENSOR_FRAME__SCAN_TO_SENSOR_FRAME_HPP_

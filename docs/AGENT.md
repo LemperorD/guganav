@@ -63,9 +63,8 @@ guganav/
 │   ├── guga_perception/       # [感知层]
 │   │   ├── terrain_analysis/  #   地形可通行性分析 ★模式A范例
 │   │   ├── pointcloud_to_laserscan/ # 点云转激光扫描
-│   │   ├── sensor_scan_generation/  # 传感器扫描生成
-│   │   ├── loam_interface/    #   LOAM 里程计接口
-│   │   └── loam_interface_gravity/  # 带重力对齐的 LOAM 接口
+│   │   ├── scan_to_sensor_frame/  # 扫描转回雷达坐标系
+│   │   └── loam_interface/    #   LOAM 里程计接口
 │   │
 │   ├── guga_localization/     # [定位层]
 │   │   ├── point_lio/         #   Point-LIO 激光惯性里程计

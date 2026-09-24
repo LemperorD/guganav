@@ -54,9 +54,9 @@ def generate_launch_description():
         description="Frame ID for odometry child frame",
     )
 
-    start_sensor_scan_generation = Node(
-        package="sensor_scan_generation",
-        executable="sensor_scan_generation_node",
+    start_scan_to_sensor_frame = Node(
+        package="scan_to_sensor_frame",
+        executable="scan_to_sensor_frame_node",
         namespace=namespace,
         output="screen",
         remappings=remappings,
@@ -74,6 +74,6 @@ def generate_launch_description():
     ld.add_action(declare_lidar_frame)
     ld.add_action(declare_base_frame)
     ld.add_action(declare_robot_base_frame)
-    ld.add_action(start_sensor_scan_generation)
+    ld.add_action(start_scan_to_sensor_frame)
 
     return ld

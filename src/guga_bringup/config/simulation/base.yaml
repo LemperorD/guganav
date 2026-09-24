@@ -91,7 +91,7 @@ loam_interface:
     base_frame: "base_footprint"
     lidar_frame: "front_mid360"
 
-sensor_scan_generation:
+scan_to_sensor_frame:
   ros__parameters:
     use_sim_time: True
     lidar_frame: "front_mid360"

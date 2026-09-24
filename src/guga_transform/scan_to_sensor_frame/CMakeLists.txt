@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(sensor_scan_generation)
+project(scan_to_sensor_frame)
 
 ## Use C++14
 set(CMAKE_CXX_STANDARD 14)
@@ -28,7 +28,7 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN sensor_scan_generation::SensorScanGenerationNode
+  PLUGIN scan_to_sensor_frame::ScanToSensorFrameNode
   EXECUTABLE ${PROJECT_NAME}_node
 )
 

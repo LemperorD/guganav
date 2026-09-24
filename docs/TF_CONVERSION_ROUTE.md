@@ -37,14 +37,14 @@ base_footprint
 
 ### `odom -> base_footprint`
 
-`sensor_scan_generation` 订阅：
+`scan_to_sensor_frame` 订阅：
 
 ```text
 lidar_odometry       loam_interface 输出
 registered_scan      loam_interface 输出的点云
 ```
 
-在 [sensor_scan_generation.cpp](../src/guga_perception/sensor_scan_generation/src/sensor_scan_generation.cpp) 中：
+在 [scan_to_sensor_frame.cpp](../src/guga_perception/scan_to_sensor_frame/src/scan_to_sensor_frame.cpp) 中：
 
 1. 将 `lidar_odometry.pose` 作为 `odom -> front_mid360`。
 2. 调用 `lookupTransform(front_mid360, base_footprint)`，取得
@@ -81,7 +81,7 @@ gimbal_pitch_odom -> gimbal_yaw        revolute
 Point-LIO: aft_mapped_to_init
     ↓ loam_interface
 lidar_odometry: pose 转到 odom，child = front_mid360
-    ↓ sensor_scan_generation
+    ↓ scan_to_sensor_frame
 odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 ```
 
@@ -92,7 +92,7 @@ Point-LIO 默认只发布 `aft_mapped_to_init` 话题；其 TF 发布开关 `tf_
 实现见 [nonrotating_vel_transform.cpp](../src/guga_controller/nonrotating_vel_transform/src/nonrotating_vel_transform.cpp)：
 
 ```text
-输入 TF: odom -> base_footprint（由 sensor_scan_generation 发布）
+输入 TF: odom -> base_footprint（由 scan_to_sensor_frame 发布）
 输出 TF: base_footprint -> base_footprint_nonrotating
 ```
 
@@ -127,7 +127,7 @@ nonrotating_vel_transform（旋转补偿 + 叠加自旋）
 模式时，`nonrotating_vel_transform` 将 `spin_speed_`（来自 `cmd_spin` 话题）
 叠加到输出角速度，实现底盘自旋。
 
-`sensor_scan_generation::publishOdometry()` 先对相邻 `odom -> base_footprint`
+`scan_to_sensor_frame::publishOdometry()` 先对相邻 `odom -> base_footprint`
 位姿做差，得到 `odom` 轴的线速度和角速度，再乘当前姿态的逆旋转，将其
 转换到 `child_frame_id` (`base_footprint`) 后写入 twist。这符合
 `nav_msgs/Odometry` 对 twist 坐标系的定义。
@@ -155,7 +155,7 @@ ros2 param get /red_standard_robot1/controller_server odom_topic
 
 重点确认：
 
-- `/odometry` 的发布者是否只有 `sensor_scan_generation`。
+- `/odometry` 的发布者是否只有 `scan_to_sensor_frame`。
 - `Odometry.child_frame_id` 与 `twist` 实际坐标系是否一致。
 - 是否同时存在两个节点发布 `odom -> base_footprint`。
 - `controller_server` 的 `odom_topic` 是否为 `odometry`。

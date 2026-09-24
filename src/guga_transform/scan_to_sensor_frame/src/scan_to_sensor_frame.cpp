@@ -1,4 +1,4 @@
-#include "sensor_scan_generation/sensor_scan_generation.hpp"
+#include "scan_to_sensor_frame/scan_to_sensor_frame.hpp"
 
 #include "pcl_ros/transforms.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <cmath>
 
-namespace sensor_scan_generation
+namespace scan_to_sensor_frame
 {
 
-SensorScanGenerationNode::SensorScanGenerationNode(const rclcpp::NodeOptions & options)
-: Node("sensor_scan_generation", options)
+ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options)
+: Node("scan_to_sensor_frame", options)
 {
   this->declare_parameter<std::string>("lidar_frame", "");
   this->declare_parameter<std::string>("base_frame", "");
@@ -51,18 +51,18 @@ SensorScanGenerationNode::SensorScanGenerationNode(const rclcpp::NodeOptions & o
   sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(100), odometry_sub_, laser_cloud_sub_);
   sync_->registerCallback(std::bind(
-    &SensorScanGenerationNode::laserCloudAndOdometryHandler, this, std::placeholders::_1,
+    &ScanToSensorFrameNode::laserCloudAndOdometryHandler, this, std::placeholders::_1,
     std::placeholders::_2));
 
   // 启动四个线程执行本功能包的四个并行任务
-  sensor_scan_thread_ = std::thread(std::bind(&SensorScanGenerationNode::updateSensorScan, this));
-  chassis_odom_thread_ = std::thread(std::bind(&SensorScanGenerationNode::updateChassisOdometry, this));
-  robot_base_odom_thread_ = std::thread(std::bind(&SensorScanGenerationNode::updateRobotBaseOdometry, this));
-  chassis_tf_thread_ = std::thread(std::bind(&SensorScanGenerationNode::updateChassisTF, this));
+  sensor_scan_thread_ = std::thread(std::bind(&ScanToSensorFrameNode::updateSensorScan, this));
+  chassis_odom_thread_ = std::thread(std::bind(&ScanToSensorFrameNode::updateChassisOdometry, this));
+  robot_base_odom_thread_ = std::thread(std::bind(&ScanToSensorFrameNode::updateRobotBaseOdometry, this));
+  chassis_tf_thread_ = std::thread(std::bind(&ScanToSensorFrameNode::updateChassisTF, this));
 }
 
 // 析构函数,释放线程资源
-SensorScanGenerationNode::~SensorScanGenerationNode() {
+ScanToSensorFrameNode::~ScanToSensorFrameNode() {
   if (chassis_tf_thread_.joinable()) {
     chassis_tf_thread_.join();
   }
@@ -77,7 +77,7 @@ SensorScanGenerationNode::~SensorScanGenerationNode() {
   }
 }
 
-void SensorScanGenerationNode::laserCloudAndOdometryHandler(
+void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
   const nav_msgs::msg::Odometry::ConstSharedPtr & odometry_msg,
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pcd_msg)
 {
@@ -124,7 +124,7 @@ void SensorScanGenerationNode::laserCloudAndOdometryHandler(
 #endif
 }
 
-tf2::Transform SensorScanGenerationNode::getTransform(
+tf2::Transform ScanToSensorFrameNode::getTransform(
   const std::string & target_frame, const std::string & source_frame, const rclcpp::Time & time)
 {
   try {
@@ -139,7 +139,7 @@ tf2::Transform SensorScanGenerationNode::getTransform(
   }
 }
 
-void SensorScanGenerationNode::publishTransform(
+void ScanToSensorFrameNode::publishTransform(
   const tf2::Transform & transform, const std::string & parent_frame,
   const std::string & child_frame, const rclcpp::Time & stamp)
 {
@@ -151,7 +151,7 @@ void SensorScanGenerationNode::publishTransform(
   br_->sendTransform(transform_msg);
 }
 
-void SensorScanGenerationNode::publishChassisOdometry(
+void ScanToSensorFrameNode::publishChassisOdometry(
   const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
   const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr)
 {
@@ -209,7 +209,7 @@ void SensorScanGenerationNode::publishChassisOdometry(
   odom_pub_ptr->publish(out);
 }
 
-void SensorScanGenerationNode::publishRobotBaseOdometry(
+void ScanToSensorFrameNode::publishRobotBaseOdometry(
   const tf2::Transform & transform, std::string parent_frame, const std::string & child_frame,
   const rclcpp::Time & stamp, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr)
 {
@@ -267,7 +267,7 @@ void SensorScanGenerationNode::publishRobotBaseOdometry(
   odom_pub_ptr->publish(out);
 }
 
-void SensorScanGenerationNode::updateChassisTF() {
+void ScanToSensorFrameNode::updateChassisTF() {
   while (rclcpp::ok()) {
     tf2::Transform input;
     {
@@ -283,7 +283,7 @@ void SensorScanGenerationNode::updateChassisTF() {
   }
 }
 
-void SensorScanGenerationNode::updateChassisOdometry() {
+void ScanToSensorFrameNode::updateChassisOdometry() {
   while (rclcpp::ok()) {
     tf2::Transform input;
     {
@@ -299,7 +299,7 @@ void SensorScanGenerationNode::updateChassisOdometry() {
   }
 }
 
-void SensorScanGenerationNode::updateRobotBaseOdometry() {
+void ScanToSensorFrameNode::updateRobotBaseOdometry() {
   while (rclcpp::ok()) {
     tf2::Transform input;
     {
@@ -315,7 +315,7 @@ void SensorScanGenerationNode::updateRobotBaseOdometry() {
   }
 }
 
-void SensorScanGenerationNode::updateSensorScan() {
+void ScanToSensorFrameNode::updateSensorScan() {
   while (rclcpp::ok()) {
     {
       sensor_msgs::msg::PointCloud2 input;
@@ -334,7 +334,7 @@ void SensorScanGenerationNode::updateSensorScan() {
   }
 }
 
-} // namespace sensor_scan_generation
+} // namespace scan_to_sensor_frame
 
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(sensor_scan_generation::SensorScanGenerationNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(scan_to_sensor_frame::ScanToSensorFrameNode)

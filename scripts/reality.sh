@@ -65,7 +65,7 @@ cleanup_reality_processes() {
     "point_lio"
     "small_gicp"
     "loam_interface"
-    "sensor_scan_generation"
+    "scan_to_sensor_frame"
     "terrain_analysis"
     "controller_server"
     "planner_server"
