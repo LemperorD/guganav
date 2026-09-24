@@ -1,7 +1,0 @@
-<class_libraries>
-  <library path="pb_nav2_layers">
-    <class type="pb_nav2_costmap_2d::ObstacleLayerLocal"     base_class_type="nav2_costmap_2d::Layer">
-      <description>本仓库自己的障碍层：实现正文取自官方 ObstacleLayer，但直接继承 CostmapLayer。</description>
-    </class>
-  </library>
-</class_libraries>
