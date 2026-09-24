@@ -19,50 +19,44 @@
 PointLioParams readParameters(rclcpp::Node* nh) {
   PointLioParams params;
   try {
-
     params.mapping.propagate_at_imu_frequency = nh->declare_parameter<bool>(
         "prop_at_freq_of_imu", true);
     params.mapping.use_imu_as_input = nh->declare_parameter<bool>(
         "use_imu_as_input", false);
-    params.imu.check_saturation = nh->declare_parameter<bool>(
-        "check_satu", true);
+    params.imu.check_saturation = nh->declare_parameter<bool>("check_satu",
+                                                              true);
     params.mapping.init_map_size = static_cast<int>(
         nh->declare_parameter<long>("init_map_size", 100));
     params.mapping.space_down_sample = nh->declare_parameter<bool>(
         "space_down_sample", true);
 
-
     params.imu.saturation_acc = nh->declare_parameter<double>(
         "mapping.satu_acc", 3.0);
     params.imu.saturation_gyro = nh->declare_parameter<double>(
         "mapping.satu_gyro", 35.0);
-    params.imu.acc_norm = nh->declare_parameter<double>(
-        "mapping.acc_norm", 1.0);
-
+    params.imu.acc_norm = nh->declare_parameter<double>("mapping.acc_norm",
+                                                        1.0);
 
     params.lidar.plane_threshold = static_cast<float>(
         nh->declare_parameter<double>("mapping.plane_thr", 0.05F));
     params.lidar.preprocess.point_filter_num = static_cast<int>(
         nh->declare_parameter<long>("point_filter_num", 2));
 
-
     params.sensor.lidar_topic = nh->declare_parameter<std::string>(
         "common.lid_topic", ".livox.lidar");
     params.sensor.imu_topic = nh->declare_parameter<std::string>(
         "common.imu_topic", ".livox.imu");
 
-
-    params.lidar.con_frame = nh->declare_parameter<bool>(
-        "common.con_frame", false);
+    params.lidar.con_frame = nh->declare_parameter<bool>("common.con_frame",
+                                                         false);
     params.lidar.con_frame_num = static_cast<int>(
         nh->declare_parameter<long>("common.con_frame_num", 1));
-    params.lidar.cut_frame = nh->declare_parameter<bool>(
-        "common.cut_frame", false);
+    params.lidar.cut_frame = nh->declare_parameter<bool>("common.cut_frame",
+                                                         false);
     params.lidar.cut_frame_interval = nh->declare_parameter<double>(
         "common.cut_frame_time_interval", 0.1);
     params.sensor.lidar_to_imu_time = nh->declare_parameter<double>(
         "common.time_diff_lidar_to_imu", 0.0);
-
 
     params.sensor.enable_prior_map = nh->declare_parameter<bool>(
         "prior_pcd.enable", false);
@@ -70,7 +64,6 @@ PointLioParams readParameters(rclcpp::Node* nh) {
         "prior_pcd.prior_pcd_map_path", "");
     params.sensor.initial_pose = nh->declare_parameter<std::vector<double>>(
         "prior_pcd.init_pose", std::vector<double>());
-
 
     params.mapping.filter_size_surf = nh->declare_parameter<double>(
         "filter_size_surf", 0.5);
@@ -80,8 +73,8 @@ PointLioParams readParameters(rclcpp::Node* nh) {
         nh->declare_parameter<double>("mapping.det_range", 300.F));
     params.lidar.preprocess.det_range = params.mapping.det_range;
 
-    params.imu.processor.enabled = nh->declare_parameter<bool>(
-        "mapping.imu_en", true);
+    params.imu.processor.enabled = nh->declare_parameter<bool>("mapping.imu_en",
+                                                               true);
     params.lidar.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
 
@@ -90,58 +83,52 @@ PointLioParams readParameters(rclcpp::Node* nh) {
     params.filter.acc_cov_input = nh->declare_parameter<double>(
         "mapping.acc_cov_input", 0.1);
     params.filter.vel_cov = nh->declare_parameter<double>("mapping.vel_cov",
-                                                             20);
+                                                          20);
     params.filter.gyr_cov_input = nh->declare_parameter<double>(
         "mapping.gyr_cov_input", 0.1);
     params.filter.gyr_cov_output = nh->declare_parameter<double>(
         "mapping.gyr_cov_output", 0.1);
     params.filter.acc_cov_output = nh->declare_parameter<double>(
         "mapping.acc_cov_output", 0.1);
-    params.filter.b_gyr_cov = nh->declare_parameter<double>(
-        "mapping.b_gyr_cov", 0.0001);
-    params.filter.b_acc_cov = nh->declare_parameter<double>(
-        "mapping.b_acc_cov", 0.0001);
+    params.filter.b_gyr_cov = nh->declare_parameter<double>("mapping.b_gyr_cov",
+                                                            0.0001);
+    params.filter.b_acc_cov = nh->declare_parameter<double>("mapping.b_acc_cov",
+                                                            0.0001);
     params.imu.measurement_acc_cov = nh->declare_parameter<double>(
         "mapping.imu_meas_acc_cov", 0.1);
     params.imu.measurement_gyro_cov = nh->declare_parameter<double>(
         "mapping.imu_meas_omg_cov", 0.1);
 
-
     params.lidar.preprocess.blind = nh->declare_parameter<double>(
         "preprocess.blind", 1.0);
     params.lidar.lidar_type = static_cast<int>(
         nh->declare_parameter<long>("preprocess.lidar_type", 1));
-    params.lidar.preprocess.lidar_type =
-        params.lidar.lidar_type;
+    params.lidar.preprocess.lidar_type = params.lidar.lidar_type;
     params.lidar.preprocess.scan_lines = static_cast<int>(
         nh->declare_parameter<long>("preprocess.scan_line", 16));
     params.lidar.preprocess.scan_rate = static_cast<int>(
         nh->declare_parameter<long>("preprocess.scan_rate", 10));
     params.lidar.preprocess.timestamp_unit = static_cast<int>(
         nh->declare_parameter<long>("preprocess.timestamp_unit", 1));
-    params.lidar.match_threshold = nh->declare_parameter<double>("mapping.match_s",
-                                                             81);
-
+    params.lidar.match_threshold = nh->declare_parameter<double>(
+        "mapping.match_s", 81);
 
     const auto gravity = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity", std::vector<double>());
     const auto gravity_init = nh->declare_parameter<std::vector<double>>(
         "mapping.gravity_init", std::vector<double>());
     if (gravity.size() >= 3) {
-      params.imu.processor.gravity =
-          V3D(gravity[0], gravity[1], gravity[2]);
+      params.imu.processor.gravity = V3D(gravity[0], gravity[1], gravity[2]);
     }
     if (gravity_init.size() >= 3) {
-      params.imu.processor.gravity_init =
-          V3D(gravity_init[0], gravity_init[1], gravity_init[2]);
+      params.imu.processor.gravity_init = V3D(gravity_init[0], gravity_init[1],
+                                              gravity_init[2]);
     }
-
 
     params.sensor.extrinsic_t = nh->declare_parameter<std::vector<double>>(
         "mapping.extrinsic_T", std::vector<double>());
     params.sensor.extrinsic_r = nh->declare_parameter<std::vector<double>>(
         "mapping.extrinsic_R", std::vector<double>());
-
 
     params.mapping.publish_odometry_without_downsample =
         nh->declare_parameter<bool>(
@@ -162,6 +149,32 @@ PointLioParams readParameters(rclcpp::Node* nh) {
     params.lidar.lidar_time_interval = nh->declare_parameter<double>(
         "mapping.lidar_time_inte", 0.1);
 
+    // 项目约定输出: 把点云与位姿换算到与底盘对齐的 odom 系后另行发布。
+    // 这是原先 loam_interface 的职责。安装变换留空时在启动阶段从 TF 查询
+    // base_frame <- lidar_frame, 与 loam_interface 的行为一致。
+    params.output_frame.enabled = nh->declare_parameter<bool>(
+        "output_frame.enable", true);
+    params.output_frame.odom_frame = nh->declare_parameter<std::string>(
+        "output_frame.odom_frame", "odom");
+    params.output_frame.lidar_frame = nh->declare_parameter<std::string>(
+        "output_frame.lidar_frame", "front_mid360");
+    params.output_frame.base_frame = nh->declare_parameter<std::string>(
+        "output_frame.base_frame", "base_footprint");
+    params.output_frame.registered_scan_topic =
+        nh->declare_parameter<std::string>("output_frame.registered_scan_topic",
+                                           "registered_scan");
+    params.output_frame.lidar_odometry_topic =
+        nh->declare_parameter<std::string>("output_frame.lidar_odometry_topic",
+                                           "lidar_odometry");
+    params.output_frame.lidar_to_base_t =
+        nh->declare_parameter<std::vector<double>>(
+            "output_frame.lidar_to_base_t", std::vector<double>());
+    params.output_frame.lidar_to_base_r =
+        nh->declare_parameter<std::vector<double>>(
+            "output_frame.lidar_to_base_r", std::vector<double>());
+    params.output_frame.extrinsic_from_params =
+        params.output_frame.lidar_to_base_t.size() == 3
+        && params.output_frame.lidar_to_base_r.size() == 9;
 
     params.mapping.ivox_options.resolution_ = static_cast<float>(
         nh->declare_parameter<double>("mapping.ivox_grid_resolution", 0.2));

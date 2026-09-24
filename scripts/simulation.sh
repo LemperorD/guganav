@@ -310,7 +310,6 @@ cleanup_simulation_processes() {
     "ign_sim_pointcloud_tool"
     "point_lio"
     "small_gicp"
-    "loam_interface"
     "scan_to_sensor_frame"
     "terrain_analysis"
     "controller_server"

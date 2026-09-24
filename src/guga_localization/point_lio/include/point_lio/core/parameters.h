@@ -26,7 +26,7 @@
 #include "point_lio/core/preprocess.h"
 
 namespace rclcpp {
-class Node;
+  class Node;
 }
 
 // 选择 iVox 节点类型: PHC (Plane-Histogram-Coplanarity) 或 DEFAULT
@@ -112,6 +112,27 @@ struct LidarParams {
   float plane_threshold{0.05F};
 };
 
+/**
+ * @brief 项目约定输出 (原 loam_interface 承担的职责)
+ *
+ * Point-LIO 自身输出在雷达里程计系 (camera_init, 初始 IMU 姿态) 下, 而项目其他
+ * 节点统一使用与底盘对齐的 odom 系。这个结构描述把输出换算过去所需的安装变换
+ * (即 TF 中 base_frame <- lidar_frame) 与输出话题名。
+ */
+struct OutputFrameParams {
+  bool enabled{true};
+  std::string odom_frame{"odom"};
+  std::string lidar_frame{"front_mid360"};
+  std::string base_frame{"base_footprint"};
+  std::string registered_scan_topic{"registered_scan"};
+  std::string lidar_odometry_topic{"lidar_odometry"};
+  /// 非零表示由参数显式给出安装变换; 否则启动时从 TF 查 base_frame <-
+  /// lidar_frame
+  bool extrinsic_from_params{false};
+  std::vector<double> lidar_to_base_t;
+  std::vector<double> lidar_to_base_r;
+};
+
 struct PointLioParams {
   CommonParams common;
   MappingParams mapping;
@@ -120,6 +141,7 @@ struct PointLioParams {
   SensorParams sensor;
   LidarParams lidar;
   ImuParams imu;
+  OutputFrameParams output_frame;
 };
 
 // ==================== 函数声明 ====================
@@ -133,8 +155,7 @@ struct PointLioParams {
  * @param n ROS2 节点共享指针
  * @return 完整的只读配置值
  */
-[[nodiscard]] PointLioParams readParameters(
-    rclcpp::Node* n);
+[[nodiscard]] PointLioParams readParameters(rclcpp::Node* n);
 
 /**
  * @brief SO(3) → ZYX 欧拉角

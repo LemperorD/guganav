@@ -40,8 +40,8 @@ base_footprint
 `scan_to_sensor_frame` 订阅：
 
 ```text
-lidar_odometry       loam_interface 输出
-registered_scan      loam_interface 输出的点云
+lidar_odometry       point_lio 输出 (已换算到 odom 系)
+registered_scan      point_lio 输出的点云 (已换算到 odom 系)
 ```
 
 在 [scan_to_sensor_frame.cpp](../src/guga_perception/scan_to_sensor_frame/src/scan_to_sensor_frame.cpp) 中：
@@ -78,14 +78,22 @@ gimbal_pitch_odom -> gimbal_yaw        revolute
 ## 3. 输入里程计的转换位置
 
 ```text
-Point-LIO: aft_mapped_to_init
-    ↓ loam_interface
+Point-LIO: aft_mapped_to_init (雷达里程计系)
+    ↓ point_lio 内部换算 (安装变换 base <- lidar)
 lidar_odometry: pose 转到 odom，child = front_mid360
     ↓ scan_to_sensor_frame
 odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 ```
 
-Point-LIO 默认只发布 `aft_mapped_to_init` 话题；其 TF 发布开关 `tf_send_en` 在当前配置中关闭，因此 `loam_interface` 负责把激光里程计接入项目的 `odom` 系。
+Point-LIO 自身的位姿在雷达里程计系 (初始 IMU 姿态, `camera_init`) 下, 而项目其余节点
+统一使用与底盘对齐的 `odom` 系。两者的差异就是雷达的安装变换, 因此 `point_lio` 在
+`publishFrameOutputs()` 中左乘该变换后另行发布 `registered_scan` 与 `lidar_odometry`
+(见 `laserMapping.cpp` 的 `publishProjectOutputs()`); 该变换默认在启动阶段从 TF 查一次
+`base_frame <- lidar_frame`, 也可用 `output_frame.lidar_to_base_t/_r` 参数显式给出。
+
+这部分职责原先由独立节点 `loam_interface` 承担, 现已并入 `point_lio`, 原因是从
+`camera_init` 到 `odom` 的换算只需要安装变换, 而安装变换是静态的, 不必为此多一个节点
+和一次话题转发。
 
 ## 4. `nonrotating_vel_transform` 的转换
 

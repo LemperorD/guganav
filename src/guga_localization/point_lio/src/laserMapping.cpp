@@ -41,8 +41,7 @@ int main(int argc, char** argv) {
 
 LaserMappingNode::LaserMappingNode()
     : rclcpp::Node("laserMapping"),
-      processor_(imu_, stage_, lidar_,
-                 config_, state_) {
+      processor_(imu_, stage_, lidar_, config_, state_) {
   callback_group_ = create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive);
   config_ = readParameters(this);
@@ -92,6 +91,18 @@ void LaserMappingNode::initializeRos2Interfaces() {
       "aft_mapped_to_init", 20);
   pub_path_ = create_publisher<nav_msgs::msg::Path>("path", 20);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
+  // 项目约定输出 (原 loam_interface 的职责): 同一个 odom 系下的点云与里程计
+  if (config_.output_frame.enabled) {
+    pub_registered_scan_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+        config_.output_frame.registered_scan_topic, 5);
+    pub_lidar_odometry_ = create_publisher<nav_msgs::msg::Odometry>(
+        config_.output_frame.lidar_odometry_topic, 5);
+    if (!config_.output_frame.extrinsic_from_params) {
+      tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+      tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    }
+  }
   createSensorSubscriptions();
 }
 void LaserMappingNode::createSensorSubscriptions() {
@@ -134,6 +145,9 @@ void LaserMappingNode::processIteration() {
         if (pub_odom_aft_mapped_) {
           pub_odom_aft_mapped_->publish(msg);
         }
+        // 缓存一份, 换到 odom 系后由项目约定输出发布
+        last_odometry_ = msg;
+        has_last_odometry_ = true;
       },
       [this](const geometry_msgs::msg::TransformStamped& msg) {
         if (tf_broadcaster_) {
@@ -154,6 +168,106 @@ void LaserMappingNode::publishFrameOutputs() {
   }
   if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
     publishFrameBody();
+  }
+  publishProjectOutputs();
+}
+
+bool LaserMappingNode::resolveOdomExtrinsic() {
+  if (odom_extrinsic_ready_) {
+    return true;
+  }
+  const auto& out = config_.output_frame;
+  if (out.extrinsic_from_params) {
+    odom_rotation_ << out.lidar_to_base_r[0], out.lidar_to_base_r[1],
+        out.lidar_to_base_r[2], out.lidar_to_base_r[3], out.lidar_to_base_r[4],
+        out.lidar_to_base_r[5], out.lidar_to_base_r[6], out.lidar_to_base_r[7],
+        out.lidar_to_base_r[8];
+    odom_translation_ << out.lidar_to_base_t[0], out.lidar_to_base_t[1],
+        out.lidar_to_base_t[2];
+    odom_extrinsic_ready_ = true;
+    RCLCPP_INFO(get_logger(), "odom 输出使用的安装变换来自参数 %s <- %s",
+                out.base_frame.c_str(), out.lidar_frame.c_str());
+    return true;
+  }
+  if (!tf_buffer_) {
+    return false;
+  }
+  try {
+    // 静态变换, 用 TimePointZero 取最新可用值, 不依赖雷达时间戳
+    const auto tf_stamped = tf_buffer_->lookupTransform(
+        out.base_frame, out.lidar_frame, tf2::TimePointZero);
+    const auto& q = tf_stamped.transform.rotation;
+    const Eigen::Quaterniond quat(q.w, q.x, q.y, q.z);
+    odom_rotation_ = quat.toRotationMatrix();
+    const auto& t = tf_stamped.transform.translation;
+    odom_translation_ << t.x, t.y, t.z;
+    odom_extrinsic_ready_ = true;
+    RCLCPP_INFO(get_logger(), "已从 TF 取得安装变换 %s <- %s",
+                out.base_frame.c_str(), out.lidar_frame.c_str());
+  } catch (const tf2::TransformException& ex) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                         "查不到安装变换 %s <- %s: %s, 暂不发布 %s/%s",
+                         out.base_frame.c_str(), out.lidar_frame.c_str(),
+                         ex.what(), out.registered_scan_topic.c_str(),
+                         out.lidar_odometry_topic.c_str());
+    return false;
+  }
+  return true;
+}
+
+void LaserMappingNode::publishProjectOutputs() {
+  if (!pub_registered_scan_ && !pub_lidar_odometry_) {
+    return;
+  }
+  if (!resolveOdomExtrinsic()) {
+    return;
+  }
+  const auto& out = config_.output_frame;
+  const rclcpp::Time stamp = get_ros_time(processor_.lidarEndTime());
+
+  if (pub_registered_scan_ && config_.publish.scan_enabled) {
+    // 与 loam_interface 一致: 整幅世界系点云左乘安装变换后标 odom
+    PointCloudXYZI::Ptr cloud_odom(new PointCloudXYZI);
+    cloud_odom->reserve(lidar_.workspace().feats_down_world->size());
+    for (const auto& p : lidar_.workspace().feats_down_world->points) {
+      const Eigen::Vector3d pw(p.x, p.y, p.z);
+      const Eigen::Vector3d po = odom_rotation_ * pw + odom_translation_;
+      PointType q = p;
+      q.x = static_cast<float>(po.x());
+      q.y = static_cast<float>(po.y());
+      q.z = static_cast<float>(po.z());
+      cloud_odom->points.emplace_back(q);
+    }
+    cloud_odom->width = cloud_odom->points.size();
+    cloud_odom->height = 1;
+    cloud_odom->is_dense = false;
+
+    sensor_msgs::msg::PointCloud2 msg;
+    pcl::toROSMsg(*cloud_odom, msg);
+    msg.header.stamp = stamp;
+    msg.header.frame_id = out.odom_frame;
+    pub_registered_scan_->publish(msg);
+  }
+
+  if (pub_lidar_odometry_ && has_last_odometry_) {
+    nav_msgs::msg::Odometry msg = last_odometry_;
+    const auto& pose = last_odometry_.pose.pose;
+    const Eigen::Vector3d p_lio(pose.position.x, pose.position.y,
+                                pose.position.z);
+    const Eigen::Quaterniond q_lio(pose.orientation.w, pose.orientation.x,
+                                   pose.orientation.y, pose.orientation.z);
+    const Eigen::Vector3d p_odom = odom_rotation_ * p_lio + odom_translation_;
+    const Eigen::Quaterniond q_odom(odom_rotation_ * q_lio.toRotationMatrix());
+    msg.pose.pose.position.x = p_odom.x();
+    msg.pose.pose.position.y = p_odom.y();
+    msg.pose.pose.position.z = p_odom.z();
+    msg.pose.pose.orientation.x = q_odom.x();
+    msg.pose.pose.orientation.y = q_odom.y();
+    msg.pose.pose.orientation.z = q_odom.z();
+    msg.pose.pose.orientation.w = q_odom.w();
+    msg.header.frame_id = out.odom_frame;
+    msg.child_frame_id = out.lidar_frame;
+    pub_lidar_odometry_->publish(msg);
   }
 }
 void LaserMappingNode::publishPath() {

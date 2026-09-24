@@ -28,26 +28,26 @@
 ## 数据流
 
 ```
-point_lio (cloud_registered, aft_mapped_to_init)
+point_lio (雷达里程计系)
   │
-loam_interface
-  │
-  └─(lidar_odometry)──── terrain_analysis
-     (registered_scan)    │
-                          ├─(terrain_map)─────────── local_costmap / global_costmap
-                          │                          (obstacle_layer, pb_nav2_plugins)
-                          │                          └ SLAM 模式：pointcloud_to_laserscan
-                          │                            → slam_toolbox (map)
-                          └─(terrain_returns_current) local_costmap / global_costmap
-                                                     (obstacle_layer, 只做清除)
+  └─ 内部左乘安装变换 (base <- lidar), 换到 odom 系
+     │
+     └─(lidar_odometry)──── terrain_analysis
+        (registered_scan)    │
+                             ├─(terrain_map)─────────── local_costmap / global_costmap
+                             │                          (obstacle_layer, pb_nav2_plugins)
+                             │                          └ SLAM 模式：pointcloud_to_laserscan
+                             │                            → slam_toolbox (map)
+                             └─(terrain_returns_current) local_costmap / global_costmap
+                                                        (obstacle_layer, 只做清除)
 ```
 
 ## 输入
 
 | 节点              | Topic             | 类型                      | 来源包/节点                  |
 | ----------------- | ----------------- | ------------------------- | ---------------------------- |
-| `terrainAnalysis` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio → loam_interface` |
-| `terrainAnalysis` | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio → loam_interface` |
+| `terrainAnalysis` | `lidar_odometry`  | `nav_msgs/Odometry`       | `point_lio` |
+| `terrainAnalysis` | `registered_scan` | `sensor_msgs/PointCloud2` | `point_lio` |
 
 ## 输出
 

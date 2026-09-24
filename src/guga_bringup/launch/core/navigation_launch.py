@@ -171,16 +171,6 @@ def generate_launch_description():
         condition=IfCondition(PythonExpression(["not ", use_composition])),
         actions=[
             Node(
-                package="loam_interface",
-                executable="loam_interface_node",
-                name="loam_interface",
-                output="screen",
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=configured_params,
-                arguments=["--ros-args", "--log-level", log_level],
-            ),
-            Node(
                 package="scan_to_sensor_frame",
                 executable="scan_to_sensor_frame_node",
                 name="scan_to_sensor_frame",
@@ -322,13 +312,6 @@ def generate_launch_description():
                 package="terrain_analysis",
                 plugin="terrain_analysis::TerrainAnalysis",
                 name="terrain_analysis",
-                parameters=configured_params,
-                extra_arguments=[{'use_intra_process_comms': True}],
-            ),
-            ComposableNode(
-                package="loam_interface",
-                plugin="loam_interface::LoamInterfaceNode",
-                name="loam_interface",
                 parameters=configured_params,
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
