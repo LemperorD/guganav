@@ -299,14 +299,14 @@ bool FrameProcessor::initializeIteration(
   return prepareFrame(publish);
 }
 
-void FrameProcessor::processIteration(
+bool FrameProcessor::processIteration(
     const std::function<void(const sensor_msgs::msg::PointCloud2&)>&
         publish_map,
     const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
     const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
         publish_tf) {
   if (!initializeIteration(publish_map))
-    return;
+    return false;
   if (config_.mapping.use_imu_as_input) {
     processFramePoints<true>(filter_.input(), last_time_input_,
                              filter_.inputNoise(), publish_odom, publish_tf);
@@ -321,6 +321,7 @@ void FrameProcessor::processIteration(
       && (!config_.sensor.enable_prior_map || ++state_.sleep_time > 200)) {
     mapIncremental();
   }
+  return true;
 }
 
 template <bool ImuAsInput, typename KF>

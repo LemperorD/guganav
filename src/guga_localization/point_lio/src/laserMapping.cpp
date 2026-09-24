@@ -120,7 +120,11 @@ void LaserMappingNode::createSensorSubscriptions() {
       options);
 }
 void LaserMappingNode::processIteration() {
-  processor_.processIteration(
+  // 定时器以 500 Hz 轮询, 但只有真正处理了新帧才发布输出。
+  // 否则没有新帧时也会反复重发同一幅点云与同一条 path:
+  // 既占满 CPU (每 2 ms 转换一次全分辨率点云),
+  // 又让 path 消息不断累积重复位姿。
+  const bool frame_processed = processor_.processIteration(
       [this](const sensor_msgs::msg::PointCloud2& msg) {
         if (pub_laser_cloud_map_) {
           pub_laser_cloud_map_->publish(msg);
@@ -136,6 +140,9 @@ void LaserMappingNode::processIteration() {
           tf_broadcaster_->sendTransform(msg);
         }
       });
+  if (!frame_processed) {
+    return;
+  }
   publishFrameOutputs();
 }
 void LaserMappingNode::publishFrameOutputs() {

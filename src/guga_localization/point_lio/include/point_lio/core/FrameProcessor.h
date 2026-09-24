@@ -32,7 +32,8 @@ public:
   void setPose(geometry_msgs::msg::Pose& pose) const;
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
   void configureSynchronizer(double lidar_time_interval);
-  void processIteration(
+  /// 处理一帧; 返回 true 表示本帧确实被处理 (据此决定是否发布输出)
+  [[nodiscard]] bool processIteration(
       const std::function<void(const sensor_msgs::msg::PointCloud2&)>&
           publish_map,
       const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
