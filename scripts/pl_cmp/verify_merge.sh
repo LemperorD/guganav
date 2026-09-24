@@ -3,6 +3,11 @@
 #
 # A 阶段: point_lio(output_frame.enable=false) + loam_interface  -> 旧链路
 # B 阶段: point_lio(output_frame.enable=true)                    -> 合入后
+#
+# 注意: loam_interface 包已随合并删除, 现在只有 B 阶段可以运行。
+# 需要复现 A 阶段时, 从合并前的提交取回该包再编译, 例如:
+#   git archive <合并前提交> src/guga_transform/loam_interface \
+#     | tar -x -C /tmp/old_ws/src --strip-components=2
 # 两阶段使用同一份 bag 与同一套静态 TF, 比较 /registered_scan 与 /lidar_odometry。
 set +u
 
