@@ -21,7 +21,7 @@
 ┌─────────────────────────────────────────────────┐
 │              Nav2 Costmap Pipeline               │
 │                                                  │
-│  static_layer → intensity_voxel_layer             │
+│  static_layer → obstacle_layer                    │
 │                     ↓                            │
 │              esdf_layer  ← (本插件)               │
 │                     ↓                            │
@@ -39,13 +39,13 @@ EsdfParallelExecutor（TBB 线程池）            IncrementalUpdate（静态工
 
 ### 核心类
 
-| 类 | 职责 |
-|----|------|
-| `EsdfLayer` | Nav2 Layer 插件接口（`onInitialize` / `updateBounds` / `updateCosts` / `matchSize` / `reset`） |
-| `EsdfMap` | 距离场 + 梯度场存储，提供 `computeFull()` / `computeIncremental()` / 查询 API |
-| `EsdfConfig` | 不可变参数 struct（ESDF 距离 / TBB 并行 / 输出控制） |
-| `EsdfParallelExecutor` | TBB `task_arena` + `parallel_for` / `parallelFor2D` 封装 |
-| `IncrementalUpdate` | 增量更新静态工具集（差分检测 / 脏区域膨胀 / 重置） |
+| 类                     | 职责                                                                                           |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
+| `EsdfLayer`            | Nav2 Layer 插件接口（`onInitialize` / `updateBounds` / `updateCosts` / `matchSize` / `reset`） |
+| `EsdfMap`              | 距离场 + 梯度场存储，提供 `computeFull()` / `computeIncremental()` / 查询 API                  |
+| `EsdfConfig`           | 不可变参数 struct（ESDF 距离 / TBB 并行 / 输出控制）                                           |
+| `EsdfParallelExecutor` | TBB `task_arena` + `parallel_for` / `parallelFor2D` 封装                                       |
+| `IncrementalUpdate`    | 增量更新静态工具集（差分检测 / 脏区域膨胀 / 重置）                                             |
 
 ---
 
@@ -120,15 +120,15 @@ rog_map_layer/
 
 ## 依赖
 
-| 依赖 | 用途 |
-|------|------|
-| `nav2_costmap_2d` | Layer 基类、Costmap2D、cost_values |
-| `nav2_util` | LifecycleNode |
-| `rclcpp` / `rclcpp_lifecycle` | ROS2 节点/生命周期 |
-| `nav_msgs` | OccupancyGrid 消息（可视化发布） |
-| `pluginlib` | 插件注册 |
-| `tf2_ros` | 坐标变换 |
-| `libtbb-dev` (oneTBB) | 多线程并行（`parallel_for`, `task_arena`） |
+| 依赖                          | 用途                                       |
+| ----------------------------- | ------------------------------------------ |
+| `nav2_costmap_2d`             | Layer 基类、Costmap2D、cost_values         |
+| `nav2_util`                   | LifecycleNode                              |
+| `rclcpp` / `rclcpp_lifecycle` | ROS2 节点/生命周期                         |
+| `nav_msgs`                    | OccupancyGrid 消息（可视化发布）           |
+| `pluginlib`                   | 插件注册                                   |
+| `tf2_ros`                     | 坐标变换                                   |
+| `libtbb-dev` (oneTBB)         | 多线程并行（`parallel_for`, `task_arena`） |
 
 ---
 
@@ -162,11 +162,11 @@ esdf_layer:
 
 ### Local vs Global Costmap 参考配置差异
 
-| 参数 | Local (5m×5m, 10Hz) | Global (可变, 5Hz) |
-|------|---------------------|---------------------|
-| `max_distance` | 2.0 | 3.0 |
-| `publish_esdf_grid` | true (调试) | false |
-| `tile_size` | 32 | 64 |
+| 参数                | Local (5m×5m, 10Hz) | Global (可变, 5Hz) |
+| ------------------- | ------------------- | ------------------ |
+| `max_distance`      | 2.0                 | 3.0                |
+| `publish_esdf_grid` | true (调试)         | false              |
+| `tile_size`         | 32                  | 64                 |
 
 ---
 
@@ -175,7 +175,7 @@ esdf_layer:
 ### layer 顺序
 
 ```yaml
-plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
 ```
 
 ESDF 层放在 obstacle 层之后、inflation 层之前。可选移除 `inflation_layer`，由 ESDF 直接提供距离代价。

@@ -41,6 +41,7 @@ def generate_launch_description():
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
 
     # ── <robot_namespace> 文件替换 ──
@@ -61,6 +62,7 @@ def generate_launch_description():
         )
 
     params_file = with_namespace_replace(params_file)
+    params_file = ""
     base_params_file = with_namespace_replace(base_params_file)
     controller_params_file = with_namespace_replace(controller_params_file)
     planner_params_file = with_namespace_replace(planner_params_file)
@@ -100,9 +102,13 @@ def generate_launch_description():
         "namespace", default_value="", description="Top-level namespace"
     )
 
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
-        default_value="pid",
+        default_value="mppi",
         choices=["pid", "mppi", "mpc"],
         description="Controller profile, forwarded to navigation_launch for chassis mode",
     )
@@ -113,7 +119,7 @@ def generate_launch_description():
             [
                 "'", params_file, "' != '' and '", params_file,
                 "' or '",
-                os.path.join(bringup_dir, "config", "simulation", which),
+                os.path.join(bringup_dir, "config", "reality", which),
                 "'",
             ]
         )
@@ -125,7 +131,8 @@ def generate_launch_description():
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
         "controller_params_file",
-        default_value=default_params_file("controller/pid.yaml"),
+        # default_value=default_params_file("controller/mppi.yaml"),
+        default_value=os.path.join(bringup_dir, "config", "reality", "controller", "mppi.yaml"),
         description="Controller-diff params file",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
@@ -239,6 +246,7 @@ def generate_launch_description():
                     "base_params_file": base_params_file,
                     "controller_params_file": controller_params_file,
                     "planner_params_file": planner_params_file,
+                    "planner": planner,
                     "controller": controller,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
@@ -257,6 +265,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_controller_params_file_cmd)

@@ -20,11 +20,11 @@ local_costmap:
   local_costmap:
     ros__parameters:
 
-      plugins: ["static_layer", "intensity_voxel_layer",  "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer",  "inflation_layer"]
 
 global_costmap:
   global_costmap:
     ros__parameters:
 
-      plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
 

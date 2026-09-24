@@ -24,6 +24,7 @@ def generate_launch_description():
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
@@ -75,9 +76,13 @@ def generate_launch_description():
 
     # 控制器选择：pid/mppi/mpc。底盘模式（启动即小陀螺）由它推断，
     # 不再需要独立的 navigation_profile 参数。
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
     declare_controller_cmd = DeclareLaunchArgument(
         "controller",
-        default_value="pid",
+        default_value="mppi",
         choices=["pid", "mppi", "mpc"],
         description="Controller profile: pid (omni PID), mppi, or mpc",
     )
@@ -112,7 +117,7 @@ def generate_launch_description():
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
         "controller_params_file",
-        default_value=default_params_file("controller/pid.yaml"),
+        default_value=default_params_file("controller/mppi.yaml"),
         description="Controller-diff params file (overrides base)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
@@ -162,19 +167,6 @@ def generate_launch_description():
         parameters=configured_params,
     )
 
-    # 非组合模式：独立进程运行 terrain_analysis_ext
-    start_terrain_analysis_ext_cmd = Node(
-        package="terrain_analysis_ext",
-        executable="terrain_analysis_ext_exe",
-        name="terrain_analysis_ext",
-        output="screen",
-        condition=IfCondition(PythonExpression(["not ", use_composition])),
-        respawn=use_respawn,
-        respawn_delay=2.0,
-        arguments=["--ros-args", "--log-level", log_level],
-        parameters=configured_params,
-    )
-
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(["not ", use_composition])),
         actions=[
@@ -189,9 +181,9 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
-                package="sensor_scan_generation",
-                executable="sensor_scan_generation_node",
-                name="sensor_scan_generation",
+                package="scan_to_sensor_frame",
+                executable="scan_to_sensor_frame_node",
+                name="scan_to_sensor_frame",
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
@@ -300,7 +292,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "6.28 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -334,13 +326,6 @@ def generate_launch_description():
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
-                package="terrain_analysis_ext",
-                plugin="terrain_analysis_ext::TerrainAnalysisExtNode",
-                name="terrain_analysis_ext",
-                parameters=configured_params,
-                extra_arguments=[{'use_intra_process_comms': True}],
-            ),
-            ComposableNode(
                 package="loam_interface",
                 plugin="loam_interface::LoamInterfaceNode",
                 name="loam_interface",
@@ -348,9 +333,9 @@ def generate_launch_description():
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
-                package="sensor_scan_generation",
-                plugin="sensor_scan_generation::SensorScanGenerationNode",
-                name="sensor_scan_generation",
+                package="scan_to_sensor_frame",
+                plugin="scan_to_sensor_frame::ScanToSensorFrameNode",
+                name="scan_to_sensor_frame",
                 parameters=configured_params,
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
@@ -427,7 +412,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "6.28 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -457,6 +442,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
@@ -470,7 +456,6 @@ def generate_launch_description():
     ld.add_action(declare_log_level_cmd)
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_terrain_analysis_cmd)
-    ld.add_action(start_terrain_analysis_ext_cmd)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
 

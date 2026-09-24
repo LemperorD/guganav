@@ -19,7 +19,7 @@
     # 启动即小陀螺：true 时恒发 LITTLE_TES + cmd_spin（忽略决策状态机对底盘模式的输出）
     always_tes: true
     # 小陀螺自旋角速度 (rad/s)；2π ≈ 每秒一圈，按战术需求调整
-    spin_speed: 6.28
+    spin_speed: 3.14
     cmd_vel_topic: "cmd_vel"
     cmd_gimbal_topic: "cmd_gimbal"
     sub_mode_topic: "sub_mode"

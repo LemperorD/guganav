@@ -80,7 +80,7 @@ geometry_msgs::msg::TwistStamped MpcControllerNode::computeVelocityCommands(cons
   // 将机器人位姿转换到全局路径的坐标系并设置为初始状态约束
   geometry_msgs::msg::PoseStamped global_pose = transformPoseToGlobal(pose);
   StateBound x0 = Point2State(global_pose);
-  x0[2] = unwrap_angle(x0[2], last_yaw_); // 保持角度连续性
+  x0[2] = unwarp_angle(x0[2], last_yaw_); // 保持角度连续性
   last_yaw_ = x0[2];
   mpc_wrapper_->setInitialState(x0);
 

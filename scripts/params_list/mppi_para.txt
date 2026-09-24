@@ -1,0 +1,16 @@
+  FollowPath.PathAlignCritic.cost_weight|贴路径程度（大→严格贴线）
+  FollowPath.PathFollowCritic.cost_weight|路径跟随（大→死贴路径）
+  FollowPath.CostCritic.cost_weight|代价地图权重（大→怕障碍）
+  FollowPath.ConstraintCritic.cost_weight|运动约束（大→保守）
+  FollowPath.GoalCritic.cost_weight|目标引力
+  FollowPath.vx_max|最大前进速度
+  FollowPath.vy_max|最大侧向速度
+  FollowPath.wz_max|最大角速度
+  FollowPath.temperature|采样温度（大→激进/抖）
+  FollowPath.gamma|代价衰减（小→看得远）
+  FollowPath.batch_size|采样轨迹数（大→平滑但慢）
+  FollowPath.time_steps|轨迹步数
+  FollowPath.iteration_count|迭代次数
+  FollowPath.vx_std|前进噪声
+  FollowPath.vy_std|侧向噪声
+  FollowPath.wz_std|转向噪声

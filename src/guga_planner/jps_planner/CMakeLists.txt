@@ -4,6 +4,7 @@ project(jps_planner)
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -20,18 +21,28 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 ament_auto_add_library(jps_planner SHARED
-  src/jps_planner.cpp
+  src/jps_planner_node.cpp
   src/jps_algorithm.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/src/bspline_optimizer.cpp
+  src/detail/jps_obstacle.cpp
+  src/detail/jps_neighbor.cpp
+  src/detail/jps_jump.cpp
+  src/detail/jps_path.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/bspline_optimizer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/detail/grid_utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/detail/esdf_utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/detail/basis.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/detail/cost_cache.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/detail/cost_function.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/src/detail/gradient_descent.cpp
 )
 target_include_directories(jps_planner
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_opt/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../guga_perception/rog_map_layer/include
-    ${EIGEN3_INCLUDE_DIRS})
+  ${CMAKE_CURRENT_SOURCE_DIR}/../bspline_optimizer/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../guga_perception/rog_map_layer/include
+  ${EIGEN3_INCLUDE_DIRS})
 target_link_directories(jps_planner
   PRIVATE
-    ${rog_map_layer_DIR}/../../../lib)
+  ${rog_map_layer_DIR}/../../../lib)
 target_link_libraries(jps_planner esdf_layer)
 
 pluginlib_export_plugin_description_file(nav2_core jps_planner_plugin.xml)
@@ -42,6 +53,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_jps
     test/test_jps.cpp
     src/jps_algorithm.cpp
+    src/detail/jps_obstacle.cpp
+    src/detail/jps_neighbor.cpp
+    src/detail/jps_jump.cpp
   )
   target_include_directories(test_jps PRIVATE include test)
   target_compile_definitions(test_jps PRIVATE TESTING)
@@ -50,6 +64,9 @@ if(BUILD_TESTING)
   add_executable(jps_viz_exporter
     test/jps_viz_exporter.cpp
     src/jps_algorithm.cpp
+    src/detail/jps_obstacle.cpp
+    src/detail/jps_neighbor.cpp
+    src/detail/jps_jump.cpp
   )
   target_include_directories(jps_viz_exporter PRIVATE include test)
   target_compile_definitions(jps_viz_exporter PRIVATE TESTING)

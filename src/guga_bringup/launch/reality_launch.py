@@ -31,8 +31,13 @@ def generate_launch_description():
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
-    use_ui = LaunchConfiguration("use_ui")
     use_decision = LaunchConfiguration("use_decision")
+    # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
+    planner = LaunchConfiguration("planner")
+    controller = LaunchConfiguration("controller")
+    base_params_file = LaunchConfiguration("base_params_file")
+    controller_params_file = LaunchConfiguration("controller_params_file")
+    planner_params_file = LaunchConfiguration("planner_params_file")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -81,10 +86,44 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
-        default_value=os.path.join(
-            bringup_dir, "config", "reality", "nav2_params.yaml"
+        # 单文件覆盖模式当前**未启用**：reality_launch 与 bringup_launch 都把
+        # params_file 置空以强制三文件合并（base → controller → planner），见
+        # 670049b。该参数仅为兼容保留，传值不会生效；默认值指向 base.yaml，
+        # 避免默认值指向不存在的文件。
+        default_value=os.path.join(bringup_dir, "config", "reality", "base.yaml"),
+        description=(
+            "Reserved: single params file override is currently disabled "
+            "(params_file is forced empty; 3-file merge always applies)"
         ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
+    )
+    declare_planner_cmd = DeclareLaunchArgument(
+        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        description="Global planner: jps, smac2d, or smachybrid",
+    )
+    declare_controller_cmd = DeclareLaunchArgument(
+        "controller", default_value="mppi", choices=["pid", "mppi", "mpc"],
+        description="Controller: pid, mppi, or mpc",
+    )
+
+    def default_params_file(which):
+        return PythonExpression(
+            [
+                "'", params_file, "' != '' and '", params_file,
+                "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
+            ]
+        )
+    params_file = ""
+    declare_base_params_file_cmd = DeclareLaunchArgument(
+        "base_params_file", default_value=default_params_file("base.yaml"),
+        description="Common params file (merge base layer)",
+    )
+    declare_controller_params_file_cmd = DeclareLaunchArgument(
+        "controller_params_file", default_value=default_params_file("controller/mppi.yaml"),
+        description="Controller-diff params file (pid default, mppi available)",
+    )
+    declare_planner_params_file_cmd = DeclareLaunchArgument(
+        "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
+        description="Planner-diff params file",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -119,20 +158,14 @@ def generate_launch_description():
     )
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
-        # "use_rviz", default_value="True", description="Whether to start RVIZ"
-        "use_rviz", default_value="False", description="Whether to start RVIZ"
+        "use_rviz", default_value="True", description="Whether to start RVIZ"
+        # "use_rviz", default_value="False", description="Whether to start RVIZ"
     )
 
     declare_use_communication_cmd = DeclareLaunchArgument(
         "use_communication",
-        default_value="False",
+        default_value="True",
         description="Whether to start the communication node",
-    )
-
-    declare_use_ui_cmd = DeclareLaunchArgument(
-        "use_ui",
-        default_value="False",
-        description="Whether to start the guga_ui_pangolin process",
     )
 
     declare_use_decision_cmd = DeclareLaunchArgument(
@@ -143,11 +176,14 @@ def generate_launch_description():
 
     # Create our own temporary YAML files that include substitutions
 
+    # livox 节点参数直接指向 base.yaml 的绝对路径,不经过 PythonExpression
+    # 动态求值(base_params_file 在 bringup 层才被 ReplaceString 处理,此处
+    # 求值为空会触发 RewrittenYaml 打开 '' → FileNotFoundError)。
     configured_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=os.path.join(bringup_dir, "config", "reality", "base.yaml"),
             root_key=namespace,
-            param_rewrites={},
+            param_rewrites={"use_sim_time": use_sim_time},
             convert_types=True,
         ),
         allow_substs=True,
@@ -209,7 +245,12 @@ def generate_launch_description():
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
+            "controller": controller,
+            "planner": planner,
             "params_file": params_file,
+            "base_params_file": base_params_file,
+            "controller_params_file": controller_params_file,
+            "planner_params_file": planner_params_file,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
@@ -225,13 +266,6 @@ def generate_launch_description():
             "namespace": namespace,
             "use_sim_time": use_sim_time,
         }.items(),
-    )
-
-    guga_ui_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(launch_dir, "support", "guga_ui_launch.py")
-        ),
-        condition=IfCondition(use_ui),
     )
 
     decision_cmd = IncludeLaunchDescription(
@@ -256,13 +290,17 @@ def generate_launch_description():
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_planner_cmd)
+    ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_base_params_file_cmd)
+    ld.add_action(declare_controller_params_file_cmd)
+    ld.add_action(declare_planner_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_robot_state_pub_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
-    ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_use_decision_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
@@ -273,7 +311,6 @@ def generate_launch_description():
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(communication_cmd)
-    ld.add_action(guga_ui_cmd)
     ld.add_action(decision_cmd)
 
     return ld

@@ -30,6 +30,7 @@ Diagnostics:
       - performance-unnecessary-value-param
       - readability-function-cognitive-complexity
       - readability-magic-numbers
+      - readability-math-missing-parentheses
       - cppcoreguidelines-avoid-magic-numbers
       - readability-identifier-length
       - llvm*

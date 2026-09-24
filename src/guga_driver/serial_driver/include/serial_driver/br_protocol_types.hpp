@@ -53,7 +53,7 @@ inline constexpr size_t WZ_NEG{8};       // float LE 角速度 z 取反
 /** @brief MCU→PC 上传字段偏移（从同一 17 字节帧不同位置解析）。 */
 namespace uplink_offset {
 
-inline constexpr size_t YAW_DIFF{0};       // float LE   云台 yaw 角度差
+inline constexpr size_t YAW_DIFF{0};      // float LE 云台 yaw 角度差
 inline constexpr size_t ENEMY_X{4};       // float LE 敌方 x 坐标
 inline constexpr size_t ENEMY_Y{8};       // float LE 敌方 y 坐标
 

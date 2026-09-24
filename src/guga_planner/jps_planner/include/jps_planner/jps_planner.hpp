@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "bspline_opt/bspline_optimizer.hpp"
+#include "bspline_optimizer/bspline_optimizer.hpp"
 #include "jps_planner/jps_algorithm.hpp"
 #include "nav2_core/global_planner.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
@@ -81,7 +81,7 @@ namespace jps_planner {
 
     JPSConfig config_{};
 
-    bspline_opt::BSplineConfig bspline_config_{};
+    bspline_optimizer::BSplineConfig bspline_config_{};
     bool enable_bspline_{true};  // enable B-spline smoothing
     bool enable_esdf_{true};     // enable ESDF gradient optimisation
     double esdf_weight_{

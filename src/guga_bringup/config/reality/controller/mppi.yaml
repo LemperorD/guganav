@@ -1,0 +1,381 @@
+controller_server:
+  ros__parameters:
+    use_sim_time: False
+
+    # controller_server 的节点级配置（plugin 列表、检查器、容差）。
+    # 原先只写在单文件 nav2_params.yaml 里，而该文件自 670049b 起不再被加载，
+    # 这些设置一直没有生效；此处按 pid profile 的取值补齐。
+    controller_plugins: ["FollowPath"]
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+    goal_checker_plugins: ["general_goal_checker"]
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.15
+      yaw_goal_tolerance: 6.28
+    failure_tolerance: 0.3
+    odom_topic: odometry
+    # 三个速度阈值（min_x/min_y/min_theta_velocity_threshold）在此故意不写：
+    # MPPI 用 Omni 运动模型，y 方向存在小幅横向速度，Nav2 默认的
+    # 0.0001/0.0001/0.0001 即是当前生效值（已确认 controller_server.cpp 的声明默认值）。
+    # 已删除的单文件 nav2_params.yaml 里写过 0.001/0.5/0.001，但该文件自 670049b
+    # 起不再被加载，这组取值从未生效；其中 min_y=0.5 会把 0.5 m/s 以下的横向速度
+    # 当作零，与 Omni 控制相冲突，故不沿用。
+
+    controller_frequency: 60.0
+
+    FollowPath:
+      plugin: "guga_source_mppi_controller::MPPIController"
+      time_steps: 48
+      # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
+      #   - period < model_dt → 仅告警，控制序列移位关闭
+      #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
+      #   - period > model_dt → configure 抛异常，controller_server 起不来
+      # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
+      # 若改 controller_frequency，model_dt 需同步改为 1/频率。
+      model_dt: 0.166666667
+      batch_size: 1200
+      vx_std: 0.5
+      vy_std: 0.5
+      wz_std: 1.0
+      vx_max: 2.5
+      vx_min: -2.5
+      ax_max: 5.0
+      ay_max: 5.0
+      vy_max: 2.5
+      wz_max: 0.0
+
+      iteration_count: 1
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "Omni"
+      visualize: false
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      Omni:
+        plugin: "mppi::OmniMotionModel"
+      critics:
+        [
+          "ConstraintCritic",
+          "CostCritic",
+          "GoalCritic",
+          "PathAlignCritic",
+          "PathFollowCritic",
+        ]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 2.0
+      GoalAngleCritic:
+        enabled: false
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PreferForwardCritic:
+        enabled: false
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+      ObstaclesCritic:
+        enabled: true
+        cost_power: 1
+        repulsion_weight: 1.0
+        critical_weight: 25.0
+        consider_footprint: false
+        collision_cost: 10000.0
+        collision_margin_distance: 0.15
+        near_goal_distance: 0.5
+        inflation_radius: 0.55 # (only in Humble)
+        cost_scaling_factor: 10.0 # (only in Humble)
+      CostCritic:
+        enabled: true
+        cost_power: 10
+        cost_weight: 12.0
+        critical_cost: 300.0
+        consider_footprint: false
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+        trajectory_point_step: 2
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.2
+        offset_from_furthest: 10
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAngleCritic:
+        enabled: false
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
+      # VelocityDeadbandCritic:
+      #   enabled: true
+      #   cost_power: 1
+      #   cost_weight: 35.0
+      #   deadband_velocities: [0.05, 0.05, 0.05]
+      TwirlingCritic:
+        enabled: false
+        twirling_cost_power: 1
+        twirling_cost_weight: 10.0
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: False
+
+      update_frequency: 10.0
+
+      publish_frequency: 5.0
+
+      global_frame: odom
+
+      robot_base_frame: base_footprint_nonrotating
+
+      rolling_window: true
+
+      width: 5
+
+      height: 5
+
+      resolution: 0.05
+
+      robot_radius: 0.464 # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
+
+      obstacle_layer:
+        plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
+        enabled: true
+        footprint_clearing_enabled: true
+        combination_method: 1
+        observation_sources: terrain_map terrain_returns_current
+        terrain_map:
+          data_type: "PointCloud2"
+          # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
+          # It doesn't need to start with '/'
+          topic: <robot_namespace>/terrain_map
+          # sensor_frame 只决定射线清除的原点坐标系，不参与点云变换
+          # （点云变换用的是消息自己的 frame_id，即 odom）。留空时原点会取成 odom 原点，
+          # 机器人离开 odom 原点超过代价地图半宽后，标记与清除都会因原点越界被跳过。
+          sensor_frame: front_mid360
+          marking: true
+          clearing: false # 清除改由当帧返回的雷达射线云 terrain_returns_current 承担
+          obstacle_max_range: 5.0
+          obstacle_min_range: 0.2
+          raytrace_max_range: 5.5
+          raytrace_min_range: 0.2
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+        terrain_returns_current:
+          data_type: "PointCloud2"
+          topic: <robot_namespace>/terrain_returns_current
+          # 当帧返回的雷达射线云，含地面返回的雷达射线。清除射线只要求"该方向上有一次返回的雷达射线"，
+          # 地面返回的雷达射线正是射线路径为空的证据，因此它不必是障碍点。
+          sensor_frame: front_mid360
+          marking: false
+          clearing: true
+          observation_persistence: 0.0 # 只留最新一帧：清除用的是当帧观测
+          obstacle_min_range: 0.2
+          obstacle_max_range: 5.0
+          raytrace_min_range: 0.2
+          raytrace_max_range: 5.5
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线（绝对 z 略低于 0）
+          # 在 ObservationBuffer 里滤掉，清除就失去这些射线。
+          min_obstacle_height: -3.0
+          max_obstacle_height: 3.0
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 4.0
+        inflation_radius: 0.5 # 实车 MPPI 保守起步（仿真 0.40）
+
+      always_send_full_costmap: False
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: False
+
+      update_frequency: 5.0
+
+      publish_frequency: 2.0
+
+      global_frame: map
+
+      robot_base_frame: base_footprint_nonrotating
+
+      robot_radius: 0.464 # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
+
+      resolution: 0.05
+
+      track_unknown_space: true
+
+      obstacle_layer:
+        plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
+        enabled: true
+        footprint_clearing_enabled: true
+        combination_method: 1
+        observation_sources: terrain_map terrain_returns_current
+        terrain_map:
+          data_type: "PointCloud2"
+          # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
+          # It doesn't need to start with '/'
+          topic: <robot_namespace>/terrain_map
+          # sensor_frame 只决定射线清除的原点坐标系，不参与点云变换
+          # （点云变换用的是消息自己的 frame_id，即 odom）。留空时原点会取成 odom 原点，
+          # 机器人离开 odom 原点超过代价地图半宽后，标记与清除都会因原点越界被跳过。
+          sensor_frame: front_mid360
+          marking: true
+          clearing: true
+          obstacle_max_range: 10.0
+          obstacle_min_range: 0.2
+          raytrace_max_range: 5.0 # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
+          raytrace_min_range: 0.2
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+        terrain_returns_current:
+          data_type: "PointCloud2"
+          topic: <robot_namespace>/terrain_returns_current
+          # 当帧返回的雷达射线云（含地面返回的雷达射线），只做清除。terrain_map 里只有障碍点，某方位视野内
+          # 没有障碍时该方位一个端点都没有，落在那条路径上的旧标记清不掉；返回的雷达射线给出的
+          # 是"该方位路径为空"这一证据。与 local 那条链的配置保持一致。
+          sensor_frame: front_mid360
+          marking: false
+          clearing: true
+          observation_persistence: 0.0 # 只留最新一帧：清除用的是当帧观测
+          obstacle_min_range: 0.2
+          obstacle_max_range: 10.0
+          raytrace_min_range: 0.2
+          raytrace_max_range: 5.0 # 试验值：与平面网格每轴 ±5.1 m 相当；对角约 7.2 m 方向上的标记清不到，待实车对比
+          # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线在 ObservationBuffer 里滤掉。
+          min_obstacle_height: -3.0
+          max_obstacle_height: 3.0
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 4.0
+        inflation_radius: 0.7
+
+      always_send_full_costmap: False
+
+# The yaml_filename does not need to be specified since it going to be set by defaults in launch.
+# If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
+# file & provide full path to map below. If CLI map configuration or launch default is provided, that will be used.
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: False
+
+    smoother_plugins: ["simple_smoother"]
+
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: False
+
+    local_costmap_topic: local_costmap/costmap_raw
+
+    global_costmap_topic: global_costmap/costmap_raw
+
+    local_footprint_topic: local_costmap/published_footprint
+
+    global_footprint_topic: global_costmap/published_footprint
+
+    cycle_frequency: 10.0
+
+    behavior_plugins:
+      ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+
+    spin:
+      plugin: "nav2_behaviors/Spin"
+
+    backup:
+      plugin: "pb_nav2_behaviors/BackUpFreeSpace"
+
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+
+    wait:
+      plugin: "nav2_behaviors/Wait"
+
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+
+    local_frame: odom
+
+    global_frame: map
+
+    robot_base_frame: base_footprint_nonrotating
+
+    transform_tolerance: 0.1
+
+    simulate_ahead_time: 2.0
+
+    max_rotational_vel: 1.0
+
+    min_rotational_vel: 0.4
+
+    rotational_acc_lim: 3.2
+    # params for pb_nav2_behaviors/BackUpFreeSpace
+
+    service_name: "global_costmap/get_costmap"
+
+    max_radius: 2.0
+
+    visualize: false
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: False
+
+    smoothing_frequency: 20.0
+
+    scale_velocities: False
+
+    feedback: "OPEN_LOOP"
+
+    max_velocity: [2.5, 2.5, 3.0]
+
+    min_velocity: [-2.5, -2.5, -3.0]
+
+    max_accel: [4.5, 4.5, 5.0]
+
+    max_decel: [-4.5, -4.5, -5.0]
+
+    odom_topic: "odometry"
+
+    odom_duration: 0.1
+
+    deadband_velocity: [0.0, 0.0, 0.0]
+
+    velocity_timeout: 1.0

@@ -207,15 +207,15 @@ ESDF 作为 Nav2 costmap 的一个独立插件层 (`EsdfLayer`) 运行：
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                   LayeredCostmap                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  StaticLayer  │  │  ObstacleLayer │  │  EsdfLayer   │  │
-│  │  (costmap)    │  │  (costmap)    │  │  (ESDF field) │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                   LayeredCostmap                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │  StaticLayer │  │ObstacleLayer │  │  EsdfLayer   │    │
+│  │  (costmap)   │  │  (costmap)   │  │ (ESDF field) │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘    │
 └──────────────────────────────────────────────────────────┘
          │                                       │
          ▼                                       ▼
-   JPSPlanner ─── JPS搜索 (读 costmap)           │
+   JPSPlanner ─── JPS搜索 (读 costmap)            │
          │                                       │
          ▼                                       ▼
    bsplineSmooth() ─── 梯度下降优化 (读 ESDF distance + gradient)
@@ -624,31 +624,31 @@ projectPointToFree(p_i.x, p_i.y)
   ▼
 6. BSplineOptimizer::optimize(num_samples)
   │
-  ├─ [若 enable_gradient_descent = true] ──────────────────────┐
-  │  │                                                         │
-  │  ├─ 构造优化变量 x ∈ ℝ^{2(M-2)} (内部控制点)              │
-  │  │                                                         │
-  │  ├─ gradientDescent() (算法 1)                             │
-  │  │  │                                                      │
-  │  │  ├─ 数值中心差分 ∇J (维度: 2(M-2), h=0.5)              │
-  │  │  │  │                                                   │
-  │  │  │  └─ evalCost(x) ─────────────────────────────┐      │
-  │  │  │     │  ├─ J_smooth: 50 采样点 ‖C''‖²        │      │
-  │  │  │     │  ├─ J_dist:   N 航点 ‖C(τ_i)-q_i‖²   │      │
-  │  │  │     │  ├─ J_obs:    200 采样点 二元障碍物   │      │
-  │  │  │     │  └─ J_esdf:   200 采样点 ESDF 距离场  │      │
-  │  │  │     │        └─ esdfDistanceAt() 双线性插值 │      │
-  │  │  │     └───────────────────────────────────────┘      │
-  │  │  │                                                      │
-  │  │  ├─ 回溯线搜索 (α 自适应, clamp 走廊约束)               │
-  │  │  └─ 收敛: ‖∇J‖ < 1e-8 或 patience=20                   │
-  │  │                                                         │
-  │  └─ 更新 state_.control_points                             │
-  │                                                             │
-  ├─ 控制点障碍物投射 (螺旋搜索 r=1..8)                       │
-  ├─ rebuildSpline()                                          │
-  ├─ 采样路径点障碍物投射                                      │
-  └─ 计算曲率 profile                                          │
+  ├─ [若 enable_gradient_descent = true] 
+  │  │                                                         
+  │  ├─ 构造优化变量 x ∈ ℝ^{2(M-2)} (内部控制点)                 
+  │  │                                                        
+  │  ├─ gradientDescent() (算法 1)                            
+  │  │  │                                                     
+  │  │  ├─ 数值中心差分 ∇J (维度: 2(M-2), h=0.5)                
+  │  │  │  │                                                  
+  │  │  │  └─ evalCost(x) ─────────────────────────────┐      
+  │  │  │     │  ├─ J_smooth: 50 采样点 ‖C''‖²          │      
+  │  │  │     │  ├─ J_dist:   N 航点 ‖C(τ_i)-q_i‖²      │      
+  │  │  │     │  ├─ J_obs:    200 采样点 二元障碍物       │      
+  │  │  │     │  └─ J_esdf:   200 采样点 ESDF 距离场     │      
+  │  │  │     │        └─ esdfDistanceAt() 双线性插值    │     
+  │  │  │     └────────────────────────────────────────┘      
+  │  │  │                                                      
+  │  │  ├─ 回溯线搜索 (α 自适应, clamp 走廊约束)               
+  │  │  └─ 收敛: ‖∇J‖ < 1e-8 或 patience=20                   
+  │  │                                                         
+  │  └─ 更新 state_.control_points                             
+  │                                                             
+  ├─ 控制点障碍物投射 (螺旋搜索 r=1..8)                       
+  ├─ rebuildSpline()                                          
+  ├─ 采样路径点障碍物投射                                     
+  └─ 计算曲率 profile                                          
   │
   ▼
 7. 连续地图坐标 → 世界坐标 (mapContinuousToWorld)
