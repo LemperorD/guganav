@@ -301,7 +301,7 @@ void NonrotatingVelTransform::onConfigure()
   this->declare_parameter<std::string>("input_cmd_vel_topic", "");
   this->declare_parameter<std::string>("output_cmd_vel_topic", "");
   this->declare_parameter<std::string>("vis_cmd_vel_topic", "cmd_vel_marker");
-  this->declare_parameter<std::string>("vis_frame_id", "base_link");
+  this->declare_parameter<std::string>("vis_frame_id", "base_footprint");
   this->declare_parameter<double>("vis_scale", 1.0);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
   // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），

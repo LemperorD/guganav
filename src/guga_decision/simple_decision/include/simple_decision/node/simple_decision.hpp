@@ -54,7 +54,7 @@ namespace simple_decision {
     static Stamp makeStamped(rclcpp::Time time);
 
     std::string frame_id_{"map"};
-    std::string base_frame_id_{"base_link"};
+    std::string base_frame_id_{"base_footprint"};
 
     std::string robot_status_topic_{"referee/robot_status"};
     std::string goal_pose_topic_{"goal_pose"};
