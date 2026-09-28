@@ -11,7 +11,8 @@
 
 ## 设计与决策
 
-- [SentryTactialAIPlan.md](SentryTactialAIPlan.md)：烧饼低算力哨兵决策与战术导航初版方案（架构讨论稿）。
+- [SENTRY_AVAILABLE_INFORMATION.md](decision/SENTRY_AVAILABLE_INFORMATION.md)：烧饼比赛可获取信息清单（2026 规则与通信协议基线、2027 变更、通信权限及当前接入差距）。
+- [SentryTactialAIPlan.md](decision/SentryTactialAIPlan.md)：烧饼低算力哨兵决策与战术导航初版方案（架构讨论稿）。
 - [LOCAL_CONTROL_DYNAMIC_AVOIDANCE_DECISION.md](LOCAL_CONTROL_DYNAMIC_AVOIDANCE_DECISION.md)：哨兵局部路径跟踪与动态避障控制方案决策报告（含现状审计）。
 - [NAV2_RAYTRACE_CLEARING_PLAN.md](NAV2_RAYTRACE_CLEARING_PLAN.md)：terrain 衰减、高度过滤与 Nav2 射线清障方案（设计稿；R1–R8 未全部实施，文末折叠旧稿）。
 - [BR_PROTOCOL.md](BR_PROTOCOL.md)：上位机 ↔ 下位机的 BR 串口通信协议。
