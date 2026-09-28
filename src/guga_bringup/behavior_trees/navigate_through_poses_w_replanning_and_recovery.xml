@@ -6,7 +6,14 @@
         <RateController hz="1.25">
           <RecoveryNode name="ComputePathThroughPoses" number_of_retries="1">
             <ReactiveSequence>
-              <RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="0.7"/>
+              <!-- RemovePassedGoals 的 robot_base_frame 端口默认是 base_link,
+                   不受 bt_navigator 的 robot_base_frame 约束; 本项目 TF 树里没有
+                   base_link, 必须显式指定, 否则每轮 tick 都查不到位姿而失败 -->
+              <RemovePassedGoals input_goals="{goals}"
+                                 output_goals="{goals}"
+                                 radius="0.7"
+                                 robot_base_frame="base_footprint"
+                                 global_frame="map"/>
               <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"/>
             </ReactiveSequence>
             <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
