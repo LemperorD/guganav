@@ -36,7 +36,7 @@ guganav/
 ├── .pre-commit-config.yaml    # pre-commit 钩子
 │
 ├── docs/
-│   └── CODING_STANDARD.md     # 编码规范（模式 A / 模式 B）
+│   └── 编码规范.md             # 编码规范（模式 A / 模式 B）
 │
 ├── scripts/                   # 工具脚本
 │   ├── colconBuild.sh         # 构建
@@ -96,7 +96,6 @@ guganav/
 │   ├── guga_common/           # [接口] 自定义 ROS2 msg（多包共享）
 │   ├── guga_ui/               # [UI] cmdvel_visualizer（速度可视化）
 │   ├── guga_ui_old/           # [UI-旧] guga_ui_common（共享内存）+ guga_ui_pangolin（Pangolin 3D）
-│   ├── guga_test/             # [测试] (COLCON_IGNORE)
 │   ├── guga_thirdparty/       # [第三方] point_lio 等
 │   ├── guga_vision/           # [视觉] (预留，当前为空)
 │
@@ -133,7 +132,7 @@ guganav/
 适用的场景：有跨帧状态的决策系统。  
 特征：`Config` 不可变 → `Context` 私有状态 → `Snapshot` 只读快照 → `Decision` 实例方法，3 层抽象。
 
-详见 `docs/CODING_STANDARD.md`。
+详见 `docs/编码规范.md`。
 
 ### 串口通信协议 (BR 协议)
 
@@ -339,7 +338,7 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 
 | 文件 | 说明 |
 |------|------|
-| `docs/CODING_STANDARD.md` | 完整编码规范 |
+| `docs/编码规范.md` | 完整编码规范 |
 | `src/guga_perception/terrain_analysis/` | 模式 A 范例代码 |
 | `src/guga_decision/simple_decision/` | 模式 B 范例代码 |
 | `src/guga_bringup/launch/reality_launch.py` | 实车启动入口 |

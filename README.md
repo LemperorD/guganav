@@ -377,7 +377,7 @@ pre-commit run --all-files
 - 新增或修改核心逻辑时，优先补充小范围、可重复的单元测试。
 - 修改 launch、脚本、配置、地图路径或 Nav2 插件参数后，同步更新 README 或对应子目录文档。
 - 在确保稳定性之前不可提交至主线。
-- `docs/CODING_STANDARD.md`
+- `docs/编码规范.md`
 
 ## 常见问题
 

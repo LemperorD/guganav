@@ -143,7 +143,7 @@ R26 §5.6.4 与 P26 表 1-33，第 29—31 页：通过 `0x0301` 子内容 `0x01
 
 ## 8. 当前仓库实现与完整协议的差距
 
-对照 [BR 协议](../BR_PROTOCOL.md)、[串口节点实现](../../src/guga_driver/serial_driver/src/serial_driver_node.cpp)、[RobotStatus.msg](../../src/guga_interfaces/msg/RobotStatus.msg) 和 [GameStatus.msg](../../src/guga_interfaces/msg/GameStatus.msg)：
+对照 [BR 协议](../通信协议.md)、[串口节点实现](../../src/guga_driver/serial_driver/src/serial_driver_node.cpp)、[RobotStatus.msg](../../src/guga_interfaces/msg/RobotStatus.msg) 和 [GameStatus.msg](../../src/guga_interfaces/msg/GameStatus.msg)：
 
 | 当前入口 | 已确认代码行为 | 尚缺内容 |
 | --- | --- | --- |

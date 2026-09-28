@@ -44,7 +44,7 @@ lidar_odometry       point_lio 输出 (已换算到 odom 系)
 registered_scan      point_lio 输出的点云 (已换算到 odom 系)
 ```
 
-在 [scan_to_sensor_frame.cpp](../src/guga_perception/scan_to_sensor_frame/src/scan_to_sensor_frame.cpp) 中：
+在 [scan_to_sensor_frame.cpp](../src/guga_transform/scan_to_sensor_frame/src/scan_to_sensor_frame.cpp) 中：
 
 1. 将 `lidar_odometry.pose` 作为 `odom -> front_mid360`。
 2. 调用 `lookupTransform(front_mid360, base_footprint)`，取得
@@ -97,7 +97,7 @@ Point-LIO 自身的位姿在雷达里程计系 (初始 IMU 姿态, `camera_init`
 
 ## 4. `nonrotating_vel_transform` 的转换
 
-实现见 [nonrotating_vel_transform.cpp](../src/guga_controller/nonrotating_vel_transform/src/nonrotating_vel_transform.cpp)：
+实现见 [nonrotating_vel_transform.cpp](../src/guga_transform/nonrotating_vel_transform/src/nonrotating_vel_transform.cpp)：
 
 ```text
 输入 TF: odom -> base_footprint（由 scan_to_sensor_frame 发布）
