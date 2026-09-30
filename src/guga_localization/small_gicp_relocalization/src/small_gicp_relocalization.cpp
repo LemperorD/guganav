@@ -77,25 +77,25 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     "registered_scan", 10,
-    std::bind(&SmallGicpRelocalizationNode::registeredPcdCallback, this, std::placeholders::_1));
+    [this] (const sensor_msgs::msg::PointCloud2::SharedPtr msg){registeredPcdCallback(msg);});
 
   initial_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "initialpose", 10,
-    std::bind(&SmallGicpRelocalizationNode::initialPoseCallback, this, std::placeholders::_1));
+    [this] (const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg){initialPoseCallback(msg);});
 
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
-    std::bind(&SmallGicpRelocalizationNode::performRegistration, this));
+    [this] () {performRegistration();});
 
   transform_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50),  // 20 Hz
-    std::bind(&SmallGicpRelocalizationNode::publishTransform, this));
+    [this] (){publishTransform();});
 
   // A component constructor runs inside the container's load_node service.
   // Waiting for TF here blocks every component queued behind this node,
   // including the Nav2 servers that own the costmaps.
   map_initialization_timer_ = this->create_wall_timer(
-    std::chrono::seconds(1), std::bind(&SmallGicpRelocalizationNode::initializeGlobalMap, this));
+    std::chrono::seconds(1), [this] (){initializeGlobalMap();});
 }
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)

@@ -15,7 +15,7 @@ planner_server:
       esdf_weight: 200.0
       esdf_safe_distance: 1.5
       corridor_halfwidth: 15.0
-      smoothness_weight: 20.0
+      smoothness_weight: 40.0
       distance_weight: 0.3
       max_control_points: 24
       max_iterations: 300
@@ -24,7 +24,7 @@ local_costmap:
   local_costmap:
     ros__parameters:
 
-      plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
 
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer
@@ -44,7 +44,7 @@ global_costmap:
   global_costmap:
     ros__parameters:
 
-      plugins: ["static_layer", "intensity_voxel_layer", "esdf_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
 
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer

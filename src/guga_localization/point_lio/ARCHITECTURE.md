@@ -320,6 +320,36 @@ z_IMU[3:6] = a_meas * G/acc_norm - (acc + ba)  (加速度残差)
 - 如果已有 (且距离体素中心 < 0.5 * 分辨率): 跳过 (避免冗余)
 - 否则: 加入 `points_to_add` 批量添加到 iVox
 
+### 5.8 主循环工作流标记 (Workflow ↔ 伪代码步骤)
+
+`laserMapping.cpp` / `Estimator.cpp` 中的 `[Workflow N]` 注释对应 Point-LIO 论文
+Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法流程:
+
+| 标记 | 伪代码步骤 | 代码位置 |
+|------|-----------|----------|
+| `[Workflow 1]` | ① 状态传播 (9)(10) | `processFramePoints`: 各 `kf.predict()` 调用前 (laserMapping.cpp ~L589/L667) |
+| `[Workflow 2]` | ② 如果是激光雷达点 | `processFramePoints` 列1: `time_seq` 非空时的逐时间组循环 (~L624) |
+| `[Workflow 3]` | ③ 点量测准备 (协方差变换) | `prepare_point_measurements()` (~L1006); 注: 本实现用标量 `laser_point_cov`, 逐点协方差变换未启用 |
+| `[Workflow 4]` | ④ 判断是否存在平面对应 | `update_iterated_dyn_share_modified()` 调用前 (~L777); 内部 `h_model_*` 做近邻搜索/平面拟合/马氏检验 |
+| `[Workflow 5]` | ⑤ 计算 r, H, D (12)(13) | 同上调用; 残差/雅可比/噪声在 `h_model_*` 内计算 (Estimator.cpp) |
+| `[Workflow 6]` | ⑥ 状态更新 (20)(21) | 同上调用; `x_.boxplus(K·z)` 在 esekfom.hpp `update_iterated_dyn_share_modified` 内 |
+| `[Workflow 7]` | ⑦ 协方差更新 (23)(24) | 同上调用; `P_ -= K·H·P_` 在 esekfom.hpp 内 |
+| `[Workflow 8]` | ⑧ 更新状态变换点加入地图 | 更新后的 `pointBodyToWorld` 循环 (~L812); 入库在 `MapIncremental` (~L1026) |
+| `[Workflow 9]` | ⑨ 否则 (无对应→跳过更新) | `if (!update_iterated_dyn_share_modified()) continue;` (~L782) |
+| `[Workflow 10]` | ⑩ 将点 p 加入地图 | `MapIncremental` 中 `Nearest_Points` 为空的分支 (~L241) |
+| `[Workflow 12]` | ⑫ 否则如果 IMU 测量 | `processFramePoints` 列2: `time_seq` 为空时的 IMU-only 分支 (~L537) |
+| `[Workflow 13]` | ⑬ 如果无饱和度 (a_m, ω_m) | `h_model_IMU_output` 内 `check_satu` 逐轴判断 (Estimator.cpp ~L542); 调用点见两处 `update_iterated_dyn_share_IMU()` (~L605/L735) |
+| `[Workflow 14]` | ⑭ 计算 r, H, D (14)(15) | `h_model_IMU_output` 残差/量测噪声 (Estimator.cpp ~L529) |
+| `[Workflow 15]` | ⑮ 状态更新 (20)(21) | `update_iterated_dyn_share_IMU` 内 `x_.boxplus(K·z_IMU)` (esekfom.hpp) |
+| `[Workflow 16]` | ⑯ 协方差更新 (23)(24) | `update_iterated_dyn_share_IMU` 内 `P_ -= K·HP` (esekfom.hpp) |
+| `[Workflow 17]` | ⑰ 否则 (饱和→跳过) | `satu_check` 为真的轴不参与增益/协方差计算 (esekfom.hpp); 残差置零在 `h_model_IMU_output` (~L543) |
+| `[Workflow 18]` | ⑱ 算法末尾 (输出) | 帧末 `publish_odometry()` 发布 x_{k+1}/P_{k+1} (~L1020) |
+
+说明:
+- 步骤 ⑪ (LiDAR 分支的结束 `否则`) 无对应代码, 故无标记。
+
+- 标记编号与伪代码步骤号一一对应, 与代码出现顺序无关。
+
 ---
 
 ## 6. 模块依赖关系
@@ -369,7 +399,6 @@ z_IMU[3:6] = a_meas * G/acc_norm - (acc + ba)  (加速度残差)
 
 | 维度 | input 模式 | output 模式 |
 |------|-----------|------------|
-| 参数名 | `use_imu_as_input: True` | `use_imu_as_input: False` (默认) |
 | 状态维度 | 24 | 30 |
 | 过程噪声维度 | 12 (ng, na, nbg, nba) | 15 (+ vel噪声) |
 | 量测模型数 | 1 (激光点面) | 2 (激光点面 + IMU伪量测) |
@@ -425,7 +454,6 @@ z_IMU[3:6] = a_meas * G/acc_norm - (acc + ba)  (加速度残差)
 ```
 ros__parameters:
 ├── 模式开关
-│   ├── use_imu_as_input       # True=input(24维) / False=output(30维)
 │   ├── prop_at_freq_of_imu    # 按IMU频率传播
 │   ├── check_satu             # IMU饱和检测
 │   ├── space_down_sample      # 二次空间降采样
@@ -456,7 +484,7 @@ ros__parameters:
 │   ├── 滤波: filter_size_surf, filter_size_map, ivox_grid_resolution
 │   ├── 外参: extrinsic_T, extrinsic_R
 │   ├── 重力: gravity, gravity_init
-│   └── 时序: imu_time_inte, lidar_time_inte
+│   └── 时序: lidar_time_inte
 │
 ├── odometry
 │   └── publish_odometry_without_downsample
@@ -568,7 +596,6 @@ ros__parameters:
 - `libeigen3-dev` (Eigen3 线性代数)
 - `libpcl-dev` (PCL 点云库)
 - `ros-$ROS_DISTRO-pcl-conversions` (PCL↔ROS2 桥接)
-- `libgoogle-glog-dev` (Google 日志库)
 - `libunwind-dev` (栈回溯)
 
 ### 11.2 Vendor 依赖 (源码内嵌)
@@ -616,5 +643,4 @@ ros__parameters:
 | `filter_size_map_min` | 0.5m | 地图降采样分辨率 |
 | `ivox_grid_resolution` | 2.0m (Mid360) / 0.2m (默认) | iVox 体素边长 |
 | `laser_point_cov` | 0.01 | 量测噪声方差 |
-| `imu_time_inte` | 0.005s | IMU 积分步长 |
 | `G_m_s2` | 9.81 | 重力加速度 |

@@ -166,12 +166,21 @@ interactive_menu() {
       i=$((i+1))
     done
     echo "  0) 退出"
-    printf "选择 [0-%d]: " "${#names[@]}"
+    printf "选择 [0-%d]（s=保存当前参数）: " "${#names[@]}"
     read -r choice || break
     [ -z "$choice" ] && continue
     if [ "$choice" = "0" ]; then
       echo "再见了，${USER}小弟🐧🐧🐧"
       break
+    fi
+    if [ "$choice" = "s" ] || [ "$choice" = "S" ]; then
+      local save_file
+      printf "  保存到文件 [默认 /tmp/mppi_saved.yaml]: "
+      read -r save_file || break
+      [ -z "$save_file" ] && save_file="/tmp/mppi_saved.yaml"
+      ros2 param dump "$node" 2>/dev/null | grep -E "FollowPath\\." > "$save_file" || true
+      echo "  ✅ 已保存 $(grep -c . "$save_file" 2>/dev/null || echo 0) 项参数 → $save_file"
+      continue
     fi
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
       echo "无效选择: $choice" >&2

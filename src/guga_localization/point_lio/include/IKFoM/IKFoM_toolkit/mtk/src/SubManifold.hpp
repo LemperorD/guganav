@@ -106,7 +106,7 @@ struct SubManifold : public T
 	//! Construct from derived type
 	template<class X>
 	explicit
-	SubManifold(const X& t) : T(t) {};
+	SubManifold(const X& t) : T(t) {}
 	
 	//! Construct from internal type
 	//explicit

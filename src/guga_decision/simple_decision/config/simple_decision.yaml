@@ -12,6 +12,8 @@
     goal_pose_topic: "goal_pose"
     debug_attack_pose_topic: "debug_attack_pose"
     frame_id: "map"
+    # 取自身位姿用的机器人坐标系; 本项目的 TF 树里是 base_footprint, 不是 base_link
+    base_frame_id: "base_footprint"
 
     # chassis & motion
     chassis_mode_topic: "chassis_mode"

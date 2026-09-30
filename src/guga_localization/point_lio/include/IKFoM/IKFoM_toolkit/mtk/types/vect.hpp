@@ -126,12 +126,12 @@ struct vect : public Eigen::Matrix<_scalar, D, 1, _Options>
 
   void oplus(MTK::vectview<const scalar, D> vec, scalar scale = 1) { *this += scale * vec; }
 
-  void hat(Eigen::VectorXd & v, Eigen::MatrixXd & res) { std::cout << "wrong idx" << '\n'; }
-  void Jacob_right_inv(Eigen::VectorXd & v, Eigen::MatrixXd & res)
+  void hat(Eigen::VectorXd &, Eigen::MatrixXd &) { std::cout << "wrong idx" << '\n'; }
+  void Jacob_right_inv(Eigen::VectorXd &, Eigen::MatrixXd &)
   {
     std::cout << "wrong idx" << '\n';
   }
-  void Jacob_right(Eigen::VectorXd & v, Eigen::MatrixXd & res) { std::cout << "wrong idx" << '\n'; }
+  void Jacob_right(Eigen::VectorXd &, Eigen::MatrixXd &) { std::cout << "wrong idx" << '\n'; }
 
   void S2_hat(Eigen::Matrix<scalar, 3, 3> & res) { res = Eigen::Matrix<scalar, 3, 3>::Zero(); }
 
@@ -142,7 +142,8 @@ struct vect : public Eigen::Matrix<_scalar, D, 1, _Options>
     res = Eigen::Matrix<scalar, 2, 3>::Zero();
   }
 
-  void S2_Mx(Eigen::Matrix<scalar, 3, 2> & res, MTK::vectview<const scalar, 2> delta)
+  void S2_Mx(Eigen::Matrix<scalar, 3, 2> & res,
+             MTK::vectview<const scalar, 2>)
   {
     std::cerr << "wrong idx for S2" << '\n';
     std::exit(100);

@@ -63,9 +63,7 @@ guganav/
 │   ├── guga_perception/       # [感知层]
 │   │   ├── terrain_analysis/  #   地形可通行性分析 ★模式A范例
 │   │   ├── pointcloud_to_laserscan/ # 点云转激光扫描
-│   │   ├── sensor_scan_generation/  # 传感器扫描生成
-│   │   ├── loam_interface/    #   LOAM 里程计接口
-│   │   └── loam_interface_gravity/  # 带重力对齐的 LOAM 接口
+│   │   ├── scan_to_sensor_frame/  # 扫描转回雷达坐标系
 │   │
 │   ├── guga_localization/     # [定位层]
 │   │   ├── point_lio/         #   Point-LIO 激光惯性里程计
@@ -78,7 +76,7 @@ guganav/
 │   │   └── nav2_mppi_controller/ #  MPPI 控制器（输出 nonrotating 系速度）
 │   │
 │   ├── guga_planner/          # [规划层]
-│   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up, intensity_voxel)
+│   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up_free_space, obstacle_layer_local)
 │   │   └── minco_smoother/    #   MINCO 轨迹平滑器
 │   │
 │   ├── guga_decision/         # [决策层]

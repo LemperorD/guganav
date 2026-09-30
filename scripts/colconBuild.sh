@@ -14,7 +14,7 @@ Options:
     -r / --release       Release编译
     -d / --debug         Debug编译
     -m / --model         强制重编译控制器模型
-    -p / --packages      仅编译指定包(空格分隔多个包名)
+    -p / --packages      仅指定安全编译的包(空格分隔多个包名)
     -t / --tes           安全编译TES相关包(内存限制+单线程,防死机)
 EOF
 }
@@ -102,7 +102,7 @@ else
       echo "控制器模型编译失败，请检查错误信息。"
       exit 1
     fi
-  else 
+  else
     echo "控制器模型已存在，跳过编译。"
   fi
 fi

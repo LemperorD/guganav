@@ -1,5 +1,71 @@
 # Point-LIO
 
+## 本仓库适配
+
+本包是 `guganav` 中的 ROS 2 Humble Point-LIO 实现，构建目标为
+`pointlio_mapping`。从工作空间根目录构建并启动：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --packages-select point_lio
+source install/setup.bash
+ros2 launch point_lio point_lio.launch.py rviz:=False
+```
+
+启动文件默认加载 `config/mid360.yaml`。通过
+`point_lio_cfg_dir:=/absolute/path/to/config.yaml` 选择其他配置；包内提供
+`avia.yaml`、`horizon.yaml`、`mid360.yaml`、`ouster64.yaml` 和
+`velody16.yaml`。
+
+节点订阅 LiDAR 与 IMU 话题，具体名称由 YAML 的 `common.lid_topic` 与
+`common.imu_topic` 配置。
+
+### 输出
+
+发布两组话题：一组是上游 Point-LIO 原有的，位姿与点云都在雷达里程计系
+（初始 IMU 姿态，`camera_init`）下；另一组是项目约定输出，已换算到与底盘对齐的
+`odom` 系。
+
+| 话题 | 类型 | 坐标系 | 说明 |
+|------|------|--------|------|
+| `aft_mapped_to_init` | `nav_msgs/Odometry` | `camera_init` | 上游里程计，`child_frame_id` 为 `body` |
+| `cloud_registered` | `sensor_msgs/PointCloud2` | `camera_init` | 降采样后的世界系点云 |
+| `cloud_registered_body` | `sensor_msgs/PointCloud2` | `body` | 机体系点云，由 `publish.scan_bodyframe_pub_en` 控制 |
+| `Laser_map` | `sensor_msgs/PointCloud2` | `camera_init` | 建图初期的累积点云 |
+| `path` | `nav_msgs/Path` | `camera_init` | 轨迹，由 `publish.path_en` 控制 |
+| `registered_scan` | `sensor_msgs/PointCloud2` | `odom` | 项目约定：点云左乘安装变换后发布 |
+| `lidar_odometry` | `nav_msgs/Odometry` | `odom` | 项目约定：位姿左乘安装变换，`child_frame_id` 为 `front_mid360` |
+
+`registered_scan` 与 `lidar_odometry` 供 `terrain_analysis`、
+`small_gicp_relocalization`、`scan_to_sensor_frame` 使用。这部分换算原先由独立节点
+`loam_interface` 承担，现已并入本包（该包已删除），因为从 `camera_init` 到 `odom`
+只差一个静止的安装变换，不必为此多一个节点和一次话题转发。
+
+### `output_frame` 参数
+
+```yaml
+output_frame:
+  enable: true                       # 关闭后不发布上面那两个项目约定话题
+  odom_frame: "odom"
+  lidar_frame: "front_mid360"
+  base_frame: "base_footprint"
+  registered_scan_topic: "registered_scan"
+  lidar_odometry_topic: "lidar_odometry"
+  # 安装变换 (TF 的 base_frame <- lidar_frame)。留空表示启动阶段查一次 TF；
+  # 给出则直接用参数值, 不依赖 TF 是否就绪。
+  lidar_to_base_t: []                # [x, y, z]
+  lidar_to_base_r: []                # 行主序 3x3
+```
+
+留空时若查不到 TF，节点会按 2 秒节流打印警告，并且**暂不发布**这两个话题，而不是用
+未初始化的变换发布错误结果。当前实车与仿真的安装变换都在 TF 里给出，因此配置中
+不必重复填写。
+
+算法流程、当前接口和重构记录见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+下方内容来自上游 Point-LIO，保留用于算法背景与参数含义参考；其中涉及
+独立仓库目录、旧构建命令或旧 launch 文件的步骤不适用于本工作空间。
+
 > ROS2 Fork repo maintainer: [LihanChen2004](https://github.com/LihanChen2004)
 
 ## Point-LIO: Robust High-Bandwidth Lidar-Inertial Odometry

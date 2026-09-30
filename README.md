@@ -31,6 +31,7 @@
     - [实车建图](#实车建图)
     - [导航与决策联调](#导航与决策联调)
     - [保存地图](#保存地图)
+  - [Point-LIO](#point-lio)
   - [测试与检查](#测试与检查)
   - [开发规范](#开发规范)
   - [常见问题](#常见问题)
@@ -277,6 +278,32 @@ scripts/nav_decision.sh
 cd ~/guganav
 scripts/save_map.sh
 ```
+
+## Point-LIO
+
+`point_lio` 是本仓库的 LiDAR-IMU 里程计节点，提供
+`aft_mapped_to_init` 里程计、注册点云和可选 TF。直接构建与启动：
+
+```bash
+cd ~/guganav
+source /opt/ros/humble/setup.bash
+colcon build --packages-select point_lio
+source install/setup.bash
+ros2 launch point_lio point_lio.launch.py rviz:=False
+```
+
+默认使用 `config/mid360.yaml`。可通过 `point_lio_cfg_dir` 指定
+`avia.yaml`、`horizon.yaml`、`ouster64.yaml` 或 `velody16.yaml`：
+
+```bash
+ros2 launch point_lio point_lio.launch.py \
+  point_lio_cfg_dir:=/path/to/point_lio.yaml
+```
+
+参数、话题和重构状态见
+[`src/guga_localization/point_lio/README.md`](src/guga_localization/point_lio/README.md)；
+内部流程和已知问题见
+[`src/guga_localization/point_lio/ARCHITECTURE.md`](src/guga_localization/point_lio/ARCHITECTURE.md)。
 
 常用 launch 参数：
 

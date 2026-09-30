@@ -18,9 +18,9 @@ if [ -z "${ROS_DISTRO:-}" ]; then
 fi
 cd "$WS"
 
-rm -rf build/terrain_analysis build/terrain_analysis_ext \
-  install/terrain_analysis install/terrain_analysis_ext \
-  log/latest_build/terrain_analysis log/latest_build/terrain_analysis_ext
+rm -rf build/terrain_analysis \
+  install/terrain_analysis \
+  log/latest_build/terrain_analysis
 
 mkdir -p build/terrain_analysis
 RESULT_FILE=$WS/build/terrain_analysis/coverage_result.ans
@@ -37,11 +37,11 @@ if colcon build --help 2>/dev/null | grep -q -- "--allow-overriding"; then
   ALLOW_OVERRIDE_ARGS=(--allow-overriding terrain_analysis)
 fi
 colcon build \
-  --base-paths "$TERRAIN_ROOT" \
+  --base-paths "$TERRAIN_ROOT" "$WS/src/guga_common" \
   --symlink-install \
   --parallel-workers 1 \
   "${ALLOW_OVERRIDE_ARGS[@]}" \
-  --packages-select terrain_analysis terrain_analysis_ext \
+  --packages-select guga_common terrain_analysis \
   --event-handlers console_direct+ \
   --cmake-clean-cache \
   --cmake-args \
@@ -56,7 +56,7 @@ source_setup "$WS/install/setup.bash"
 
 echo "=== Run tests ===" | tee -a "$RESULT_FILE"
 cd "$WS/build/terrain_analysis"
-for test_bin in test_terrain_analysis test_state_ingest test_algorithm; do
+for test_bin in test_terrain_analysis test_frame_ingest test_algorithm test_integration; do
   echo "--- $test_bin ---" | tee -a "$RESULT_FILE"
   GTEST_COLOR=yes ./$test_bin 2>&1 | tee -a "$RESULT_FILE"
 done
@@ -64,7 +64,7 @@ done
 echo "" | tee -a "$RESULT_FILE"
 echo "=== Generate coverage report ===" | tee -a "$RESULT_FILE"
 cd "$WS"
-FILTER_BASE='src/guga_perception/terrain_analysis/terrain_analysis'
+FILTER_BASE='src/guga_perception/terrain_analysis'
 gcovr \
   --root . \
   --object-directory build/terrain_analysis \

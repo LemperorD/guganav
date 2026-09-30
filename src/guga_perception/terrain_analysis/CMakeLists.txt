@@ -1,0 +1,102 @@
+cmake_minimum_required(VERSION 3.5)
+project(terrain_analysis)
+
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+## Export compile commands for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(pcl_ros REQUIRED)
+find_package(guga_common REQUIRED)
+
+# Library（组件库必须 SHARED，plugin 动态加载）
+add_library(terrain_analysis_lib SHARED
+  src/terrain_analysis_node.cpp
+  src/per_frame_height_map.cpp
+  src/persistent_voxel_map.cpp)
+
+target_include_directories(terrain_analysis_lib PUBLIC include)
+ament_target_dependencies(
+  terrain_analysis_lib
+  rclcpp
+  rclcpp_components
+  sensor_msgs
+  nav_msgs
+  geometry_msgs
+  message_filters
+  pcl_ros
+  pcl_conversions
+  guga_common)
+
+
+
+# 注册为 rclcpp component，同时生成独立可执行文件
+rclcpp_components_register_node(terrain_analysis_lib
+  PLUGIN "terrain_analysis::TerrainAnalysis"
+  EXECUTABLE terrain_analysis_exe
+)
+
+
+
+# 组件库运行时依赖：必须安装到 lib 才能被 pluginlib 加载
+install(TARGETS terrain_analysis_lib
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME})
+
+# 头文件对外可用：别的包找到本包时能拿到 include 目录与传递依赖
+# （guga_common 的 Point3d、PCL 的点类型都出现在公有头里）。
+install(DIRECTORY include/ DESTINATION include)
+ament_export_include_directories(include)
+ament_export_dependencies(guga_common)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_terrain_analysis test/test_terrain_analysis.cpp)
+  target_include_directories(test_terrain_analysis PRIVATE test)
+  target_link_libraries(test_terrain_analysis terrain_analysis_lib)
+
+  ament_add_gtest(test_frame_receive test/test_frame_receive.cpp)
+  target_include_directories(test_frame_receive PRIVATE test)
+  target_link_libraries(test_frame_receive terrain_analysis_lib)
+
+  ament_add_gtest(test_algorithm test/test_algorithm.cpp)
+  target_include_directories(test_algorithm PRIVATE test)
+  target_link_libraries(test_algorithm terrain_analysis_lib)
+
+  # 集成测试：只通过 ROS 话题驱动节点，覆盖订阅/时间戳/发布与跨帧数据分发
+  ament_add_gtest(test_integration test/test_integration.cpp)
+  target_include_directories(test_integration PRIVATE test)
+  target_link_libraries(test_integration terrain_analysis_lib)
+
+  # 叶宽影响测量工具：手动运行，不注册为测试（不拖慢 colcon test）
+  add_executable(measure_leaf test/measure_leaf.cpp)
+  target_include_directories(measure_leaf PRIVATE test)
+  target_link_libraries(measure_leaf terrain_analysis_lib)
+
+endif()
+
+ament_export_dependencies(rclcpp_components)
+ament_export_libraries(terrain_analysis_lib)
+
+ament_package()

@@ -30,3 +30,10 @@ python3 c_codegen/c_codegen_omni.py
 
 确认雷达、串口、相机 SDK、地图、PCD 和参数文件路径均与当前机器一致。实车参数主要位于
 `src/guga_bringup/config/reality/`。
+
+## rviz因未知原因打不开
+将你的互联网设置为buaa mobile试试.
+
+# POINT_LIO
+## 修改后发现地图随小车旋转
+多半是改动了初始化的相关逻辑.重点检查初始化的次数是否与改动前相同,是否将一次性初始化的量多次初始化了.

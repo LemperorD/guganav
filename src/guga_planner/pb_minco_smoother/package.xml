@@ -35,7 +35,7 @@
     <depend>eigen</depend>
     <depend>guga_common</depend>
 
-    <!-- 项目内依赖（IntensityVoxelLayer 的 ESDF 功能） -->
+    <!-- 项目内依赖（同仓库的 Nav2 插件包） -->
     <depend>pb_nav2_plugins</depend>
 
     <!-- 轨迹消息接口 -->

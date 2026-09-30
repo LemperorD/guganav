@@ -167,36 +167,13 @@ def generate_launch_description():
         parameters=configured_params,
     )
 
-    # 非组合模式：独立进程运行 terrain_analysis_ext
-    start_terrain_analysis_ext_cmd = Node(
-        package="terrain_analysis_ext",
-        executable="terrain_analysis_ext_exe",
-        name="terrain_analysis_ext",
-        output="screen",
-        condition=IfCondition(PythonExpression(["not ", use_composition])),
-        respawn=use_respawn,
-        respawn_delay=2.0,
-        arguments=["--ros-args", "--log-level", log_level],
-        parameters=configured_params,
-    )
-
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(["not ", use_composition])),
         actions=[
             Node(
-                package="loam_interface",
-                executable="loam_interface_node",
-                name="loam_interface",
-                output="screen",
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=configured_params,
-                arguments=["--ros-args", "--log-level", log_level],
-            ),
-            Node(
-                package="sensor_scan_generation",
-                executable="sensor_scan_generation_node",
-                name="sensor_scan_generation",
+                package="scan_to_sensor_frame",
+                executable="scan_to_sensor_frame_node",
+                name="scan_to_sensor_frame",
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
@@ -339,23 +316,9 @@ def generate_launch_description():
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
-                package="terrain_analysis_ext",
-                plugin="terrain_analysis_ext::TerrainAnalysisExtNode",
-                name="terrain_analysis_ext",
-                parameters=configured_params,
-                extra_arguments=[{'use_intra_process_comms': True}],
-            ),
-            ComposableNode(
-                package="loam_interface",
-                plugin="loam_interface::LoamInterfaceNode",
-                name="loam_interface",
-                parameters=configured_params,
-                extra_arguments=[{'use_intra_process_comms': True}],
-            ),
-            ComposableNode(
-                package="sensor_scan_generation",
-                plugin="sensor_scan_generation::SensorScanGenerationNode",
-                name="sensor_scan_generation",
+                package="scan_to_sensor_frame",
+                plugin="scan_to_sensor_frame::ScanToSensorFrameNode",
+                name="scan_to_sensor_frame",
                 parameters=configured_params,
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
@@ -476,7 +439,6 @@ def generate_launch_description():
     ld.add_action(declare_log_level_cmd)
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_terrain_analysis_cmd)
-    ld.add_action(start_terrain_analysis_ext_cmd)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
 
