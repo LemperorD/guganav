@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="3" project_name="Project">
+    <include path="rmul.xml"/>
+    <!-- Description of Node Models (used by Groot) -->
+    <TreeNodesModel>
+        <Action ID="CheckGreaterThan200" editable="true">
+            <input_port name="HP" default="200" type="double"/>
+        </Action>
+        <Action ID="SetGoalPose" editable="true">
+            <input_port name="pose_x" default="0.0" type="double"/>
+            <input_port name="pose_y" default="0.0" type="double"/>
+        </Action>
+    </TreeNodesModel>
+</root>
