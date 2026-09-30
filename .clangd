@@ -4,6 +4,7 @@ CompileFlags:
     - -xc++
     - -std=gnu++20
     - --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/11
+    - -I/opt/ros/humble/include  # ROS 2 头文件;behaviortree_cpp_v3 与 behaviortree_cpp 都在此目录下
     - -I/home/rog/guganav/.cache/clangd-include  # 内含 omp.h(系统 GCC 头目录 clangd 找不到);
     # 若 .cache 被清空,重新执行:
     #   mkdir -p .cache/clangd-include && cp /usr/lib/gcc/x86_64-linux-gnu/11/include/omp.h .cache/clangd-include/
