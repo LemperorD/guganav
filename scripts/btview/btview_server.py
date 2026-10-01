@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""行为树 Web UI 的服务端：一边 tail 执行记录，一边转发假裁判的参数。
+"""行为树 Web UI 的服务端：一边 tail 执行记录，一边转发假数据源的参数。
 
 数据来源是决策节点写出的 .btlog（BT.CPP v4 的 FileLogger2 格式）。选它而不是
 自己发 ROS 话题，是因为 C++ 侧只需两行就能启用，而解析逻辑已经在
 btlog_view.py 里写好了。
 
-参数读写通过 rclpy 直接调假裁判的 get_parameters / set_parameters 服务，
+参数读写通过 rclpy 直接调假数据源的 get_parameters / set_parameters 服务，
 不经过 ros2 CLI——CLI 依赖 node graph 查询，某些环境（含开发沙箱）会报
 "Node not found"，而服务发现是好的。
 
 用法：
-    scripts/btview_server.py                          # 默认读 /tmp/bt_trace.btlog
-    scripts/btview_server.py --log 路径.btlog
-    scripts/btview_server.py --referee /fake_referee --port 8080
+    scripts/btview/btview_server.py                          # 默认读 /tmp/bt_trace.btlog
+    scripts/btview/btview_server.py --log 路径.btlog
+    scripts/btview/btview_server.py --source /fake_msg_source --port 8080
 
 浏览器打开 http://localhost:8080。
 
@@ -20,7 +20,7 @@ btlog_view.py 里写好了。
     服务器 -> 浏览器
         {"type":"tree"}                    树结构，连接时发一次
         {"type":"tick"}                    每完成一次 tick 发一条
-        {"type":"params"}                  假裁判参数，定期刷新
+        {"type":"params"}                  假数据源参数，定期刷新
         {"type":"result","ok":bool,"msg"}  参数写入的反馈
     浏览器 -> 服务器
         {"type":"set_param","name":...,"value":...}
@@ -43,8 +43,8 @@ STATUS_NAMES = {0: "IDLE", 1: "RUNNING", 2: "SUCCESS", 3: "FAILURE"}
 MAGIC = b"BTCPP4-FileLogger2"
 HEADER_LEN = len(MAGIC) + 1 + 4
 
-# 假裁判的可调参数：名称、类型、说明。与 fake_referee_node.cpp 里的声明对应。
-REFEREE_PARAMS = [
+# 假数据源的可调参数：名称、类型、说明。与 fake_msg_source_node.cpp 里的声明对应。
+SOURCE_PARAMS = [
     ("current_hp", "integer", "当前血量"),
     ("maximum_hp", "integer", "血量上限"),
     ("projectile_allowance_17mm", "integer", "允许发弹量"),
@@ -55,6 +55,8 @@ REFEREE_PARAMS = [
     ("robot_id", "integer", "机器人 ID"),
     ("robot_level", "integer", "机器人等级"),
     ("publish_rate", "double", "发布频率"),
+    ("enemy_count", "integer", "敌人数量（>0 即有敌）"),
+    ("vision_rate", "double", "视觉发布频率"),
 ]
 
 
@@ -164,8 +166,8 @@ class BtLogTailer:
         }
 
 
-class RefereeBridge:
-    """读写假裁判参数的 ROS 2 侧封装。
+class SourceBridge:
+    """读写假数据源参数的 ROS 2 侧封装。
 
     rclpy 在专用线程上 spin，主线程只投递请求再轮询 future——这样 asyncio 的
     事件循环不会被阻塞，也不需要在两处各自 spin。
@@ -213,13 +215,13 @@ class RefereeBridge:
         from rcl_interfaces.msg import ParameterType
 
         req = self._get_srv.Request()
-        req.names = [name for name, _kind, _desc in REFEREE_PARAMS]
+        req.names = [name for name, _kind, _desc in SOURCE_PARAMS]
         res = self._await(self.get_cli.call_async(req))
         if res is None:
             return None
 
         items = []
-        for (name, kind, desc), value in zip(REFEREE_PARAMS, res.values):
+        for (name, kind, desc), value in zip(SOURCE_PARAMS, res.values):
             if value.type == ParameterType.PARAMETER_DOUBLE:
                 shown = value.double_value
             elif value.type == ParameterType.PARAMETER_BOOL:
@@ -233,7 +235,7 @@ class RefereeBridge:
         """把界面上输入的文本按参数类型写回。返回 (ok, message)。"""
         from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 
-        kind = dict((n, k) for n, k, _d in REFEREE_PARAMS).get(name, "integer")
+        kind = dict((n, k) for n, k, _d in SOURCE_PARAMS).get(name, "integer")
         if not self.set_cli.wait_for_service(timeout_sec=1.0):
             return False, f"{self._target} 的 set_parameters 服务不可用"
 
@@ -262,17 +264,17 @@ class RefereeBridge:
 
 
 class BtViewServer:
-    def __init__(self, log_path, html_path, referee_node, poll_interval=0.2):
+    def __init__(self, log_path, html_path, source_node, poll_interval=0.2):
         self.tailer = BtLogTailer(log_path)
         self.html_path = html_path
         self.poll_interval = poll_interval
         self.clients = set()
         self.last_params = None
         try:
-            self.referee = RefereeBridge(referee_node)
+            self.source = SourceBridge(source_node)
         except Exception as exc:
             print(f"参数桥接未启用: {exc}", file=sys.stderr)
-            self.referee = None
+            self.source = None
 
     # ---- HTTP ----
     async def index(self, request):
@@ -303,23 +305,23 @@ class BtViewServer:
         if kind == "get_params":
             await self.push_params()
         elif kind == "set_param":
-            if not self.referee:
+            if not self.source:
                 await ws.send_json({"type": "result", "ok": False,
                                     "msg": "参数桥接未启用"})
                 return
             loop = asyncio.get_running_loop()
             ok, text = await loop.run_in_executor(
-                None, self.referee.write, msg["name"], str(msg["value"])
+                None, self.source.write, msg["name"], str(msg["value"])
             )
             await ws.send_json({"type": "result", "ok": ok,
                                 "msg": f"{msg['name']}: {text}"})
             await self.push_params()
 
     async def push_params(self):
-        if not self.referee:
+        if not self.source:
             return
         loop = asyncio.get_running_loop()
-        items = await loop.run_in_executor(None, self.referee.read_all)
+        items = await loop.run_in_executor(None, self.source.read_all)
         if items is None:
             return
         self.last_params = {"type": "params", "items": items}
@@ -368,7 +370,7 @@ def main():
     parser.add_argument("--log", default="/tmp/bt_trace.btlog", help=".btlog 文件路径")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
     parser.add_argument("--port", type=int, default=8080, help="监听端口")
-    parser.add_argument("--referee", default="/fake_referee", help="假裁判节点名")
+    parser.add_argument("--source", default="/fake_msg_source", help="假数据源节点名")
     parser.add_argument("--html", default=os.path.join(here, "btview.html"))
     parser.add_argument("--interval", type=float, default=0.2, help="轮询间隔（秒）")
     args = parser.parse_args()
@@ -376,7 +378,7 @@ def main():
     if not os.path.exists(args.html):
         raise SystemExit(f"前端页面不存在：{args.html}")
 
-    server = BtViewServer(args.log, args.html, args.referee, args.interval)
+    server = BtViewServer(args.log, args.html, args.source, args.interval)
 
     app = web.Application()
     app.router.add_get("/", server.index)
@@ -387,14 +389,14 @@ def main():
 
     async def stop_background(app):
         app["poller"].cancel()
-        if server.referee:
-            server.referee.shutdown()
+        if server.source:
+            server.source.shutdown()
 
     app.on_startup.append(start_background)
     app.on_cleanup.append(stop_background)
 
     print(f"记录文件: {args.log}")
-    print(f"假裁判节点: {args.referee}")
+    print(f"假数据源节点: {args.source}")
     print(f"打开浏览器访问: http://localhost:{args.port}")
     web.run_app(app, host=args.host, port=args.port, print=None)
 

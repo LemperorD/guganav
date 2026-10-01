@@ -1,6 +1,7 @@
-#include "fake_referee/fake_referee_node.hpp"
+#include "fake_msg_source/fake_msg_source.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -11,17 +12,23 @@ constexpr std::int64_t kSentryId = 7;
 constexpr std::int64_t kSentryMaxHp = 400;
 constexpr std::int64_t kSentryHeatLimit = 260;
 constexpr std::int64_t kSentryCooling = 30;
-constexpr double kDefaultRate = 20.0;
+
+constexpr double kDefaultStatusRate = 20.0;
+constexpr double kDefaultVisionRate = 10.0;
 }  // namespace
 
-FakeRefereeNode::FakeRefereeNode()
-: rclcpp::Node("fake_referee")
+FakeMsgSource::FakeMsgSource()
+: rclcpp::Node("fake_msg_source")
 {
-  // 话题名与频率。频率在启动时建定时器，运行中改 publish_rate 需重启节点。
-  const std::string topic = declare_parameter<std::string>("topic", "referee/robot_status");
-  const double publish_rate = declare_parameter<double>("publish_rate", kDefaultRate);
+  // ===== 话题与频率 =====
+  const std::string status_topic =
+    declare_parameter<std::string>("robot_status_topic", "referee/robot_status");
+  const std::string vision_topic =
+    declare_parameter<std::string>("vision_topic", "vision/info");
+  const double status_rate = declare_parameter<double>("publish_rate", kDefaultStatusRate);
+  const double vision_rate = declare_parameter<double>("vision_rate", kDefaultVisionRate);
 
-  // 本机性能体系，全部可在运行时调整
+  // ===== 本机裁判状态：全部可在运行时调整 =====
   declare_parameter<std::int64_t>("robot_id", kSentryId);
   declare_parameter<std::int64_t>("robot_level", 1);
   declare_parameter<std::int64_t>("current_hp", kSentryMaxHp);
@@ -32,27 +39,39 @@ FakeRefereeNode::FakeRefereeNode()
   declare_parameter<std::int64_t>("projectile_allowance_17mm", 100);
   declare_parameter<std::int64_t>("remaining_gold_coin", 0);
 
+  // ===== 视觉汇总 =====
+  // 只有一个计数字段：> 0 表示视野里有敌人。改成 0 即可模拟敌人消失。
+  declare_parameter<std::int64_t>("enemy_count", 0);
+  declare_parameter<std::string>("vision_frame_id", "map");
+
   param_callback_ = add_on_set_parameters_callback(
     [this](const std::vector<rclcpp::Parameter>& params) {
       return on_parameters_changed(params);
     });
 
-  publisher_ = create_publisher<RobotStatusMsg>(topic, 10);
+  status_pub_ = create_publisher<RobotStatusMsg>(status_topic, 10);
+  vision_pub_ = create_publisher<VisionInfoMsg>(vision_topic, 10);
 
   last_hp_ = static_cast<std::uint16_t>(param_int("current_hp"));
 
   // 频率非法时回退到默认值，避免除零或负周期
-  const double rate = (publish_rate > 0.0) ? publish_rate : kDefaultRate;
-  timer_ = create_wall_timer(
-    std::chrono::duration<double>(1.0 / rate),
-    [this]() { publish_status(); });
+  const double eff_status_rate = (status_rate > 0.0) ? status_rate : kDefaultStatusRate;
+  const double eff_vision_rate = (vision_rate > 0.0) ? vision_rate : kDefaultVisionRate;
+
+  status_timer_ = create_wall_timer(
+    std::chrono::duration<double>(1.0 / eff_status_rate),
+    [this]() { publish_robot_status(); });
+  vision_timer_ = create_wall_timer(
+    std::chrono::duration<double>(1.0 / eff_vision_rate),
+    [this]() { publish_vision_info(); });
 
   RCLCPP_INFO(
-    get_logger(), "假裁判已启动：话题 %s，频率 %.1f Hz，ID %ld，HP %u/%ld",
-    topic.c_str(), rate, param_int("robot_id"), last_hp_, param_int("maximum_hp"));
+    get_logger(), "假数据源已启动：%s @ %.1f Hz，%s @ %.1f Hz，ID %ld，HP %u/%ld，enemy_count %ld",
+    status_topic.c_str(), eff_status_rate, vision_topic.c_str(), eff_vision_rate,
+    param_int("robot_id"), last_hp_, param_int("maximum_hp"), param_int("enemy_count"));
 }
 
-rcl_interfaces::msg::SetParametersResult FakeRefereeNode::on_parameters_changed(
+rcl_interfaces::msg::SetParametersResult FakeMsgSource::on_parameters_changed(
   const std::vector<rclcpp::Parameter>& params)
 {
   rcl_interfaces::msg::SetParametersResult result;
@@ -67,7 +86,7 @@ rcl_interfaces::msg::SetParametersResult FakeRefereeNode::on_parameters_changed(
   return result;
 }
 
-void FakeRefereeNode::publish_status()
+void FakeMsgSource::publish_robot_status()
 {
   RobotStatusMsg msg;
 
@@ -92,13 +111,23 @@ void FakeRefereeNode::publish_status()
   msg.is_hp_deduced = (msg.current_hp < last_hp_);
   last_hp_ = msg.current_hp;
 
-  publisher_->publish(msg);
+  status_pub_->publish(msg);
+}
+
+void FakeMsgSource::publish_vision_info()
+{
+  VisionInfoMsg msg;
+  msg.header.stamp = now();
+  msg.header.frame_id = get_parameter("vision_frame_id").as_string();
+  msg.enemy_count = static_cast<std::int32_t>(param_int("enemy_count"));
+
+  vision_pub_->publish(msg);
 }
 
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<FakeRefereeNode>());
+  rclcpp::spin(std::make_shared<FakeMsgSource>());
   rclcpp::shutdown();
   return 0;
 }

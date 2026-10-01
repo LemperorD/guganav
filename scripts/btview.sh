@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ────────────────────────────────────────────────────────────────
-# 一键启动行为树可视化：假裁判 + 决策节点 + Web UI 三个进程
+# 一键启动行为树可视化：假数据源 + 决策节点 + Web UI 三个进程
 #
 # 用法：
 #   scripts/btview.sh                  # 端口 8080，tick 1 Hz，自动开浏览器
@@ -64,15 +64,15 @@ source_setup() {
 [[ -n "${ROS_DISTRO:-}" ]] || source_setup /opt/ros/humble/setup.bash
 source_setup "$WS/install/setup.bash"
 
-REFEREE_BIN="$WS/install/fake_referee/lib/fake_referee/fake_referee_node"
+SOURCE_BIN="$WS/install/fake_msg_source/lib/fake_msg_source/fake_msg_source_node"
 STRATEGY_BIN="$WS/install/guga_rmul_strategy/lib/guga_rmul_strategy/rmul_strategy_node"
-SERVER_PY="$WS/scripts/btview_server.py"
-PAGE="$WS/scripts/btview.html"
+SERVER_PY="$WS/scripts/btview/btview_server.py"
+PAGE="$WS/scripts/btview/btview.html"
 
-for f in "$REFEREE_BIN" "$STRATEGY_BIN" "$SERVER_PY" "$PAGE"; do
+for f in "$SOURCE_BIN" "$STRATEGY_BIN" "$SERVER_PY" "$PAGE"; do
   if [ ! -e "$f" ]; then
     echo "ERROR: 缺少 $f" >&2
-    echo "      先构建：./scripts/colconBuild.sh --packages-select fake_referee guga_rmul_strategy" >&2
+    echo "      先构建：./scripts/colconBuild.sh --packages-select fake_msg_source guga_rmul_strategy" >&2
     exit 1
   fi
 done
@@ -97,7 +97,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "启动假裁判…"
-"$REFEREE_BIN" >"$LOG_DIR/referee.log" 2>&1 &
+"$SOURCE_BIN" >"$LOG_DIR/source.log" 2>&1 &
 PIDS+=($!)
 
 sleep 1
@@ -124,7 +124,7 @@ done
 URL="http://localhost:${PORT}"
 echo
 echo "  可视化页面: $URL"
-echo "  假裁判日志: $LOG_DIR/referee.log"
+echo "  数据源日志: $LOG_DIR/source.log"
 echo "  决策日志  : $LOG_DIR/strategy.log"
 echo "  服务日志  : $LOG_DIR/server.log"
 echo "  按 Ctrl-C 停止全部"

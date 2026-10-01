@@ -6,11 +6,11 @@ IDLE，实时界面看到的永远是某一瞬间的静态状态，看不出执�
 记的是带时间戳的状态迁移，按时间排开就是完整路径。
 
 用法：
-    scripts/btlog_view.py <file.btlog>              树结构 + 每次 tick 一行摘要
-    scripts/btlog_view.py <file.btlog> --tick 7     第 7 次 tick 的完整事件序列
-    scripts/btlog_view.py <file.btlog> --verbose    所有 tick 都展开
-    scripts/btlog_view.py <file.btlog> --tree-only  只看树结构
-    scripts/btlog_view.py <file.btlog> --no-color   不着色（重定向到文件时用）
+    scripts/btview/btlog_view.py <file.btlog>              树结构 + 每次 tick 一行摘要
+    scripts/btview/btlog_view.py <file.btlog> --tick 7     第 7 次 tick 的完整事件序列
+    scripts/btview/btlog_view.py <file.btlog> --verbose    所有 tick 都展开
+    scripts/btview/btlog_view.py <file.btlog> --tree-only  只看树结构
+    scripts/btview/btlog_view.py <file.btlog> --no-color   不着色（重定向到文件时用）
 
 文件格式（BT.CPP v4 的 FileLogger2）：
     魔数 "BTCPP4-FileLogger2"(18) + 版本(1) + XML 长度(4, 小端)

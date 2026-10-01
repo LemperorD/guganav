@@ -2,25 +2,25 @@
 set -euo pipefail
 
 # ────────────────────────────────────────────────────────────────
-# 假裁判系统动态调参工具（运行时调整，无需重启节点）
+# 假数据源动态调参工具（运行时调整，无需重启节点）
 #
-# fake_referee 的所有字段都注册为 ROS 2 参数，publish_status() 每帧重新读取，
+# fake_msg_source 的所有字段都注册为 ROS 2 参数，publish_status() 每帧重新读取，
 # 所以改完下一帧（20 Hz，约 50 ms）即生效。
 #
 # 用法：
-#   scripts/tune_referee.sh                              # 交互菜单
-#   scripts/tune_referee.sh set <param> <value> [node]   # 改单个参数
-#   scripts/tune_referee.sh hp <value> [node]            # 快捷：改当前血量
-#   scripts/tune_referee.sh ammo <value> [node]          # 快捷：改允许发弹量
-#   scripts/tune_referee.sh heat <value> [node]          # 快捷：改当前枪管热量
-#   scripts/tune_referee.sh hit <damage> [node]          # 在现有血量上扣血
-#   scripts/tune_referee.sh show [node]                  # 显示当前取值
-#   scripts/tune_referee.sh dump [node]                  # 导出全部参数
-#   scripts/tune_referee.sh save <file> [node]           # 保存到文件
-#   scripts/tune_referee.sh restore <file> [node]        # 从文件恢复
+#   scripts/tune_fake_source.sh                              # 交互菜单
+#   scripts/tune_fake_source.sh set <param> <value> [node]   # 改单个参数
+#   scripts/tune_fake_source.sh hp <value> [node]            # 快捷：改当前血量
+#   scripts/tune_fake_source.sh ammo <value> [node]          # 快捷：改允许发弹量
+#   scripts/tune_fake_source.sh heat <value> [node]          # 快捷：改当前枪管热量
+#   scripts/tune_fake_source.sh hit <damage> [node]          # 在现有血量上扣血
+#   scripts/tune_fake_source.sh show [node]                  # 显示当前取值
+#   scripts/tune_fake_source.sh dump [node]                  # 导出全部参数
+#   scripts/tune_fake_source.sh save <file> [node]           # 保存到文件
+#   scripts/tune_fake_source.sh restore <file> [node]        # 从文件恢复
 #
-# 节点名默认 /fake_referee；若假裁判带命名空间启动（例如仿真里的
-# /red_standard_robot1/fake_referee），把完整节点名作为最后一个参数传入。
+# 节点名默认 /fake_msg_source；若数据源带命名空间启动（例如仿真里的
+# /red_standard_robot1/fake_msg_source），把完整节点名作为最后一个参数传入。
 #
 # ros2 param 依赖 node graph 查询，某些环境会报 "Node not found"。
 # 本脚本在 param 命令失败时回退到直接调用 set_parameters / get_parameters
@@ -44,7 +44,7 @@ if [[ -z "${ROS_DISTRO:-}" ]]; then
 fi
 source_setup "$WS/install/setup.bash"
 
-DEFAULT_NODE="/fake_referee"
+DEFAULT_NODE="/fake_msg_source"
 
 # 参数表：名称|类型|是否即时生效|说明
 PARAM_TABLE=(
@@ -58,6 +58,8 @@ PARAM_TABLE=(
   "projectile_allowance_17mm|integer|yes|允许发弹量"
   "remaining_gold_coin|integer|yes|剩余金币"
   "publish_rate|double|no|发布频率（改动需重启节点）"
+  "enemy_count|integer|yes|敌人数量（>0 即有敌）"
+  "vision_rate|double|no|视觉发布频率（改动需重启节点）"
 )
 
 param_names() {
@@ -142,7 +144,7 @@ probe_node() {
     echo "ERROR: 读不到 $node 的参数。常见原因："
     echo "       - 节点没启动，或名字不对。用 ros2 node list 确认；"
     echo "         带命名空间启动时要传完整名，例如"
-    echo "         $0 show /red_standard_robot1/fake_referee"
+    echo "         $0 show /red_standard_robot1/fake_msg_source"
     echo "       - param 查询暂时不可用（服务发现未完成），稍后重试。"
   } >&2
   return 1
@@ -176,7 +178,7 @@ interactive_menu() {
   mapfile -t names < <(param_names)
 
   clear 2>/dev/null || true
-  echo "== 正在读取假裁判参数（${#names[@]} 项，节点 $node）... =="
+  echo "== 正在读取参数（${#names[@]} 项，节点 $node）... =="
   local i=1 p
   for p in "${names[@]}"; do
     values[$p]=$(param_value "$node" "$p")
@@ -225,9 +227,9 @@ interactive_menu() {
 
     if [ "$choice" = "s" ] || [ "$choice" = "S" ]; then
       local save_file
-      printf "  保存到文件 [默认 /tmp/fake_referee_params.yaml]: "
+      printf "  保存到文件 [默认 /tmp/fake_msg_source_params.yaml]: "
       read -r save_file || break
-      [ -z "$save_file" ] && save_file="/tmp/fake_referee_params.yaml"
+      [ -z "$save_file" ] && save_file="/tmp/fake_msg_source_params.yaml"
       dump_params "$node" >"$save_file"
       echo "  已保存 $(grep -c . "$save_file" 2>/dev/null || echo 0) 项 → $save_file"
       printf "  按回车继续..."
@@ -263,7 +265,7 @@ shift || true
 
 case "$cmd" in
   set)
-    # tune_referee.sh set <param> <value> [node]
+    # tune_fake_source.sh set <param> <value> [node]
     param=${1:-}
     value=${2:-}
     node=${3:-$DEFAULT_NODE}
@@ -278,8 +280,8 @@ case "$cmd" in
     fi
     ;;
 
-  hp | ammo | heat)
-    # 快捷改常用字段：tune_referee.sh <cmd> <value> [node]
+  hp | ammo | heat | enemy)
+    # 快捷改常用字段：tune_fake_source.sh <cmd> <value> [node]
     value=${1:-}
     node=${2:-$DEFAULT_NODE}
     [ -n "$value" ] || { echo "用法: $0 $cmd <value> [node]" >&2; exit 1; }
@@ -288,6 +290,7 @@ case "$cmd" in
       hp) param=current_hp ;;
       ammo) param=projectile_allowance_17mm ;;
       heat) param=shooter_17mm_1_barrel_heat ;;
+      enemy) param=enemy_count ;;
     esac
     if set_param "$node" "$param" "$(param_type "$param")" "$value"; then
       echo "==> $node $param = $value"
@@ -334,7 +337,7 @@ case "$cmd" in
     ;;
 
   save)
-    # tune_referee.sh save <file> [node]
+    # tune_fake_source.sh save <file> [node]
     file=${1:-}
     node=${2:-$DEFAULT_NODE}
     [ -n "$file" ] || { echo "用法: $0 save <file> [node]" >&2; exit 1; }
@@ -344,7 +347,7 @@ case "$cmd" in
     ;;
 
   restore)
-    # tune_referee.sh restore <file> [node]
+    # tune_fake_source.sh restore <file> [node]
     file=${1:-}
     node=${2:-$DEFAULT_NODE}
     [ -n "$file" ] || { echo "用法: $0 restore <file> [node]" >&2; exit 1; }

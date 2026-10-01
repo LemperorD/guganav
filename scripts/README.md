@@ -39,30 +39,31 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 
 | 脚本                     | 用途                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |
-| `scripts/tune_referee.sh` | 运行时调整 `fake_referee` 的裁判数据（血量、发弹量、热量等），改动下一帧即生效。 |
+| `scripts/tune_fake_source.sh` | 运行时调整 `fake_msg_source` 的裁判数据与敌人数量，改动下一帧即生效。 |
 | `scripts/tune_controller.sh` | 运行时调整 controller 的 critics 权重与速度限制等参数。             |
 
-`tune_referee.sh` 常用命令：
+`tune_fake_source.sh` 常用命令：
 
 ```bash
-scripts/tune_referee.sh              # 交互菜单
-scripts/tune_referee.sh show         # 显示当前取值
-scripts/tune_referee.sh hp 150       # 改当前血量
-scripts/tune_referee.sh hit 30       # 在现有血量上扣 30，模拟受击
-scripts/tune_referee.sh save /tmp/ref.yaml      # 保存当前取值
-scripts/tune_referee.sh restore /tmp/ref.yaml   # 恢复
+scripts/tune_fake_source.sh              # 交互菜单
+scripts/tune_fake_source.sh show         # 显示当前取值
+scripts/tune_fake_source.sh hp 150       # 改当前血量
+scripts/tune_fake_source.sh hit 30       # 在现有血量上扣 30，模拟受击
+scripts/tune_fake_source.sh enemy 2      # 让视觉"看见" 2 个敌人（0 表示敌人消失）
+scripts/tune_fake_source.sh save /tmp/ref.yaml      # 保存当前取值
+scripts/tune_fake_source.sh restore /tmp/ref.yaml   # 恢复
 ```
 
-节点名默认 `/fake_referee`；假裁判带命名空间启动时（例如仿真里的
+节点名默认 `/fake_msg_source`；数据源带命名空间启动时（例如仿真里的
 `/red_standard_robot1`），把完整节点名作为最后一个参数传入。
 
 ## 行为树可视化
 
 | 脚本                       | 用途                                                                   |
 | -------------------------- | ---------------------------------------------------------------------- |
-| `scripts/btview.sh`        | 一键启动假裁判、决策节点与行为树 Web 界面，Ctrl-C 一并停止。            |
-| `scripts/btview_server.py` | Web 界面的服务端：tail 执行记录 + 转发假裁判参数，一般由 `btview.sh` 拉起。 |
-| `scripts/btlog_view.py`    | 离线解析 `.btlog` 执行记录，打印树结构与每次 tick 的执行路径。          |
+| `scripts/btview.sh`        | 一键启动假数据源、决策节点与行为树 Web 界面，Ctrl-C 一并停止。          |
+| `scripts/btview/btview_server.py` | Web 界面的服务端：tail 执行记录 + 转发数据源参数，一般由 `btview.sh` 拉起。 |
+| `scripts/btview/btlog_view.py`    | 离线解析 `.btlog` 执行记录，打印树结构与每次 tick 的执行路径。          |
 
 行为树的节点在几微秒内跑完就回到 `IDLE`，实时界面看到的永远是静态状态，
 看不出执行顺序。所以 Web 界面不做实时高亮，而是每完成一次 tick 就定格显示
@@ -72,8 +73,8 @@ scripts/tune_referee.sh restore /tmp/ref.yaml   # 恢复
 scripts/btview.sh                    # 浏览器打开 http://localhost:8080
 scripts/btview.sh --hz 10 --port 8090
 
-python3 scripts/btlog_view.py ~/Desktop/1.btlog            # 摘要
-python3 scripts/btlog_view.py ~/Desktop/1.btlog --tick 7   # 展开第 7 次 tick
+python3 scripts/btview/btlog_view.py ~/Desktop/1.btlog            # 摘要
+python3 scripts/btview/btlog_view.py ~/Desktop/1.btlog --tick 7   # 展开第 7 次 tick
 ```
 
 执行记录由决策节点的 `btlog_path` 参数决定（默认 `/tmp/bt_trace.btlog`），
