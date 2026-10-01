@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<root BTCPP_format="3" main_tree_to_execute="MainLoop">
+<root BTCPP_format="4"
+      main_tree_to_execute="MainLoop">
   <BehaviorTree ID="Attack">
     <AlwaysSuccess/>
   </BehaviorTree>
 
   <BehaviorTree ID="CaptureCenterArea">
     <IfThenElse>
-      <SubTree ID="EngageEnemy" __shared_blackboard="true"/>
-      <SubTree ID="Attack" __shared_blackboard="true"/>
-      <SetGoalPose pose_x="0.0" pose_y="0.0"/>
+      <SubTree ID="EngageEnemy"/>
+      <SubTree ID="Attack"/>
+      <SetGoalPose pose_x="0.0"
+                   pose_y="0.0"/>
+    </IfThenElse>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Decide">
+    <IfThenElse>
+      <SubTree ID="IsSafe"
+               _autoremap="true"/>
+      <SubTree ID="CaptureCenterArea"
+               _autoremap="true"/>
+      <SubTree ID="FallBack"
+               _autoremap="true"/>
     </IfThenElse>
   </BehaviorTree>
 
@@ -17,7 +30,8 @@
   </BehaviorTree>
 
   <BehaviorTree ID="FallBack">
-    <SetGoalPose pose_x="0.0" pose_y="0.0"/>
+    <SetGoalPose pose_x="0.0"
+                 pose_y="0.0"/>
   </BehaviorTree>
 
   <BehaviorTree ID="IsSafe">
@@ -29,23 +43,33 @@
   <BehaviorTree ID="MainLoop">
     <KeepRunningUntilFailure>
       <ForceSuccess>
-        <IfThenElse>
-          <SubTree ID="IsSafe" __shared_blackboard="true"/>
-          <SubTree ID="CaptureCenterArea" __shared_blackboard="true"/>
-          <SubTree ID="FallBack" __shared_blackboard="true"/>
-        </IfThenElse>
+        <Sequence>
+          <ROS2Wrapper/>
+          <SubTree ID="Decide"
+                   _autoremap="true"/>
+        </Sequence>
       </ForceSuccess>
     </KeepRunningUntilFailure>
   </BehaviorTree>
 
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
-    <Action ID="CheckGreaterThan200" editable="true">
-      <input_port name="HP" default="200" type="double"/>
+    <Action ID="CheckGreaterThan200"
+            editable="true">
+      <input_port name="HP"
+                  default="200"
+                  type="double"/>
     </Action>
-    <Action ID="SetGoalPose" editable="true">
-      <input_port name="pose_x" default="0.0" type="double"/>
-      <input_port name="pose_y" default="0.0" type="double"/>
+    <Action ID="ROS2Wrapper"
+            editable="true"/>
+    <Action ID="SetGoalPose"
+            editable="true">
+      <input_port name="pose_x"
+                  default="0.0"
+                  type="double"/>
+      <input_port name="pose_y"
+                  default="0.0"
+                  type="double"/>
     </Action>
   </TreeNodesModel>
 

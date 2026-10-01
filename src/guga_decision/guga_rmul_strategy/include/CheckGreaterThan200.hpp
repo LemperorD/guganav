@@ -1,33 +1,56 @@
 #pragma once
-#include "behaviortree_cpp_v3/bt_factory.h"
 
-class CheckGreaterThan200 : public BT::SyncActionNode
+#include <memory>
+#include <string>
+#include <utility>
+
+#include "behaviortree_cpp/bt_factory.h"
+#include "rclcpp/rclcpp.hpp"
+
+// 条件判断：血量是否高于阈值。
+// 够血返回 SUCCESS，不够返回 FAILURE——这里的 FAILURE 不是"出错"，
+// 而是给父节点（IfThenElse / Fallback）看的控制流信号：条件不成立。
+//
+// 继承 StatefulActionNode 是为了在读不到 HP 时能返回 RUNNING 等下一帧；
+// SyncActionNode 返回 RUNNING 会被 BT.CPP 抛异常。
+class CheckGreaterThan200 : public BT::StatefulActionNode
 {
 public:
-  CheckGreaterThan200(const std::string& name, const BT::NodeConfiguration& config)
-    : BT::SyncActionNode(name, config) {}
+  CheckGreaterThan200(const std::string& name, const BT::NodeConfig& config,
+                      rclcpp::Node::SharedPtr node)
+  : BT::StatefulActionNode(name, config), node_(std::move(node)) {}
 
-  // 空缺一:声明两个端口
   static BT::PortsList providedPorts()
   {
-    return {BT::InputPort<double>("HP"), BT::OutputPort<bool>("result")};
+    return { BT::InputPort<double>("HP") };
   }
 
-  // 空缺二:执行逻辑
-  BT::NodeStatus tick() override
-  {
-    double hitpoint;
+  BT::NodeStatus onStart() override { return judge(); }
+  BT::NodeStatus onRunning() override { return judge(); }
+  void onHalted() override {}
 
-    if(!getInput<double>("HP",hitpoint))
-    {
-      return BT::NodeStatus::FAILURE;
+private:
+  BT::NodeStatus judge()
+  {
+    auto hitpoint = getInput<double>("HP");
+    if (!hitpoint) {
+      // 取不到值说明上游还没写黑板，或键名对不上。这和"血量不够"是两回事，
+      // 不该让树立刻走回退分支，返回 RUNNING 等下一个 tick 再看。
+      if (node_) {
+        RCLCPP_WARN_THROTTLE(
+          node_->get_logger(), *node_->get_clock(), 2000,
+          "读不到黑板的 HP，暂不做安全性判定");
+      }
+      return BT::NodeStatus::RUNNING;
     }
 
-    bool result = (hitpoint > 200);
-    
-    auto bb = config().blackboard;
-    bb->set("is_safe", result);
-    
-    return BT::NodeStatus::SUCCESS;
+    return (hitpoint.value() > kThreshold) ? BT::NodeStatus::SUCCESS
+                                           : BT::NodeStatus::FAILURE;
   }
+
+  // 安全血量的下限。
+  static constexpr double kThreshold = 200.0;
+
+  // 仅用于打日志，判断本身不依赖它。
+  rclcpp::Node::SharedPtr node_;
 };
