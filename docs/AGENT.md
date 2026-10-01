@@ -29,78 +29,94 @@ GitHub: `https://github.com/LemperorD/guganav`
 
 ```
 guganav/
-├── CLAUDE.md                  # 本文件
 ├── README.md                  # 项目介绍（用户维护）
-├── .clang-format              # 格式化配置
-├── .clang-tidy                # 静态分析配置
-├── .pre-commit-config.yaml    # pre-commit 钩子
+├── LICENSE                    # Apache-2.0
+├── .clang-format / .clang-tidy / .pre-commit-config.yaml
+├── compile_commands.json      # 编译数据库（构建生成）
 │
-├── docs/
-│   └── CODING_STANDARD.md     # 编码规范（模式 A / 模式 B）
+├── autostart/                 # 开机自启（install.sh / systemd service）
+│
+├── docs/                      # 文档，索引见 docs/README.md
+│   ├── AGENT.md               # 本文件：项目概述与给 AI 代理的工作约束
+│   ├── 编码规范.md            # 编码规范（模式 A / 模式 B）
+│   ├── TF转换线路.md          # TF 发布、坐标转换线路与速度坐标系
+│   ├── 通信协议.md            # 上位机 ↔ 下位机 BR 串口协议
+│   ├── TODOLIST.md            # 待办
+│   ├── 已归档todo.md          # 已解决问题归档（现象/原因/方案/验证/提交）
+│   ├── FAQ.md / README.md     # 常见问题与文档索引
+│   └── decision/              # 决策与方案文档、组委会规则书 PDF
 │
 ├── scripts/                   # 工具脚本
-│   ├── colconBuild.sh         # 构建
-│   ├── simulation.sh          # 仿真启动
-│   ├── gitPush.sh             # Git 提交助手
-│   ├── nav_decision.sh        # 导航+决策启动
+│   ├── colconBuild.sh         # 构建（检测 Hik MVS，缺 SDK 则跳过该包）
+│   ├── reality.sh             # 实车启动与进程管理
+│   ├── simulation.sh          # 仿真启动（含 gazebo 模式）
+│   ├── nav_decision.sh        # 导航 + 决策一键启动
 │   ├── map.sh / save_map.sh   # 地图操作
-│   ├── pre-commit/            # Pre-commit 测试脚本
-│   └── test/                  # 覆盖率测试脚本
+│   ├── gitFetch.sh / gitPush.sh / deepseek.sh / tune_controller.sh
+│   ├── create_udev_rules.sh   # 串口 udev 规则
+│   ├── ci/                    # 依赖安装与 MPC 代码生成
+│   ├── fake_serial_driver/    # 虚拟串口假下位机（无车调试用）
+│   ├── params_list/           # 各控制器参数对照表
+│   ├── pl_cmp/                # Point-LIO 版本对比工具（合成 bag 回放）
+│   ├── pre-commit/            # pre-commit 各包测试入口
+│   └── test/                  # 覆盖率与冒烟测试脚本
 │
 ├── src/
-│   ├── guga_bringup/          # [总启动] launch/map/pcd/rviz/behavior_tree/config
-│   ├── guga_interfaces/       # [接口] 自定义 ROS2 msg/srv/action
-│   ├── guga_description/      # [模型] URDF/Xacro 机器人描述
+│   ├── guga_bringup/          # [总启动] launch / config / rviz / behavior_trees / map / pcd
+│   ├── guga_interfaces/       # [接口] 自定义 ROS2 msg / srv / action
+│   ├── guga_description/      # [模型] URDF、机器人参数与 rviz（包名 pb2025_robot_description）
+│   ├── guga_common/           # [公共库] 多包共享 msg 与工具（含共享内存读写）
 │   │
 │   ├── guga_driver/           # [驱动层]
-│   │   ├── serial_driver/     #   串口通信 (BR 协议, 与 MCU 通信)
-│   │   ├── livox_ros_driver2/ #   览沃激光雷达
-│   │   ├── hik_camera_ros2_driver/ # 海康相机
-│   │   ├── hik_driver/        #   海康相机(新版,开发中)
-│   │   ├── usbjs_driver/      #   USB 手柄
+│   │   ├── serial_driver/     #   串口通信（BR 协议，与 MCU 通信）
+│   │   ├── livox_ros_driver2/ #   览沃激光雷达（含 Livox-SDK2）
+│   │   ├── hik_camera_ros2_driver/ # 海康相机（子模块，当前为空目录）
+│   │   ├── hik_driver/        #   海康相机（新版，开发中，默认跳过编译）
+│   │   ├── usbjs_driver/      #   USB 手柄（未接入启动链路）
 │   │   └── camera_interface/  #   相机通用接口
 │   │
 │   ├── guga_perception/       # [感知层]
 │   │   ├── terrain_analysis/  #   地形可通行性分析 ★模式A范例
-│   │   ├── pointcloud_to_laserscan/ # 点云转激光扫描
-│   │   ├── scan_to_sensor_frame/  # 扫描转回雷达坐标系
+│   │   ├── pb_nav2_plugins/   #   代价地图障碍层与后退行为插件
+│   │   └── rog_map_layer/     #   ESDF 代价地图层（全局规划用）
 │   │
 │   ├── guga_localization/     # [定位层]
-│   │   ├── point_lio/         #   Point-LIO 激光惯性里程计
-│   │   └── small_gicp_relocalization/ # GICP 重定位
+│   │   ├── point_lio/         #   Point-LIO 惯性激光里程计（含项目约定输出）
+│   │   └── small_gicp_relocalization/ # GICP 重定位（发布 map → odom）
+│   │
+│   ├── guga_transform/        # [坐标与速度变换]
+│   │   ├── scan_to_sensor_frame/      # 扫描转回雷达坐标系，发布 odom → base_footprint
+│   │   ├── pointcloud_to_laserscan/   # 点云转单线激光（SLAM 模式用）
+│   │   └── nonrotating_vel_transform/ # 自旋场景速度补偿与伪坐标系
 │   │
 │   ├── guga_controller/       # [控制层]
 │   │   ├── pb_omni_pid_pursuit_controller/ # 全向 PID 追迹控制器 ★模式B范例
-│   │   ├── nonrotating_vel_transform/  # 速度变换适配（base_footprint → base_footprint_nonrotating）
-│   │   ├── mpc_controller/     #   acados MPC 控制器
+│   │   ├── mpc_controller/    #   acados MPC 控制器
 │   │   └── nav2_mppi_controller/ #  MPPI 控制器（输出 nonrotating 系速度）
 │   │
 │   ├── guga_planner/          # [规划层]
-│   │   ├── pb_nav2_plugins/   #   Nav2 行为/层插件 (back_up_free_space, obstacle_layer_local)
-│   │   └── minco_smoother/    #   MINCO 轨迹平滑器
+│   │   ├── jps_planner/       #   JPS 全局规划器（直接编译 bspline_optimizer 源码）
+│   │   ├── bspline_optimizer/ #   B 样条优化（其库无人链接，源码被 jps_planner 编译）
+│   │   └── pb_minco_smoother/ #   MINCO 平滑器（插件存在，但无配置选中）
 │   │
 │   ├── guga_decision/         # [决策层]
-│   │   ├── simple_decision/   #   简单决策系统 (状态机: 默认/攻击/补给)
-│   │   └── BehaviorTree.ROS2/ #   行为树框架（备用）
+│   │   └── simple_decision/   #   简单决策状态机（默认/攻击/补给）
 │   │
 │   ├── guga_sim/              # [仿真]
-│   │   ├── rmoss_core/        #   RMOSS 仿真核心
-│   │   ├── rmoss_gazebo/      #   RMOSS Gazebo 插件
-│   │   ├── rmoss_gz_resources/#   仿真资源 (模型/世界)
+│   │   ├── rmoss_gazebo/      #   RMOSS Gazebo 插件（gz_base/bridge/cam/plugins）
+│   │   ├── rmoss_gz_resources/#   仿真资源（模型、世界文件）
 │   │   ├── rmoss_interfaces/  #   仿真接口定义
+│   │   ├── rmoss_core/        #   占位目录（由 dependencies.repos 拉取）
 │   │   ├── rmu_gazebo_simulator/ # RMU 比赛仿真器
 │   │   ├── ign_sim_pointcloud_tool/ # Ignition 点云工具
-│   │   ├── joint_state_publisher/   # 关节状态发布
-│   │   └── sdformat_tools/   #    SDFormat 工具
+│   │   ├── joint_state_publisher/   # 关节状态发布（上游副本，含 joint_state_publisher_gui）
+│   │   └── sdformat_tools/    #    SDFormat 工具
 │   │
-│   ├── guga_common/           # [接口] 自定义 ROS2 msg（多包共享）
-│   ├── guga_ui/               # [UI] cmdvel_visualizer（速度可视化）
-│   ├── guga_ui_old/           # [UI-旧] guga_ui_common（共享内存）+ guga_ui_pangolin（Pangolin 3D）
-│   ├── guga_test/             # [测试] (COLCON_IGNORE)
-│   ├── guga_thirdparty/       # [第三方] point_lio 等
-│   ├── guga_vision/           # [视觉] (预留，当前为空)
+│   └── guga_ui/               # [UI]
+│       ├── guga_ui_common/    #   共享内存与类型定义
+│       └── guga_ui_pangolin/  #   Pangolin 3D 界面（独立进程，非 ROS 节点）
 │
-├── build/                     # colcon 构建输出 (含 COLCON_IGNORE)
+├── build/                     # colcon 构建输出
 ├── install/                   # colcon 安装输出
 └── log/                       # 运行日志
 ```
@@ -133,7 +149,7 @@ guganav/
 适用的场景：有跨帧状态的决策系统。  
 特征：`Config` 不可变 → `Context` 私有状态 → `Snapshot` 只读快照 → `Decision` 实例方法，3 层抽象。
 
-详见 `docs/CODING_STANDARD.md`。
+详见 `docs/编码规范.md`。
 
 ### 串口通信协议 (BR 协议)
 
@@ -339,7 +355,7 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 
 | 文件 | 说明 |
 |------|------|
-| `docs/CODING_STANDARD.md` | 完整编码规范 |
+| `docs/编码规范.md` | 完整编码规范 |
 | `src/guga_perception/terrain_analysis/` | 模式 A 范例代码 |
 | `src/guga_decision/simple_decision/` | 模式 B 范例代码 |
 | `src/guga_bringup/launch/reality_launch.py` | 实车启动入口 |

@@ -3,7 +3,7 @@
 在**没有实车**（没有串口下位机、没有裁判系统）的条件下，验证 UI 标签能否实时更新，
 例如 HUD 里的 `Robot Yaw`（云台-底盘 yaw 角差）和 `Match Status`。
 
-原理：用 Python 自带的 pty 创建一个虚拟串口，按 `docs/BR_PROTOCOL.md` 的 BR 帧协议
+原理：用 Python 自带的 pty 创建一个虚拟串口，按 `docs/通信协议.md` 的 BR 帧协议
 持续向 `serial_driver` 喂运动帧和裁判帧。`serial_driver` 收到帧后照常解析并写入
 `guga_shm` 的 YAW 槽位，UI 就能像连着实车一样读到数据。整个过程不改动任何项目代码。
 

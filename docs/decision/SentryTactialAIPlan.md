@@ -209,7 +209,7 @@ R26 §5.6.4，第 114 页进一步规定自动与半自动控制，以及转发�
 
 #### 4.1.8 当前接入范围
 
-对照 [BR 协议](../BR_PROTOCOL.md)、[串口节点实现](../../src/guga_driver/serial_driver/src/serial_driver_node.cpp)、[RobotStatus.msg](../../src/guga_interfaces/msg/RobotStatus.msg) 和 [GameStatus.msg](../../src/guga_interfaces/msg/GameStatus.msg)：
+对照 [BR 协议](../通信协议.md)、[串口节点实现](../../src/guga_driver/serial_driver/src/serial_driver_node.cpp)、[RobotStatus.msg](../../src/guga_interfaces/msg/RobotStatus.msg) 和 [GameStatus.msg](../../src/guga_interfaces/msg/GameStatus.msg)：
 
 | 当前入口 | 已确认代码行为 | 尚缺内容 |
 | --- | --- | --- |

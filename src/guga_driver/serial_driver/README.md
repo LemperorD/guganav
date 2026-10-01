@@ -9,7 +9,7 @@ ROS 2 与 MCU 之间的 BR 二进制串口协议驱动。该包负责串口收�
 帧解析、ROS topic 桥接、裁判系统数据发布和部分云台 TF 广播。
 
 详细的线协议和 payload 字段布局见
-[BR_PROTOCOL.md](../../../docs/BR_PROTOCOL.md)。
+[通信协议.md](../../../docs/通信协议.md)。
 
 ## Architecture
 
