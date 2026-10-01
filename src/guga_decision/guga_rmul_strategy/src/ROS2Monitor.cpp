@@ -23,6 +23,7 @@ ROS2Monitor::ROS2Monitor(const rclcpp::NodeOptions& options)
       }
       current_hp_.store(msg->current_hp);
       maximum_hp_.store(msg->maximum_hp);
+      projectile_allowance_.store(msg->projectile_allowance_17mm);
       has_data_.store(true);
     });
 

@@ -10,7 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "CheckGreaterThan200.hpp"
-#include "EngageEnemy.hpp"
+#include "ShouldEngage.hpp"
 #include "ROS2Monitor.hpp"
 #include "ROS2Wrapper.hpp"
 #include "SetGoalPose.hpp"
@@ -50,10 +50,10 @@ int main(int argc, char** argv)
       return std::make_unique<ROS2Wrapper>(name, config, monitor);
     });
 
-  factory.registerBuilder<EngageEnemy>(
-    "EngageEnemy",
+  factory.registerBuilder<ShouldEngage>(
+    "ShouldEngage",
     [monitor](const std::string& name, const BT::NodeConfig& config) {
-      return std::make_unique<EngageEnemy>(name, config, monitor);
+      return std::make_unique<ShouldEngage>(name, config, monitor);
     });
 
     factory.registerBuilder<Attack>(
@@ -98,14 +98,17 @@ int main(int argc, char** argv)
   }
 
   // ===== 4. 执行 =====
-  // 频率做成参数：默认 100 Hz 对齐 Nav2 的 bt_loop_duration。
-  // 调试时调低（例如 1 Hz）便于在 Groot2 实时视图里看清每个 tick 走了哪些节点，
-  // 否则 100 Hz 下状态刷新太快，看不出先后顺序。
-  const double tick_hz = monitor->declare_parameter<double>("tick_rate_hz", 1.0);
+  // 频率做成参数。默认 1 Hz 是为了便于观察：100 Hz 下一次 tick 只占 10 ms 中的
+  // 几十微秒，Groot2 的实时视图和日志都看不出先后顺序。要对接 Nav2 的实际节奏
+  // 时把 tick_rate_hz 设成 100，对齐它的 bt_loop_duration（默认 10 ms）。
+  const double kDefaultTickHz = 1.0;
+  const double tick_hz =
+    monitor->declare_parameter<double>("tick_rate_hz", kDefaultTickHz);
   if (tick_hz <= 0.0) {
-    RCLCPP_WARN(monitor->get_logger(), "tick_rate_hz 不是正数，回退到 100 Hz");
+    RCLCPP_WARN(monitor->get_logger(), "tick_rate_hz 不是正数，回退到 %.1f Hz",
+                kDefaultTickHz);
   }
-  const double effective_hz = (tick_hz > 0.0) ? tick_hz : 1.0;
+  const double effective_hz = (tick_hz > 0.0) ? tick_hz : kDefaultTickHz;
   RCLCPP_INFO(monitor->get_logger(), "行为树 tick 频率: %.2f Hz", effective_hz);
 
   rclcpp::WallRate rate(effective_hz);

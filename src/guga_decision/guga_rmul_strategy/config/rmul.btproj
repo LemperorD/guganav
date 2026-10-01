@@ -3,10 +3,22 @@
     <include path="rmul.xml"/>
     <!-- Description of Node Models (used by Groot) -->
     <TreeNodesModel>
-        <Action ID="Attack" editable="true"/>
+        <Action ID="Attack" editable="true">
+            <input_port name="ammo" default="100" type="int"/>
+            <input_port name="enemy_count" default="0" type="int"/>
+        </Action>
         <Action ID="CheckGreaterThan200" editable="true">
             <input_port name="HP" default="200" type="double"/>
         </Action>
+        <Condition ID="ShouldEngage"
+                   editable="true">
+      <input_port name="enemy_count"
+                  default="0"
+                  type="int"/>
+      <input_port name="ammo"
+                  default="100"
+                  type="int"/>
+    </Condition>
         <Action ID="ROS2Wrapper" editable="true"/>
         <Action ID="SetGoalPose" editable="true">
             <input_port name="pose_x" default="0.0" type="double"/>

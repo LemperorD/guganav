@@ -27,12 +27,14 @@ public:
   std::uint16_t currentHp() const { return current_hp_.load(); }
   std::uint16_t maximumHp() const { return maximum_hp_.load(); }
 
+  // 允许发弹量。它在同一条裁判消息里，所以 hasData() 为真时这个值也是有效的。
+  std::uint16_t projectileAllowance() const { return projectile_allowance_.load(); }
+
   // 是否已经收到过至少一条消息。没收到时血量是 0，判断前应当先看这个标志。
   bool hasData() const { return has_data_.load(); }
 
   // 视觉汇总：视野内的敌方机器人数量，> 0 表示有敌人。
   std::int32_t enemyCount() const { return enemy_count_.load(); }
-  bool hasEnemy() const { return enemy_count_.load() > 0; }
 
   // 发布导航目标点。目标与上次相同时不重复发布，返回 false 表示这次没有发。
   bool sendGoalPose(double x, double y);
@@ -47,6 +49,7 @@ private:
   
   std::atomic<std::uint16_t> current_hp_{0};
   std::atomic<std::uint16_t> maximum_hp_{0};
+  std::atomic<std::uint16_t> projectile_allowance_{0};
   std::atomic<std::int32_t> enemy_count_{0};
   std::atomic<bool> has_data_{false};
 

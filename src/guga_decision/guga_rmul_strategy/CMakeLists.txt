@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 # 版本号写在 project() 的参数里，CMake 没有独立的 version() 命令；
 # 取值与 package.xml 的 <version> 一致。
-project(guga_rmul_strategy VERSION 0.1.0)
+project(guga_rmul_strategy VERSION 0.2.0)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)

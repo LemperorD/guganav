@@ -3,8 +3,10 @@
       main_tree_to_execute="MainLoop">
   <BehaviorTree ID="CaptureCenterArea">
     <IfThenElse>
-      <EngageEnemy/>
-      <Attack/>
+      <ShouldEngage enemy_count="{enemy_count}"
+                    ammo="{ammo}"/>
+      <Attack ammo="{ammo}"
+              enemy_count="{enemy_count}"/>
       <SetGoalPose pose_x="0.0"
                    pose_y="0.0"/>
     </IfThenElse>
@@ -41,9 +43,23 @@
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
     <Action ID="Attack"
-            editable="true"/>
-    <Condition ID="EngageEnemy"
-               editable="true"/>
+            editable="true">
+      <input_port name="ammo"
+                  default="100"
+                  type="int"/>
+      <input_port name="enemy_count"
+                  default="0"
+                  type="int"/>
+    </Action>
+    <Condition ID="ShouldEngage"
+               editable="true">
+      <input_port name="enemy_count"
+                  default="0"
+                  type="int"/>
+      <input_port name="ammo"
+                  default="100"
+                  type="int"/>
+    </Condition>
     <Action ID="CheckGreaterThan200"
             editable="true">
       <input_port name="HP"
