@@ -28,6 +28,7 @@
 #include "small_gicp/pcl/pcl_point.hpp"
 #include "small_gicp/registration/reduction_omp.hpp"
 #include "small_gicp/registration/registration.hpp"
+#include "small_gicp_relocalization/step_limit_optimizer.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -47,7 +48,8 @@ private:
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
-
+  static void checkRegistration(Eigen::Isometry3d& previous_result_t,
+    double tz_max_,double roll_max_,double pitch_max_);
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
 
@@ -56,6 +58,11 @@ private:
   float global_leaf_size_;
   float registered_leaf_size_;
   float max_dist_sq_;
+  double max_roll_pitch_step_;
+  double max_tz_step_;
+  double tz_max_;
+  double roll_max_;
+  double pitch_max_;
   std::vector<double> init_pose_;
 
   std::string map_frame_;
@@ -78,8 +85,9 @@ private:
 
   std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>> target_tree_;
   std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>> source_tree_;
-  std::shared_ptr<
-    small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>
+  std::shared_ptr<small_gicp::Registration<
+    small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
+    small_gicp::DistanceRejector, StepLimitOptimizer>>
     register_;
 
   rclcpp::TimerBase::SharedPtr transform_timer_;

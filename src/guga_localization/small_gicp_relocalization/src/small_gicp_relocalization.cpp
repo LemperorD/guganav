@@ -33,6 +33,11 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("global_leaf_size", 0.25);
   this->declare_parameter("registered_leaf_size", 0.25);
   this->declare_parameter("max_dist_sq", 1.0);
+  this->declare_parameter("max_roll_pitch_step", 0.05);
+  this->declare_parameter("max_tz_step", 0.02);
+  this->declare_parameter("tz_max_",0.5);
+  this->declare_parameter("roll_max_",0.02);
+  this->declare_parameter("pitch_max_",0.02);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
   this->declare_parameter("base_frame", "");
@@ -46,6 +51,11 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("global_leaf_size", global_leaf_size_);
   this->get_parameter("registered_leaf_size", registered_leaf_size_);
   this->get_parameter("max_dist_sq", max_dist_sq_);
+  this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
+  this->get_parameter("max_tz_step", max_tz_step_);
+  this->get_parameter("tz_max_",tz_max_);
+  this->get_parameter("roll_max_",roll_max_);
+  this->get_parameter("pitch_max_",pitch_max_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
   this->get_parameter("base_frame", base_frame_);
@@ -66,8 +76,9 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-  register_ = std::make_shared<
-    small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>();
+  register_ = std::make_shared<small_gicp::Registration<
+    small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
+    small_gicp::DistanceRejector, StepLimitOptimizer>>();
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -187,9 +198,11 @@ void SmallGicpRelocalizationNode::performRegistration()
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_iterations = 100;
+  register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
+  register_->optimizer.max_tz_step = max_tz_step_;
 
+  checkRegistration(previous_result_t_,tz_max_,roll_max_,pitch_max_);
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
-
   if (result.converged) {
     result_t_ = previous_result_t_ = result.T_target_source;
   } else {
@@ -198,6 +211,24 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   accumulated_cloud_->clear();
 }
+
+void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& previous_result_t_,
+    double tz_max_,double roll_max_,double pitch_max_)
+{
+    Eigen::Isometry3d& T=previous_result_t_;
+    Eigen::Vector3d rpy = T.linear().eulerAngles(0, 1, 2);
+    if(T.translation().z()>tz_max_) 
+    T.translation().z()=0.0;
+    if(rpy(1)>roll_max_)
+    rpy(1)=0.0;
+    if(rpy(2)>pitch_max_)
+    rpy(2)=0.0;
+    T.linear() =
+    Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) *
+    Eigen::AngleAxisd(rpy[1], Eigen::Vector3d::UnitY()) *
+    Eigen::AngleAxisd(rpy[2], Eigen::Vector3d::UnitZ())
+    .toRotationMatrix();
+  }
 
 void SmallGicpRelocalizationNode::publishTransform()
 {
