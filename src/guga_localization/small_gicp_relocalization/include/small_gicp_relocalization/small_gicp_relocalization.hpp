@@ -55,6 +55,7 @@ private:
 
   int num_threads_;
   int num_neighbors_;
+  int max_iterations_;
   float global_leaf_size_;
   float registered_leaf_size_;
   float max_dist_sq_;

@@ -33,6 +33,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("global_leaf_size", 0.25);
   this->declare_parameter("registered_leaf_size", 0.25);
   this->declare_parameter("max_dist_sq", 1.0);
+  this->declare_parameter("max_iterations", 100);
   this->declare_parameter("max_roll_pitch_step", 0.05);
   this->declare_parameter("max_tz_step", 0.02);
   this->declare_parameter("tz_max_",0.5);
@@ -51,6 +52,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("global_leaf_size", global_leaf_size_);
   this->get_parameter("registered_leaf_size", registered_leaf_size_);
   this->get_parameter("max_dist_sq", max_dist_sq_);
+  this->get_parameter("max_iterations", max_iterations_);
   this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
   this->get_parameter("max_tz_step", max_tz_step_);
   this->get_parameter("tz_max_",tz_max_);
@@ -197,7 +199,7 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
-  register_->optimizer.max_iterations = 100;
+  register_->optimizer.max_iterations = max_iterations_;
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
   register_->optimizer.max_tz_step = max_tz_step_;
 
@@ -217,12 +219,12 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& previous_
 {
     Eigen::Isometry3d& T=previous_result_t_;
     Eigen::Vector3d rpy = T.linear().eulerAngles(0, 1, 2);
-    if(T.translation().z()>tz_max_) 
+    if(fabs(T.translation().z())>tz_max_) 
     T.translation().z()=0.0;
-    if(rpy(1)>roll_max_)
+    if(fabs(rpy(0))>roll_max_)
+    rpy(0)=0.0;
+    if(fabs(rpy(1))>pitch_max_)
     rpy(1)=0.0;
-    if(rpy(2)>pitch_max_)
-    rpy(2)=0.0;
     T.linear() =
     Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) *
     Eigen::AngleAxisd(rpy[1], Eigen::Vector3d::UnitY()) *
