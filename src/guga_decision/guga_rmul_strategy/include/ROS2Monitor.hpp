@@ -6,6 +6,7 @@
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
+#include "guga_interfaces/msg/vision_info.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 // 决策节点的 ROS 2 侧接口，集中持有本包用到的全部 ROS 资源：
@@ -29,16 +30,24 @@ public:
   // 是否已经收到过至少一条消息。没收到时血量是 0，判断前应当先看这个标志。
   bool hasData() const { return has_data_.load(); }
 
+  // 视觉汇总：视野内的敌方机器人数量，> 0 表示有敌人。
+  std::int32_t enemyCount() const { return enemy_count_.load(); }
+  bool hasEnemy() const { return enemy_count_.load() > 0; }
+
   // 发布导航目标点。目标与上次相同时不重复发布，返回 false 表示这次没有发。
   bool sendGoalPose(double x, double y);
 
 private:
   using RobotStatusMsg = guga_interfaces::msg::RobotStatus;
+  using VisionInfo = guga_interfaces::msg::VisionInfo;
   using PoseStamped = geometry_msgs::msg::PoseStamped;
 
   rclcpp::Subscription<RobotStatusMsg>::SharedPtr sub_state_;
+  rclcpp::Subscription<VisionInfo>::SharedPtr sub_vision_;
+  
   std::atomic<std::uint16_t> current_hp_{0};
   std::atomic<std::uint16_t> maximum_hp_{0};
+  std::atomic<std::int32_t> enemy_count_{0};
   std::atomic<bool> has_data_{false};
 
   rclcpp::Publisher<PoseStamped>::SharedPtr goal_pub_;

@@ -26,7 +26,21 @@ ROS2Monitor::ROS2Monitor(const rclcpp::NodeOptions& options)
       has_data_.store(true);
     });
 
-  RCLCPP_INFO(get_logger(), "ROS2Monitor 订阅话题: %s", topic.c_str());
+  // ===== 视觉订阅 =====
+  // 话题名要与假数据源 / 真实视觉模块一致，做成参数便于带命名空间时调整。
+  const std::string vision_topic =
+    declare_parameter<std::string>("vision_topic", "vision/info");
+  sub_vision_ = create_subscription<VisionInfo>(
+    vision_topic, rclcpp::QoS(10),
+    [this](VisionInfo::SharedPtr msg) {
+      if (!msg) {
+        return;
+      }
+      enemy_count_.store(msg->enemy_count);
+    });
+
+  RCLCPP_INFO(get_logger(), "ROS2Monitor 订阅话题: %s, %s",
+              topic.c_str(), vision_topic.c_str());
 
   // ===== 导航目标点发布 =====
   // 话题用相对名，实际话题由节点所在命名空间决定；frame_id 与项目其余部分一致为 map。

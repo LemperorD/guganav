@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root BTCPP_format="4"
       main_tree_to_execute="MainLoop">
-  <BehaviorTree ID="Attack">
-    <AlwaysSuccess/>
-  </BehaviorTree>
-
   <BehaviorTree ID="CaptureCenterArea">
     <IfThenElse>
-      <SubTree ID="EngageEnemy"/>
-      <SubTree ID="Attack"/>
+      <EngageEnemy/>
+      <Attack/>
       <SetGoalPose pose_x="0.0"
                    pose_y="0.0"/>
     </IfThenElse>
@@ -23,10 +19,6 @@
       <SubTree ID="FallBack"
                _autoremap="true"/>
     </IfThenElse>
-  </BehaviorTree>
-
-  <BehaviorTree ID="EngageEnemy">
-    <AlwaysFailure/>
   </BehaviorTree>
 
   <BehaviorTree ID="FallBack">
@@ -48,6 +40,10 @@
 
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
+    <Action ID="Attack"
+            editable="true"/>
+    <Condition ID="EngageEnemy"
+               editable="true"/>
     <Action ID="CheckGreaterThan200"
             editable="true">
       <input_port name="HP"

@@ -3,6 +3,7 @@
     <include path="rmul.xml"/>
     <!-- Description of Node Models (used by Groot) -->
     <TreeNodesModel>
+        <Action ID="Attack" editable="true"/>
         <Action ID="CheckGreaterThan200" editable="true">
             <input_port name="HP" default="200" type="double"/>
         </Action>

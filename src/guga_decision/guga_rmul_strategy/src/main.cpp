@@ -10,9 +10,11 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "CheckGreaterThan200.hpp"
+#include "EngageEnemy.hpp"
 #include "ROS2Monitor.hpp"
 #include "ROS2Wrapper.hpp"
 #include "SetGoalPose.hpp"
+#include "Attack.hpp"
 
 int main(int argc, char** argv)
 {
@@ -46,6 +48,18 @@ int main(int argc, char** argv)
     "ROS2Wrapper",
     [monitor](const std::string& name, const BT::NodeConfig& config) {
       return std::make_unique<ROS2Wrapper>(name, config, monitor);
+    });
+
+  factory.registerBuilder<EngageEnemy>(
+    "EngageEnemy",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<EngageEnemy>(name, config, monitor);
+    });
+
+    factory.registerBuilder<Attack>(
+    "Attack",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<Attack>(name, config, monitor);
     });
 
   // ===== 3. 加载行为树 =====
