@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>fake_referee</name>
+  <version>0.0.1</version>
+  <description>RMUL 假裁判系统：按固定频率发布本机满状态，字段可用 ROS 2 参数动态调整</description>
+  <maintainer email="ld2382619813@163.com">ld</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>guga_interfaces</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
