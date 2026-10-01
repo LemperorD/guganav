@@ -28,6 +28,7 @@
 #include "small_gicp/pcl/pcl_point.hpp"
 #include "small_gicp/registration/reduction_omp.hpp"
 #include "small_gicp/registration/registration.hpp"
+#include "small_gicp_relocalization/pose_penalty_factor.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -47,15 +48,27 @@ private:
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  [[nodiscard]] bool isRegistrationResultValid(const Eigen::Isometry3d & candidate) const;
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
 
   int num_threads_;
   int num_neighbors_;
+  int min_registration_points_;
+  int max_accumulated_points_;
+  int max_iterations_;
   float global_leaf_size_;
   float registered_leaf_size_;
   float max_dist_sq_;
+  size_t min_registration_inliers_;
+  double max_translation_jump_;
+  double max_rotation_jump_;
+  double map_boundary_margin_;
+  double max_height_;
+  double max_tilt_;
+  double dof_restriction_weight_;
+  double pose_penalty_weight_;
   std::vector<double> init_pose_;
 
   std::string map_frame_;
@@ -69,6 +82,10 @@ private:
   Eigen::Isometry3d result_t_;
   Eigen::Isometry3d previous_result_t_;
   bool global_map_ready_{false};
+  bool pose_validated_{false};
+  bool has_map_bounds_{false};
+  Eigen::Vector3d map_min_bound_;
+  Eigen::Vector3d map_max_bound_;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr registered_scan_;
@@ -78,8 +95,8 @@ private:
 
   std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>> target_tree_;
   std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>> source_tree_;
-  std::shared_ptr<
-    small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>
+  std::shared_ptr<small_gicp::Registration<
+    small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, PosePenaltyFactor>>
     register_;
 
   rclcpp::TimerBase::SharedPtr transform_timer_;

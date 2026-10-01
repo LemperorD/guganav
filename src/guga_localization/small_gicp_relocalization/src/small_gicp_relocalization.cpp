@@ -14,6 +14,10 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <algorithm>
+#include <cmath>
+
+#include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
 #include "pcl_conversions/pcl_conversions.h"
 #include "small_gicp/pcl/pcl_registration.hpp"
@@ -30,9 +34,20 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 {
   this->declare_parameter("num_threads", 4);
   this->declare_parameter("num_neighbors", 20);
+  this->declare_parameter("min_registration_points", 50);
+  this->declare_parameter("max_accumulated_points", 500000);
+  this->declare_parameter("max_iterations", 100);
   this->declare_parameter("global_leaf_size", 0.25);
   this->declare_parameter("registered_leaf_size", 0.25);
   this->declare_parameter("max_dist_sq", 1.0);
+  this->declare_parameter("min_registration_inliers", 10);
+  this->declare_parameter("max_translation_jump", 1.0);
+  this->declare_parameter("max_rotation_jump", 0.35);
+  this->declare_parameter("map_boundary_margin", 2.0);
+  this->declare_parameter("max_height", 1.0);
+  this->declare_parameter("max_tilt", 0.35);
+  this->declare_parameter("dof_restriction_weight", 1.0e8);
+  this->declare_parameter("pose_penalty_weight", 1.0e4);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
   this->declare_parameter("base_frame", "");
@@ -43,9 +58,22 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   this->get_parameter("num_threads", num_threads_);
   this->get_parameter("num_neighbors", num_neighbors_);
+  this->get_parameter("min_registration_points", min_registration_points_);
+  this->get_parameter("max_accumulated_points", max_accumulated_points_);
+  this->get_parameter("max_iterations", max_iterations_);
   this->get_parameter("global_leaf_size", global_leaf_size_);
   this->get_parameter("registered_leaf_size", registered_leaf_size_);
   this->get_parameter("max_dist_sq", max_dist_sq_);
+  int min_registration_inliers = 10;
+  this->get_parameter("min_registration_inliers", min_registration_inliers);
+  min_registration_inliers_ = static_cast<size_t>(min_registration_inliers);
+  this->get_parameter("max_translation_jump", max_translation_jump_);
+  this->get_parameter("max_rotation_jump", max_rotation_jump_);
+  this->get_parameter("map_boundary_margin", map_boundary_margin_);
+  this->get_parameter("max_height", max_height_);
+  this->get_parameter("max_tilt", max_tilt_);
+  this->get_parameter("dof_restriction_weight", dof_restriction_weight_);
+  this->get_parameter("pose_penalty_weight", pose_penalty_weight_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
   this->get_parameter("base_frame", base_frame_);
@@ -66,8 +94,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-  register_ = std::make_shared<
-    small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>();
+  register_ = std::make_shared<small_gicp::Registration<
+    small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, PosePenaltyFactor>>();
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -77,25 +105,26 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     "registered_scan", 10,
-    [this] (const sensor_msgs::msg::PointCloud2::SharedPtr msg){registeredPcdCallback(msg);});
+    [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) { registeredPcdCallback(msg); });
 
   initial_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-    "initialpose", 10,
-    [this] (const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg){initialPoseCallback(msg);});
+    "initialpose", 10, [this](const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+      initialPoseCallback(msg);
+    });
 
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
-    [this] () {performRegistration();});
+    [this]() { performRegistration(); });
 
   transform_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50),  // 20 Hz
-    [this] (){publishTransform();});
+    [this]() { publishTransform(); });
 
   // A component constructor runs inside the container's load_node service.
   // Waiting for TF here blocks every component queued behind this node,
   // including the Nav2 servers that own the costmaps.
-  map_initialization_timer_ = this->create_wall_timer(
-    std::chrono::seconds(1), [this] (){initializeGlobalMap();});
+  map_initialization_timer_ =
+    this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
 }
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
@@ -131,6 +160,17 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
                           << odom_to_lidar_odom.translation().transpose() << ", rpy = "
                           << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
   pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
+
+  // Map footprint used to reject registration results that leave the mapped area
+  pcl::PointXYZ min_bound;
+  pcl::PointXYZ max_bound;
+  pcl::getMinMax3D(*global_map_, min_bound, max_bound);
+  map_min_bound_ = min_bound.getVector3fMap().cast<double>();
+  map_max_bound_ = max_bound.getVector3fMap().cast<double>();
+  has_map_bounds_ = true;
+  RCLCPP_INFO_STREAM(
+    this->get_logger(),
+    "Map bounds: min = " << map_min_bound_.transpose() << ", max = " << map_max_bound_.transpose());
 
   // Downsample points and convert them into pcl::PointCloud<pcl::PointCovariance>
   target_ = small_gicp::voxelgrid_sampling_omp<
@@ -181,22 +221,119 @@ void SmallGicpRelocalizationNode::performRegistration()
     source_, small_gicp::KdTreeBuilderOMP(num_threads_));
 
   if (!source_ || !source_tree_) {
+    accumulated_cloud_->clear();
+    return;
+  }
+
+  // With too few feature points the optimization is under-constrained and can
+  // slide the pose far outside the map. Keep accumulating and wait for structure.
+  if (static_cast<int>(source_->size()) < min_registration_points_) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Too few source points (%zu < %d), skip registration.", source_->size(),
+      min_registration_points_);
+    if (static_cast<int>(accumulated_cloud_->size()) > max_accumulated_points_) {
+      accumulated_cloud_->clear();
+    }
     return;
   }
 
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
-  register_->optimizer.max_iterations = 10;
+  register_->optimizer.max_iterations = max_iterations_;
+
+  // Iteration penalty: pull the estimate toward the last trusted pose and softly
+  // freeze tz / roll / pitch. Only active once a pose has been trusted, so a
+  // legitimate first relocalization is not held back.
+  if (pose_validated_) {
+    Eigen::Matrix<double, 6, 1> restriction_mask = Eigen::Matrix<double, 6, 1>::Zero();
+    restriction_mask[0] = 1.0;  // roll
+    restriction_mask[1] = 1.0;  // pitch
+    restriction_mask[5] = 1.0;  // tz
+    register_->general_factor.set_reference(previous_result_t_);
+    register_->general_factor.set_dof_restriction_mask(restriction_mask);
+    register_->general_factor.set_dof_restriction_weight(dof_restriction_weight_);
+    register_->general_factor.set_pose_penalty_weight(pose_penalty_weight_);
+  } else {
+    register_->general_factor.set_dof_restriction_weight(0.0);
+    register_->general_factor.set_pose_penalty_weight(0.0);
+  }
 
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
 
-  if (result.converged) {
-    result_t_ = previous_result_t_ = result.T_target_source;
-  } else {
+  accumulated_cloud_->clear();
+
+  if (!result.converged) {
     RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
+    return;
   }
 
-  accumulated_cloud_->clear();
+  if (result.num_inliers < min_registration_inliers_) {
+    RCLCPP_WARN(
+      this->get_logger(), "GICP inliers too few (%zu < %zu), keep previous pose.",
+      result.num_inliers, min_registration_inliers_);
+    return;
+  }
+
+  if (!isRegistrationResultValid(result.T_target_source)) {
+    return;
+  }
+
+  result_t_ = previous_result_t_ = result.T_target_source;
+  pose_validated_ = true;
+}
+
+bool SmallGicpRelocalizationNode::isRegistrationResultValid(
+  const Eigen::Isometry3d & candidate) const
+{
+  const Eigen::Vector3d translation = candidate.translation();
+  const Eigen::Matrix3d rotation = candidate.rotation();
+
+  if (std::abs(translation.z()) > max_height_) {
+    RCLCPP_WARN(
+      this->get_logger(), "GICP result height %.2f m exceeds %.2f m, keep previous pose.",
+      translation.z(), max_height_);
+    return false;
+  }
+
+  const double roll = std::atan2(rotation(2, 1), rotation(2, 2));
+  const double pitch = std::asin(std::min(1.0, std::max(-1.0, -rotation(2, 0))));
+  if (std::abs(roll) > max_tilt_ || std::abs(pitch) > max_tilt_) {
+    RCLCPP_WARN(
+      this->get_logger(), "GICP result tilt (roll %.2f rad, pitch %.2f rad) exceeds %.2f rad.",
+      roll, pitch, max_tilt_);
+    return false;
+  }
+
+  if (has_map_bounds_) {
+    const Eigen::Vector3d margin = Eigen::Vector3d::Constant(map_boundary_margin_);
+    if (
+      (translation.array() < (map_min_bound_ - margin).array()).any() ||
+      (translation.array() > (map_max_bound_ + margin).array()).any()) {
+      RCLCPP_WARN(
+        this->get_logger(), "GICP result out of map bounds (%.2f, %.2f, %.2f), keep previous pose.",
+        translation.x(), translation.y(), translation.z());
+      return false;
+    }
+  }
+
+  // Skip the jump gate for the first solve so a legitimately far initial guess
+  // can still converge; afterwards limit how far a single update may move.
+  if (pose_validated_) {
+    const double translation_jump =
+      (candidate.translation() - previous_result_t_.translation()).norm();
+    const double rotation_jump =
+      Eigen::AngleAxisd(candidate.rotation() * previous_result_t_.rotation().transpose()).angle();
+    if (translation_jump > max_translation_jump_ || rotation_jump > max_rotation_jump_) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "GICP result jump too large (dt = %.2f m, dr = %.2f rad), keep previous pose.",
+        translation_jump, rotation_jump);
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void SmallGicpRelocalizationNode::publishTransform()
@@ -247,6 +384,7 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
     previous_result_t_ = result_t_ = map_to_odom;
+    pose_validated_ = true;
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",
