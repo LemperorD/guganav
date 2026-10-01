@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>行为树执行视图</title>
+<style>
+  :root {
+    --bg: #1e1f26;
+    --panel: #262832;
+    --line: #3c4050;
+    --text: #d8dae4;
+    --dim: #7b8095;
+    --idle: #4a4f61;
+    --running: #e5b95c;
+    --success: #5fbf6a;
+    --failure: #d9635f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.5 "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+    display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+  }
+  header .item { color: var(--dim); }
+  header .item b { color: var(--text); font-weight: 600; }
+  #status { margin-left: auto; }
+  #status.on { color: var(--success); }
+  #status.off { color: var(--failure); }
+  main { flex: 1; display: flex; min-height: 0; }
+  #tree-wrap { flex: 1; overflow: auto; }
+  aside {
+    width: 360px; border-left: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  aside h2 {
+    margin: 0; padding: 10px 14px; font-size: 12px; font-weight: 600;
+    color: var(--dim); border-bottom: 1px solid var(--line); letter-spacing: .5px;
+  }
+  #params { padding: 8px 14px; border-bottom: 1px solid var(--line); overflow: auto; max-height: 42%; }
+  .param { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .param label { flex: 1; color: var(--dim); font-size: 12px; }
+  .param input {
+    width: 92px; background: #1b1d24; border: 1px solid var(--line); color: var(--text);
+    border-radius: 4px; padding: 3px 6px; font: inherit; font-size: 12px; text-align: right;
+  }
+  .param input:focus { outline: none; border-color: var(--running); }
+  #current { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  #current .leaves { display: flex; flex-direction: column; gap: 4px; }
+  #current .leaf { display: flex; justify-content: space-between; gap: 8px; }
+  #current .leaf .name { color: var(--text); }
+  #current .path { margin-top: 8px; color: var(--dim); font-size: 12px; word-break: break-all; }
+  #history { flex: 1; overflow: auto; }
+  .row { display: flex; gap: 8px; padding: 6px 14px; border-bottom: 1px solid #2c2f3a; }
+  .row:hover { background: #2c2f3a; }
+  .row .idx { color: var(--dim); width: 46px; flex: none; }
+  .row .branch { color: var(--text); flex: 1; }
+  .row .times { color: var(--dim); flex: none; }
+  .s-RUNNING { color: var(--running); }
+  .s-SUCCESS { color: var(--success); }
+  .s-FAILURE { color: var(--failure); }
+  .s-IDLE { color: var(--idle); }
+  svg { display: block; }
+  .node rect { fill: #2b2e3a; stroke: var(--idle); stroke-width: 1.5; rx: 5; }
+  .node text { fill: var(--text); font-size: 12px; dominant-baseline: middle; }
+  .node .uid { fill: var(--dim); font-size: 10px; }
+  .node.on rect { stroke-width: 2.5; }
+  .link { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .link.on { stroke: var(--running); }
+  #toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: #2b2e3a; border: 1px solid var(--line); padding: 7px 16px;
+    border-radius: 6px; opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+  #toast.err { border-color: var(--failure); color: var(--failure); }
+</style>
+</head>
+<body>
+<header>
+  <div class="item">节点 <b id="n-nodes">-</b></div>
+  <div class="item">tick <b id="n-ticks">0</b></div>
+  <div class="item">最近跨度 <b id="n-span">-</b></div>
+  <div id="status" class="off">未连接</div>
+</header>
+<main>
+  <div id="tree-wrap"><svg id="tree"></svg></div>
+  <aside>
+    <h2>假裁判参数（回车提交）</h2>
+    <div id="params"></div>
+    <h2>最近一次 tick</h2>
+    <div id="current"><div class="leaves" id="cur-leaves"></div><div class="path" id="cur-path"></div></div>
+    <h2>历史（新的在上）</h2>
+    <div id="history"></div>
+  </aside>
+</main>
+<div id="toast"></div>
+
+<script>
+const NODE_W = 156, NODE_H = 34, GAP_X = 34, GAP_Y = 46, PAD = 30;
+const ns = "http://www.w3.org/2000/svg";
+let nodes = {};
+let order = [];
+let ws = null;
+let connected = false;
+let tickCount = 0;
+let paramInputs = {};
+
+const el = (id) => document.getElementById(id);
+
+function toast(text, isError) {
+  const box = el("toast");
+  box.textContent = text;
+  box.className = "show" + (isError ? " err" : "");
+  clearTimeout(box._timer);
+  box._timer = setTimeout(() => { box.className = ""; }, 1800);
+}
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => { connected = true; setStatus(); };
+  ws.onclose = () => { connected = false; setStatus(); setTimeout(connect, 1000); };
+  ws.onerror = () => { connected = false; setStatus(); };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === "tree") onTree(msg);
+    else if (msg.type === "tick") onTick(msg);
+    else if (msg.type === "params") onParams(msg);
+    else if (msg.type === "result") toast(msg.msg, !msg.ok);
+  };
+}
+
+function setStatus() {
+  const s = el("status");
+  s.textContent = connected ? "已连接" : "未连接";
+  s.className = connected ? "on" : "off";
+}
+
+// ---------- 假裁判参数 ----------
+function onParams(msg) {
+  const box = el("params");
+  msg.items.forEach(item => {
+    let input = paramInputs[item.name];
+    if (!input) {
+      const row = document.createElement("div");
+      row.className = "param";
+      const label = document.createElement("label");
+      label.textContent = item.desc || item.name;
+      label.title = item.name;
+      input = document.createElement("input");
+      input.type = "text";
+      input.spellcheck = false;
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          submitParam(item.name, input.value);
+          input.blur();
+        }
+      });
+      row.appendChild(label);
+      row.appendChild(input);
+      box.appendChild(row);
+      paramInputs[item.name] = input;
+    }
+    // 正在输入时不覆盖，免得每秒刷新的值把光标内容冲掉
+    if (document.activeElement !== input) {
+      input.value = item.value;
+    }
+  });
+}
+
+function submitParam(name, value) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { toast("未连接", true); return; }
+  ws.send(JSON.stringify({ type: "set_param", name: name, value: value }));
+}
+
+// ---------- 树与 tick ----------
+function onTree(msg) {
+  el("n-nodes").textContent = msg.nodes.length;
+  nodes = {};
+  msg.nodes.forEach(n => { nodes[n.uid] = Object.assign({}, n, { status: null }); });
+
+  order = [];
+  const rootUid = msg.roots[Object.keys(msg.roots)[0]];
+  const visited = new Set();
+  (function walk(uid, depth) {
+    const node = nodes[uid];
+    if (!node) return;
+    node.depth = depth;
+    if (visited.has(uid) || node.children.length === 0) {
+      node.x = order.length; order.push(uid);
+      return;
+    }
+    visited.add(uid);
+    node.children.forEach(c => walk(c, depth + 1));
+    const first = nodes[node.children[0]];
+    const last = nodes[node.children[node.children.length - 1]];
+    node.x = (first.x + last.x) / 2;
+  })(rootUid, 0);
+
+  const maxDepth = Math.max(...Object.values(nodes).map(n => n.depth || 0));
+  Object.values(nodes).forEach(n => {
+    n.px = PAD + n.x * (NODE_W + GAP_X);
+    n.py = PAD + (n.depth || 0) * (NODE_H + GAP_Y);
+  });
+  const svg = el("tree");
+  svg.setAttribute("width", PAD * 2 + Math.max(0, order.length - 1) * (NODE_W + GAP_X) + NODE_W);
+  svg.setAttribute("height", PAD * 2 + maxDepth * (NODE_H + GAP_Y) + NODE_H);
+  draw();
+}
+
+function draw() {
+  const svg = el("tree");
+  svg.innerHTML = "";
+
+  Object.values(nodes).forEach(node => {
+    (node.children || []).forEach(cuid => {
+      const child = nodes[cuid];
+      if (!child) return;
+      const x1 = node.px + NODE_W / 2, y1 = node.py + NODE_H;
+      const x2 = child.px + NODE_W / 2, y2 = child.py;
+      const mid = (y1 + y2) / 2;
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("d", `M${x1},${y1} L${x1},${mid} L${x2},${mid} L${x2},${y2}`);
+      path.setAttribute("class", "link" + (isOn(node) && isOn(child) ? " on" : ""));
+      svg.appendChild(path);
+    });
+  });
+
+  Object.values(nodes).forEach(node => {
+    const g = document.createElementNS(ns, "g");
+    g.setAttribute("class", "node" + (isOn(node) ? " on" : ""));
+    g.setAttribute("transform", `translate(${node.px},${node.py})`);
+
+    const rect = document.createElementNS(ns, "rect");
+    rect.setAttribute("width", NODE_W);
+    rect.setAttribute("height", NODE_H);
+    rect.setAttribute("stroke", colorOf(node));
+    g.appendChild(rect);
+
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", 8);
+    label.setAttribute("y", NODE_H / 2 - 1);
+    label.textContent = node.label.length > 18 ? node.label.slice(0, 17) + "…" : node.label;
+    g.appendChild(label);
+
+    const meta = document.createElementNS(ns, "text");
+    meta.setAttribute("class", "uid");
+    meta.setAttribute("x", 8);
+    meta.setAttribute("y", NODE_H - 8);
+    meta.textContent = node.subtree ? `#${node.uid} → ${node.subtree}` : `#${node.uid}`;
+    g.appendChild(meta);
+
+    svg.appendChild(g);
+  });
+}
+
+const isOn = (node) => node.status && node.status !== "IDLE";
+function colorOf(node) {
+  switch (node.status) {
+    case "RUNNING": return "var(--running)";
+    case "SUCCESS": return "var(--success)";
+    case "FAILURE": return "var(--failure)";
+    case "IDLE": return "var(--idle)";
+    default: return "var(--idle)";
+  }
+}
+
+function onTick(tick) {
+  tickCount += 1;
+  el("n-ticks").textContent = tickCount;
+  el("n-span").textContent = tick.span_us + " us";
+
+  // 每轮先清空，再取每个节点最后一个非 IDLE 状态
+  Object.values(nodes).forEach(n => { n.status = null; });
+  tick.events.forEach(e => {
+    if (nodes[e.uid] && e.status !== "IDLE") nodes[e.uid].status = e.status;
+  });
+  draw();
+
+  const leaves = el("cur-leaves");
+  leaves.innerHTML = "";
+  tick.leaves.forEach(l => {
+    const row = document.createElement("div");
+    row.className = "leaf";
+    row.innerHTML = `<span class="name">${l.label}#${l.uid}</span>` +
+                    `<span class="s-${l.status}">${l.status}</span>`;
+    leaves.appendChild(row);
+  });
+  el("cur-path").textContent = tick.path.length ? tick.path.join(" > ") : "（无子行为树）";
+
+  const row = document.createElement("div");
+  row.className = "row";
+  const branch = tick.leaves.map(l => `${l.label}=${l.status[0]}`).join(" ") || "-";
+  row.innerHTML = `<span class="idx">#${tick.index}</span>` +
+                  `<span class="branch">${branch}</span>` +
+                  `<span class="times">${tick.span_us}us</span>`;
+  const history = el("history");
+  history.insertBefore(row, history.firstChild);
+  while (history.childElementCount > 10) history.removeChild(history.lastChild);
+}
+
+connect();
+</script>
+</body>
+</html>

@@ -56,6 +56,29 @@ scripts/tune_referee.sh restore /tmp/ref.yaml   # 恢复
 节点名默认 `/fake_referee`；假裁判带命名空间启动时（例如仿真里的
 `/red_standard_robot1`），把完整节点名作为最后一个参数传入。
 
+## 行为树可视化
+
+| 脚本                       | 用途                                                                   |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `scripts/btview.sh`        | 一键启动假裁判、决策节点与行为树 Web 界面，Ctrl-C 一并停止。            |
+| `scripts/btview_server.py` | Web 界面的服务端：tail 执行记录 + 转发假裁判参数，一般由 `btview.sh` 拉起。 |
+| `scripts/btlog_view.py`    | 离线解析 `.btlog` 执行记录，打印树结构与每次 tick 的执行路径。          |
+
+行为树的节点在几微秒内跑完就回到 `IDLE`，实时界面看到的永远是静态状态，
+看不出执行顺序。所以 Web 界面不做实时高亮，而是每完成一次 tick 就定格显示
+这一轮走过的路径；离线工具则直接按时间戳排出完整序列。
+
+```bash
+scripts/btview.sh                    # 浏览器打开 http://localhost:8080
+scripts/btview.sh --hz 10 --port 8090
+
+python3 scripts/btlog_view.py ~/Desktop/1.btlog            # 摘要
+python3 scripts/btlog_view.py ~/Desktop/1.btlog --tick 7   # 展开第 7 次 tick
+```
+
+执行记录由决策节点的 `btlog_path` 参数决定（默认 `/tmp/bt_trace.btlog`），
+传空字符串可关闭。`btview.sh` 会把三个进程的日志写到 `log/btview/`。
+
 ## 测试
 
 | 脚本                                               | 用途                                                   |
