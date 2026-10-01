@@ -5,6 +5,7 @@
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "behaviortree_cpp/bt_factory.h"
+#include "behaviortree_cpp/loggers/bt_file_logger_v2.h"
 #include "behaviortree_cpp/loggers/groot2_publisher.h"
 #include "rclcpp/rclcpp.hpp"
 
@@ -66,6 +67,21 @@ int main(int argc, char** argv)
 
   // 把 ROS 2 节点也放进黑板，节点里可以按 "node" 键取句柄。
   tree.rootBlackboard()->set("node", std::static_pointer_cast<rclcpp::Node>(monitor));
+
+  // 行为树执行记录：写成 Groot2 的 .btlog 格式，供离线分析（scripts/btlog_view.py）
+  // 与 Web UI 实时读取。FileLogger2 内部有独立写线程，路径后缀必须是 .btlog。
+  // 传空字符串可关闭记录。
+  const std::string btlog_path =
+    monitor->declare_parameter<std::string>("btlog_path", "/tmp/bt_trace.btlog");
+  std::unique_ptr<BT::FileLogger2> file_logger;
+  if (!btlog_path.empty()) {
+    try {
+      file_logger = std::make_unique<BT::FileLogger2>(tree, btlog_path);
+      RCLCPP_INFO(monitor->get_logger(), "行为树执行记录: %s", btlog_path.c_str());
+    } catch (const std::exception& e) {
+      RCLCPP_WARN(monitor->get_logger(), "行为树记录未启用: %s", e.what());
+    }
+  }
 
   // ===== 4. 执行 =====
   // 频率做成参数：默认 100 Hz 对齐 Nav2 的 bt_loop_duration。
