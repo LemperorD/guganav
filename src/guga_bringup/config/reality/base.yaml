@@ -116,20 +116,9 @@ small_gicp_relocalization:
     use_sim_time: False
     num_threads: 4
     num_neighbors: 20
-    min_registration_points: 100 # 源点云少于此值跳过配准，避免欠约束优化把位姿滑出地图
     global_leaf_size: 0.1
     registered_leaf_size: 0.05
     max_dist_sq: 3.0
-    max_iterations: 100 # 最大迭代次数
-    min_registration_inliers: 30 # 内点少于此值视为配准不可信，保留上一帧位姿
-    max_translation_jump: 1.0 # 单次配准允许的最大平移跳变(m)
-    max_rotation_jump: 0.35 # 单次配准允许的最大旋转跳变(rad)
-    map_boundary_margin: 2.0 # 位姿超出地图包围盒的允许余量(m)
-    max_height: 1.0 # map->odom 的 tz 上限(m)，防止位姿在高度方向漂移
-    max_tilt: 0.35 # map->odom 绕 x/y 轴(roll/pitch)翻转上限(rad)
-    dof_restriction_weight: 100000000.0 # 迭代内对 tz/roll/pitch 的软约束强度
-    pose_penalty_weight: 10000.0 # 迭代惩罚：把解拉向上一次可信位姿的权重，0 关闭
-    max_accumulated_points: 500000
     map_frame: "map"
     odom_frame: "odom"
     base_frame: "base_footprint"
