@@ -35,6 +35,27 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | -------------------- | ----------------------------------------------------------------------- |
 | `scripts/gitPush.sh` | 按项目格式生成 commit message；传入 `--push` 时提交成功后推送当前分支。 |
 
+## 调试与调参
+
+| 脚本                     | 用途                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `scripts/tune_referee.sh` | 运行时调整 `fake_referee` 的裁判数据（血量、发弹量、热量等），改动下一帧即生效。 |
+| `scripts/tune_controller.sh` | 运行时调整 controller 的 critics 权重与速度限制等参数。             |
+
+`tune_referee.sh` 常用命令：
+
+```bash
+scripts/tune_referee.sh              # 交互菜单
+scripts/tune_referee.sh show         # 显示当前取值
+scripts/tune_referee.sh hp 150       # 改当前血量
+scripts/tune_referee.sh hit 30       # 在现有血量上扣 30，模拟受击
+scripts/tune_referee.sh save /tmp/ref.yaml      # 保存当前取值
+scripts/tune_referee.sh restore /tmp/ref.yaml   # 恢复
+```
+
+节点名默认 `/fake_referee`；假裁判带命名空间启动时（例如仿真里的
+`/red_standard_robot1`），把完整节点名作为最后一个参数传入。
+
 ## 测试
 
 | 脚本                                               | 用途                                                   |
