@@ -40,7 +40,6 @@ message(STATUS "BehaviorTree.CPP v4: 头文件 ${BT_CPP_INCLUDE_DIR}，库 ${BT_
 add_executable(rmul_strategy_node
   src/main.cpp
   src/ROS2Monitor.cpp
-  src/GoalPoseSender.cpp
 )
 target_include_directories(rmul_strategy_node PRIVATE
   include

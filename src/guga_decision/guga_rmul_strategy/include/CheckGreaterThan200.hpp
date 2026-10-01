@@ -7,11 +7,8 @@
 #include "behaviortree_cpp/bt_factory.h"
 #include "rclcpp/rclcpp.hpp"
 
-// 条件判断：血量是否高于阈值。
-// 够血返回 SUCCESS，不够返回 FAILURE——这里的 FAILURE 不是"出错"，
-// 而是给父节点（IfThenElse / Fallback）看的控制流信号：条件不成立。
+// 条件判断：血量是否高于阈值,高返回 SUCCESS,低返回 FAILURE,读不到值返回 RUNNING。
 //
-// 继承 StatefulActionNode 是为了在读不到 HP 时能返回 RUNNING 等下一帧；
 // SyncActionNode 返回 RUNNING 会被 BT.CPP 抛异常。
 class CheckGreaterThan200 : public BT::StatefulActionNode
 {

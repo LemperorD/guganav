@@ -43,7 +43,6 @@ private:
     }
 
     // 还没收到裁判数据时返回 RUNNING 而不是 FAILURE：
-    // "还不知道"和"不安全"是两回事，FAILURE 会让上游立刻走回退分支。
     if (!monitor_->hasData()) {
       RCLCPP_WARN_THROTTLE(
         monitor_->get_logger(), *monitor_->get_clock(), 2000,

@@ -35,21 +35,15 @@
   </BehaviorTree>
 
   <BehaviorTree ID="IsSafe">
-    <Sequence>
-      <CheckGreaterThan200 HP="{HP}"/>
-    </Sequence>
+    <CheckGreaterThan200 HP="{HP}"/>
   </BehaviorTree>
 
   <BehaviorTree ID="MainLoop">
-    <KeepRunningUntilFailure>
-      <ForceSuccess>
-        <Sequence>
-          <ROS2Wrapper/>
-          <SubTree ID="Decide"
-                   _autoremap="true"/>
-        </Sequence>
-      </ForceSuccess>
-    </KeepRunningUntilFailure>
+    <Sequence>
+      <ROS2Wrapper/>
+      <SubTree ID="Decide"
+               _autoremap="true"/>
+    </Sequence>
   </BehaviorTree>
 
   <!-- Description of Node Models (used by Groot) -->

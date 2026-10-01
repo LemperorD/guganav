@@ -9,7 +9,6 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "CheckGreaterThan200.hpp"
-#include "GoalPoseSender.hpp"
 #include "ROS2Monitor.hpp"
 #include "ROS2Wrapper.hpp"
 #include "SetGoalPose.hpp"
@@ -18,10 +17,9 @@ int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
 
-  // ===== 1. ROS 2 侧：建立节点并让它开始收数据 =====
+  // ===== 1. ROS 2 侧：建立节点 =====
+  // 收裁判数据和发导航目标都在这个节点上，全包只有这一个 ROS 2 节点。
   auto monitor = std::make_shared<ROS2Monitor>();
-  // 目标点发送器与 monitor 共用同一个节点句柄。
-  auto goal_sender = std::make_shared<GoalPoseSender>(monitor);
 
   // 行为树由主线程周期 tick，订阅回调只能靠另一条线程跑。
   rclcpp::executors::MultiThreadedExecutor executor;
@@ -39,8 +37,8 @@ int main(int argc, char** argv)
 
   factory.registerBuilder<SetGoalPose>(
     "SetGoalPose",
-    [goal_sender](const std::string& name, const BT::NodeConfig& config) {
-      return std::make_unique<SetGoalPose>(name, config, goal_sender);
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<SetGoalPose>(name, config, monitor);
     });
 
   factory.registerBuilder<ROS2Wrapper>(
@@ -70,8 +68,17 @@ int main(int argc, char** argv)
   tree.rootBlackboard()->set("node", std::static_pointer_cast<rclcpp::Node>(monitor));
 
   // ===== 4. 执行 =====
-  // v4 里单次 tick 用 tickOnce()（v3 是 tickRoot()）。
-  rclcpp::WallRate rate(100);  // 100 Hz，约合 10 ms
+  // 频率做成参数：默认 100 Hz 对齐 Nav2 的 bt_loop_duration。
+  // 调试时调低（例如 1 Hz）便于在 Groot2 实时视图里看清每个 tick 走了哪些节点，
+  // 否则 100 Hz 下状态刷新太快，看不出先后顺序。
+  const double tick_hz = monitor->declare_parameter<double>("tick_rate_hz", 1.0);
+  if (tick_hz <= 0.0) {
+    RCLCPP_WARN(monitor->get_logger(), "tick_rate_hz 不是正数，回退到 100 Hz");
+  }
+  const double effective_hz = (tick_hz > 0.0) ? tick_hz : 1.0;
+  RCLCPP_INFO(monitor->get_logger(), "行为树 tick 频率: %.2f Hz", effective_hz);
+
+  rclcpp::WallRate rate(effective_hz);
   while (rclcpp::ok()) {
     tree.tickOnce();
     rate.sleep();

@@ -5,16 +5,15 @@
 #include <utility>
 
 #include "behaviortree_cpp/bt_factory.h"
-#include "GoalPoseSender.hpp"
+#include "ROS2Monitor.hpp"
 
-// 行为树侧：把目标点交给 GoalPoseSender 发给导航。
-// 节点本身不认识 ROS 2，只负责读端口和判断成败。
+// 行为树侧：把目标点交给 ROS2Monitor 发给导航。
 class SetGoalPose : public BT::SyncActionNode
 {
 public:
   SetGoalPose(const std::string& name, const BT::NodeConfig& config,
-              std::shared_ptr<GoalPoseSender> sender)
-  : BT::SyncActionNode(name, config), sender_(std::move(sender)) {}
+              std::shared_ptr<ROS2Monitor> monitor)
+  : BT::SyncActionNode(name, config), monitor_(std::move(monitor)) {}
 
   static BT::PortsList providedPorts()
   {
@@ -23,7 +22,7 @@ public:
 
   BT::NodeStatus tick() override
   {
-    if (!sender_) {
+    if (!monitor_) {
       // 依赖没注入进来属于配置错误，显式失败而不是静默什么都不做。
       return BT::NodeStatus::FAILURE;
     }
@@ -34,12 +33,12 @@ public:
       return BT::NodeStatus::FAILURE;
     }
 
-    // 目标点与上次相同时 sender 不会重复发布，这里同样算成功：
+    // 目标点与上次相同时不会重复发布，这里同样算成功：
     // "目标点已经在那儿了"不是失败。
-    sender_->send(x, y);
+    monitor_->sendGoalPose(x, y);
     return BT::NodeStatus::SUCCESS;
   }
 
 private:
-  std::shared_ptr<GoalPoseSender> sender_;
+  std::shared_ptr<ROS2Monitor> monitor_;
 };
