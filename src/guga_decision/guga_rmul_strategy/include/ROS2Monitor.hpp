@@ -24,7 +24,7 @@ public:
 private:
   using RobotStatusMsg = guga_interfaces::msg::RobotStatus;
 
-  rclcpp::Subscription<RobotStatusMsg>::SharedPtr subscription_;
+  rclcpp::Subscription<RobotStatusMsg>::SharedPtr sub_state_;
   std::atomic<std::uint16_t> current_hp_{0};
   std::atomic<std::uint16_t> maximum_hp_{0};
   std::atomic<bool> has_data_{false};

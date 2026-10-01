@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<root BTCPP_format="3"
-      main_tree_to_execute="MainLoop">
+<root BTCPP_format="3" main_tree_to_execute="MainLoop">
   <BehaviorTree ID="Attack">
     <AlwaysSuccess/>
   </BehaviorTree>
 
-  <BehaviorTree ID="CaptureSenterArea">
+  <BehaviorTree ID="CaptureCenterArea">
     <IfThenElse>
-      <SubTree ID="EngageEnemy"
-               __shared_blackboard="true"/>
-      <SubTree ID="Attack"
-               __shared_blackboard="true"/>
-      <SetGoalPose pose_x="0.0"
-                   pose_y="0.0"/>
+      <SubTree ID="EngageEnemy" __shared_blackboard="true"/>
+      <SubTree ID="Attack" __shared_blackboard="true"/>
+      <SetGoalPose pose_x="0.0" pose_y="0.0"/>
     </IfThenElse>
   </BehaviorTree>
 
@@ -21,52 +17,35 @@
   </BehaviorTree>
 
   <BehaviorTree ID="FallBack">
-    <SetGoalPose pose_x="0.0"
-                 pose_y="0.0"/>
+    <SetGoalPose pose_x="0.0" pose_y="0.0"/>
   </BehaviorTree>
 
   <BehaviorTree ID="IsSafe">
     <Sequence>
-      <ROS2Wrapper HP="{HP}"
-                   max_HP="{max_HP}"/>
       <CheckGreaterThan200 HP="{HP}"/>
     </Sequence>
   </BehaviorTree>
 
   <BehaviorTree ID="MainLoop">
-    <IfThenElse>
-      <SubTree ID="IsSafe"
-               __shared_blackboard="true"/>
-      <SubTree ID="CaptureSenterArea"
-               __shared_blackboard="true"/>
-      <SubTree ID="FallBack"
-               __shared_blackboard="true"/>
-    </IfThenElse>
+    <KeepRunningUntilFailure>
+      <ForceSuccess>
+        <IfThenElse>
+          <SubTree ID="IsSafe" __shared_blackboard="true"/>
+          <SubTree ID="CaptureCenterArea" __shared_blackboard="true"/>
+          <SubTree ID="FallBack" __shared_blackboard="true"/>
+        </IfThenElse>
+      </ForceSuccess>
+    </KeepRunningUntilFailure>
   </BehaviorTree>
 
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
-    <Action ID="ROS2Wrapper"
-            editable="true">
-      <output_port name="HP"
-                   type="double"/>
-      <output_port name="max_HP"
-                   type="double"/>
+    <Action ID="CheckGreaterThan200" editable="true">
+      <input_port name="HP" default="200" type="double"/>
     </Action>
-    <Action ID="CheckGreaterThan200"
-            editable="true">
-      <input_port name="HP"
-                  default="200"
-                  type="double"/>
-    </Action>
-    <Action ID="SetGoalPose"
-            editable="true">
-      <input_port name="pose_x"
-                  default="0.0"
-                  type="double"/>
-      <input_port name="pose_y"
-                  default="0.0"
-                  type="double"/>
+    <Action ID="SetGoalPose" editable="true">
+      <input_port name="pose_x" default="0.0" type="double"/>
+      <input_port name="pose_y" default="0.0" type="double"/>
     </Action>
   </TreeNodesModel>
 
