@@ -8,11 +8,12 @@ install/
 log/
 
 bin/
-
+settings.json
 cmake/
 
 compile_commands.json
-
+*.pgm
+*.pcd
 # DSH 插件注入器实体（dsh-super-injector 解压目录，profile 软链指向此处）
 .dsh-plugin-tmp/
 scripts/deepseek.sh
