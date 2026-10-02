@@ -3,7 +3,7 @@
 <package format="3">
   <name>fake_msg_source</name>
   <version>0.0.1</version>
-  <description>假数据源：按 RMUL 规则发本机裁判状态，并模拟视觉的敌人数量，字段都可用 ROS 2 参数动态调整</description>
+  <description>假数据源：发本机裁判状态与 RFID 增益点、模拟视觉敌人数量，并给出假位姿（odometry 与 odom -> base_footprint），字段都可用 ROS 2 参数动态调整</description>
   <maintainer email="ld2382619813@163.com">ld</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,9 @@
 
   <depend>rclcpp</depend>
   <depend>guga_interfaces</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
