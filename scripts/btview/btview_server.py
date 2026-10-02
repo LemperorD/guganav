@@ -58,6 +58,8 @@ SOURCE_PARAMS = [
     ("publish_rate", "double", "发布频率"),
     ("enemy_count", "integer", "敌人数量（>0 即有敌）"),
     ("vision_rate", "double", "视觉发布频率"),
+    ("game_progress", "integer", "比赛阶段（4 = 比赛中）"),
+    ("stage_remain_time", "integer", "当前阶段剩余时间（秒）"),
     ("rfid_center", "bool", "中心增益点 RFID（占点）"),
     ("rfid_base", "bool", "基地增益点 RFID（家）"),
     ("robot_x", "double", "假机器人 x（map 系，移动到哪就看到哪）"),

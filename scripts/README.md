@@ -63,6 +63,10 @@ scripts/tune_fake_source.sh restore /tmp/ref.yaml   # 恢复
 `rfid_center`（中心增益点，占点）、`rfid_base`（基地增益点，家）在面板里直接
 填 `true`／`false`，用来模拟机器人压到卡上。
 
+比赛阶段 `game_progress` 也在面板里（0 未开始、1 准备、2 自检、3 倒计时、4 比赛中、
+5 结算）。默认就是 4，否则树上"比赛开始满 1 秒才放行"的开关会把整棵树挡住；改成 0
+再改回 4 就能看到它重新计时。
+
 假数据源还给出假位姿：发 `odometry` 话题和 `odom -> base_footprint` 变换，
 外加一条静态的 `map -> odom`。`sim_speed` 不为 0 时机器人朝决策节点发出的
 `goal_pose` 走（默认 0.5 m/s），所以 `btview.sh` 起来之后能看到"未到达 → 每个
