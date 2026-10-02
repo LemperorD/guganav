@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -p | --packages)
-            PACKAGES_SELECT+="$2"
+            PACKAGES_SELECT+=" $2"
             shift 2
             ;;
         *)
