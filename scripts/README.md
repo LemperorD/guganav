@@ -60,8 +60,9 @@ scripts/tune_fake_source.sh restore /tmp/ref.yaml   # 恢复
 脚本或者行为树可视化面板都能改，两者走的是同一套参数服务。裁判两路（
 `/referee/robot_status`、`/referee/rfid_status`）用的是绝对话题名，与实车
 `serial_driver_node` 一致；视觉 `vision/info` 仍是相对名。RFID 两个开关
-`rfid_center`（中心增益点，占点）、`rfid_base`（基地增益点，家）在面板里直接
-填 `true`／`false`，用来模拟机器人压到卡上。
+`rfid_center`（中心控制区，占点）、`rfid_supply`（己方补给区，回血）在面板里
+直接填 `true`／`false`，用来模拟机器人压到卡上。UL 场地里没有基地增益点，回血靠
+占领补给区（规则 3.3.2.1）。
 
 比赛阶段 `game_progress` 也在面板里（0 未开始、1 准备、2 自检、3 倒计时、4 比赛中、
 5 结算）。默认就是 4，否则树上"比赛开始满 1 秒才放行"的开关会把整棵树挡住；改成 0
