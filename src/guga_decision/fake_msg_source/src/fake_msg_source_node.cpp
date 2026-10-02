@@ -14,6 +14,9 @@ constexpr std::int64_t kSentryMaxHp = 400;
 constexpr std::int64_t kSentryHeatLimit = 260;
 constexpr std::int64_t kSentryCooling = 30;
 
+// 裁判协议 0x0001 的 game_progress：4 = 比赛中
+constexpr std::int64_t kGameRunning = 4;
+
 constexpr double kDefaultStatusRate = 20.0;
 constexpr double kDefaultVisionRate = 10.0;
 }  // namespace
@@ -28,6 +31,8 @@ FakeMsgSource::FakeMsgSource()
     declare_parameter<std::string>("robot_status_topic", "/referee/robot_status");
   const std::string rfid_topic =
     declare_parameter<std::string>("rfid_status_topic", "/referee/rfid_status");
+  const std::string game_topic =
+    declare_parameter<std::string>("game_status_topic", "/referee/game_status");
   const std::string vision_topic =
     declare_parameter<std::string>("vision_topic", "vision/info");
   const double status_rate = declare_parameter<double>("publish_rate", kDefaultStatusRate);
@@ -55,6 +60,12 @@ FakeMsgSource::FakeMsgSource()
   // 只有一个计数字段：> 0 表示视野里有敌人。改成 0 即可模拟敌人消失。
   declare_parameter<std::int64_t>("enemy_count", 0);
   declare_parameter<std::string>("vision_frame_id", "map");
+
+  // ===== 比赛状态 =====
+  // 默认就是"比赛中"（4），否则决策树里"比赛开始才动"的开关会把整棵树挡住，
+  // 连不带比赛的联调都跑不起来。要试赛前/赛后的行为把它改成 0 或 5。
+  declare_parameter<std::int64_t>("game_progress", kGameRunning);
+  declare_parameter<std::int64_t>("stage_remain_time", 420);
 
   // ===== 假位姿 =====
   // 决策判断"是否到达"用的是 map -> base_footprint，所以这里要发两段变换：
@@ -85,6 +96,7 @@ FakeMsgSource::FakeMsgSource()
 
   status_pub_ = create_publisher<RobotStatusMsg>(status_topic, 10);
   rfid_pub_ = create_publisher<RfidStatusMsg>(rfid_topic, 10);
+  game_pub_ = create_publisher<GameStatusMsg>(game_topic, 10);
   vision_pub_ = create_publisher<VisionInfoMsg>(vision_topic, 10);
   odom_pub_ = create_publisher<OdometryMsg>(odom_topic, 10);
 
@@ -129,6 +141,7 @@ FakeMsgSource::FakeMsgSource()
       step_pose(1.0 / eff_status_rate);
       publish_robot_status();
       publish_rfid_status();
+      publish_game_status();
       publish_pose();
     });
   vision_timer_ = create_wall_timer(
@@ -286,6 +299,16 @@ void FakeMsgSource::publish_rfid_status()
   msg.center_gain_point = param_bool("rfid_center");
 
   rfid_pub_->publish(msg);
+}
+
+void FakeMsgSource::publish_game_status()
+{
+  GameStatusMsg msg;
+
+  msg.game_progress = static_cast<std::uint8_t>(param_int("game_progress"));
+  msg.stage_remain_time = static_cast<std::int32_t>(param_int("stage_remain_time"));
+
+  game_pub_->publish(msg);
 }
 
 void FakeMsgSource::publish_vision_info()

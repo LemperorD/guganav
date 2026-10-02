@@ -10,6 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.h"
+#include "guga_interfaces/msg/game_status.hpp"
 #include "guga_interfaces/msg/rfid_status.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
 #include "guga_interfaces/msg/vision_info.hpp"
@@ -19,6 +20,7 @@
 // 四路：
 //   /referee/robot_status   本机裁判状态（血量、发弹量、热量…）
 //   /referee/rfid_status    RFID 增益点状态（"到家/占点"是否真的到了）
+//   /referee/game_status    比赛状态（阶段与剩余时间）
 //   vision/info             视觉汇总（看见几个敌人）
 //   odometry + TF           假位姿：odom -> base_footprint 随动，map -> odom 静态单位变换
 //
@@ -44,12 +46,14 @@ public:
 private:
   using RobotStatusMsg = guga_interfaces::msg::RobotStatus;
   using RfidStatusMsg = guga_interfaces::msg::RfidStatus;
+  using GameStatusMsg = guga_interfaces::msg::GameStatus;
   using VisionInfoMsg = guga_interfaces::msg::VisionInfo;
   using OdometryMsg = nav_msgs::msg::Odometry;
   using PoseStampedMsg = geometry_msgs::msg::PoseStamped;
 
   void publish_robot_status();
   void publish_rfid_status();
+  void publish_game_status();
   void publish_vision_info();
   void publish_pose();
   // 朝最近一次收到的 goal_pose 走一步；速度 0 表示不动，位置完全由参数决定。
@@ -77,6 +81,7 @@ private:
 
   rclcpp::Publisher<RobotStatusMsg>::SharedPtr status_pub_;
   rclcpp::Publisher<RfidStatusMsg>::SharedPtr rfid_pub_;
+  rclcpp::Publisher<GameStatusMsg>::SharedPtr game_pub_;
   rclcpp::Publisher<VisionInfoMsg>::SharedPtr vision_pub_;
   rclcpp::Publisher<OdometryMsg>::SharedPtr odom_pub_;
   rclcpp::Subscription<PoseStampedMsg>::SharedPtr goal_sub_;
