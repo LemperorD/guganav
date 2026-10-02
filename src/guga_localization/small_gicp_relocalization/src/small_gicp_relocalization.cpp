@@ -14,6 +14,7 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
 #include "pcl_conversions/pcl_conversions.h"
 #include "small_gicp/pcl/pcl_registration.hpp"
@@ -39,6 +40,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("tz_max_",0.5);
   this->declare_parameter("roll_max_",0.02);
   this->declare_parameter("pitch_max_",0.02);
+  this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
   this->declare_parameter("base_frame", "");
@@ -58,6 +60,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("tz_max_",tz_max_);
   this->get_parameter("roll_max_",roll_max_);
   this->get_parameter("pitch_max_",pitch_max_);
+  this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
   this->get_parameter("base_frame", base_frame_);
@@ -145,6 +148,17 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
                           << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
   pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
 
+  // Map footprint used to detect a transform that pushes the robot off the map
+  pcl::PointXYZ min_bound;
+  pcl::PointXYZ max_bound;
+  pcl::getMinMax3D(*global_map_, min_bound, max_bound);
+  map_min_bound_ = min_bound.getVector3fMap().cast<double>();
+  map_max_bound_ = max_bound.getVector3fMap().cast<double>();
+  has_map_bounds_ = true;
+  RCLCPP_INFO_STREAM(
+    this->get_logger(),
+    "Map bounds: min = " << map_min_bound_.transpose() << ", max = " << map_max_bound_.transpose());
+
   // Downsample points and convert them into pcl::PointCloud<pcl::PointCovariance>
   target_ = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
@@ -203,7 +217,6 @@ void SmallGicpRelocalizationNode::performRegistration()
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
   register_->optimizer.max_tz_step = max_tz_step_;
 
-  checkRegistration(previous_result_t_,tz_max_,roll_max_,pitch_max_);
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
   if (result.converged) {
     result_t_ = previous_result_t_ = result.T_target_source;
@@ -232,10 +245,48 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& previous_
     .toRotationMatrix();
   }
 
+bool SmallGicpRelocalizationNode::isOutOfMap(
+  const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const
+{
+  if (!has_map_bounds_) {
+    return false;  // 地图范围还没算出来, 不判
+  }
+  Eigen::Isometry3d T_odom_base;
+  try {
+    T_odom_base = tf2::transformToEigen(
+      tf_buffer_->lookupTransform(odom_frame_, base_frame_, tf2::TimePointZero).transform);
+  } catch (const tf2::TransformException &) {
+    return false;  // 拿不到 odom->base 就不猜
+  }
+  // T_map_odom 是 map->odom, 它的 translation 是 odom 原点落在地图的哪里, 不是机器人的
+  // 位置; 机器人在地图里的位置要再乘上 odom->base。只判水平方向, z 由 tz_max_ 管。
+  robot_in_map = (T_map_odom * T_odom_base).translation();
+  for (int axis = 0; axis < 2; ++axis) {
+    if (
+      robot_in_map[axis] < map_min_bound_[axis] - map_boundary_margin_ ||
+      robot_in_map[axis] > map_max_bound_[axis] + map_boundary_margin_) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void SmallGicpRelocalizationNode::publishTransform()
 {
   if (result_t_.matrix().isZero()) {
     return;
+  }
+  checkRegistration(result_t_,tz_max_,roll_max_,pitch_max_);
+
+  // 越界: 强制把 map->odom 置为单位变换 (等价于 odom 系与 map 系重合),
+  // 同时把 GICP 的种子也一起重置, 免得下一轮还从越界位姿起步。
+  Eigen::Vector3d robot_in_map;
+  if (isOutOfMap(result_t_, robot_in_map)) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Relocalization leaves the map (x=%.2f, y=%.2f), forcing map->odom to identity",
+      robot_in_map.x(), robot_in_map.y());
+    result_t_ = previous_result_t_ = Eigen::Isometry3d::Identity();
   }
 
   geometry_msgs::msg::TransformStamped transform_stamped;
