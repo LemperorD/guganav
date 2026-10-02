@@ -28,11 +28,17 @@
   </BehaviorTree>
 
   <BehaviorTree ID="FallBack">
+    <!-- 回补给区：判补给区卡（rfid_supply）。UL 规则 3.3.2.1 是"占领己方补给区
+         回血"，场地里没有基地增益点这个概念。到了就钉住（hold=true）——压在补给区
+         卡上本身就在回血，钉住期间速度被置零开关压着，手柄也推不动它。
+         切换过来的那一轮人还在控制区上，rfid_supply 为假，会走共享子树里"还没
+         到位"那支先放开开关，所以"IsSafe 切换时放开"是自动发生的，不用另写。
+         坐标还是占位值，等补给区实际坐标定下来改这两行。 -->
     <SubTree ID="NavigateAndTrigger"
              goal_x="0.0"
              goal_y="0.0"
              rfid="{rfid_supply}"
-             hold="false"
+             hold="true"
              _autoremap="true"/>
   </BehaviorTree>
 
