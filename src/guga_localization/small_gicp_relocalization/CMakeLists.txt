@@ -15,7 +15,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 #######################
 ## Find dependencies ##
 #######################
-
+find_package(nav_msgs REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
 find_package(OpenMP REQUIRED)
 ament_auto_find_build_dependencies()

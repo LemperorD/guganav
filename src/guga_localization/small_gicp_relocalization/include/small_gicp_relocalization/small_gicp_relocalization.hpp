@@ -33,6 +33,8 @@
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
 
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <mutex>
 namespace small_gicp_relocalization
 {
 
@@ -48,13 +50,17 @@ private:
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
-  static void checkRegistration(Eigen::Isometry3d& previous_result_t,
+  void checkRegistration(Eigen::Isometry3d& previous_result_t,
     double tz_max_,double roll_max_,double pitch_max_);
   /// @brief 本次变换是否把机器人推出地图; 越界时 robot_in_map 为机器人在地图中的位置
-  bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
+  bool isOutsideMap(double x,double y);
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
 
+  nav_msgs::msg::OccupancyGrid::SharedPtr map_;
+  std::mutex map_mutex_;
+  int count_= 0;
   int num_threads_;
   int num_neighbors_;
   int max_iterations_;
@@ -78,6 +84,7 @@ private:
   std::string current_scan_frame_id_;
   rclcpp::Time last_scan_time_;
   Eigen::Isometry3d result_t_;
+  Eigen::Isometry3d initial_result_t_;
   Eigen::Isometry3d previous_result_t_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};

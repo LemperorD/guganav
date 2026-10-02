@@ -145,7 +145,6 @@ namespace serial_driver {
     std_msgs::msg::Float32 msg;
     msg.data = SerialDriverMain::readFloatLE(&payload[uplink_offset::YAW_DIFF]);
     yaw_diff_ = static_cast<double>(msg.data) / 180 * M_PI;
-    std::cout << "yaw: " << yaw_diff_ << std::endl;
 
     // 写入 UI 共享内存 YAW 槽位，供 guga_ui_pangolin 实时显示
     guga_ui::UiYaw ui_yaw{};

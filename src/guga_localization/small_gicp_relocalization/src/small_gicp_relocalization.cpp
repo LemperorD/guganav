@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
+#include <mutex>
 
 #include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
@@ -38,8 +39,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("max_roll_pitch_step", 0.05);
   this->declare_parameter("max_tz_step", 0.02);
   this->declare_parameter("tz_max_",0.5);
-  this->declare_parameter("roll_max_",0.02);
-  this->declare_parameter("pitch_max_",0.02);
+  this->declare_parameter("roll_max_",0.001);
+  this->declare_parameter("pitch_max_",0.001);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
@@ -77,6 +78,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
       Eigen::AngleAxisd(init_pose_[4], Eigen::Vector3d::UnitY()) *
       Eigen::AngleAxisd(init_pose_[3], Eigen::Vector3d::UnitX()).toRotationMatrix();
   }
+  initial_result_t_ = result_t_;
+  RCLCPP_INFO(this->get_logger(), "initial_tf:%f %f %f",init_pose_[0], init_pose_[1], init_pose_[2]);
   previous_result_t_ = result_t_;
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -98,7 +101,13 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   initial_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "initialpose", 10,
     [this] (const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg){initialPoseCallback(msg);});
-
+  
+  map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/map", rclcpp::QoS(1).transient_local(), 
+  [this](const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
+  {
+    std::lock_guard<std::mutex> lock(map_mutex_);
+    map_=msg;
+  });
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
     [this] () {performRegistration();});
@@ -213,9 +222,15 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
-  register_->optimizer.max_iterations = max_iterations_;
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
   register_->optimizer.max_tz_step = max_tz_step_;
+  count_++;
+
+if (count_ % 100>80) {
+  register_->optimizer.max_iterations = max_iterations_;
+} else {
+  register_->optimizer.max_iterations = 10;
+}
 
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
   if (result.converged) {
@@ -227,17 +242,29 @@ void SmallGicpRelocalizationNode::performRegistration()
   accumulated_cloud_->clear();
 }
 
-void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& previous_result_t_,
+void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t,
     double tz_max_,double roll_max_,double pitch_max_)
 {
-    Eigen::Isometry3d& T=previous_result_t_;
+    Eigen::Isometry3d& T=result_t;
     Eigen::Vector3d rpy = T.linear().eulerAngles(0, 1, 2);
-    if(fabs(T.translation().z())>tz_max_) 
+    if(isOutsideMap(T.translation().x(),T.translation().y())){
+      RCLCPP_WARN(
+      this->get_logger(),
+      "Registration result is outside map: x=%.3f, y=%.3f",
+      T.translation().x(), T.translation().y());
+
+      result_t=previous_result_t_;
+      return ;  
+    }
+    if(fabs(T.translation().z())>tz_max_){ 
     T.translation().z()=0.0;
-    if(fabs(rpy(0))>roll_max_)
+    }
+    if(fabs(rpy(0))>roll_max_){
     rpy(0)=0.0;
-    if(fabs(rpy(1))>pitch_max_)
+    }
+    if(fabs(rpy(1))>pitch_max_){
     rpy(1)=0.0;
+    }
     T.linear() =
     Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) *
     Eigen::AngleAxisd(rpy[1], Eigen::Vector3d::UnitY()) *
@@ -245,30 +272,29 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& previous_
     .toRotationMatrix();
   }
 
-bool SmallGicpRelocalizationNode::isOutOfMap(
-  const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const
+bool SmallGicpRelocalizationNode::isOutsideMap(double x, double y)
 {
-  if (!has_map_bounds_) {
-    return false;  // 地图范围还没算出来, 不判
+  std::lock_guard<std::mutex> lock(map_mutex_);
+
+  if (!map_) {
+    return false;  // 地图还没收到
   }
-  Eigen::Isometry3d T_odom_base;
-  try {
-    T_odom_base = tf2::transformToEigen(
-      tf_buffer_->lookupTransform(odom_frame_, base_frame_, tf2::TimePointZero).transform);
-  } catch (const tf2::TransformException &) {
-    return false;  // 拿不到 odom->base 就不猜
-  }
-  // T_map_odom 是 map->odom, 它的 translation 是 odom 原点落在地图的哪里, 不是机器人的
-  // 位置; 机器人在地图里的位置要再乘上 odom->base。只判水平方向, z 由 tz_max_ 管。
-  robot_in_map = (T_map_odom * T_odom_base).translation();
-  for (int axis = 0; axis < 2; ++axis) {
-    if (
-      robot_in_map[axis] < map_min_bound_[axis] - map_boundary_margin_ ||
-      robot_in_map[axis] > map_max_bound_[axis] + map_boundary_margin_) {
-      return true;
-    }
-  }
-  return false;
+
+  const auto & info = map_->info;
+
+  const double min_x = info.origin.position.x;
+  const double min_y = info.origin.position.y;
+
+  const double max_x =
+    min_x + info.width * info.resolution;
+
+  const double max_y =
+    min_y + info.height * info.resolution;
+
+  return x < min_x ||
+         x >= max_x ||
+         y < min_y ||
+         y >= max_y;
 }
 
 void SmallGicpRelocalizationNode::publishTransform()
@@ -276,19 +302,8 @@ void SmallGicpRelocalizationNode::publishTransform()
   if (result_t_.matrix().isZero()) {
     return;
   }
-  checkRegistration(result_t_,tz_max_,roll_max_,pitch_max_);
-
-  // 越界: 强制把 map->odom 置为单位变换 (等价于 odom 系与 map 系重合),
-  // 同时把 GICP 的种子也一起重置, 免得下一轮还从越界位姿起步。
-  Eigen::Vector3d robot_in_map;
-  if (isOutOfMap(result_t_, robot_in_map)) {
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(), *this->get_clock(), 2000,
-      "Relocalization leaves the map (x=%.2f, y=%.2f), forcing map->odom to identity",
-      robot_in_map.x(), robot_in_map.y());
-    result_t_ = previous_result_t_ = Eigen::Isometry3d::Identity();
-  }
-
+  // checkRegistration(result_t_,tz_max_,roll_max_,pitch_max_);
+  
   geometry_msgs::msg::TransformStamped transform_stamped;
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615
   transform_stamped.header.stamp = last_scan_time_ + rclcpp::Duration::from_seconds(0.1);
