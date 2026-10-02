@@ -57,6 +57,21 @@ scripts/tune_fake_source.sh restore /tmp/ref.yaml   # 恢复
 节点名默认 `/fake_msg_source`；数据源带命名空间启动时（例如仿真里的
 `/red_standard_robot1`），把完整节点名作为最后一个参数传入。
 
+脚本或者行为树可视化面板都能改，两者走的是同一套参数服务。裁判两路（
+`/referee/robot_status`、`/referee/rfid_status`）用的是绝对话题名，与实车
+`serial_driver_node` 一致；视觉 `vision/info` 仍是相对名。RFID 两个开关
+`rfid_center`（中心增益点，占点）、`rfid_base`（基地增益点，家）在面板里直接
+填 `true`／`false`，用来模拟机器人压到卡上。
+
+假数据源还给出假位姿：发 `odometry` 话题和 `odom -> base_footprint` 变换，
+外加一条静态的 `map -> odom`。`sim_speed` 不为 0 时机器人朝决策节点发出的
+`goal_pose` 走（默认 0.5 m/s），所以 `btview.sh` 起来之后能看到"未到达 → 每个
+周期重发目标 → 进入 20 cm → 已到达 → 进占点分支"这一整条路径，不需要额外的
+`static_transform_publisher`。把 `sim_speed` 改成 0，位置就固定由 `robot_x`、
+`robot_y` 决定，用来手试两条分支。只在不开仿真、不接实车时用：真机上
+`odom -> base_footprint` 由驱动发布、`map -> odom` 由定位发布，同时跑会争同一个
+变换（`publish_map_to_odom` 置 false 可以只让假数据源发前者）。
+
 ## 行为树可视化
 
 | 脚本                       | 用途                                                                   |
@@ -79,6 +94,15 @@ python3 scripts/btview/btlog_view.py ~/Desktop/1.btlog --tick 7   # 展开第 7 
 
 执行记录由决策节点的 `btlog_path` 参数决定（默认 `/tmp/bt_trace.btlog`），
 传空字符串可关闭。`btview.sh` 会把三个进程的日志写到 `log/btview/`。
+
+同一个子行为树被多处调用时，日志里会存下每一份实例，节点编号（`#uid`）各不相同，
+界面上按调用点分开画，子树节点下面那行小字标的就是调用它的位置。页面晚于节点
+打开也能看到最近 10 次 tick：服务端会把这几次补发给新连接。
+
+节点边框按这一轮的状态着色：绿=成功，黄=运行中，红=失败，灰=这一轮没走到。
+一次 tick 只有几微秒，所以黄边框一般只在节点确实停在运行中时才看得到，
+例如 `ROS2Wrapper` 还没收到数据、返回 `RUNNING` 的那几轮。连线的黄条表示
+这一轮走过的路径。
 
 ## 测试
 

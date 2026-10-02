@@ -96,22 +96,38 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "启动假裁判…"
-"$SOURCE_BIN" >"$LOG_DIR/source.log" 2>&1 &
-PIDS+=($!)
+# 启动一个进程，稍后确认它还活着。崩了就把日志末尾打出来并退出，
+# 而不是继续往下打印页面地址装作一切正常。
+# 决策节点最容易这样死：树里用了没注册的节点名时，BT.CPP 在加载期就终止进程。
+start_checked() {
+  local label=$1 log=$2
+  shift 2
+  "$@" >"$log" 2>&1 &
+  local pid=$!
+  PIDS+=("$pid")
+  sleep 1
+  if ! kill -0 "$pid" 2>/dev/null; then
+    {
+      echo
+      echo "ERROR: $label 启动后立即退出。$log 末尾："
+      echo "────────────"
+      tail -n 15 "$log"
+      echo "────────────"
+    } >&2
+    exit 1
+  fi
+}
 
-sleep 1
+echo "启动数据源…"
+start_checked "数据源" "$LOG_DIR/source.log" "$SOURCE_BIN"
 
 echo "启动决策节点（tick ${TICK_HZ} Hz，记录写入 $BTLOG）…"
-"$STRATEGY_BIN" --ros-args -p tick_rate_hz:="$TICK_HZ" -p btlog_path:="$BTLOG" \
-  >"$LOG_DIR/strategy.log" 2>&1 &
-PIDS+=($!)
-
-sleep 1
+start_checked "决策节点" "$LOG_DIR/strategy.log" \
+  "$STRATEGY_BIN" --ros-args -p tick_rate_hz:="$TICK_HZ" -p btlog_path:="$BTLOG"
 
 echo "启动 Web UI（端口 $PORT）…"
-python3 "$SERVER_PY" --log "$BTLOG" --port "$PORT" >"$LOG_DIR/server.log" 2>&1 &
-PIDS+=($!)
+start_checked "Web UI" "$LOG_DIR/server.log" \
+  python3 "$SERVER_PY" --log "$BTLOG" --port "$PORT"
 
 # 等页面能访问了再开浏览器，免得打开是空白的
 for _ in $(seq 1 30); do

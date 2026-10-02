@@ -71,16 +71,24 @@ def parse_btlog(path):
 def build_tree(xml_text):
     """从 XML 还原节点表与各 BehaviorTree 的根 uid。
 
-    nodes[uid] = {"uid","label","tag","subtree","children","leaf"}
+    nodes[uid] = {"uid","label","tag","subtree","path","children","leaf"}
     leaf 表示这个节点是实际干活的叶子（动作或条件）：既没有 XML 子元素，
     也不是 SubTree。摘要里只列这些，才不会把控制节点也报一遍。
+
+    同一个子行为树被多处调用时，日志 XML 里会出现多个同名 <BehaviorTree>，
+    只有 _fullpath 能区分（例如 Decide::3/CaptureCenterArea::7/NavigateAndTrigger::13
+    与 Decide::3/FallBack::19/NavigateAndTrigger::20）。所以 SubTree 节点与子树的
+    连线必须按 _fullpath 匹配：按 ID 匹配会让所有同名调用点连到同一份定义上，
+    另一份里的节点就与树脱开，界面上表现为"同名节点聚成一堆"、光条走不到。
     """
     root = ET.fromstring(xml_text)
     nodes = {}
     roots = {}
+    instances = {}
 
     for behavior_tree in root.findall("BehaviorTree"):
         tree_id = behavior_tree.get("ID")
+        fullpath = behavior_tree.get("_fullpath") or tree_id
         first = None
         for child in behavior_tree:
             if child.tag in PORT_TAGS:
@@ -88,12 +96,15 @@ def build_tree(xml_text):
             if first is None:
                 first = int(child.get("_uid"))
             _collect(child, nodes)
+        # 同名时后者覆盖前者：roots 只用于按 ID 找入口树（MainLoop 是唯一的），
+        # 子树连接一律走 instances。
         roots[tree_id] = first
+        instances[fullpath] = first
 
-    # SubTree 节点没有 XML 子元素，它的唯一子节点是所引用树的根
+    # SubTree 节点没有 XML 子元素，它的唯一子节点按自己的 _fullpath 找。
     for info in nodes.values():
         if info["subtree"] and not info["children"]:
-            target = roots.get(info["subtree"])
+            target = instances.get(info["path"])
             if target is not None:
                 info["children"] = [target]
 
@@ -106,9 +117,10 @@ def _collect(element, nodes):
     is_subtree = element.tag == "SubTree"
     nodes[uid] = {
         "uid": uid,
-        "label": element.get("name") or element.tag,
+        "label": element.get("ID") if is_subtree else (element.get("name") or element.tag),
         "tag": element.tag,
         "subtree": element.get("ID") if is_subtree else None,
+        "path": element.get("_fullpath"),
         "children": [int(c.get("_uid")) for c in children],
         "leaf": not children and not is_subtree,
     }
@@ -116,21 +128,65 @@ def _collect(element, nodes):
         _collect(child, nodes)
 
 
-def split_ticks(records):
+def reachable(nodes, root_uid):
+    """从入口根节点出发能走到的 uid 集合，顺序与树一致。
+
+    日志里所有节点都在一起，而已展开的树是从入口根连通的。用不到这个集合的
+    话，脱开的节点在界面上会因为没有坐标而堆在左上角。
+    """
+    seen, stack, order = set(), [root_uid], []
+    while stack:
+        uid = stack.pop()
+        if uid in seen or uid not in nodes:
+            continue
+        seen.add(uid)
+        order.append(uid)
+        stack.extend(reversed(nodes[uid]["children"]))
+    return order
+
+
+
+def tick_marker(nodes, root_uid):
+    """返回入口根节点的第一个孩子：每轮第一个被求值的节点。
+
+    只有根节点不够用：根节点报告 RUNNING 后会跨 tick 一直保持这个状态（分支里
+    有节点在等，例如巡逻等超时），不再产生边界。第一个孩子每轮都会重新求值，
+    状态必然从 IDLE 出发，两种情况下都能当边界。没有孩子时返回根节点自己。
+    """
+    info = nodes.get(root_uid)
+    if info and info["children"]:
+        return info["children"][0]
+    return root_uid
+
+
+def split_ticks(records, root_uid, marker_uid=None):
     """按 tick 切分事件序列。
 
-    入口树的根节点（uid 最小者）自身的状态变化不会被记录，所以用"出现过的
-    最小 uid"从空闲态转入 RUNNING 作为一次 tick 的开始。
+    边界取"根节点或它的第一个孩子离开 IDLE"的那一刻：
+      - 立即返回终态的动作（例如 ROS2Wrapper，onStart 里就 SUCCESS）每轮只记
+        SUCCESS、IDLE，没有 RUNNING 记录，只能靠"离开 IDLE"认出来；
+      - 控制节点每轮记 RUNNING、终态、IDLE，两种都能认。
+    根节点跨 tick 停在 RUNNING 时（有节点在等）只有第一个孩子会产生边界；正常
+    情况下两者都会产生，于是在一轮的开头会多出一个"只有根节点自己的事件"的片段，
+    这种片段并回后一轮，不算独立的一次 tick。
     """
     if not records:
         return []
-    entry_uid = min(uid for _, uid, _ in records)
+    if marker_uid is None:
+        marker_uid = root_uid
 
+    IDLE = 0
     ticks, current = [], []
+    statuses = {root_uid: IDLE, marker_uid: IDLE}
     for ts, uid, status in records:
-        if uid == entry_uid and status == 1 and current:
-            ticks.append(current)
-            current = []
+        if uid in statuses:
+            started = statuses[uid] == IDLE and status != IDLE
+            statuses[uid] = status
+            if started and current:
+                only_root = all(u == root_uid for _t, u, _s in current)
+                if not only_root:
+                    ticks.append(current)
+                    current = []
         current.append((ts, uid, status))
     if current:
         ticks.append(current)
@@ -152,8 +208,16 @@ def summarize(tick, nodes):
         if info["leaf"]:
             leaves.append((uid, info["label"], status))
         if info["subtree"]:
-            subtrees.append(info["subtree"])
-    return leaves, subtrees
+            # 子树节点在出栈时才记终态，事件顺序是从里往外的，按树深排回
+            # 从外到里，读起来才是"经过哪几层子树"。
+            subtrees.append(((info["path"] or "").count("/"), info["subtree"]))
+
+    subtrees.sort(key=lambda item: item[0])
+    chain = []
+    for _depth, name in subtrees:
+        if name not in chain:
+            chain.append(name)
+    return leaves, chain
 
 
 def format_summary(leaves, subtrees, color):
@@ -234,11 +298,21 @@ def main():
 
     xml_text, _time_base, records = parse_btlog(args.logfile)
     nodes, roots = build_tree(xml_text)
-    ticks = split_ticks(records)
+    entry_root = roots.get(args.main_tree)
+    if entry_root is None:
+        # 找不到入口树时退回"出现过的最小 uid"，至少还能切出东西来。
+        entry_root = min(nodes) if nodes else None
+    ticks = split_ticks(records, entry_root, tick_marker(nodes, entry_root))
     color = not args.no_color and sys.stdout.isatty()
 
     print(f"记录文件 : {args.logfile}")
     print(f"节点数量 : {len(nodes)}   行为树: {', '.join(roots)}")
+    if entry_root is not None:
+        linked = reachable(nodes, entry_root)
+        if len(linked) != len(nodes):
+            # 日志里节点是平铺的：同名子行为树的每一份实例都在。连不上的说明
+            # 子树连接出了问题，下面的树里看不到它们。
+            print(f"注意     : {len(nodes) - len(linked)} 个节点连不到入口树，不会出现在树结构里")
     print(f"事件数量 : {len(records)}   切分出 {len(ticks)} 次 tick")
     if ticks:
         span = ticks[-1][-1][0] - ticks[0][0][0]

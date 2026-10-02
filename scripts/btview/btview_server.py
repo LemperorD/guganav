@@ -33,11 +33,12 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 
 from aiohttp import web
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from btlog_view import build_tree, summarize  # noqa: E402
+from btlog_view import build_tree, summarize, tick_marker  # noqa: E402
 
 STATUS_NAMES = {0: "IDLE", 1: "RUNNING", 2: "SUCCESS", 3: "FAILURE"}
 MAGIC = b"BTCPP4-FileLogger2"
@@ -57,6 +58,11 @@ SOURCE_PARAMS = [
     ("publish_rate", "double", "发布频率"),
     ("enemy_count", "integer", "敌人数量（>0 即有敌）"),
     ("vision_rate", "double", "视觉发布频率"),
+    ("rfid_center", "bool", "中心增益点 RFID（占点）"),
+    ("rfid_base", "bool", "基地增益点 RFID（家）"),
+    ("robot_x", "double", "假机器人 x（map 系，移动到哪就看到哪）"),
+    ("robot_y", "double", "假机器人 y（map 系）"),
+    ("sim_speed", "double", "假机器人速度 m/s（0 = 钉住不动）"),
 ]
 
 
@@ -75,7 +81,11 @@ class BtLogTailer:
         self.parsed = 0
         self.pending = []
         self.tick_index = 0
+        # 切分 tick 的两个边界节点（根节点与它的第一个孩子）及其上次状态，
+        # 规则与 btlog_view.split_ticks 一致：见那里的说明。
         self.entry_uid = None
+        self.marker_uid = None
+        self.boundary_status = {}
 
     def _load_header(self, data):
         if data[: len(MAGIC)] != MAGIC:
@@ -87,7 +97,19 @@ class BtLogTailer:
         xml_text = data[HEADER_LEN:xml_end].decode("utf-8", "replace")
         self.nodes, self.roots = build_tree(xml_text)
         self.rec_offset = xml_end + 8
+        # tick 边界用入口根节点的第一个孩子，理由见 btlog_view.tick_marker：
+        # 根节点跨 tick 停在 RUNNING 时不会有"再次进入 RUNNING"的记录。
+        main = self._main_tree()
+        if main is not None:
+            self.entry_uid = self.roots[main]
+            self.marker_uid = tick_marker(self.nodes, self.entry_uid)
+            self.boundary_status = {self.entry_uid: 0, self.marker_uid: 0}
         return True
+
+    def _main_tree(self):
+        """入口树：根 uid 最小的那棵（uid 按实例化顺序分配，主树排在最前）。"""
+        candidates = {k: v for k, v in (self.roots or {}).items() if v is not None}
+        return min(candidates, key=lambda tid: candidates[tid]) if candidates else None
 
     def poll(self):
         """返回自上次调用以来完成的 tick 列表。"""
@@ -108,20 +130,22 @@ class BtLogTailer:
         if total == self.parsed:
             return []
 
-        if self.entry_uid is None and total:
-            self.entry_uid = min(
-                int.from_bytes(body[i * 9 + 6 : i * 9 + 8], "little") for i in range(total)
-            )
-
         finished = []
         for i in range(self.parsed, total):
             chunk = body[i * 9 : (i + 1) * 9]
             ts = int.from_bytes(chunk[0:6], "little")
             uid = int.from_bytes(chunk[6:8], "little")
             status = chunk[8]
-            if uid == self.entry_uid and status == 1 and self.pending:
-                finished.append(self._finish(self.pending))
-                self.pending = []
+            # 边界规则与 btlog_view.split_ticks 保持一致：两个边界节点里有任意
+            # 一个"离开 IDLE"就是新的一轮；若当前攒下的还只有根节点自己的事件，
+            # 说明这一轮才刚开始，不算独立的一次 tick。
+            if uid in self.boundary_status:
+                started = self.boundary_status[uid] == 0 and status != 0
+                self.boundary_status[uid] = status
+                only_root = all(u == self.entry_uid for _t, u, _s in self.pending)
+                if started and self.pending and not only_root:
+                    finished.append(self._finish(self.pending))
+                    self.pending = []
             self.pending.append((ts, uid, status))
         self.parsed = total
         return finished
@@ -149,8 +173,11 @@ class BtLogTailer:
     def tree_message(self):
         if self.nodes is None:
             return None
+        # 界面上必须从入口根往下画：日志里所有节点是平铺的，只有连通的那部分
+        # 属于展开后的树。
         return {
             "type": "tree",
+            "main": self._main_tree(),
             "roots": self.roots,
             "nodes": [
                 {
@@ -158,12 +185,23 @@ class BtLogTailer:
                     "label": info["label"],
                     "tag": info["tag"],
                     "subtree": info["subtree"],
+                    "path": info["path"],
                     "children": info["children"],
                     "leaf": info["leaf"],
                 }
                 for info in self.nodes.values()
             ],
         }
+
+
+def _parse_bool(text):
+    """把界面上输入的文本转成布尔量，认不出来就抛 ValueError。"""
+    shown = text.strip().lower()
+    if shown in ("1", "true", "on", "yes"):
+        return True
+    if shown in ("0", "false", "off", "no"):
+        return False
+    raise ValueError(f"值不是布尔量（用 true/false 或 1/0）: {text}")
 
 
 class SourceBridge:
@@ -239,19 +277,23 @@ class SourceBridge:
         if not self.set_cli.wait_for_service(timeout_sec=1.0):
             return False, f"{self._target} 的 set_parameters 服务不可用"
 
+        # 按声明类型构造 ParameterValue：类型不匹配会直接被 set_parameters 拒绝，
+        # 所以不能用"整型也塞给布尔参数"这种偷懒写法。
         try:
             if kind == "double":
-                ptype, ival, dval = ParameterType.PARAMETER_DOUBLE, 0, float(text)
+                value = ParameterValue(type=ParameterType.PARAMETER_DOUBLE,
+                                       double_value=float(text))
+            elif kind == "bool":
+                value = ParameterValue(type=ParameterType.PARAMETER_BOOL,
+                                       bool_value=_parse_bool(text))
             else:
-                ptype, ival, dval = ParameterType.PARAMETER_INTEGER, int(float(text)), 0.0
-        except ValueError:
-            return False, f"值不是数字: {text}"
+                value = ParameterValue(type=ParameterType.PARAMETER_INTEGER,
+                                       integer_value=int(float(text)))
+        except ValueError as exc:
+            return False, f"{name}: {exc}"
 
         req = self._set_srv.Request()
-        req.parameters = [
-            Parameter(name=name, value=ParameterValue(type=ptype, integer_value=ival,
-                                                      double_value=dval))
-        ]
+        req.parameters = [Parameter(name=name, value=value)]
         res = self._await(self.set_cli.call_async(req))
         if res is None:
             return False, "写入超时"
@@ -261,15 +303,29 @@ class SourceBridge:
 
     def shutdown(self):
         self._stop.set()
+        # spin 线程要先收回来再拆节点：先关 rclpy 的话，线程可能还停在
+        # spin_once 里，进程退出时会直接 abort 并打印 "terminate called"。
+        if self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+        try:
+            self.node.destroy_node()
+            if self._rclpy.ok():
+                self._rclpy.shutdown()
+        except Exception:
+            pass
 
 
 class BtViewServer:
-    def __init__(self, log_path, html_path, source_node, poll_interval=0.2):
+    def __init__(self, log_path, html_path, source_node, poll_interval=0.1,
+                 history=10):
         self.tailer = BtLogTailer(log_path)
         self.html_path = html_path
         self.poll_interval = poll_interval
         self.clients = set()
         self.last_params = None
+        # 最近几次 tick 留一份：轮询是增量的，页面晚连上来就再也收不到已经解析过
+        # 的 tick，界面上会一直空着，直到下一个 tick 边界。留一份补发给新连接。
+        self.recent = deque(maxlen=history)
         try:
             self.source = SourceBridge(source_node)
         except Exception as exc:
@@ -289,6 +345,9 @@ class BtViewServer:
             tree = self.tailer.tree_message()
             if tree:
                 await ws.send_json(tree)
+            # 按时间顺序补发最近的 tick，前端把它当实时消息处理即可。
+            for tick in self.recent:
+                await ws.send_json(tick)
             if self.last_params:
                 await ws.send_json(self.last_params)
             async for msg in ws:
@@ -355,6 +414,7 @@ class BtViewServer:
                     sent_tree = True
 
             for tick in ticks:
+                self.recent.append(tick)
                 await self.broadcast(tick)
 
             # 参数每秒刷新一次，够用又不会刷屏
@@ -372,7 +432,7 @@ def main():
     parser.add_argument("--port", type=int, default=8080, help="监听端口")
     parser.add_argument("--source", default="/fake_msg_source", help="假数据源节点名")
     parser.add_argument("--html", default=os.path.join(here, "btview.html"))
-    parser.add_argument("--interval", type=float, default=0.2, help="轮询间隔（秒）")
+    parser.add_argument("--interval", type=float, default=0.1, help="轮询间隔（秒）")
     args = parser.parse_args()
 
     if not os.path.exists(args.html):

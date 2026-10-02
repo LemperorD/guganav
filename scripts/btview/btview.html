@@ -227,6 +227,21 @@
       font-size: 10px;
     }
 
+    /* 边框按状态着色。只能走 CSS：CSS 的 stroke 优先于 SVG 表示属性，
+       在 rect 上 setAttribute("stroke", ...) 会被上面那条规则覆盖掉，
+       结果所有边框都是灰的。 */
+    .node.s-RUNNING rect {
+      stroke: var(--running);
+    }
+
+    .node.s-SUCCESS rect {
+      stroke: var(--success);
+    }
+
+    .node.s-FAILURE rect {
+      stroke: var(--failure);
+    }
+
     .node.on rect {
       stroke-width: 2.5;
     }
@@ -239,6 +254,16 @@
 
     .link.on {
       stroke: var(--running);
+      stroke-width: 2.5;
+    }
+
+    /* 亮线的底色描边：交叉处把压在下面的暗线切断，亮线看起来是一条连着的线，
+       不会被误读成一个岔路口。 */
+    .link-casing {
+      fill: none;
+      stroke: var(--bg);
+      stroke-width: 6;
+      stroke-linejoin: round;
     }
 
     #toast {
@@ -369,13 +394,43 @@
     }
 
     // ---------- 树与 tick ----------
+    // "Decide::3/CaptureCenterArea::7/NavigateAndTrigger::13" -> "CaptureCenterArea"
+    // 同一个子行为树可能被多处调用，光看节点名分不出是哪一次调用，调用点写在节点里。
+    function callSite(path) {
+      if (!path) return "";
+      const parts = path.split("/");
+      if (parts.length < 2) return "";
+      return parts[parts.length - 2].split("::")[0];
+    }
+
     function onTree(msg) {
-      el("n-nodes").textContent = msg.nodes.length;
+      const all = {};
+      msg.nodes.forEach(n => { all[n.uid] = Object.assign({}, n, { status: null, sticky: false }); });
+
+      const rootUid = msg.roots[msg.main] !== undefined
+        ? msg.roots[msg.main]
+        : msg.roots[Object.keys(msg.roots)[0]];
+
+      // 只画从入口根节点连通的节点。日志里节点是平铺的，子树的每一份实例各有
+      // 自己的 uid；按 ID 连错时另一份实例就与根脱开，那些节点没有坐标，
+      // 会全部堆在左上角。
+      const drawn = [];
+      const seen = new Set();
+      (function collect(uid) {
+        if (seen.has(uid) || !all[uid]) return;
+        seen.add(uid);
+        drawn.push(all[uid]);
+        (all[uid].children || []).forEach(collect);
+      })(rootUid);
+
       nodes = {};
-      msg.nodes.forEach(n => { nodes[n.uid] = Object.assign({}, n, { status: null }); });
+      drawn.forEach(n => { nodes[n.uid] = n; });
+      const dropped = msg.nodes.length - drawn.length;
+      el("n-nodes").textContent = dropped > 0
+        ? `${drawn.length}（另有 ${dropped} 个未连通）`
+        : drawn.length;
 
       order = [];
-      const rootUid = msg.roots[Object.keys(msg.roots)[0]];
       const visited = new Set();
       (function walk(uid, depth) {
         const node = nodes[uid];
@@ -407,29 +462,56 @@
       const svg = el("tree");
       svg.innerHTML = "";
 
+      // 每条连线：从父节点底部下到自己那一档高度，横过去，再下到子节点顶部。
+      // 高度按"离父节点越近的分支越高"分配。以前是所有分支共用一个中途高度，
+      // 兄弟节点的线就先共用同一段竖线：一亮一暗两个分支叠在一起时，亮的那条
+      // 看起来会拐进暗的分支（丁字口），暗线穿过亮线时又看不出谁连着谁（十字口）。
+      const links = [];
       Object.values(nodes).forEach(node => {
-        (node.children || []).forEach(cuid => {
-          const child = nodes[cuid];
-          if (!child) return;
-          const x1 = node.px + NODE_W / 2, y1 = node.py + NODE_H;
-          const x2 = child.px + NODE_W / 2, y2 = child.py;
-          const mid = (y1 + y2) / 2;
-          const path = document.createElementNS(ns, "path");
-          path.setAttribute("d", `M${x1},${y1} L${x1},${mid} L${x2},${mid} L${x2},${y2}`);
-          path.setAttribute("class", "link" + (isOn(node) && isOn(child) ? " on" : ""));
-          svg.appendChild(path);
+        const kids = (node.children || []).map(c => nodes[c]).filter(Boolean);
+        if (kids.length === 0) return;
+        const byDistance = kids.map((_k, i) => i).sort((a, b) =>
+          Math.abs(kids[a].px - node.px) - Math.abs(kids[b].px - node.px));
+        const rank = new Map(byDistance.map((index, r) => [index, r]));
+
+        kids.forEach((child, i) => {
+          const y1 = node.py + NODE_H, y2 = child.py;
+          const level = (rank.get(i) + 1) / (kids.length + 1);
+          const mid = y1 + (y2 - y1) * level;
+          const x1 = node.px + NODE_W / 2, x2 = child.px + NODE_W / 2;
+          links.push({
+            d: `M${x1},${y1} L${x1},${mid} L${x2},${mid} L${x2},${y2}`,
+            on: isOn(node) && isOn(child),
+          });
         });
+      });
+
+      const addPath = (link, cls) => {
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("d", link.d);
+        path.setAttribute("class", cls);
+        svg.appendChild(path);
+      };
+
+      // 分两趟画：暗线先，亮线后（每条亮线自带一圈底色描边）。
+      // 亮线因此压在暗线之上，交汇处不会看成同一根。
+      links.filter(l => !l.on).forEach(l => addPath(l, "link"));
+      links.filter(l => l.on).forEach(l => {
+        addPath(l, "link-casing");
+        addPath(l, "link on");
       });
 
       Object.values(nodes).forEach(node => {
         const g = document.createElementNS(ns, "g");
-        g.setAttribute("class", "node" + (isOn(node) ? " on" : ""));
+        // 状态同时决定边框颜色（CSS 里的 .s-XXX）和线宽（.on）
+        const status = shownStatus(node);
+        g.setAttribute("class", "node" + (status ? " s-" + status : "") +
+          (isOn(node) ? " on" : ""));
         g.setAttribute("transform", `translate(${node.px},${node.py})`);
 
         const rect = document.createElementNS(ns, "rect");
         rect.setAttribute("width", NODE_W);
         rect.setAttribute("height", NODE_H);
-        rect.setAttribute("stroke", colorOf(node));
         g.appendChild(rect);
 
         const label = document.createElementNS(ns, "text");
@@ -438,37 +520,57 @@
         label.textContent = node.label.length > 18 ? node.label.slice(0, 17) + "…" : node.label;
         g.appendChild(label);
 
+        // 子树节点写出调用点：同一个子行为树被两处调用时，只有这里能区分。
         const meta = document.createElementNS(ns, "text");
         meta.setAttribute("class", "uid");
         meta.setAttribute("x", 8);
         meta.setAttribute("y", NODE_H - 8);
-        meta.textContent = node.subtree ? `#${node.uid} → ${node.subtree}` : `#${node.uid}`;
+        const site = callSite(node.path);
+        meta.textContent = site ? `#${node.uid} · ${site}` : `#${node.uid}`;
         g.appendChild(meta);
+
+        if (node.path || node.subtree) {
+          const title = document.createElementNS(ns, "title");
+          title.textContent = node.subtree
+            ? `#${node.uid} 调用 ${node.subtree}，位置 ${node.path}`
+            : `#${node.uid} ${node.label}`;
+          g.appendChild(title);
+        }
 
         svg.appendChild(g);
       });
     }
 
-    const isOn = (node) => node.status && node.status !== "IDLE";
-    function colorOf(node) {
-      switch (node.status) {
-        case "RUNNING": return "var(--running)";
-        case "SUCCESS": return "var(--success)";
-        case "FAILURE": return "var(--failure)";
-        case "IDLE": return "var(--idle)";
-        default: return "var(--idle)";
-      }
-    }
+    // 节点显示用的状态：本 tick 有过状态就用它；否则如果它还停在 RUNNING，就显示 RUNNING。
+    // 停在 RUNNING 的节点在后续 tick 里不再产生日志（状态没变化，日志只在变化时记），
+    // 只按本 tick 的事件着色的话，它会从第二轮起一直显示成灰的。
+    const shownStatus = (node) => node.status || (node.sticky ? "RUNNING" : null);
+    const isOn = (node) => {
+      const status = shownStatus(node);
+      return status && status !== "IDLE";
+    };
 
     function onTick(tick) {
       tickCount += 1;
       el("n-ticks").textContent = tickCount;
       el("n-span").textContent = tick.span_us + " us";
 
-      // 每轮先清空，再取每个节点最后一个非 IDLE 状态
+      // 每轮先清空本 tick 的状态，再取每个节点最后一个非 IDLE 状态；
+      // sticky 用来记住"还停在 RUNNING"，它不随 tick 清空。
       Object.values(nodes).forEach(n => { n.status = null; });
       tick.events.forEach(e => {
-        if (nodes[e.uid] && e.status !== "IDLE") nodes[e.uid].status = e.status;
+        const node = nodes[e.uid];
+        if (!node) return;
+        if (e.status === "RUNNING") {
+          node.sticky = true;
+          node.status = "RUNNING";
+        } else if (e.status !== "IDLE") {
+          // SUCCESS / FAILURE：这一轮有了终态，就不再是"停在运行中"
+          node.sticky = false;
+          node.status = e.status;
+        } else {
+          node.sticky = false;
+        }
       });
       draw();
 
