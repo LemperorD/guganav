@@ -50,10 +50,10 @@ FakeMsgSource::FakeMsgSource()
   declare_parameter<std::int64_t>("remaining_gold_coin", 0);
 
   // ===== RFID 增益点 =====
-  // 只模拟本工程用到的两处：基地增益点（"家"）与中心增益点（RMUL 占点）。
+  // 只模拟本工程用到的两处：己方补给区（UL 回血靠它）与中心控制区（UL 占点）。
   // 其余 22 位保持 false；以后要用别的点，在这里加一个 bool 参数即可。
   // 真机上这两位的来源是裁判系统 0x0209 的位域，机器人压到卡上才会置 1。
-  declare_parameter<bool>("rfid_base", false);
+  declare_parameter<bool>("rfid_supply", false);
   declare_parameter<bool>("rfid_center", false);
 
   // ===== 视觉汇总 =====
@@ -151,11 +151,11 @@ FakeMsgSource::FakeMsgSource()
   RCLCPP_INFO(
     get_logger(),
     "假数据源已启动：%s @ %.1f Hz，%s @ %.1f Hz，%s @ %.1f Hz，%s @ %.1f Hz，ID %ld，"
-    "HP %u/%ld，enemy_count %ld，RFID 基地=%d 中心=%d",
+    "HP %u/%ld，enemy_count %ld，RFID 补给区=%d 控制区=%d",
     status_topic.c_str(), eff_status_rate, rfid_topic.c_str(), eff_status_rate,
     vision_topic.c_str(), eff_vision_rate, odom_topic.c_str(), eff_status_rate,
     param_int("robot_id"), last_hp_, param_int("maximum_hp"),
-    param_int("enemy_count"), param_bool("rfid_base"), param_bool("rfid_center"));
+    param_int("enemy_count"), param_bool("rfid_supply"), param_bool("rfid_center"));
   RCLCPP_INFO(
     get_logger(),
     "假位姿：%s -> %s，%s -> %s（%s），起点 (%.2f, %.2f)，速度 %.2f m/s",
@@ -295,7 +295,8 @@ void FakeMsgSource::publish_rfid_status()
   RfidStatusMsg msg;
 
   // 只填本工程用到的两位，其余保持 false：真机上未触发的位也是 0。
-  msg.base_gain_point = param_bool("rfid_base");
+  // UL 的补给区用「己方与兑换区不重叠的补给区」这一位
+  msg.friendly_supply_zone_non_exchange = param_bool("rfid_supply");
   msg.center_gain_point = param_bool("rfid_center");
 
   rfid_pub_->publish(msg);

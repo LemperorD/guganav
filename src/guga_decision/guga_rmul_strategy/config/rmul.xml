@@ -31,7 +31,7 @@
     <SubTree ID="NavigateAndTrigger"
              goal_x="0.0"
              goal_y="0.0"
-             rfid="{rfid_base}"
+             rfid="{rfid_supply}"
              hold="false"
              _autoremap="true"/>
   </BehaviorTree>

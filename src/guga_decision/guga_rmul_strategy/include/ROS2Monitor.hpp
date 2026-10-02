@@ -45,9 +45,11 @@ public:
   // 4 比赛中、5 结算。没收到过消息时为 0。
   std::uint8_t gameProgress() const { return game_progress_.load(); }
 
-  // RFID 增益点：机器人是否压到了对应的卡上。base 是己方基地增益点（"家"），
-  // center 是中心增益点（RMUL 的"占点"）。未触发时为 false。
-  bool baseGainPoint() const { return base_gain_point_.load(); }
+  // RFID 增益点：机器人是否压到了对应的卡上。supply 是己方补给区——UL 里回血靠它
+  // （规则 3.3.2.1：占领己方补给区，每秒回 25% 上限血量），center 是中心控制区
+  // （UL 的"占点"）。协议里的字段名保持原样：补给区对应
+  // friendly_supply_zone_non_exchange，控制区对应 center_gain_point。
+  bool supplyZoneGainPoint() const { return supply_zone_gain_point_.load(); }
   bool centerGainPoint() const { return center_gain_point_.load(); }
 
   // 是否收到过 RFID 状态。没收到时上面两位恒为 false，判断"没触发"之前要先看
@@ -95,7 +97,7 @@ private:
   std::atomic<std::uint16_t> projectile_allowance_{0};
   std::atomic<std::int32_t> enemy_count_{0};
   std::atomic<bool> has_data_{false};
-  std::atomic<bool> base_gain_point_{false};
+  std::atomic<bool> supply_zone_gain_point_{false};
   std::atomic<bool> center_gain_point_{false};
   std::atomic<bool> has_rfid_data_{false};
   std::atomic<std::uint8_t> game_progress_{0};

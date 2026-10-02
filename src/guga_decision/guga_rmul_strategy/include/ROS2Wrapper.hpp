@@ -21,7 +21,7 @@
 // 当前写入：HP(double)、ammo(int)、enemy_count(int)，
 // robot_x、robot_y(double，map 系下的机器人位置，定位不可用时为 NaN)，
 // game_progress(int，比赛阶段，4 = 比赛中)，
-// rfid_base、rfid_center(bool，是否正压着对应的 RFID 增益点，离开即回到 false)。
+// rfid_supply、rfid_center(bool，是否正压着补给区／控制区的卡，离开即回到 false)。
 class ROS2Wrapper : public BT::StatefulActionNode
 {
 public:
@@ -80,7 +80,7 @@ private:
 
     // RFID 增益点：压到卡上为 true，离开回到 false。只给当前状态，不做"触发过
     // 就算"的累积——累积起来就看不出机器人被撞开，不会再回去占。
-    blackboard->set(kRfidBaseKey, monitor_->baseGainPoint());
+    blackboard->set(kRfidSupplyKey, monitor_->supplyZoneGainPoint());
     blackboard->set(kRfidCenterKey, monitor_->centerGainPoint());
     if (!monitor_->hasRfidData()) {
       // 没收到过说明话题没通（名字不对或驱动没发），此时两位恒为 false——
@@ -100,7 +100,7 @@ private:
   static constexpr const char* kRobotXKey = "robot_x";
   static constexpr const char* kRobotYKey = "robot_y";
   static constexpr const char* kGameProgressKey = "game_progress";
-  static constexpr const char* kRfidBaseKey = "rfid_base";
+  static constexpr const char* kRfidSupplyKey = "rfid_supply";
   static constexpr const char* kRfidCenterKey = "rfid_center";
 
   std::shared_ptr<ROS2Monitor> monitor_;

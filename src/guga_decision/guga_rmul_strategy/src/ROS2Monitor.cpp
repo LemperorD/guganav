@@ -42,21 +42,22 @@ ROS2Monitor::ROS2Monitor(const rclcpp::NodeOptions& options)
       if (!msg) {
         return;
       }
-      const bool base = msg->base_gain_point;
+      // UL 的补给区就是协议里「己方与兑换区不重叠的补给区」这一位。
+      const bool supply = msg->friendly_supply_zone_non_exchange;
       const bool center = msg->center_gain_point;
 
       // 状态变化很少（一场比赛几次），按"变化"打日志比按时间节流更有用：
       // 复盘时能看到增益点是什么时候触发的。首条单独打，用来确认链路是通的。
       if (!has_rfid_data_.load()) {
-        RCLCPP_INFO(get_logger(), "首次收到 RFID 状态：基地增益点=%d，中心增益点=%d",
-                    base, center);
-      } else if (base != base_gain_point_.load() ||
+        RCLCPP_INFO(get_logger(), "首次收到 RFID 状态：补给区=%d，中心控制区=%d",
+                    supply, center);
+      } else if (supply != supply_zone_gain_point_.load() ||
                  center != center_gain_point_.load()) {
-        RCLCPP_INFO(get_logger(), "RFID 变化：基地增益点=%d，中心增益点=%d", base,
+        RCLCPP_INFO(get_logger(), "RFID 变化：补给区=%d，中心控制区=%d", supply,
                     center);
       }
 
-      base_gain_point_.store(base);
+      supply_zone_gain_point_.store(supply);
       center_gain_point_.store(center);
       has_rfid_data_.store(true);
     });

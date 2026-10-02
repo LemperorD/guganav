@@ -7,8 +7,8 @@
 
 // RFID 到位判定：此刻是否压着指定的增益点。
 //
-// 读的是输入端口，由树上接到黑板键上（`{rfid_center}` 或 `{rfid_base}`）。不自己
-// 读键名，因为占点看中心增益点、回家看基地增益点，同一个判定要用在两处。
+// 读的是输入端口，由树上接到黑板键上（`{rfid_center}` 或 `{rfid_supply}`）。不自己
+// 读键名，因为占点看中心控制区、回补给区看补给区，同一个判定要用在两处。
 //
 // 判的是"当前状态"，不做"触发过就算"的累积：累积起来就看不出机器人被撞开，
 // 也就不会再去占。移动中压过卡的那一瞬间确实可能落在两次 tick 之间被漏掉，但
@@ -35,7 +35,7 @@ public:
       if (node_) {
         RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 5000,
                               "RfidArrived 没读到 rfid 端口（应接 {rfid_center} "
-                              "或 {rfid_base}）");
+                              "或 {rfid_supply}）");
       }
       return BT::NodeStatus::FAILURE;
     }
