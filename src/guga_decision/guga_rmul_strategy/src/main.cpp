@@ -10,11 +10,18 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "CheckGreaterThan200.hpp"
+#include "CheckHpSafe.hpp"
 #include "ShouldEngage.hpp"
 #include "ROS2Monitor.hpp"
 #include "ROS2Wrapper.hpp"
 #include "SetGoalPose.hpp"
+#include "AchieveGoalPose.hpp"
 #include "Attack.hpp"
+#include "Patrol.hpp"
+#include "PublishStop.hpp"
+#include "SetStop.hpp"
+#include "PublishGoal.hpp"
+#include "RfidArrived.hpp"
 
 int main(int argc, char** argv)
 {
@@ -50,6 +57,24 @@ int main(int argc, char** argv)
       return std::make_unique<ROS2Wrapper>(name, config, monitor);
     });
 
+  factory.registerBuilder<SetStop>(
+    "SetStop",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<SetStop>(name, config, monitor);
+    });
+
+  factory.registerBuilder<PublishStop>(
+    "PublishStop",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<PublishStop>(name, config, monitor);
+    });
+
+  factory.registerBuilder<CheckHpSafe>(
+    "CheckHpSafe",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<CheckHpSafe>(name, config, monitor);
+    });
+
   factory.registerBuilder<ShouldEngage>(
     "ShouldEngage",
     [monitor](const std::string& name, const BT::NodeConfig& config) {
@@ -60,6 +85,30 @@ int main(int argc, char** argv)
     "Attack",
     [monitor](const std::string& name, const BT::NodeConfig& config) {
       return std::make_unique<Attack>(name, config, monitor);
+    });
+
+  factory.registerBuilder<AchieveGoalPose>(
+    "AchieveGoalPose",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<AchieveGoalPose>(name, config, monitor);
+    });
+
+  factory.registerBuilder<PublishGoal>(
+    "PublishGoal",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<PublishGoal>(name, config, monitor);
+    });
+
+  factory.registerBuilder<RfidArrived>(
+    "RfidArrived",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<RfidArrived>(name, config, monitor);
+    });
+
+  factory.registerBuilder<Patrol>(
+    "Patrol",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<Patrol>(name, config, monitor);
     });
 
   // ===== 3. 加载行为树 =====

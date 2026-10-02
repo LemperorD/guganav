@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -16,6 +17,10 @@
 //
 // 不声明输出端口：黑板键名固定在本文件里，树上只写 <ROS2Wrapper/>。写了哪些键
 // 见下面的常量，树上用 {键名} 引用。改键名就要同步改树，写错不会有加载期报错。
+//
+// 当前写入：HP(double)、ammo(int)、enemy_count(int)，
+// robot_x、robot_y(double，map 系下的机器人位置，定位不可用时为 NaN)，
+// rfid_base、rfid_center(bool，是否正压着对应的 RFID 增益点，离开即回到 false)。
 class ROS2Wrapper : public BT::StatefulActionNode
 {
 public:
@@ -57,6 +62,30 @@ private:
     blackboard->set(kAmmoKey, static_cast<int>(monitor_->projectileAllowance()));
     // 敌情来自视觉，与裁判消息不是同一路，但同样按最新值写入。
     blackboard->set(kEnemyCountKey, static_cast<int>(monitor_->enemyCount()));
+
+    // 机器人位置：map 系下的坐标，由 TF 变换而来（里程计给的是 odom 系的）。
+    // 查不到时写 NaN 而不是 0：目标点常常就是 (0, 0)，写 0 会被到达判断误判成
+    // "已经到家"；NaN 参与的任何比较都是假，即"还没到"。要区分"没到家"和
+    // "不知道在哪"，判断前先看 std::isfinite()。
+    double robot_x = std::numeric_limits<double>::quiet_NaN();
+    double robot_y = robot_x;
+    // 查不到时 lookupRobotPose 不修改入参，两个值保持 NaN。
+    monitor_->lookupRobotPose(robot_x, robot_y);
+    blackboard->set(kRobotXKey, robot_x);
+    blackboard->set(kRobotYKey, robot_y);
+
+    // RFID 增益点：压到卡上为 true，离开回到 false。只给当前状态，不做"触发过
+    // 就算"的累积——累积起来就看不出机器人被撞开，不会再回去占。
+    blackboard->set(kRfidBaseKey, monitor_->baseGainPoint());
+    blackboard->set(kRfidCenterKey, monitor_->centerGainPoint());
+    if (!monitor_->hasRfidData()) {
+      // 没收到过说明话题没通（名字不对或驱动没发），此时两位恒为 false——
+      // 和"没压到卡上"在数据上分不出来，只能靠这条日志区分。
+      RCLCPP_WARN_THROTTLE(
+        monitor_->get_logger(), *monitor_->get_clock(), 5000,
+        "尚未收到 RFID 状态，增益点判定会一直是 false");
+    }
+
     return BT::NodeStatus::SUCCESS;
   }
 
@@ -64,6 +93,10 @@ private:
   static constexpr const char* kHpKey = "HP";
   static constexpr const char* kAmmoKey = "ammo";
   static constexpr const char* kEnemyCountKey = "enemy_count";
+  static constexpr const char* kRobotXKey = "robot_x";
+  static constexpr const char* kRobotYKey = "robot_y";
+  static constexpr const char* kRfidBaseKey = "rfid_base";
+  static constexpr const char* kRfidCenterKey = "rfid_center";
 
   std::shared_ptr<ROS2Monitor> monitor_;
 };

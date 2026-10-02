@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 # 版本号写在 project() 的参数里，CMake 没有独立的 version() 命令；
 # 取值与 package.xml 的 <version> 一致。
-project(guga_rmul_strategy VERSION 0.2.0)
+project(guga_rmul_strategy VERSION 0.3.0)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -15,6 +15,10 @@ find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(guga_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+# 定位：查 map -> base_footprint 的变换，用于判断是否到达目标点。
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 # ===== BehaviorTree.CPP v4 =====
 # 这里不用 find_package(behaviortree_cpp)：Humble 上这个包的 ament 配置只搜
@@ -52,7 +56,10 @@ ament_target_dependencies(rmul_strategy_node
   rclcpp
   guga_interfaces
   geometry_msgs
+  std_msgs
   ament_index_cpp
+  tf2
+  tf2_ros
 )
 
 install(TARGETS rmul_strategy_node

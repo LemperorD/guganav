@@ -2,46 +2,93 @@
 <root BTCPP_format="4"
       main_tree_to_execute="MainLoop">
   <BehaviorTree ID="CaptureCenterArea">
-    <IfThenElse>
+    <WhileDoElse>
       <ShouldEngage enemy_count="{enemy_count}"
                     ammo="{ammo}"/>
       <Attack ammo="{ammo}"
               enemy_count="{enemy_count}"/>
-      <SetGoalPose pose_x="0.0"
-                   pose_y="0.0"/>
-    </IfThenElse>
+      <SubTree ID="NavigateAndTrigger"
+               goal_x="2.0"
+               goal_y="2.0"
+               rfid="{rfid_center}"
+               hold="true"
+               _autoremap="true"/>
+    </WhileDoElse>
   </BehaviorTree>
 
   <BehaviorTree ID="Decide">
-    <IfThenElse>
+    <WhileDoElse>
       <SubTree ID="IsSafe"
                _autoremap="true"/>
       <SubTree ID="CaptureCenterArea"
                _autoremap="true"/>
       <SubTree ID="FallBack"
                _autoremap="true"/>
-    </IfThenElse>
+    </WhileDoElse>
   </BehaviorTree>
 
   <BehaviorTree ID="FallBack">
-    <SetGoalPose pose_x="0.0"
-                 pose_y="0.0"/>
+    <SubTree ID="NavigateAndTrigger"
+             goal_x="0.0"
+             goal_y="0.0"
+             rfid="{rfid_base}"
+             hold="false"
+             _autoremap="true"/>
   </BehaviorTree>
 
   <BehaviorTree ID="IsSafe">
-    <CheckGreaterThan200 HP="{HP}"/>
+    <CheckHpSafe HP="{HP}"
+                 enter_hp="200.0"
+                 exit_hp="400.0"/>
   </BehaviorTree>
 
   <BehaviorTree ID="MainLoop">
-    <Sequence>
+    <ReactiveSequence>
       <ROS2Wrapper/>
+      <PublishStop/>
       <SubTree ID="Decide"
                _autoremap="true"/>
-    </Sequence>
+    </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="NavigateAndTrigger">
+    <ReactiveFallback>
+      <Sequence>
+        <RfidArrived rfid="{rfid}"/>
+        <SetStop stop="{hold}"/>
+      </Sequence>
+      <Sequence>
+        <SetStop stop="false"/>
+        <SetGoalPose pose_x="{goal_x}"
+                     pose_y="{goal_y}"/>
+        <ReactiveFallback>
+          <Sequence>
+            <AchieveGoalPose/>
+            <SubTree ID="SearchRfid"
+                     rfid="{rfid}"
+                     _autoremap="true"/>
+          </Sequence>
+          <PublishGoal/>
+        </ReactiveFallback>
+      </Sequence>
+    </ReactiveFallback>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SearchRfid">
+    <ReactiveFallback>
+      <RfidArrived rfid="{rfid}"/>
+      <Patrol xs="0.25;0.25;-0.25;-0.25"
+              ys="0.25;-0.25;-0.25;0.25"
+              tolerance="0.20"
+              timeout="4.0"
+              max_rounds="0"/>
+    </ReactiveFallback>
   </BehaviorTree>
 
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
+    <Condition ID="AchieveGoalPose"
+               editable="true"/>
     <Action ID="Attack"
             editable="true">
       <input_port name="ammo"
@@ -50,6 +97,77 @@
       <input_port name="enemy_count"
                   default="0"
                   type="int"/>
+    </Action>
+    <Action ID="CheckHpSafe"
+            editable="true">
+      <input_port name="HP"
+                  default="200"
+                  type="double"/>
+      <input_port name="enter_hp"
+                  default="200.0"
+                  type="double"/>
+      <input_port name="exit_hp"
+                  default="400.0"
+                  type="double"/>
+    </Action>
+    <SubTree ID="NavigateAndTrigger">
+      <input_port name="goal_x"
+                  type="double"/>
+      <input_port name="goal_y"
+                  type="double"/>
+      <input_port name="rfid"
+                  type="bool"/>
+      <input_port name="hold"
+                  type="bool"/>
+    </SubTree>
+    <Action ID="Patrol"
+            editable="true">
+      <input_port name="xs"
+                  default="0.25;0.25;-0.25;-0.25"
+                  type="std::vector&lt;double&gt;"/>
+      <input_port name="ys"
+                  default="0.25;-0.25;-0.25;0.25"
+                  type="std::vector&lt;double&gt;"/>
+      <input_port name="tolerance"
+                  default="0.20"
+                  type="double"/>
+      <input_port name="timeout"
+                  default="4.0"
+                  type="double"/>
+      <input_port name="max_rounds"
+                  default="0"
+                  type="int"/>
+    </Action>
+    <Action ID="PublishGoal"
+            editable="true"/>
+    <Action ID="PublishStop"
+            editable="true"/>
+    <Action ID="ROS2Wrapper"
+            editable="true"/>
+    <Condition ID="RfidArrived"
+               editable="true">
+      <input_port name="rfid"
+                  default="false"
+                  type="bool"/>
+    </Condition>
+    <SubTree ID="SearchRfid">
+      <input_port name="rfid"
+                  type="bool"/>
+    </SubTree>
+    <Action ID="SetGoalPose"
+            editable="true">
+      <input_port name="pose_x"
+                  default="0.0"
+                  type="double"/>
+      <input_port name="pose_y"
+                  default="0.0"
+                  type="double"/>
+    </Action>
+    <Action ID="SetStop"
+            editable="true">
+      <input_port name="stop"
+                  default="true"
+                  type="bool"/>
     </Action>
     <Condition ID="ShouldEngage"
                editable="true">
@@ -60,23 +178,6 @@
                   default="100"
                   type="int"/>
     </Condition>
-    <Action ID="CheckGreaterThan200"
-            editable="true">
-      <input_port name="HP"
-                  default="200"
-                  type="double"/>
-    </Action>
-    <Action ID="ROS2Wrapper"
-            editable="true"/>
-    <Action ID="SetGoalPose"
-            editable="true">
-      <input_port name="pose_x"
-                  default="0.0"
-                  type="double"/>
-      <input_port name="pose_y"
-                  default="0.0"
-                  type="double"/>
-    </Action>
   </TreeNodesModel>
 
 </root>

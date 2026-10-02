@@ -3,6 +3,7 @@
     <include path="rmul.xml"/>
     <!-- Description of Node Models (used by Groot) -->
     <TreeNodesModel>
+        <Condition ID="AchieveGoalPose" editable="true"/>
         <Action ID="Attack" editable="true">
             <input_port name="ammo" default="100" type="int"/>
             <input_port name="enemy_count" default="0" type="int"/>
@@ -10,19 +11,43 @@
         <Action ID="CheckGreaterThan200" editable="true">
             <input_port name="HP" default="200" type="double"/>
         </Action>
-        <Condition ID="ShouldEngage"
-                   editable="true">
-      <input_port name="enemy_count"
-                  default="0"
-                  type="int"/>
-      <input_port name="ammo"
-                  default="100"
-                  type="int"/>
-    </Condition>
+        <Action ID="CheckHpSafe" editable="true">
+            <input_port name="HP" default="200" type="double"/>
+            <input_port name="enter_hp" default="200.0" type="double"/>
+            <input_port name="exit_hp" default="400.0" type="double"/>
+        </Action>
+        <SubTree ID="NavigateAndTrigger">
+            <input_port name="goal_x" type="double"/>
+            <input_port name="goal_y" type="double"/>
+            <input_port name="rfid" type="bool"/>
+            <input_port name="hold" type="bool"/>
+        </SubTree>
+        <Action ID="Patrol" editable="true">
+            <input_port name="xs" default="0.25;0.25;-0.25;-0.25" type="std::vector&lt;double&gt;"/>
+            <input_port name="ys" default="0.25;-0.25;-0.25;0.25" type="std::vector&lt;double&gt;"/>
+            <input_port name="tolerance" default="0.20" type="double"/>
+            <input_port name="timeout" default="4.0" type="double"/>
+            <input_port name="max_rounds" default="0" type="int"/>
+        </Action>
+        <Action ID="PublishGoal" editable="true"/>
+        <Action ID="PublishStop" editable="true"/>
         <Action ID="ROS2Wrapper" editable="true"/>
+        <Condition ID="RfidArrived" editable="true">
+            <input_port name="rfid" default="false" type="bool"/>
+        </Condition>
+        <SubTree ID="SearchRfid">
+            <input_port name="rfid" type="bool"/>
+        </SubTree>
         <Action ID="SetGoalPose" editable="true">
             <input_port name="pose_x" default="0.0" type="double"/>
             <input_port name="pose_y" default="0.0" type="double"/>
         </Action>
+        <Action ID="SetStop" editable="true">
+            <input_port name="stop" default="true" type="bool"/>
+        </Action>
+        <Condition ID="ShouldEngage" editable="true">
+            <input_port name="enemy_count" default="0" type="int"/>
+            <input_port name="ammo" default="100" type="int"/>
+        </Condition>
     </TreeNodesModel>
 </root>
