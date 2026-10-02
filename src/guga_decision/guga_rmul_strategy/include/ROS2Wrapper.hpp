@@ -20,6 +20,7 @@
 //
 // 当前写入：HP(double)、ammo(int)、enemy_count(int)，
 // robot_x、robot_y(double，map 系下的机器人位置，定位不可用时为 NaN)，
+// game_progress(int，比赛阶段，4 = 比赛中)，
 // rfid_base、rfid_center(bool，是否正压着对应的 RFID 增益点，离开即回到 false)。
 class ROS2Wrapper : public BT::StatefulActionNode
 {
@@ -74,6 +75,9 @@ private:
     blackboard->set(kRobotXKey, robot_x);
     blackboard->set(kRobotYKey, robot_y);
 
+    // 比赛阶段：0 未开始 … 4 比赛中、5 结算。整型，树上用 {game_progress}。
+    blackboard->set(kGameProgressKey, static_cast<int>(monitor_->gameProgress()));
+
     // RFID 增益点：压到卡上为 true，离开回到 false。只给当前状态，不做"触发过
     // 就算"的累积——累积起来就看不出机器人被撞开，不会再回去占。
     blackboard->set(kRfidBaseKey, monitor_->baseGainPoint());
@@ -95,6 +99,7 @@ private:
   static constexpr const char* kEnemyCountKey = "enemy_count";
   static constexpr const char* kRobotXKey = "robot_x";
   static constexpr const char* kRobotYKey = "robot_y";
+  static constexpr const char* kGameProgressKey = "game_progress";
   static constexpr const char* kRfidBaseKey = "rfid_base";
   static constexpr const char* kRfidCenterKey = "rfid_center";
 

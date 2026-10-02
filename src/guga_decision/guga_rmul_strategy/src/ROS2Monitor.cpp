@@ -61,6 +61,24 @@ ROS2Monitor::ROS2Monitor(const rclcpp::NodeOptions& options)
       has_rfid_data_.store(true);
     });
 
+  // ===== 比赛状态订阅 =====
+  // 与裁判其他两路一样用绝对名。阶段变化次数很少，按变化打日志。
+  const std::string game_topic =
+    declare_parameter<std::string>("game_status_topic", "/referee/game_status");
+  sub_game_ = create_subscription<GameStatusMsg>(
+    game_topic, rclcpp::QoS(10),
+    [this](GameStatusMsg::SharedPtr msg) {
+      if (!msg) {
+        return;
+      }
+      const auto progress = msg->game_progress;
+      if (progress != game_progress_.load()) {
+        RCLCPP_INFO(get_logger(), "比赛阶段变化: %u -> %u（4 = 比赛中）",
+                    game_progress_.load(), progress);
+      }
+      game_progress_.store(progress);
+    });
+
   // ===== 视觉订阅 =====
   // 话题名要与假数据源 / 真实视觉模块一致，做成参数便于带命名空间时调整。
   const std::string vision_topic =
@@ -74,8 +92,9 @@ ROS2Monitor::ROS2Monitor(const rclcpp::NodeOptions& options)
       enemy_count_.store(msg->enemy_count);
     });
 
-  RCLCPP_INFO(get_logger(), "ROS2Monitor 订阅话题: %s, %s, %s",
-              topic.c_str(), rfid_topic.c_str(), vision_topic.c_str());
+  RCLCPP_INFO(get_logger(), "ROS2Monitor 订阅话题: %s, %s, %s, %s",
+              topic.c_str(), rfid_topic.c_str(), game_topic.c_str(),
+              vision_topic.c_str());
 
   // ===== 导航目标点发布 =====
   // 话题用相对名，实际话题由节点所在命名空间决定；frame_id 与项目其余部分一致为 map。

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "guga_interfaces/msg/game_status.hpp"
 #include "guga_interfaces/msg/rfid_status.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
 #include "guga_interfaces/msg/vision_info.hpp"
@@ -39,6 +40,10 @@ public:
 
   // 视觉汇总：视野内的敌方机器人数量，> 0 表示有敌人。
   std::int32_t enemyCount() const { return enemy_count_.load(); }
+
+  // 比赛阶段，取值见 GameStatus.msg：0 未开始、1 准备、2 自检、3 倒计时、
+  // 4 比赛中、5 结算。没收到过消息时为 0。
+  std::uint8_t gameProgress() const { return game_progress_.load(); }
 
   // RFID 增益点：机器人是否压到了对应的卡上。base 是己方基地增益点（"家"），
   // center 是中心增益点（RMUL 的"占点"）。未触发时为 false。
@@ -76,11 +81,13 @@ public:
 private:
   using RobotStatusMsg = guga_interfaces::msg::RobotStatus;
   using RfidStatusMsg = guga_interfaces::msg::RfidStatus;
+  using GameStatusMsg = guga_interfaces::msg::GameStatus;
   using VisionInfo = guga_interfaces::msg::VisionInfo;
   using PoseStamped = geometry_msgs::msg::PoseStamped;
 
   rclcpp::Subscription<RobotStatusMsg>::SharedPtr sub_state_;
   rclcpp::Subscription<RfidStatusMsg>::SharedPtr sub_rfid_;
+  rclcpp::Subscription<GameStatusMsg>::SharedPtr sub_game_;
   rclcpp::Subscription<VisionInfo>::SharedPtr sub_vision_;
   
   std::atomic<std::uint16_t> current_hp_{0};
@@ -91,6 +98,7 @@ private:
   std::atomic<bool> base_gain_point_{false};
   std::atomic<bool> center_gain_point_{false};
   std::atomic<bool> has_rfid_data_{false};
+  std::atomic<std::uint8_t> game_progress_{0};
 
   rclcpp::Publisher<PoseStamped>::SharedPtr goal_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr stop_pub_;

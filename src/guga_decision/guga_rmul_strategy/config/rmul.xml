@@ -46,6 +46,10 @@
     <ReactiveSequence>
       <ROS2Wrapper/>
       <PublishStop/>
+      <!-- 赛前开关：比赛阶段连续为"比赛中"满 1 秒才放行，之前整棵树不动，
+           只有 ROS2Wrapper 与 PublishStop 照常跑（数据要刷新、开关要维持）。 -->
+      <IsGameStart game_progress="{game_progress}"
+                   hold_sec="1.0"/>
       <SubTree ID="Decide"
                _autoremap="true"/>
     </ReactiveSequence>
@@ -140,6 +144,15 @@
     </Action>
     <Action ID="PublishGoal"
             editable="true"/>
+    <Action ID="IsGameStart"
+            editable="true">
+      <input_port name="game_progress"
+                  default="4"
+                  type="int"/>
+      <input_port name="hold_sec"
+                  default="1.0"
+                  type="double"/>
+    </Action>
     <Action ID="PublishStop"
             editable="true"/>
     <Action ID="ROS2Wrapper"

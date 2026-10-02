@@ -11,6 +11,7 @@
 
 #include "CheckGreaterThan200.hpp"
 #include "CheckHpSafe.hpp"
+#include "IsGameStart.hpp"
 #include "ShouldEngage.hpp"
 #include "ROS2Monitor.hpp"
 #include "ROS2Wrapper.hpp"
@@ -55,6 +56,12 @@ int main(int argc, char** argv)
     "ROS2Wrapper",
     [monitor](const std::string& name, const BT::NodeConfig& config) {
       return std::make_unique<ROS2Wrapper>(name, config, monitor);
+    });
+
+  factory.registerBuilder<IsGameStart>(
+    "IsGameStart",
+    [monitor](const std::string& name, const BT::NodeConfig& config) {
+      return std::make_unique<IsGameStart>(name, config, monitor);
     });
 
   factory.registerBuilder<SetStop>(
