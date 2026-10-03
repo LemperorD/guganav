@@ -16,6 +16,11 @@ Examples:
   scripts/reality.sh n
   scripts/reality.sh map reserve
   scripts/reality.sh nav rmul_2024 use_rviz:=True use_decision:=True
+  scripts/reality.sh nav rmul_2024 planner:=jps smoother:=minco
+
+Path smoother (smoother:=):
+  smoother:=planner  Use planner-native smoothing (default; JPS uses B-spline)
+  smoother:=minco    Disable JPS B-spline and use the Nav2 MINCO smoother
 EOF
 }
 
@@ -183,6 +188,7 @@ slam=$slam_value
 launch_args=()
 map_arg=""
 prior_pcd_arg=""
+smoother="planner"
 
 for arg in "$@"; do
   case "$arg" in
@@ -190,6 +196,16 @@ for arg in "$@"; do
     slam:=*) slam=${arg#slam:=} ;;
     map:=*) map_arg=${arg#map:=}; launch_args+=("$arg") ;;
     prior_pcd_file:=*) prior_pcd_arg=${arg#prior_pcd_file:=}; launch_args+=("$arg") ;;
+    smoother:=*)
+      smoother=${arg#smoother:=}
+      case "$smoother" in
+        planner|minco) launch_args+=("$arg") ;;
+        *)
+          echo "Invalid smoother: '$smoother'. Valid values: planner minco" >&2
+          exit 2
+          ;;
+      esac
+      ;;
     *) launch_args+=("$arg") ;;
   esac
 done

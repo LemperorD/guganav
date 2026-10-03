@@ -30,20 +30,24 @@ scripts/simulation.sh nav rmul_2025 planner:=jps controller:=pid
 scripts/simulation.sh nav rmul_2025 planner:=smac2d controller:=mppi
 scripts/simulation.sh nav rmul_2025 planner:=smachybrid controller:=mpc
 
+# 可选：绕过规划器内部平滑，在 Nav2 smoother_server 中使用 MINCO
+scripts/simulation.sh nav rmul_2025 planner:=jps controller:=pid smoother:=minco
+
 # legacy profile 仍可用（等价组合）
 scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_pid   # = jps+pid
 scripts/simulation.sh nav rmul_2025 navigation_profile:=2d_mppi   # = smac2d+mppi
 scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_mpc   # = smachybrid+mpc
 ```
 
-参数采用**三层合并**（launch 侧按 base → controller → planner 顺序覆盖）：
+参数采用**四层合并**（launch 侧按 base → controller → planner → smoother 顺序覆盖）：
 
 - `config/simulation/base.yaml` — 公共参数（传感器/terrain/BT/costmap 公共键）。
 - `config/simulation/controller/<controller>.yaml` — 控制器差异（含 costmap 系与调参）。
 - `config/simulation/planner/<planner>.yaml` — 规划器差异（planner_server + costmap plugins/esdf）。
+- `config/smoother/<smoother>.yaml` — 平滑链路差异（行为树、平滑器插件及 JPS B-spline 开关）。
 
 自定义实验时可传入 `params_file:=/absolute/path/to/params.yaml` 退化为单文件模式
-（三份都指向该文件），显式指定优先于分层默认值。
+（前三层都指向该文件），显式指定优先于分层默认值。
 
 ## 核心层
 

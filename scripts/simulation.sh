@@ -21,7 +21,7 @@ Examples:
   scripts/simulation.sh nav
   scripts/simulation.sh m rmul_2025
   scripts/simulation.sh map rmul_2025
-  scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
+  scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi smoother:=minco use_rviz:=False
 
 Planner (planner:=):
   planner:=jps         JPS global planner
@@ -33,17 +33,20 @@ Controller (controller:=):
   controller:=mppi  MPPI controller
   controller:=mpc   MPC controller
 
+Path smoother (smoother:=):
+  smoother:=planner  Use planner-native smoothing (default; JPS uses B-spline)
+  smoother:=minco    Disable JPS B-spline and use the Nav2 MINCO smoother
+
 All 9 planner/controller combinations are supported. Parameters are
-merged at launch time from config/simulation/{base,controller,planner}
-layered yaml files. Default: planner:=jps controller:=pid.
+merged at launch time from base, controller, planner, and smoother layered
+yaml files. Default: planner:=jps controller:=pid smoother:=planner.
 
 Legacy navigation_profile:=jps_pid|2d_mppi|jps_mpc still works and
 maps to the corresponding planner/controller combination.
 
 When a navigation command is run from a terminal without
-planner:=/controller:= or navigation_profile:=..., an interactive
-numbered selection menu is shown: first the planner (1-3), then the
-controller (1-3).
+planner:=/controller:=/smoother:= or navigation_profile:=..., an interactive
+numbered selection menu is shown: planner, controller, then smoother.
 EOF
 }
 
@@ -95,6 +98,7 @@ is_true() {
 
 PLANNER_CHOICES="jps smac2d smachybrid"
 CONTROLLER_CHOICES="pid mppi mpc"
+SMOOTHER_CHOICES="planner minco"
 
 SIMULATION_PARAMS_DIR="$WS/src/guga_bringup/config/simulation"
 
@@ -196,6 +200,41 @@ EOF
   done
 }
 
+select_smoother() {
+  local selection
+
+  if [ ! -r /dev/tty ]; then
+    printf 'planner'
+    return 0
+  fi
+
+  cat >&2 <<'EOF'
+
+Select path smoother:
+  1) Planner-native (planner; JPS uses B-spline)
+  2) MINCO Nav2 smoother (minco)
+EOF
+  while true; do
+    printf 'Smoother [1]: ' >&2
+    if ! read -r selection < /dev/tty; then
+      selection=1
+    fi
+    case "${selection:-1}" in
+      1)
+        printf 'planner'
+        return 0
+        ;;
+      2)
+        printf 'minco'
+        return 0
+        ;;
+      *)
+        echo "Please select 1 or 2." >&2
+        ;;
+    esac
+  done
+}
+
 # ────────────────────────────────────────────────────────────────
 # 导航参数分层（9 组合运行时合并）
 # ────────────────────────────────────────────────────────────────
@@ -203,7 +242,8 @@ EOF
 #   config/simulation/base.yaml（公共）
 #   + config/simulation/controller/<controller>.yaml（控制器差异，覆盖 base）
 #   + config/simulation/planner/<planner>.yaml（规划器差异，覆盖前两层）
-# 本脚本只负责把用户选择（planner:=/controller:=）透传给 launch，
+#   + config/smoother/<smoother>.yaml（平滑器差异，最后覆盖）
+# 本脚本只负责把用户选择（planner:=/controller:=/smoother:=）透传给 launch，
 # 不关心文件路径与合并细节（由 simulation_launch.py 处理）。
 
 # 填充 nav_args 数组为透传给 simulation_launch.py 的有效参数。
@@ -217,6 +257,7 @@ build_nav_args() {
   local explicit_spec=""
   local chosen_planner=""
   local chosen_controller=""
+  local chosen_smoother=""
 
   for arg in "$@"; do
     case "$arg" in
@@ -249,6 +290,11 @@ build_nav_args() {
         nav_args+=("$arg")
         explicit_spec=1
         ;;
+      smoother:=*)
+        chosen_smoother=${arg#smoother:=}
+        nav_args+=("$arg")
+        explicit_spec=1
+        ;;
       params_file:=*)
         # 单文件覆盖调试
         nav_args+=("$arg")
@@ -264,7 +310,12 @@ build_nav_args() {
   if [ -z "$explicit_spec" ]; then
     chosen_planner=$(select_planner) || return 1
     chosen_controller=$(select_controller) || return 1
-    nav_args+=(planner:="$chosen_planner" controller:="$chosen_controller")
+    chosen_smoother=$(select_smoother) || return 1
+    nav_args+=(
+      planner:="$chosen_planner"
+      controller:="$chosen_controller"
+      smoother:="$chosen_smoother"
+    )
   fi
 
   # 校验合法值（显式传入时）
@@ -273,6 +324,9 @@ build_nav_args() {
   fi
   if [ -n "$chosen_controller" ]; then
     validate_choice controller "$chosen_controller" "$CONTROLLER_CHOICES" || return 1
+  fi
+  if [ -n "$chosen_smoother" ]; then
+    validate_choice smoother "$chosen_smoother" "$SMOOTHER_CHOICES" || return 1
   fi
 }
 

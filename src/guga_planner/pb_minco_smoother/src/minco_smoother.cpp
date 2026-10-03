@@ -8,7 +8,6 @@
 
 #include "pb_minco_smoother/minco_smoother.hpp"
 
-#include <pcl_conversions/pcl_conversions.h>
 #include <tf2/utils.h>
 
 #include <algorithm>
@@ -59,21 +58,19 @@ void MincoSmoother::configure(
         // 第一阶段轨迹可视化（调试用）
         stage1_trajectory_pub_ = node->create_publisher<nav_msgs::msg::Path>(
             "~/debug/stage1_trajectory", 1);
+
+        // 中间路点与最终路点仅用于可视化调试。
+        waypoints_marker_pub_ =
+            node->create_publisher<visualization_msgs::msg::MarkerArray>(
+                "~/minco_waypoints_marker", rclcpp::QoS(1));
+        final_waypoints_marker_pub_ =
+            node->create_publisher<visualization_msgs::msg::MarkerArray>(
+                "~/minco_final_waypoints_marker", rclcpp::QoS(1));
     }
 
     // 创建 MINCO 多项式轨迹发布器（供 Controller 订阅）
     minco_traj_pub_ = node->create_publisher<guga_common::msg::MincoTrajectory>(
         "~/minco_polynomial_trajectory", rclcpp::QoS(1).reliable());
-
-    // 创建中间路点可视化发布器（MarkerArray）
-    waypoints_marker_pub_ =
-        node->create_publisher<visualization_msgs::msg::MarkerArray>(
-            "~/minco_waypoints_marker", rclcpp::QoS(1));
-
-    // 创建最终轨迹路点可视化发布器（MarkerArray）
-    final_waypoints_marker_pub_ =
-        node->create_publisher<visualization_msgs::msg::MarkerArray>(
-            "~/minco_final_waypoints_marker", rclcpp::QoS(1));
 
     // 创建 Costmap ESDF 适配器
     // 参数说明：
@@ -271,6 +268,7 @@ void MincoSmoother::cleanup() {
     trajectory_pub_.reset();
     stage1_trajectory_pub_.reset();
     minco_traj_pub_.reset();
+    waypoints_marker_pub_.reset();
     final_waypoints_marker_pub_.reset();
 }
 
@@ -317,6 +315,14 @@ void MincoSmoother::deactivate() {
 bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
                            const rclcpp::Duration &max_time) {
     steady_clock::time_point start_time = steady_clock::now();
+    const auto overall_deadline =
+        start_time + std::chrono::duration_cast<steady_clock::duration>(
+                         std::chrono::duration<double>(
+                             std::max(0.0, max_time.seconds())));
+    const auto stage1_deadline =
+        start_time + std::chrono::duration_cast<steady_clock::duration>(
+                         std::chrono::duration<double>(
+                             std::max(0.0, max_time.seconds() * 0.4)));
 
     // 检查路径有效性
     if (path.poses.size() < 2) {
@@ -482,18 +488,21 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             stage1_optimizer_->initialize(headPVA, tailPVA, pieceNum);
 
             // 检查时间限制
-            auto elapsed = steady_clock::now() - start_time;
-            if (elapsed >
-                std::chrono::duration<double>(max_time.seconds() * 0.4)) {
+            if (steady_clock::now() >= stage1_deadline) {
                 RCLCPP_WARN(logger_,
                             "MINCO smoother timed out during stage1 init");
                 return false;
             }
 
-            bool stage1_success =
-                stage1_optimizer_->optimize(innerPoints, initialTimes);
+            bool stage1_success = stage1_optimizer_->optimize(
+                innerPoints, initialTimes, stage1_deadline);
 
             if (!stage1_success) {
+                if (stage1_optimizer_->timedOut()) {
+                    RCLCPP_WARN(logger_,
+                                "MINCO smoother timed out during stage1");
+                    return false;
+                }
                 RCLCPP_WARN(logger_,
                             "Stage 1 optimization failed, using initial "
                             "points for stage 2");
@@ -546,16 +555,21 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             optimizer_->initialize(headPVA, tailPVA, pieceNum);
 
             // 检查时间限制
-            auto elapsed = steady_clock::now() - start_time;
-            if (elapsed > std::chrono::duration<double>(max_time.seconds())) {
+            if (steady_clock::now() >= overall_deadline) {
                 RCLCPP_WARN(logger_,
                             "MINCO smoother timed out during stage2 init");
                 return false;
             }
 
-            bool success = optimizer_->optimize(innerPoints, initialTimes);
+            bool success = optimizer_->optimize(innerPoints, initialTimes,
+                                                overall_deadline);
 
             if (!success) {
+                if (optimizer_->timedOut()) {
+                    RCLCPP_WARN(logger_,
+                                "MINCO smoother timed out during stage2");
+                    return false;
+                }
                 RCLCPP_WARN(logger_,
                             "Stage 2 optimization failed, returning "
                             "original path");

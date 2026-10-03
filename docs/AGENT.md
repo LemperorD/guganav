@@ -97,7 +97,7 @@ guganav/
 │   ├── guga_planner/          # [规划层]
 │   │   ├── jps_planner/       #   JPS 全局规划器（直接编译 bspline_optimizer 源码）
 │   │   ├── bspline_optimizer/ #   B 样条优化（其库无人链接，源码被 jps_planner 编译）
-│   │   └── pb_minco_smoother/ #   MINCO 平滑器（插件存在，但无配置选中）
+│   │   └── pb_minco_smoother/ #   MINCO 平滑器（smoother:=minco 可选，默认不启用）
 │   │
 │   ├── guga_decision/         # [决策层]
 │   │   └── simple_decision/   #   简单决策状态机（默认/攻击/补给）
@@ -317,8 +317,9 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 - 启动兜底转速：`src/guga_bringup/launch/core/navigation_launch.py` → `init_spin_speed`（由 `controller` 推断：mppi/mpc=6.28，pid=0.0）
 
 **参数分层机制**（`simulation.sh` + `simulation_launch.py` + `navigation_launch.py`）：
-- **9 种 planner/controller 组合**（`planner:=jps|smac2d|smachybrid` × `controller:=pid|mppi|mpc`），参数由三份 yaml 在 launch 侧按 base → controller → planner 顺序叶子级覆盖合并（不再在 shell 里生成合并文件）：
-  - `config/simulation/base.yaml`（公共）+ `controller/<c>.yaml`（控制器差异 + costmap 系/调参）+ `planner/<p>.yaml`（planner_server + costmap plugins/esdf）
+- **9 种 planner/controller 组合**（`planner:=jps|smac2d|smachybrid` × `controller:=pid|mppi|mpc`），参数在 launch 侧按 base → controller → planner → smoother 顺序叶子级覆盖合并（不再在 shell 里生成合并文件）：
+  - `config/simulation/base.yaml`（公共）+ `controller/<c>.yaml`（控制器差异 + costmap 系/调参）+ `planner/<p>.yaml`（planner_server + costmap plugins/esdf）+ `config/smoother/<s>.yaml`（平滑链路）
+  - `smoother:=planner`（默认）保留规划器内部平滑；`smoother:=minco` 关闭 JPS B-spline 并通过 Nav2 `SmoothPath` 调用 MINCO
   - legacy `navigation_profile:=jps_pid|2d_mppi|jps_mpc` 自动映射为 jps+pid / smac2d+mppi / smachybrid+mpc
   - 显式 `params_file:=` 退化为单文件覆盖（reality 与临时调试用）
 - **底盘模式由 controller 推断**（无 navigation_profile 参数）：`mppi`/`mpc` → `initial_chassis_mode=1`（启动即小陀螺，走 `base_footprint_nonrotating`）；`pid` → `initial_chassis_mode=0`（costmap 用旋转的 `base_footprint`，不自旋；如需自旋先把 costmap 切到 nonrotating 系）
@@ -340,7 +341,7 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 | MPPI 测试入 CI | `scripts/pre-commit/run_mppi_tests.sh`（12 个 gtest 套件）；`--allow-overriding` 条件化兼容旧 colcon |
 | 参数调整 | `robot_radius` 0.25/0.35（缩小 footprint）；全局重规划 1→2Hz（BT `RateController`） |
 | PCD/栅格地图对齐工具 | `scripts/align_pcd_gridmap.py`（FFT 互相关 + IOU 精修，输出推荐 origin；**IOU>0.5 才可信**——当前 rmuc_2025 两张图内容不匹配，建议 `simulation.sh map` 重新建图） |
-| 参数分层重构 | 仿真参数拆为 `base.yaml` + `controller/<c>.yaml` + `planner/<p>.yaml` 三层，launch 侧叶子级合并，支持 9 种 planner/controller 组合；`navigation_profile` 删除，底盘模式由 `controller` 推断；esdf_layer 跟随 jps（顺带修复 jps+mppi 缺 esdf_layer 隐患） |
+| 参数分层重构 | 仿真参数按 `base.yaml` + `controller/<c>.yaml` + `planner/<p>.yaml` + `smoother/<s>.yaml` 四层叶子级合并，支持 9 种 planner/controller 组合和可选 MINCO；`navigation_profile` 删除，底盘模式由 `controller` 推断；esdf_layer 跟随 jps（顺带修复 jps+mppi 缺 esdf_layer 隐患） |
 
 ### 待办 / 已知隐患
 

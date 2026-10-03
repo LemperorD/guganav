@@ -1,0 +1,33 @@
+{
+    "ROS2.distro": "humble",
+    "python.autoComplete.extraPaths": [
+        "/home/yzj/guganav/build/sdformat_tools",
+        "/home/yzj/guganav/install/sdformat_tools/lib/python3.10/site-packages",
+        "/home/yzj/guganav/install/rmoss_interfaces/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/install/livox_ros_driver2/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/build/joint_state_publisher_gui",
+        "/home/yzj/guganav/install/joint_state_publisher_gui/lib/python3.10/site-packages",
+        "/home/yzj/guganav/build/joint_state_publisher",
+        "/home/yzj/guganav/install/joint_state_publisher/lib/python3.10/site-packages",
+        "/home/yzj/guganav/install/guga_interfaces/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/install/guga_common/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/install/dynamic_obstacle/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/yzj/guganav/build/sdformat_tools",
+        "/home/yzj/guganav/install/sdformat_tools/lib/python3.10/site-packages",
+        "/home/yzj/guganav/install/rmoss_interfaces/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/install/livox_ros_driver2/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/build/joint_state_publisher_gui",
+        "/home/yzj/guganav/install/joint_state_publisher_gui/lib/python3.10/site-packages",
+        "/home/yzj/guganav/build/joint_state_publisher",
+        "/home/yzj/guganav/install/joint_state_publisher/lib/python3.10/site-packages",
+        "/home/yzj/guganav/install/guga_interfaces/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/install/guga_common/local/lib/python3.10/dist-packages",
+        "/home/yzj/guganav/install/dynamic_obstacle/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}

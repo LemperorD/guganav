@@ -63,6 +63,11 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
 
 // 析构函数,释放线程资源
 ScanToSensorFrameNode::~ScanToSensorFrameNode() {
+  stopping_.store(true);
+  chassis_tf_cv_.notify_all();
+  chassis_odom_cv_.notify_all();
+  robot_base_odom_cv_.notify_all();
+  sensor_scan_cv_.notify_all();
   if (chassis_tf_thread_.joinable()) {
     chassis_tf_thread_.join();
   }
@@ -85,35 +90,50 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
   std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
 #endif
 
-  tf2::Transform tf_lidar_to_chassis;
-  odom_frame_ = odometry_msg->header.frame_id;
-  last_pcd_stamp_ = pcd_msg->header.stamp;
+  tf2::Transform odom_to_lidar;
+  tf2::fromMsg(odometry_msg->pose.pose, odom_to_lidar);
 
-  tf2::fromMsg(odometry_msg->pose.pose, tf_odom_to_lidar_);
-  tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, last_pcd_stamp_);
-  tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
+  tf2::Transform lidar_to_robot_base;
+  tf2::Transform lidar_to_chassis;
+  const bool has_robot_base_transform = getTransform(
+    lidar_frame_, robot_base_frame_, pcd_msg->header.stamp, lidar_to_robot_base);
+  const bool has_chassis_transform = getTransform(
+    lidar_frame_, base_frame_, pcd_msg->header.stamp, lidar_to_chassis);
+  if (!has_robot_base_transform || !has_chassis_transform) {
+    // 单位阵回退会在车体旋转时把点云投到错误位置，因此丢弃不完整帧。
+    return;
+  }
+
+  const auto odom_to_chassis = odom_to_lidar * lidar_to_chassis;
+  const auto odom_to_robot_base = odom_to_lidar * lidar_to_robot_base;
+  const auto & odom_frame = odometry_msg->header.frame_id;
+  const auto & stamp = pcd_msg->header.stamp;
 
   {
     std::lock_guard<std::mutex> lock(chassis_tf_mutex_);
-    std::lock_guard<std::mutex> lock2(chassis_odom_mutex_);
-    tf_odom_to_chassis_ = tf_odom_to_lidar_ * tf_lidar_to_chassis;
-    chassis_odom_ready_ = true;
+    chassis_tf_work_ = {odom_to_chassis, odom_frame, stamp};
     chassis_tf_ready_ = true;
   }
-  chassis_odom_cv_.notify_one();
   chassis_tf_cv_.notify_one();
 
   {
+    std::lock_guard<std::mutex> lock(chassis_odom_mutex_);
+    chassis_odom_work_ = {odom_to_chassis, odom_frame, stamp};
+    chassis_odom_ready_ = true;
+  }
+  chassis_odom_cv_.notify_one();
+
+  {
     std::lock_guard<std::mutex> lock(robot_base_odom_mutex_);
-    tf_odom_to_robot_base_ = tf_odom_to_lidar_ * tf_lidar_to_robot_base_;
+    robot_base_odom_work_ = {odom_to_robot_base, odom_frame, stamp};
     robot_base_odom_ready_ = true;
   }
   robot_base_odom_cv_.notify_one();
 
   {
     std::lock_guard<std::mutex> lock(sensor_scan_mutex_);
+    sensor_scan_work_ = {*pcd_msg, odom_to_lidar};
     sensor_scan_ready_ = true;
-    in_ = *pcd_msg;
   }
   sensor_scan_cv_.notify_one();
 
@@ -124,18 +144,20 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
 #endif
 }
 
-tf2::Transform ScanToSensorFrameNode::getTransform(
-  const std::string & target_frame, const std::string & source_frame, const rclcpp::Time & time)
+bool ScanToSensorFrameNode::getTransform(
+  const std::string & target_frame, const std::string & source_frame,
+  const rclcpp::Time & time, tf2::Transform & transform)
 {
   try {
     auto transform_stamped = tf_buffer_->lookupTransform(
       target_frame, source_frame, time, rclcpp::Duration::from_seconds(0.5));
-    tf2::Transform transform;
     tf2::fromMsg(transform_stamped.transform, transform);
-    return transform;
+    return true;
   } catch (tf2::TransformException & ex) {
-    RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s. Returning identity.", ex.what());
-    return tf2::Transform::getIdentity();
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "TF lookup failed: %s. Dropping synchronized scan.", ex.what());
+    return false;
   }
 }
 
@@ -268,69 +290,72 @@ void ScanToSensorFrameNode::publishRobotBaseOdometry(
 }
 
 void ScanToSensorFrameNode::updateChassisTF() {
-  while (rclcpp::ok()) {
-    tf2::Transform input;
+  while (rclcpp::ok() && !stopping_.load()) {
+    TransformWork work;
     {
       std::unique_lock<std::mutex> lock(chassis_tf_mutex_);
       chassis_tf_cv_.wait(lock, [this]() {
-        return chassis_tf_ready_ || !rclcpp::ok();
+        return chassis_tf_ready_ || stopping_.load() || !rclcpp::ok();
       });
+      if (!rclcpp::ok() || stopping_.load()) { return; }
+      work = chassis_tf_work_;
+      chassis_tf_ready_ = false;
     }
-    input = tf_odom_to_chassis_;
-    chassis_tf_ready_ = false;
-    if (!rclcpp::ok()) { return; }
-    publishTransform(input, odom_frame_, base_frame_, last_pcd_stamp_);
+    publishTransform(work.transform, work.parent_frame, base_frame_, work.stamp);
   }
 }
 
 void ScanToSensorFrameNode::updateChassisOdometry() {
-  while (rclcpp::ok()) {
-    tf2::Transform input;
+  while (rclcpp::ok() && !stopping_.load()) {
+    TransformWork work;
     {
       std::unique_lock<std::mutex> lock(chassis_odom_mutex_);
       chassis_odom_cv_.wait(lock, [this]() {
-        return chassis_odom_ready_ || !rclcpp::ok();
+        return chassis_odom_ready_ || stopping_.load() || !rclcpp::ok();
       });
+      if (!rclcpp::ok() || stopping_.load()) { return; }
+      work = chassis_odom_work_;
+      chassis_odom_ready_ = false;
     }
-    input = tf_odom_to_chassis_;
-    chassis_odom_ready_ = false;
-    if (!rclcpp::ok()) { return; }
-    publishChassisOdometry(input, odom_frame_, base_frame_, last_pcd_stamp_, pub_chassis_odometry_);
+    publishChassisOdometry(
+      work.transform, work.parent_frame, base_frame_, work.stamp, pub_chassis_odometry_);
   }
 }
 
 void ScanToSensorFrameNode::updateRobotBaseOdometry() {
-  while (rclcpp::ok()) {
-    tf2::Transform input;
+  while (rclcpp::ok() && !stopping_.load()) {
+    TransformWork work;
     {
       std::unique_lock<std::mutex> lock(robot_base_odom_mutex_);
       robot_base_odom_cv_.wait(lock, [this]() {
-        return robot_base_odom_ready_ || !rclcpp::ok();
+        return robot_base_odom_ready_ || stopping_.load() || !rclcpp::ok();
       });
+      if (!rclcpp::ok() || stopping_.load()) { return; }
+      work = robot_base_odom_work_;
+      robot_base_odom_ready_ = false;
     }
-    input = tf_odom_to_robot_base_;
-    robot_base_odom_ready_ = false;
-    if (!rclcpp::ok()) { return; }
-    publishRobotBaseOdometry(input, odom_frame_, robot_base_frame_, last_pcd_stamp_, pub_robot_base_odometry_);
+    publishRobotBaseOdometry(
+      work.transform, work.parent_frame, robot_base_frame_, work.stamp,
+      pub_robot_base_odometry_);
   }
 }
 
 void ScanToSensorFrameNode::updateSensorScan() {
-  while (rclcpp::ok()) {
+  while (rclcpp::ok() && !stopping_.load()) {
+    SensorScanWork work;
     {
-      sensor_msgs::msg::PointCloud2 input;
-      {
-        std::unique_lock<std::mutex> lock(sensor_scan_mutex_);
-        sensor_scan_cv_.wait(lock, [this]() {
-          return sensor_scan_ready_ || !rclcpp::ok();
-        });
-      }
-      input = in_;
+      std::unique_lock<std::mutex> lock(sensor_scan_mutex_);
+      sensor_scan_cv_.wait(lock, [this]() {
+        return sensor_scan_ready_ || stopping_.load() || !rclcpp::ok();
+      });
+      if (!rclcpp::ok() || stopping_.load()) { return; }
+      work = sensor_scan_work_;
       sensor_scan_ready_ = false;
-      if (!rclcpp::ok()) { return; }
-      pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar_.inverse(), input, out_);
     }
-    pub_laser_cloud_->publish(out_);
+    sensor_msgs::msg::PointCloud2 output;
+    pcl_ros::transformPointCloud(
+      lidar_frame_, work.odom_to_lidar.inverse(), work.cloud, output);
+    pub_laser_cloud_->publish(output);
   }
 }
 

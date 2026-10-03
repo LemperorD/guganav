@@ -21,6 +21,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -124,6 +125,11 @@ class CostmapESDFAdapter : public ESDFInterface {
         global_origin_y_ = costmap->getOriginY();
         unsigned int global_size_x = costmap->getSizeInCellsX();
         unsigned int global_size_y = costmap->getSizeInCellsY();
+        if (global_size_x == 0 || global_size_y == 0) {
+            lock.unlock();
+            RCLCPP_WARN(logger_, "updateSnapshot 失败: costmap 尺寸为 0");
+            return false;
+        }
 
         // 将世界坐标的 ROI 边界转换为栅格索引
         unsigned int mx_min, my_min, mx_max, my_max;
@@ -174,7 +180,10 @@ class CostmapESDFAdapter : public ESDFInterface {
         unsigned char* char_map = costmap->getCharMap();
         unsigned int stride = global_size_x;
 
-        // 遍历 ROI 并拷贝数据
+        // 遍历 ROI 并拷贝数据，同时对实际使用的二值障碍图做哈希。
+        constexpr std::uint64_t kFnvOffset = 1469598103934665603ULL;
+        constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
+        std::uint64_t snapshot_hash = kFnvOffset;
         for (unsigned int y = 0; y < local_size_y_; ++y) {
             for (unsigned int x = 0; x < local_size_x_; ++x) {
                 // 计算在全局 Costmap 中的索引
@@ -184,16 +193,29 @@ class CostmapESDFAdapter : public ESDFInterface {
                 // 将内切圆范围内的代价都视为硬障碍 (>= 253)
                 // 253 (INSCRIBED_INFLATED_OBSTACLE): 机器人中心碰到此处 =
                 // 边缘撞墙 254 (LETHAL_OBSTACLE): 障碍物本身 255
-                if (cost >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
-                    obstacle_img_.at<uchar>(y, x) = 0;  // 障碍物（前景）
-                } else {
-                    obstacle_img_.at<uchar>(y, x) = 255;  // 自由空间（背景）
-                }
+                const bool occupied =
+                    cost >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE;
+                obstacle_img_.at<uchar>(y, x) = occupied ? 0 : 255;
+                snapshot_hash ^= static_cast<std::uint8_t>(occupied);
+                snapshot_hash *= kFnvPrime;
             }
         }
 
+        const bool can_reuse =
+            has_valid_esdf_ && snapshot_hash == cached_snapshot_hash_ &&
+            mx_min == cached_mx_min_ && my_min == cached_my_min_ &&
+            mx_max == cached_mx_max_ && my_max == cached_my_max_ &&
+            global_resolution_ == cached_global_resolution_ &&
+            global_origin_x_ == cached_global_origin_x_ &&
+            global_origin_y_ == cached_global_origin_y_;
+
         // 【重要】尽早释放锁！后续的 EDT 计算不需要访问 Costmap
         lock.unlock();
+
+        if (can_reuse) {
+            RCLCPP_DEBUG(logger_, "Costmap ROI 未变化，复用已有 ESDF 快照");
+            return true;
+        }
 
         // ========== Step 4: 计算有符号 ESDF (Euclidean Signed Distance Field)
         // ==========
@@ -251,6 +273,14 @@ class CostmapESDFAdapter : public ESDFInterface {
         }
 
         has_valid_esdf_ = true;
+        cached_snapshot_hash_ = snapshot_hash;
+        cached_mx_min_ = mx_min;
+        cached_my_min_ = my_min;
+        cached_mx_max_ = mx_max;
+        cached_my_max_ = my_max;
+        cached_global_resolution_ = global_resolution_;
+        cached_global_origin_x_ = global_origin_x_;
+        cached_global_origin_y_ = global_origin_y_;
 
         RCLCPP_DEBUG(logger_,
                      "ESDF 快照更新完成: 局部地图 %ux%u, 原点 (%.2f, %.2f), "
@@ -476,6 +506,16 @@ class CostmapESDFAdapter : public ESDFInterface {
     // ========== OpenCV 图像缓存（复用以避免频繁分配） ==========
     cv::Mat obstacle_img_;  ///< 二值障碍物图像
     cv::Mat distance_img_;  ///< 距离变换结果
+
+    // ========== 快照缓存键 ==========
+    std::uint64_t cached_snapshot_hash_ = 0;
+    unsigned int cached_mx_min_ = 0;
+    unsigned int cached_my_min_ = 0;
+    unsigned int cached_mx_max_ = 0;
+    unsigned int cached_my_max_ = 0;
+    double cached_global_resolution_ = 0.0;
+    double cached_global_origin_x_ = 0.0;
+    double cached_global_origin_y_ = 0.0;
 };
 
 }  // namespace pb_minco

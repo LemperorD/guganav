@@ -1,0 +1,6 @@
+# Keep planner-native smoothing and the original behavior trees.
+# For JPS this means enable_bspline remains controlled by planner/jps*.yaml.
+bt_navigator:
+  ros__parameters:
+    default_nav_to_pose_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    default_nav_through_poses_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml

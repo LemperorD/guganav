@@ -17,15 +17,17 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
-    # ── 参数文件注入（base → controller → planner 顺序覆盖合并）──
-    # simulation.sh 经 simulation_launch/bringup_launch 传入三个文件路径；
+    # ── 参数文件注入（base -> controller -> planner -> smoother）──
+    # simulation.sh 经 simulation_launch/bringup_launch 传入四个文件路径；
     # 显式 params_file:= 时退化为单文件（reality / 临时调试）。
     params_file = LaunchConfiguration("params_file")
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    smoother_params_file = LaunchConfiguration("smoother_params_file")
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
+    smoother = LaunchConfiguration("smoother")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
     container_name_full = (namespace, "/", container_name)
@@ -56,12 +58,13 @@ def generate_launch_description():
             allow_substs=True,
         )
 
-    # base(公共) → controller(控制器差异) → planner(规划器差异)，
+    # smoother 最后加载，可覆盖行为树、平滑器插件和 JPS 的 B-spline 开关。
     # rclcpp 对多参数文件做叶子级覆盖，后者覆盖前者。
     configured_params = [
         rewritten_params(base_params_file),
         rewritten_params(controller_params_file),
         rewritten_params(planner_params_file),
+        rewritten_params(smoother_params_file),
     ]
 
     stdout_linebuf_envvar = SetEnvironmentVariable(
@@ -77,7 +80,9 @@ def generate_launch_description():
     # 控制器选择：pid/mppi/mpc。底盘模式（启动即小陀螺）由它推断，
     # 不再需要独立的 navigation_profile 参数。
     declare_planner_cmd = DeclareLaunchArgument(
-        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        "planner",
+        default_value="jps",
+        choices=["jps", "smac2d", "smachybrid"],
         description="Global planner: jps, smac2d, or smachybrid",
     )
     declare_controller_cmd = DeclareLaunchArgument(
@@ -86,6 +91,12 @@ def generate_launch_description():
         choices=["pid", "mppi", "mpc"],
         description="Controller profile: pid (omni PID), mppi, or mpc",
     )
+    declare_smoother_cmd = DeclareLaunchArgument(
+        "smoother",
+        default_value="planner",
+        choices=["planner", "minco"],
+        description="Path smoother: planner-native or Nav2 MINCO",
+    )
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
         "use_sim_time",
@@ -93,12 +104,15 @@ def generate_launch_description():
         description="Use simulation (Gazebo) clock if true",
     )
 
-    # 三文件默认值：显式 params_file 非空时退化为单文件；否则用
-    # simulation 默认组合（base + pid + jps）。
+    # 分层参数默认值：显式 params_file 非空时，前三层退化为单文件；
+    # 否则使用 simulation 默认组合（base + mppi + jps）。
     def default_params_file(which):
         return PythonExpression(
             [
-                "'", params_file, "' != '' and '", params_file,
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
                 "' or '",
                 os.path.join(bringup_dir, "config", "simulation", which),
                 "'",
@@ -108,7 +122,7 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Full path to a single params file override (disables 3-file merge)",
+        description="Full path to a single params file override (disables layered merge)",
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -124,6 +138,21 @@ def generate_launch_description():
         "planner_params_file",
         default_value=default_params_file("planner/jps.yaml"),
         description="Planner-diff params file (overrides base/controller)",
+    )
+    declare_smoother_params_file_cmd = DeclareLaunchArgument(
+        "smoother_params_file",
+        default_value=PythonExpression(
+            [
+                "'",
+                smoother,
+                "' == 'minco' and '",
+                os.path.join(bringup_dir, "config", "smoother", "minco.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "smoother", "planner.yaml"),
+                "'",
+            ]
+        ),
+        description="Smoother-diff params file (final merge layer)",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -277,12 +306,16 @@ def generate_launch_description():
                         # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
                         "initial_chassis_mode": PythonExpression(
                             [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
+                                "1 if '",
+                                controller,
+                                "' in ('mppi', 'mpc') else 0",
                             ]
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "3.14 if '",
+                                controller,
+                                "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -313,14 +346,14 @@ def generate_launch_description():
                 plugin="terrain_analysis::TerrainAnalysis",
                 name="terrain_analysis",
                 parameters=configured_params,
-                extra_arguments=[{'use_intra_process_comms': True}],
+                extra_arguments=[{"use_intra_process_comms": True}],
             ),
             ComposableNode(
                 package="scan_to_sensor_frame",
                 plugin="scan_to_sensor_frame::ScanToSensorFrameNode",
                 name="scan_to_sensor_frame",
                 parameters=configured_params,
-                extra_arguments=[{'use_intra_process_comms': True}],
+                extra_arguments=[{"use_intra_process_comms": True}],
             ),
             ComposableNode(
                 package="nav2_controller",
@@ -390,12 +423,16 @@ def generate_launch_description():
                         # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
                         "initial_chassis_mode": PythonExpression(
                             [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
+                                "1 if '",
+                                controller,
+                                "' in ('mppi', 'mpc') else 0",
                             ]
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "3.14 if '",
+                                controller,
+                                "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -427,11 +464,13 @@ def generate_launch_description():
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_smoother_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_controller_params_file_cmd)
     ld.add_action(declare_planner_params_file_cmd)
+    ld.add_action(declare_smoother_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_container_name_cmd)

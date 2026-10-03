@@ -5,7 +5,7 @@
 # 使用方式：
 # 1. 确保 pb_minco_smoother 包已编译并安装
 # 2. 在 smoother_server 的配置中添加此插件
-# 3. 如需 ESDF 避障功能，确保 global_costmap 里加载了 esdf 层（`rog_map_layer::EsdfLayer`）
+# 3. 当前实现会从 Nav2 Master Costmap 按需生成局部 ESDF，不要求额外 ESDF 层
 
 smoother_server:
   ros__parameters:
@@ -50,11 +50,11 @@ smoother_server:
       integral_resolution: 8
       
       # ========== 路径处理参数 ==========
-      # 路点采样间隔 (m) - 用于下采样输入路径
-      waypoint_interval: 0.5
-      
       # 最少路点数 - 少于此数不进行平滑
       min_waypoints: 3
+
+      # 最多路点数
+      max_waypoints: 50
       
       # 初始每米时间估计 (s/m) - 用于时间分配初始化
       initial_time_per_meter: 0.5
@@ -66,21 +66,5 @@ smoother_server:
       # 是否发布轨迹可视化（话题：minco_trajectory）
       publish_trajectory: true
 
-# ========== 与 ESDF 集成的 Costmap 配置示例 ==========
-# 如需使用 ESDF 避障功能，需要在 global_costmap 里加载 esdf 层（`rog_map_layer::EsdfLayer`）：
-#
-# global_costmap:
-#   global_costmap:
-#     ros__parameters:
-#       plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
-#
-#       esdf_layer:
-#         plugin: rog_map_layer::EsdfLayer
-#         enabled: true
-#         max_distance: 2.0
-#         publish_esdf_grid: false
-#         write_to_master: true
-#         incremental_update: true
-#         full_update_ratio: 0.3
-#         obstacle_threshold: 254
-#         enable_parallel: true
+      # 本项目实际里程计话题
+      odom_topic: "odometry"

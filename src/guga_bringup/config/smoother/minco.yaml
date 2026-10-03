@@ -1,0 +1,61 @@
+# MINCO is the only post-planner smoother in this profile. JPS B-spline is
+# disabled here to avoid running two geometric optimizers in series.
+planner_server:
+  ros__parameters:
+    GridBased:
+      enable_bspline: false
+
+bt_navigator:
+  ros__parameters:
+    default_nav_to_pose_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_to_pose_w_replanning_smoothing_and_recovery.xml
+    default_nav_through_poses_bt_xml: $(find-pkg-share guga_bringup)/behavior_trees/navigate_through_poses_w_replanning_smoothing_and_recovery.xml
+
+smoother_server:
+  ros__parameters:
+    # Only plugin IDs in this list are instantiated by smoother_server.
+    smoother_plugins: ["MINCO"]
+
+    MINCO:
+      plugin: "pb_minco/MincoSmoother"
+
+      # Optimization costs
+      weight_smooth: 1.0
+      weight_obstacle: 100.0
+      weight_feasibility: 10.0
+      weight_time: 10.0
+      weight_mean_time: 10.0
+
+      # Kinematic soft constraints
+      max_vel: 2.0
+      max_acc: 2.0
+      safe_distance: 0.5
+
+      # Keep the first integration conservative; benchmark before increasing.
+      max_iterations: 30
+      stage1_max_iterations: 30
+      g_epsilon: 0.0001
+      integral_resolution: 8
+
+      # Path preprocessing and output
+      min_waypoints: 3
+      max_waypoints: 50
+      initial_time_per_meter: 0.5
+      resample_time_resolution: 1.0
+      rotation_penalty_weight: 0.5
+      dense_sample_resolution: 0.1
+      output_dt: 0.1
+      publish_trajectory: false
+
+      # The project publishes nav_msgs/Odometry on the relative topic below.
+      odom_topic: "odometry"
+      trajectory_continuity_threshold: 0.25
+      projection_search_resolution: 0.02
+
+      # Stage-1 shape optimization
+      stage1_weight_smooth: 1.0
+      stage1_weight_obstacle: 50.0
+      stage1_weight_feasibility: 5.0
+      stage1_weight_time: 10.0
+      stage1_weight_mean_time: 10.0
+      mean_time_lower_bound: 0.9
+      mean_time_upper_bound: 1.1

@@ -11,6 +11,7 @@
 
 ## 设计与决策
 
+- [路径平滑方案对比.md](路径平滑方案对比.md)：B-spline 与 MINCO 的定位、优缺点、当前接入状态和选型建议。
 - [SENTRY_AVAILABLE_INFORMATION.md](decision/SENTRY_AVAILABLE_INFORMATION.md)：烧饼比赛可获取信息清单（2026 规则与通信协议基线、2027 变更、通信权限及当前接入差距）。
 - [SentryTactialAIPlan.md](decision/SentryTactialAIPlan.md)：烧饼低算力哨兵决策与战术导航初版方案（架构讨论稿）。
 - [LOCAL_CONTROL_DYNAMIC_AVOIDANCE_DECISION.md](LOCAL_CONTROL_DYNAMIC_AVOIDANCE_DECISION.md)：哨兵局部路径跟踪与动态避障控制方案决策报告（含现状审计）。

@@ -29,6 +29,7 @@
 #define PB_MINCO_SMOOTHER__MINCO_OPTIMIZER_HPP_
 
 #include <Eigen/Eigen>
+#include <chrono>
 #include <cmath>
 #include <ctime>
 #include <functional>
@@ -114,6 +115,8 @@ struct MincoOptimizerConfig {
  */
 class MincoOptimizer {
    public:
+    using Clock = std::chrono::steady_clock;
+
     MincoOptimizer() = default;
 
     /**
@@ -209,6 +212,18 @@ class MincoOptimizer {
      */
     bool optimize(const Eigen::Matrix2Xd &initPoints,
                   const Eigen::VectorXd &initTimes) {
+        return optimize(initPoints, initTimes, Clock::time_point::max());
+    }
+
+    /**
+     * @brief 在指定截止时间前执行轨迹优化
+     */
+    bool optimize(const Eigen::Matrix2Xd &initPoints,
+                  const Eigen::VectorXd &initTimes,
+                  const Clock::time_point &deadline) {
+        deadline_ = deadline;
+        timed_out_ = false;
+
         // 构造决策变量向量
         // x = [q_1, q_2, ..., q_{N-1}, ln(T_1), ln(T_2), ..., ln(T_N)]
         Eigen::VectorXd x(totalDim_);
@@ -236,9 +251,16 @@ class MincoOptimizer {
 
         // 执行优化
         double finalCost;
-        int ret =
-            lbfgs::lbfgsOptimize(x, finalCost, &MincoOptimizer::costFunction,
-                                 nullptr, nullptr, this, params);
+        int ret;
+        try {
+            checkDeadline();
+            ret = lbfgs::lbfgsOptimize(
+                x, finalCost, &MincoOptimizer::costFunction, nullptr, nullptr,
+                this, params);
+        } catch (const OptimizationTimeout &) {
+            timed_out_ = true;
+            return false;
+        }
 
         // 检查结果
         if (ret < 0 && ret != lbfgs::LBFGSERR_MAXIMUMITERATION) {
@@ -252,6 +274,8 @@ class MincoOptimizer {
 
         return true;
     }
+
+    bool timedOut() const { return timed_out_; }
 
     /**
      * @brief 获取优化后的轨迹
@@ -271,6 +295,14 @@ class MincoOptimizer {
     }
 
    private:
+    struct OptimizationTimeout {};
+
+    void checkDeadline() const {
+        if (Clock::now() >= deadline_) {
+            throw OptimizationTimeout{};
+        }
+    }
+
     /**
      * @brief L-BFGS 代价函数回调
      *
@@ -281,6 +313,7 @@ class MincoOptimizer {
     static double costFunction(void *instance, const Eigen::VectorXd &x,
                                Eigen::VectorXd &grad) {
         MincoOptimizer *opt = static_cast<MincoOptimizer *>(instance);
+        opt->checkDeadline();
         return opt->computeCostAndGradient(x, grad);
     }
 
@@ -504,6 +537,7 @@ class MincoOptimizer {
 
         // 遍历每段轨迹
         for (int i = 0; i < pieceNum_; ++i) {
+            checkDeadline();
             const auto &piece = traj_[i];
             double duration = piece.getDuration();
             double dt = duration / K;
@@ -642,6 +676,7 @@ class MincoOptimizer {
         const double aMax2 = aMax * aMax;
 
         for (int i = 0; i < pieceNum_; ++i) {
+            checkDeadline();
             const auto &piece = traj_[i];
             double duration = piece.getDuration();
             double dt = duration / K;
@@ -819,6 +854,10 @@ class MincoOptimizer {
 
     // 配置参数
     MincoOptimizerConfig config_;
+
+    // 单次 optimize() 的硬截止时间。
+    Clock::time_point deadline_{Clock::time_point::max()};
+    bool timed_out_{false};
 
     // MINCO 求解器 (使用 gcopter 的 S=3 实现)
     minco::MINCO_S3NU minco_;

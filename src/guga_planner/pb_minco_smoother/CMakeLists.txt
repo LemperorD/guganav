@@ -21,6 +21,7 @@ find_package(nav2_util REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -28,15 +29,8 @@ find_package(pluginlib REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 
-# 依赖包（同仓库的 Nav2 插件包）
-find_package(pb_nav2_plugins REQUIRED)
-
 # interfaces 依赖（用于 MINCO 轨迹消息）
 find_package(guga_common REQUIRED)
-
-find_package(pcl_conversions REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(PCL REQUIRED)
 
 # 设置库名称
 set(library_name ${PROJECT_NAME}_core)
@@ -53,7 +47,6 @@ target_include_directories(${library_name}
     "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
     ${EIGEN3_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
-    ${PCL_INCLUDE_DIRS}
 )
 
 # 链接依赖
@@ -66,19 +59,16 @@ ament_target_dependencies(${library_name}
   nav_msgs
   geometry_msgs
   std_msgs
-  sensor_msgs
+  visualization_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs
   pluginlib
-  pb_nav2_plugins
   guga_common
-  pcl_conversions
 )
 
 target_link_libraries(${library_name}
   ${OpenCV_LIBS}
-  ${PCL_LIBRARIES}
 )
 
 # 导出插件描述文件
@@ -121,15 +111,14 @@ ament_export_dependencies(
   nav_msgs
   geometry_msgs
   std_msgs
-  sensor_msgs
+  visualization_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs
   pluginlib
   Eigen3
   OpenCV
-  pb_nav2_plugins
-  pcl_conversions
+  guga_common
 )
 
 ament_package()

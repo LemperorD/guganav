@@ -32,12 +32,14 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
     use_decision = LaunchConfiguration("use_decision")
-    # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
+    # ── 参数分层（与 simulation 同机制）：base -> controller -> planner -> smoother ──
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
+    smoother = LaunchConfiguration("smoother")
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    smoother_params_file = LaunchConfiguration("smoother_params_file")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -87,43 +89,78 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         # 单文件覆盖模式当前**未启用**：reality_launch 与 bringup_launch 都把
-        # params_file 置空以强制三文件合并（base → controller → planner），见
+        # params_file 置空以强制分层合并
+        # （base → controller → planner → smoother），见
         # 670049b。该参数仅为兼容保留，传值不会生效；默认值指向 base.yaml，
         # 避免默认值指向不存在的文件。
         default_value=os.path.join(bringup_dir, "config", "reality", "base.yaml"),
         description=(
             "Reserved: single params file override is currently disabled "
-            "(params_file is forced empty; 3-file merge always applies)"
+            "(params_file is forced empty; layered merge always applies)"
         ),
     )
     declare_planner_cmd = DeclareLaunchArgument(
-        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        "planner",
+        default_value="jps",
+        choices=["jps", "smac2d", "smachybrid"],
         description="Global planner: jps, smac2d, or smachybrid",
     )
     declare_controller_cmd = DeclareLaunchArgument(
-        "controller", default_value="mppi", choices=["pid", "mppi", "mpc"],
+        "controller",
+        default_value="mppi",
+        choices=["pid", "mppi", "mpc"],
         description="Controller: pid, mppi, or mpc",
+    )
+    declare_smoother_cmd = DeclareLaunchArgument(
+        "smoother",
+        default_value="planner",
+        choices=["planner", "minco"],
+        description="Path smoother: planner-native or Nav2 MINCO",
     )
 
     def default_params_file(which):
         return PythonExpression(
             [
-                "'", params_file, "' != '' and '", params_file,
-                "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
+                "' or '",
+                os.path.join(bringup_dir, "config", "reality", which),
+                "'",
             ]
         )
+
     params_file = ""
     declare_base_params_file_cmd = DeclareLaunchArgument(
-        "base_params_file", default_value=default_params_file("base.yaml"),
+        "base_params_file",
+        default_value=default_params_file("base.yaml"),
         description="Common params file (merge base layer)",
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
-        "controller_params_file", default_value=default_params_file("controller/mppi.yaml"),
+        "controller_params_file",
+        default_value=default_params_file("controller/mppi.yaml"),
         description="Controller-diff params file (pid default, mppi available)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
-        "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
+        "planner_params_file",
+        default_value=default_params_file("planner/jps.yaml"),
         description="Planner-diff params file",
+    )
+    declare_smoother_params_file_cmd = DeclareLaunchArgument(
+        "smoother_params_file",
+        default_value=PythonExpression(
+            [
+                "'",
+                smoother,
+                "' == 'minco' and '",
+                os.path.join(bringup_dir, "config", "smoother", "minco.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "smoother", "planner.yaml"),
+                "'",
+            ]
+        ),
+        description="Smoother-diff params file (final merge layer)",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -158,7 +195,9 @@ def generate_launch_description():
     )
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
-        "use_rviz", default_value="True", description="Whether to start RVIZ"
+        "use_rviz",
+        default_value="True",
+        description="Whether to start RVIZ"
         # "use_rviz", default_value="False", description="Whether to start RVIZ"
     )
 
@@ -251,7 +290,9 @@ def generate_launch_description():
             "base_params_file": base_params_file,
             "controller_params_file": controller_params_file,
             "planner_params_file": planner_params_file,
+            "smoother_params_file": smoother_params_file,
             "autostart": autostart,
+            "smoother": smoother,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
         }.items(),
@@ -292,9 +333,11 @@ def generate_launch_description():
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_smoother_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_controller_params_file_cmd)
     ld.add_action(declare_planner_params_file_cmd)
+    ld.add_action(declare_smoother_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)

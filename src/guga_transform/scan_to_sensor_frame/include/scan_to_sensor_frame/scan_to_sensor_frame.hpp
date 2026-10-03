@@ -4,9 +4,10 @@
 // #define BACKWARD_DEBUG_GUGUGAGA
 // #define TEST_TIME
 
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <string>
-#include <chrono>
 
 #include "message_filters/subscriber.h"
 #include "message_filters/sync_policies/approximate_time.h"
@@ -41,9 +42,9 @@ private:
       const nav_msgs::msg::Odometry::ConstSharedPtr& odometry,
       const sensor_msgs::msg::PointCloud2::ConstSharedPtr& laserCloud2);
 
-  tf2::Transform getTransform(const std::string& target_frame,
-                              const std::string& source_frame,
-                              const rclcpp::Time& time);
+  bool getTransform(
+    const std::string& target_frame, const std::string& source_frame,
+    const rclcpp::Time& time, tf2::Transform& transform);
 
   void publishTransform(const tf2::Transform& transform,
                         const std::string& parent_frame,
@@ -60,11 +61,9 @@ private:
       const std::string& child_frame, const rclcpp::Time& stamp,
       rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_ptr);
 
-  std::string odom_frame_;
   std::string lidar_frame_;
   std::string base_frame_;
   std::string robot_base_frame_;
-  builtin_interfaces::msg::Time last_pcd_stamp_;
 
   std::unique_ptr<tf2_ros::TransformBroadcaster> br_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
@@ -83,8 +82,6 @@ private:
       nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2>;
   std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
 
-  tf2::Transform tf_lidar_to_robot_base_;
-
   tf2::Transform previous_chassis_odometry_transform_;
   rclcpp::Time previous_chassis_odometry_stamp_;
   bool has_previous_chassis_odometry_{false};
@@ -98,12 +95,24 @@ private:
   double max_angular_velocity_{20.0};
 
 private:  // 优化: 使用单独的四个线程执行本功能包的四个并行任务
-  // 线程内调用的成员变量
-  tf2::Transform tf_odom_to_lidar_;
-  tf2::Transform tf_odom_to_robot_base_;
-  tf2::Transform tf_odom_to_chassis_;
-  sensor_msgs::msg::PointCloud2 in_;
-  sensor_msgs::msg::PointCloud2 out_;
+  struct TransformWork
+  {
+    tf2::Transform transform;
+    std::string parent_frame;
+    builtin_interfaces::msg::Time stamp;
+  };
+
+  struct SensorScanWork
+  {
+    sensor_msgs::msg::PointCloud2 cloud;
+    tf2::Transform odom_to_lidar;
+  };
+
+  // 每个队列槽都同时保存数据与它所属的位姿/时间，避免混用不同帧。
+  TransformWork chassis_tf_work_;
+  TransformWork chassis_odom_work_;
+  TransformWork robot_base_odom_work_;
+  SensorScanWork sensor_scan_work_;
 
   // 线程对象
   std::thread chassis_tf_thread_;
@@ -132,6 +141,7 @@ private:  // 优化: 使用单独的四个线程执行本功能包的四个并�
   bool chassis_odom_ready_{false};
   bool chassis_tf_ready_{false};
   bool robot_base_odom_ready_{false};
+  std::atomic_bool stopping_{false};
 };
 
 }  // namespace scan_to_sensor_frame

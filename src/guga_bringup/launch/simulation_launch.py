@@ -28,13 +28,15 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
     use_ui = LaunchConfiguration("use_ui")
-    # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
-    # 显式 params_file:= 时退化为单文件（三份都指向它）
+    # ── 导航参数分层：base -> controller -> planner -> smoother ──
+    # 显式 params_file:= 时退化为单文件（四份都指向它）
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
+    smoother = LaunchConfiguration("smoother")
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    smoother_params_file = LaunchConfiguration("smoother_params_file")
 
     # 传感器工具节点只读 base 层公共参数
     configured_params = ParameterFile(
@@ -92,8 +94,8 @@ def generate_launch_description():
         description="Use simulation (Gazebo) clock if True",
     )
 
-    # planner/controller 决定三个参数文件；9 种组合由 base + controller + planner
-    # 三个文件运行时合并得到，不再需要为每个组合准备独立 yaml。
+    # planner/controller 决定前三层参数文件，smoother 选择最后一层；
+    # 各层在运行时合并，不需要为每个组合准备独立 yaml。
     declare_planner_cmd = DeclareLaunchArgument(
         "planner",
         default_value="jps",
@@ -105,27 +107,39 @@ def generate_launch_description():
         # 建图模式（slam:=True）默认 mppi：costmap 走 base_footprint_nonrotating，
         # 且 navigation_launch 由 controller 推断底盘模式 → 开局即小陀螺；
         # 比赛模式默认 pid（保守，不自旋）
-        default_value=PythonExpression(
-            ["'", slam, "' == 'True' and 'mppi' or 'pid'"]
-        ),
+        default_value=PythonExpression(["'", slam, "' == 'True' and 'mppi' or 'pid'"]),
         choices=["pid", "mppi", "mpc"],
         description="Controller: pid (omni PID), mppi, or mpc",
     )
+    declare_smoother_cmd = DeclareLaunchArgument(
+        "smoother",
+        default_value="planner",
+        choices=["planner", "minco"],
+        description=(
+            "Path smoother: planner keeps planner-native smoothing; minco uses "
+            "pb_minco_smoother through Nav2 smoother_server"
+        ),
+    )
 
-    # 三个文件默认值：显式 params_file 非空时三份都指向它（单文件覆盖）；
+    # 前三层默认值：显式 params_file 非空时都指向它（单文件覆盖）；
     # 否则按 planner/controller 名字取 config/simulation 下的分层文件。
     def sim_params_file(subdir, name):
         return PythonExpression(
             [
-                "'", params_file, "' != '' and '", params_file, "' or '",
-                os.path.join(bringup_dir, "config", "simulation", subdir, name), "'",
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
+                "' or '",
+                os.path.join(bringup_dir, "config", "simulation", subdir, name),
+                "'",
             ]
         )
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Single params file override (disables 3-file merge)",
+        description="Single params file override (disables layered merge)",
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -138,13 +152,26 @@ def generate_launch_description():
         "controller_params_file",
         default_value=PythonExpression(
             [
-                "'", params_file, "' != '' and '", params_file, "' or ('",
-                controller, "' == 'mppi' and '",
-                os.path.join(bringup_dir, "config", "simulation", "controller", "mppi.yaml"),
-                "' or '", controller, "' == 'mpc' and '",
-                os.path.join(bringup_dir, "config", "simulation", "controller", "mpc.yaml"),
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
+                "' or ('",
+                controller,
+                "' == 'mppi' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "controller", "mppi.yaml"
+                ),
                 "' or '",
-                os.path.join(bringup_dir, "config", "simulation", "controller", "pid.yaml"),
+                controller,
+                "' == 'mpc' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "controller", "mpc.yaml"
+                ),
+                "' or '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "controller", "pid.yaml"
+                ),
                 "')",
             ]
         ),
@@ -154,21 +181,59 @@ def generate_launch_description():
         "planner_params_file",
         default_value=PythonExpression(
             [
-                "'", params_file, "' != '' and '", params_file, "' or ('",
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
+                "' or ('",
                 # 建图模式（slam:=True）且 JPS 时：用 jps_slam.yaml（allow_unknown=true，
                 # 敢走未探索区域）；比赛模式保持 jps.yaml 保守配置
-                slam, "' == 'True' and '", planner, "' == 'jps' and '",
-                os.path.join(bringup_dir, "config", "simulation", "planner", "jps_slam.yaml"),
-                "' or '", planner, "' == 'smac2d' and '",
-                os.path.join(bringup_dir, "config", "simulation", "planner", "smac2d.yaml"),
-                "' or '", planner, "' == 'smachybrid' and '",
-                os.path.join(bringup_dir, "config", "simulation", "planner", "smachybrid.yaml"),
+                slam,
+                "' == 'True' and '",
+                planner,
+                "' == 'jps' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "planner", "jps_slam.yaml"
+                ),
                 "' or '",
-                os.path.join(bringup_dir, "config", "simulation", "planner", "jps.yaml"),
+                planner,
+                "' == 'smac2d' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "planner", "smac2d.yaml"
+                ),
+                "' or '",
+                planner,
+                "' == 'smachybrid' and '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "planner", "smachybrid.yaml"
+                ),
+                "' or '",
+                os.path.join(
+                    bringup_dir, "config", "simulation", "planner", "jps.yaml"
+                ),
                 "')",
             ]
         ),
         description="Planner-diff params file (overrides base/controller)",
+    )
+    declare_smoother_params_file_cmd = DeclareLaunchArgument(
+        "smoother_params_file",
+        default_value=PythonExpression(
+            [
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
+                "' or ('",
+                smoother,
+                "' == 'minco' and '",
+                os.path.join(bringup_dir, "config", "smoother", "minco.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "smoother", "planner.yaml"),
+                "')",
+            ]
+        ),
+        description="Smoother-diff params file (final merge layer)",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -243,7 +308,10 @@ def generate_launch_description():
             "base_params_file": base_params_file,
             "controller_params_file": controller_params_file,
             "planner_params_file": planner_params_file,
+            "smoother_params_file": smoother_params_file,
+            "planner": planner,
             "controller": controller,
+            "smoother": smoother,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
@@ -267,10 +335,12 @@ def generate_launch_description():
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_smoother_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_controller_params_file_cmd)
     ld.add_action(declare_planner_params_file_cmd)
+    ld.add_action(declare_smoother_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)

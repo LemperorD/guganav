@@ -37,17 +37,19 @@ def generate_launch_description():
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
-    # 导航参数三文件（base/controller/planner）与控制器选择，原样透传给 navigation_launch
+    # 导航参数四层（base/controller/planner/smoother）原样透传给 navigation_launch
     base_params_file = LaunchConfiguration("base_params_file")
     controller_params_file = LaunchConfiguration("controller_params_file")
     planner_params_file = LaunchConfiguration("planner_params_file")
+    smoother_params_file = LaunchConfiguration("smoother_params_file")
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
+    smoother = LaunchConfiguration("smoother")
 
     # ── <robot_namespace> 文件替换 ──
     # nav2_common 的 ReplaceString 把输入当文件打开：simulation 分层模式下
     # params_file 为空字符串，必须用条件跳过；替换值按 namespace 动态选择。
-    # base/controller/planner 三文件同样替换（costmap topic 含 <robot_namespace>）。
+    # 四层参数文件同样替换（costmap topic 含 <robot_namespace>）。
     def with_namespace_replace(sub):
         return ReplaceString(
             condition=IfCondition(NotEquals(sub, "")),
@@ -66,6 +68,7 @@ def generate_launch_description():
     base_params_file = with_namespace_replace(base_params_file)
     controller_params_file = with_namespace_replace(controller_params_file)
     planner_params_file = with_namespace_replace(planner_params_file)
+    smoother_params_file = with_namespace_replace(smoother_params_file)
     param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
 
     def rewritten_params(source):
@@ -84,12 +87,13 @@ def generate_launch_description():
 
     # Costmap2DROS 是 controller/planner 组件内部创建的子节点，不会继承
     # LoadComposableNodes 发给父组件的参数。组合模式下必须把完整的
-    # base -> controller -> planner 参数链加到容器命令行，才能让
+    # base -> controller -> planner -> smoother 参数链加到容器命令行，才能让
     # local_costmap/global_costmap 子节点按名称读到各层配置。
     container_params = [
         configured_params,
         rewritten_params(controller_params_file),
         rewritten_params(planner_params_file),
+        rewritten_params(smoother_params_file),
     ]
 
     stdout_linebuf_envvar = SetEnvironmentVariable(
@@ -103,7 +107,9 @@ def generate_launch_description():
     )
 
     declare_planner_cmd = DeclareLaunchArgument(
-        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        "planner",
+        default_value="jps",
+        choices=["jps", "smac2d", "smachybrid"],
         description="Global planner: jps, smac2d, or smachybrid",
     )
     declare_controller_cmd = DeclareLaunchArgument(
@@ -112,12 +118,21 @@ def generate_launch_description():
         choices=["pid", "mppi", "mpc"],
         description="Controller profile, forwarded to navigation_launch for chassis mode",
     )
-    # 三文件默认值：显式 params_file 非空（reality / 调试）时退化为单文件；
-    # 否则用 simulation 分层默认（simulation_launch 总会显式传入覆盖）。
+    declare_smoother_cmd = DeclareLaunchArgument(
+        "smoother",
+        default_value="planner",
+        choices=["planner", "minco"],
+        description="Path smoother profile forwarded to navigation_launch",
+    )
+    # 分层参数默认值：顶层 launch 会显式传入对应的四层文件；
+    # 这里的默认值用于直接调试 core/bringup_launch.py。
     def default_params_file(which):
         return PythonExpression(
             [
-                "'", params_file, "' != '' and '", params_file,
+                "'",
+                params_file,
+                "' != '' and '",
+                params_file,
                 "' or '",
                 os.path.join(bringup_dir, "config", "reality", which),
                 "'",
@@ -132,13 +147,30 @@ def generate_launch_description():
     declare_controller_params_file_cmd = DeclareLaunchArgument(
         "controller_params_file",
         # default_value=default_params_file("controller/mppi.yaml"),
-        default_value=os.path.join(bringup_dir, "config", "reality", "controller", "mppi.yaml"),
+        default_value=os.path.join(
+            bringup_dir, "config", "reality", "controller", "mppi.yaml"
+        ),
         description="Controller-diff params file",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
         "planner_params_file",
         default_value=default_params_file("planner/jps.yaml"),
         description="Planner-diff params file",
+    )
+    declare_smoother_params_file_cmd = DeclareLaunchArgument(
+        "smoother_params_file",
+        default_value=PythonExpression(
+            [
+                "'",
+                smoother,
+                "' == 'minco' and '",
+                os.path.join(bringup_dir, "config", "smoother", "minco.yaml"),
+                "' or '",
+                os.path.join(bringup_dir, "config", "smoother", "planner.yaml"),
+                "'",
+            ]
+        ),
+        description="Smoother-diff params file (final merge layer)",
     )
 
     declare_slam_cmd = DeclareLaunchArgument(
@@ -246,8 +278,10 @@ def generate_launch_description():
                     "base_params_file": base_params_file,
                     "controller_params_file": controller_params_file,
                     "planner_params_file": planner_params_file,
+                    "smoother_params_file": smoother_params_file,
                     "planner": planner,
                     "controller": controller,
+                    "smoother": smoother,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
@@ -267,9 +301,11 @@ def generate_launch_description():
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_planner_cmd)
     ld.add_action(declare_controller_cmd)
+    ld.add_action(declare_smoother_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_controller_params_file_cmd)
     ld.add_action(declare_planner_params_file_cmd)
+    ld.add_action(declare_smoother_params_file_cmd)
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
