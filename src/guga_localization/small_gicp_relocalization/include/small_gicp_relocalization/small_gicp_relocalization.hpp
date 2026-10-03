@@ -58,9 +58,9 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
 
+  bool registration_initial_=false;
   nav_msgs::msg::OccupancyGrid::SharedPtr map_;
   std::mutex map_mutex_;
-  int count_= 0;
   int num_threads_;
   int num_neighbors_;
   int max_iterations_;
@@ -69,10 +69,12 @@ private:
   float max_dist_sq_;
   double max_roll_pitch_step_;
   double max_tz_step_;
+  double error_max_;
   double tz_max_;
   double roll_max_;
   double pitch_max_;
   double map_boundary_margin_;
+  double previous_error_{0.0};
   std::vector<double> init_pose_;
 
   std::string map_frame_;

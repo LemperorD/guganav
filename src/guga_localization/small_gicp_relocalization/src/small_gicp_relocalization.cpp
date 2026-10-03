@@ -38,6 +38,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("max_iterations", 100);
   this->declare_parameter("max_roll_pitch_step", 0.05);
   this->declare_parameter("max_tz_step", 0.02);
+  this->declare_parameter("error_max",10.0);
   this->declare_parameter("tz_max_",0.5);
   this->declare_parameter("roll_max_",0.001);
   this->declare_parameter("pitch_max_",0.001);
@@ -58,6 +59,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_iterations", max_iterations_);
   this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
   this->get_parameter("max_tz_step", max_tz_step_);
+  this->get_parameter("error_max",error_max_);
   this->get_parameter("tz_max_",tz_max_);
   this->get_parameter("roll_max_",roll_max_);
   this->get_parameter("pitch_max_",pitch_max_);
@@ -224,15 +226,18 @@ void SmallGicpRelocalizationNode::performRegistration()
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
   register_->optimizer.max_tz_step = max_tz_step_;
-  count_++;
-
-if (count_ % 100>80) {
-  register_->optimizer.max_iterations = max_iterations_;
-} else {
-  register_->optimizer.max_iterations = 10;
-}
-
+  if (previous_error_ > error_max_) {
+    register_->optimizer.max_iterations = max_iterations_;
+  } 
+  else {
+    register_->optimizer.max_iterations = 10;
+  } 
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
+    previous_error_ = result.error;
+  if(!registration_initial_){
+    initial_result_t_=result.T_target_source;
+    registration_initial_=true;
+  }
   if (result.converged) {
     result_t_ = previous_result_t_ = result.T_target_source;
   } else {
@@ -246,29 +251,28 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t,
     double tz_max_,double roll_max_,double pitch_max_)
 {
     Eigen::Isometry3d& T=result_t;
+    Eigen::Vector3d initial_rpy=initial_result_t_.linear().eulerAngles(0, 1, 2);
     Eigen::Vector3d rpy = T.linear().eulerAngles(0, 1, 2);
-    if(isOutsideMap(T.translation().x(),T.translation().y())){
-      RCLCPP_WARN(
-      this->get_logger(),
-      "Registration result is outside map: x=%.3f, y=%.3f",
-      T.translation().x(), T.translation().y());
+    // if(isOutsideMap(T.translation().x(),T.translation().y())){
+    //   RCLCPP_WARN(
+    //   this->get_logger(),
+    //   "Registration result is outside map: x=%.3f, y=%.3f",
+    //   T.translation().x(), T.translation().y());
 
-      result_t=previous_result_t_;
-      return ;  
+    //   result_t=previous_result_t_;
+    //   return ;  
+    // }
+    // if(fabs(T.translation().z())>tz_max_){ 
+    //   T.translation().z()=0.0;
+    // }
+    if(fabs(rpy[2]-initial_rpy[2])>=0.78){
+      
+      rpy[2]=initial_rpy[2];
     }
-    if(fabs(T.translation().z())>tz_max_){ 
-    T.translation().z()=0.0;
-    }
-    if(fabs(rpy(0))>roll_max_){
-    rpy(0)=0.0;
-    }
-    if(fabs(rpy(1))>pitch_max_){
-    rpy(1)=0.0;
-    }
-    T.linear() =
-    Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) *
+    T.linear()=
+    Eigen::AngleAxisd(rpy[2], Eigen::Vector3d::UnitZ()) *
     Eigen::AngleAxisd(rpy[1], Eigen::Vector3d::UnitY()) *
-    Eigen::AngleAxisd(rpy[2], Eigen::Vector3d::UnitZ())
+    Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) 
     .toRotationMatrix();
   }
 
@@ -302,7 +306,7 @@ void SmallGicpRelocalizationNode::publishTransform()
   if (result_t_.matrix().isZero()) {
     return;
   }
-  // checkRegistration(result_t_,tz_max_,roll_max_,pitch_max_);
+  checkRegistration(result_t_,tz_max_,roll_max_,pitch_max_);
   
   geometry_msgs::msg::TransformStamped transform_stamped;
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615
