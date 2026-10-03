@@ -35,12 +35,9 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("registered_leaf_size", 0.25);
   this->declare_parameter("max_dist_sq", 1.0);
   this->declare_parameter("max_iterations", 100);
-  this->declare_parameter("max_roll_pitch_step", 0.0);
-  this->declare_parameter("max_tz_step", 0.0);
+  this->declare_parameter("max_roll_pitch_step", 0.05);
+  this->declare_parameter("max_tz_step", 0.02);
   this->declare_parameter("error_max",10.0);
-  this->declare_parameter("tz_max_",0.5);
-  this->declare_parameter("roll_max_",0.001);
-  this->declare_parameter("pitch_max_",0.001);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
@@ -59,9 +56,6 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
   this->get_parameter("max_tz_step", max_tz_step_);
   this->get_parameter("error_max",error_max_);
-  this->get_parameter("tz_max_",tz_max_);
-  this->get_parameter("roll_max_",roll_max_);
-  this->get_parameter("pitch_max_",pitch_max_);
   this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
@@ -240,8 +234,7 @@ void SmallGicpRelocalizationNode::performRegistration()
   accumulated_cloud_->clear();
 }
 
-void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t,
-    double tz_max_,double roll_max_,double pitch_max_)
+void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t)
 {
     Eigen::Isometry3d& T=result_t;
     Eigen::Vector3d initial_rpy=initial_result_t_.linear().eulerAngles(0, 1, 2);
@@ -257,12 +250,49 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t,
     .toRotationMatrix();
   }
 
+bool SmallGicpRelocalizationNode::isOutOfMap(
+  const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const
+{
+  if (!has_map_bounds_) {
+    return false;  // 地图范围还没算出来, 不判
+  }
+  Eigen::Isometry3d T_odom_base;
+  try {
+    T_odom_base = tf2::transformToEigen(
+      tf_buffer_->lookupTransform(odom_frame_, base_frame_, tf2::TimePointZero).transform);
+  } catch (const tf2::TransformException &) {
+    return false;  // 拿不到 odom->base 就不猜
+  }
+  // T_map_odom 是 map->odom, 它的 translation 是 odom 原点落在地图的哪里, 不是机器人的
+  // 位置; 机器人在地图里的位置要再乘上 odom->base。只判水平方向, z 由 tz 限位管。
+  robot_in_map = (T_map_odom * T_odom_base).translation();
+  for (int axis = 0; axis < 2; ++axis) {
+    if (
+      robot_in_map[axis] < map_min_bound_[axis] - map_boundary_margin_ ||
+      robot_in_map[axis] > map_max_bound_[axis] + map_boundary_margin_) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void SmallGicpRelocalizationNode::publishTransform()
 {
   if (result_t_.matrix().isZero()) {
     return;
   }
-  checkRegistration(result_t_,tz_max_,roll_max_,pitch_max_);
+  checkRegistration(result_t_);
+
+  // 越界: 强制把 map->odom 置为单位变换 (等价于 odom 系与 map 系重合),
+  // 同时把 GICP 的种子也一起重置, 免得下一轮还从越界位姿起步。
+  Eigen::Vector3d robot_in_map;
+  if (isOutOfMap(result_t_, robot_in_map)) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Relocalization leaves the map (x=%.2f, y=%.2f), forcing map->odom to identity",
+      robot_in_map.x(), robot_in_map.y());
+    result_t_ = previous_result_t_ = Eigen::Isometry3d::Identity();
+  }
   
   geometry_msgs::msg::TransformStamped transform_stamped;
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615

@@ -48,8 +48,9 @@ private:
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
-  void checkRegistration(Eigen::Isometry3d& previous_result_t,
-    double tz_max_,double roll_max_,double pitch_max_);
+  void checkRegistration(Eigen::Isometry3d& result_t);
+  /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
+  bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
 
@@ -63,9 +64,6 @@ private:
   double max_roll_pitch_step_;
   double max_tz_step_;
   double error_max_;
-  double tz_max_;
-  double roll_max_;
-  double pitch_max_;
   double map_boundary_margin_;
   double previous_error_{0.0};
   std::vector<double> init_pose_;
