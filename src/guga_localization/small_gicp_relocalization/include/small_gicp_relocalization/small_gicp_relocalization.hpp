@@ -33,8 +33,6 @@
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
 
-#include <nav_msgs/msg/occupancy_grid.hpp>
-#include <mutex>
 namespace small_gicp_relocalization
 {
 
@@ -52,15 +50,10 @@ private:
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void checkRegistration(Eigen::Isometry3d& previous_result_t,
     double tz_max_,double roll_max_,double pitch_max_);
-  /// @brief 本次变换是否把机器人推出地图; 越界时 robot_in_map 为机器人在地图中的位置
-  bool isOutsideMap(double x,double y);
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
-  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
 
   bool registration_initial_=false;
-  nav_msgs::msg::OccupancyGrid::SharedPtr map_;
-  std::mutex map_mutex_;
   int num_threads_;
   int num_neighbors_;
   int max_iterations_;

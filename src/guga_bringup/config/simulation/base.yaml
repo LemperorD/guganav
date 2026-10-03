@@ -121,8 +121,8 @@ small_gicp_relocalization:
     registered_leaf_size: 0.05
     max_dist_sq: 6.0
     max_iterations: 100
-    max_roll_pitch_step: 0.002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
-    max_tz_step: 0.01 # 单次迭代 tz 增量的大小上限(m)，0 关闭
+    max_roll_pitch_step: 0.0 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭（当前已关闭 step_limit）
+    max_tz_step: 0.0 # 单次迭代 tz 增量的大小上限(m)，0 关闭（当前已关闭 step_limit）
     tz_max_: 0.2
     error_max: 5.0 # 平均残差(每个内点的 GICP error)超过该值时本次迭代上限用 max_iterations, 否则用 10
     map_boundary_margin: 1.0 # 位姿超出地图范围的允许余量(m)，超出则回退到初始变换(init_pose)

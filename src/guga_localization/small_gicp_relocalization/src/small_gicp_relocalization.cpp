@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
-#include <mutex>
 
 #include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
@@ -36,8 +35,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("registered_leaf_size", 0.25);
   this->declare_parameter("max_dist_sq", 1.0);
   this->declare_parameter("max_iterations", 100);
-  this->declare_parameter("max_roll_pitch_step", 0.05);
-  this->declare_parameter("max_tz_step", 0.02);
+  this->declare_parameter("max_roll_pitch_step", 0.0);
+  this->declare_parameter("max_tz_step", 0.0);
   this->declare_parameter("error_max",10.0);
   this->declare_parameter("tz_max_",0.5);
   this->declare_parameter("roll_max_",0.001);
@@ -103,13 +102,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   initial_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "initialpose", 10,
     [this] (const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg){initialPoseCallback(msg);});
-  
-  map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/map", rclcpp::QoS(1).transient_local(), 
-  [this](const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
-  {
-    std::lock_guard<std::mutex> lock(map_mutex_);
-    map_=msg;
-  });
+
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
     [this] () {performRegistration();});
@@ -253,18 +246,6 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t,
     Eigen::Isometry3d& T=result_t;
     Eigen::Vector3d initial_rpy=initial_result_t_.linear().eulerAngles(0, 1, 2);
     Eigen::Vector3d rpy = T.linear().eulerAngles(0, 1, 2);
-    // if(isOutsideMap(T.translation().x(),T.translation().y())){
-    //   RCLCPP_WARN(
-    //   this->get_logger(),
-    //   "Registration result is outside map: x=%.3f, y=%.3f",
-    //   T.translation().x(), T.translation().y());
-
-    //   result_t=previous_result_t_;
-    //   return ;  
-    // }
-    // if(fabs(T.translation().z())>tz_max_){ 
-    //   T.translation().z()=0.0;
-    // }
     if(fabs(rpy[2]-initial_rpy[2])>=0.78){
       
       rpy[2]=initial_rpy[2];
@@ -275,31 +256,6 @@ void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t,
     Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) 
     .toRotationMatrix();
   }
-
-bool SmallGicpRelocalizationNode::isOutsideMap(double x, double y)
-{
-  std::lock_guard<std::mutex> lock(map_mutex_);
-
-  if (!map_) {
-    return false;  // 地图还没收到
-  }
-
-  const auto & info = map_->info;
-
-  const double min_x = info.origin.position.x;
-  const double min_y = info.origin.position.y;
-
-  const double max_x =
-    min_x + info.width * info.resolution;
-
-  const double max_y =
-    min_y + info.height * info.resolution;
-
-  return x < min_x ||
-         x >= max_x ||
-         y < min_y ||
-         y >= max_y;
-}
 
 void SmallGicpRelocalizationNode::publishTransform()
 {
