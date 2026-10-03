@@ -79,6 +79,7 @@ private:
   Eigen::Isometry3d result_t_;
   Eigen::Isometry3d initial_result_t_;
   Eigen::Isometry3d previous_result_t_;
+  Eigen::Isometry3d last_good_result_t_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
   Eigen::Vector3d map_min_bound_;

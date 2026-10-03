@@ -76,6 +76,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   initial_result_t_ = result_t_;
   RCLCPP_INFO(this->get_logger(), "initial_tf:%f %f %f",init_pose_[0], init_pose_[1], init_pose_[2]);
   previous_result_t_ = result_t_;
+  last_good_result_t_ = result_t_;
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -283,15 +284,17 @@ void SmallGicpRelocalizationNode::publishTransform()
   }
   checkRegistration(result_t_);
 
-  // 越界: 强制把 map->odom 置为单位变换 (等价于 odom 系与 map 系重合),
+  // 越界: 不发布这次发散的 tf, 回退到上一次在界内的 map->odom (基准),
   // 同时把 GICP 的种子也一起重置, 免得下一轮还从越界位姿起步。
   Eigen::Vector3d robot_in_map;
   if (isOutOfMap(result_t_, robot_in_map)) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
-      "Relocalization leaves the map (x=%.2f, y=%.2f), forcing map->odom to identity",
+      "Relocalization leaves the map (x=%.2f, y=%.2f), holding last in-map map->odom",
       robot_in_map.x(), robot_in_map.y());
-    result_t_ = previous_result_t_ = Eigen::Isometry3d::Identity();
+    result_t_ = previous_result_t_ = last_good_result_t_;
+  } else {
+    last_good_result_t_ = result_t_;
   }
   
   geometry_msgs::msg::TransformStamped transform_stamped;
