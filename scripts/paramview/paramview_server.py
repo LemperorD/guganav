@@ -147,9 +147,10 @@ class ParamTarget:
         if self.list_client.service_is_ready():
             request = ListParameters.Request()
             request.prefixes = [self.prefix] if self.prefix else []
-            # depth=2：nav2 的参数名是 FollowPath.CostCritic.cost_weight 这种带点的层级名，
-            # depth=0 只返回前缀直属的那一层，拿不全
-            request.depth = 2
+            # depth 要够深：nav2 的参数名带点是层级名，最深到 3~4 段
+            # （FollowPath.CostCritic.cost_weight、local_costmap.obstacle_layer.terrain_map.topic），
+            # depth=2 会漏掉第三段以后的参数
+            request.depth = 10
             future = self.list_client.call_async(request)
             if self._wait(future):
                 result = future.result().result
@@ -160,7 +161,7 @@ class ParamTarget:
                         continue
                     request2 = ListParameters.Request()
                     request2.prefixes = [sub]
-                    request2.depth = 2
+                    request2.depth = 10
                     future2 = self.list_client.call_async(request2)
                     if self._wait(future2):
                         names.update(future2.result().result.names)
@@ -216,20 +217,24 @@ class ParamTarget:
 
         current = self.values.get(name)
         value = ParameterValue()
-        if isinstance(current, bool):
-            value.type = 1
-            value.bool_value = str(raw).strip().lower() in ("1", "true", "yes", "on")
-        elif isinstance(current, int):
-            value.type = 2
-            value.integer_value = int(float(raw))
-        elif isinstance(current, float):
-            value.type = 3
-            value.double_value = float(raw)
-        elif isinstance(current, str):
-            value.type = 4
-            value.string_value = str(raw)
-        else:
-            return False, f"不支持的类型：{type(current).__name__}"
+        try:
+            if isinstance(current, bool):
+                value.type = 1
+                value.bool_value = str(raw).strip().lower() in ("1", "true", "yes", "on")
+            elif isinstance(current, int):
+                value.type = 2
+                value.integer_value = int(float(raw))
+            elif isinstance(current, float):
+                value.type = 3
+                value.double_value = float(raw)
+            elif isinstance(current, str):
+                value.type = 4
+                value.string_value = str(raw)
+            else:
+                return False, f"不支持的类型：{type(current).__name__}"
+        except (TypeError, ValueError):
+            # 输入非法时给可读反馈，不要把异常抛到接口层
+            return False, f"无法把 '{raw}' 解析成 {type(current).__name__}"
 
         request = SetParameters.Request()
         request.parameters = [Parameter(name=name, value=value)]
@@ -455,7 +460,20 @@ def make_app(args):
 
     application = web.Application()
     application.add_routes(routes)
-    application.on_startup.append(push_loop)
+
+    # 注意：on_startup 的回调会在开始监听之前被 await，直接把 push_loop 挂上去会让
+    # "永不返回的循环"把启动过程卡住，端口永远不会被监听（表现为页面打不开、
+    # 但命令行已经打印了访问地址）。这里只建任务，不 await。
+    async def start_push(app):
+        app["push_task"] = asyncio.create_task(push_loop(app))
+
+    async def stop_push(app):
+        task = app.get("push_task")
+        if task is not None:
+            task.cancel()
+
+    application.on_startup.append(start_push)
+    application.on_cleanup.append(stop_push)
     return application
 
 
