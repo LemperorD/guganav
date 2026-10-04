@@ -282,7 +282,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "0.5 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -395,7 +395,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }

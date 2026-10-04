@@ -1,0 +1,32 @@
+{
+    "ROS2.distro": "humble",
+    "python.autoComplete.extraPaths": [
+        "/home/sentry-nav/guganav/build/sdformat_tools",
+        "/home/sentry-nav/guganav/install/sdformat_tools/lib/python3.10/site-packages",
+        "/home/sentry-nav/guganav/install/rmoss_interfaces/local/lib/python3.10/dist-packages",
+        "/home/sentry-nav/guganav/install/livox_ros_driver2/local/lib/python3.10/dist-packages",
+        "/home/sentry-nav/guganav/build/joint_state_publisher_gui",
+        "/home/sentry-nav/guganav/install/joint_state_publisher_gui/lib/python3.10/site-packages",
+        "/home/sentry-nav/guganav/build/joint_state_publisher",
+        "/home/sentry-nav/guganav/install/joint_state_publisher/lib/python3.10/site-packages",
+        "/home/sentry-nav/guganav/install/guga_interfaces/local/lib/python3.10/dist-packages",
+        "/home/sentry-nav/guganav/install/guga_common/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/sentry-nav/guganav/build/sdformat_tools",
+        "/home/sentry-nav/guganav/install/sdformat_tools/lib/python3.10/site-packages",
+        "/home/sentry-nav/guganav/install/rmoss_interfaces/local/lib/python3.10/dist-packages",
+        "/home/sentry-nav/guganav/install/livox_ros_driver2/local/lib/python3.10/dist-packages",
+        "/home/sentry-nav/guganav/build/joint_state_publisher_gui",
+        "/home/sentry-nav/guganav/install/joint_state_publisher_gui/lib/python3.10/site-packages",
+        "/home/sentry-nav/guganav/build/joint_state_publisher",
+        "/home/sentry-nav/guganav/install/joint_state_publisher/lib/python3.10/site-packages",
+        "/home/sentry-nav/guganav/install/guga_interfaces/local/lib/python3.10/dist-packages",
+        "/home/sentry-nav/guganav/install/guga_common/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "cmake.sourceDirectory": "/home/sentry-nav/guganav/src/guga_bringup"
+}
