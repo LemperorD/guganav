@@ -373,9 +373,13 @@ behavior_server:
     rotational_acc_lim: 3.2
     # params for pb_nav2_behaviors/BackUpFreeSpace
 
-    service_name: "global_costmap/get_costmap"
+    # 方向判定与位姿都取局部代价地图：它才是决定控制器能否接手的图，
+    # 且与执行中的 footprint 碰撞检查同图（碰撞检查由 behavior_server 用 local_costmap 建立）。
+    service_name: "local_costmap/get_costmap"
 
-    max_radius: 2.0
+    costmap_frame: odom
+
+    max_radius: 3.0
 
     visualize: false
 

@@ -50,6 +50,11 @@ void BackUpFreeSpace::onConfigure()
   // 放宽到请求距离重扫一次；仍然要求终点低于 253，只是允许走得更远才脱离。
   nav2_util::declare_parameter_if_not_declared(
     node, "relaxed_escape_enabled", rclcpp::ParameterValue(true));
+  // 取代价地图与位姿所用的坐标系。空字符串表示沿用 behavior_server 的 global_frame。
+  // 方向判定要读哪张图，位姿就必须取该图的坐标系：服务换成局部代价地图（odom 系）
+  // 之后这里必须跟着设成 odom，否则会拿 map 系的坐标去索引 odom 系的栅格。
+  nav2_util::declare_parameter_if_not_declared(
+    node, "costmap_frame", rclcpp::ParameterValue(std::string("")));
   nav2_util::declare_parameter_if_not_declared(
     node, "service_name", rclcpp::ParameterValue("local_costmap/get_costmap"));
   nav2_util::declare_parameter_if_not_declared(node, "visualize", rclcpp::ParameterValue(false));
@@ -60,7 +65,11 @@ void BackUpFreeSpace::onConfigure()
   node->get_parameter("escape_clearance", escape_clearance_);
   node->get_parameter("traverse_cost_threshold", traverse_cost_threshold_);
   node->get_parameter("relaxed_escape_enabled", relaxed_escape_enabled_);
+  node->get_parameter("costmap_frame", costmap_frame_);
   node->get_parameter("service_name", service_name_);
+  if (costmap_frame_.empty()) {
+    costmap_frame_ = global_frame_;
+  }
   node->get_parameter("visualize", visualize_);
 
   if (max_radius_ <= 0.0 || max_escape_distance_ <= 0.0 || escape_clearance_ < 0.0) {
@@ -106,7 +115,7 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   auto costmap = result.get()->map;
 
   if (!nav2_util::getCurrentPose(
-        initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        initial_pose_, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
     return nav2_behaviors::Status::FAILED;
   }
@@ -131,7 +140,8 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   }
 
   // Calculate move command
-  // findBestDirection returns an angle in global_frame_. DriveOnHeading expects
+  // findBestDirection 返回的是 costmap_frame_（本例为局部代价地图所在的 odom）下的角度。
+  // DriveOnHeading expects
   // velocity components in robot_base_frame_, so rotate the vector into the
   // current robot frame before publishing it.
   const double speed = std::fabs(command->speed);
@@ -148,7 +158,7 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   end_time_ = clock_->now() + command_time_allowance_;
 
   if (!nav2_util::getCurrentPose(
-        initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        initial_pose_, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
     return nav2_behaviors::Status::FAILED;
   }
@@ -173,7 +183,7 @@ nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
 
   geometry_msgs::msg::PoseStamped current_pose;
   if (!nav2_util::getCurrentPose(
-        current_pose, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        current_pose, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Current robot pose is not available.");
     return nav2_behaviors::Status::FAILED;
   }
@@ -511,7 +521,7 @@ void BackUpFreeSpace::visualize(
   visualization_msgs::msg::MarkerArray markers;
 
   visualization_msgs::msg::Marker sector_marker;
-  sector_marker.header.frame_id = global_frame_;
+  sector_marker.header.frame_id = costmap_frame_;
   sector_marker.header.stamp = clock_->now();
   sector_marker.ns = "direction";
   sector_marker.id = 0;
@@ -552,7 +562,7 @@ void BackUpFreeSpace::visualize(
 
   auto create_arrow = [&](float angle, int id, float r, float g, float b) {
     visualization_msgs::msg::Marker arrow;
-    arrow.header.frame_id = global_frame_;
+    arrow.header.frame_id = costmap_frame_;
     arrow.header.stamp = clock_->now();
     arrow.ns = "direction";
     arrow.id = id;

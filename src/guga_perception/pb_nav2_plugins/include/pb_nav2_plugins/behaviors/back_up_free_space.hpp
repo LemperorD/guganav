@@ -121,6 +121,7 @@ protected:
   bool escaping_initial_high_cost_{false};
 
   // parameters
+  std::string costmap_frame_;  ///< 方向判定所用代价地图的坐标系（空则取 global_frame）
   std::string service_name_;
   double max_radius_{1.0};
   double max_escape_distance_{0.5};
