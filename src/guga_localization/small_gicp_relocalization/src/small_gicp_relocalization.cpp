@@ -254,20 +254,38 @@ void SmallGicpRelocalizationNode::performRegistration()
   const Eigen::Isometry3d candidate = result.T_target_source;
   Eigen::Vector3d robot_in_map;
   // 配准质量 = RMSE 足够小 + 内点率足够高 + 未越界
-  const bool good =
-    rmse < good_error_max_ && inlier_ratio > good_inlier_ratio_ &&
-    !isOutOfMap(candidate, robot_in_map);
+  const bool out_of_map = isOutOfMap(candidate, robot_in_map);
+  const bool good = rmse < good_error_max_ && inlier_ratio > good_inlier_ratio_ && !out_of_map;
+  const bool baseline_unset = !registration_initial_;
+
+  // 还没有基准时, 不合格的候选既不能冻结成基准, 也不往外发布;
+  // 只要没越界就留作下一轮 GICP 的种子, 让配准继续向地图收敛,
+  // 否则每轮都从旧种子重算, 永远得不到更优的结果。
+  auto hold_candidate_until_good =
+    [this, &rmse, &inlier_ratio, out_of_map](
+      const Eigen::Isometry3d & candidate, const char * source) {
+      if (!out_of_map) {
+        previous_result_t_ = candidate;
+      }
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "%s rejected by baseline check (RMSE %.4f, inlier ratio %.2f), "
+        "holding the seed and retrying until a qualified baseline is found",
+        source, rmse, inlier_ratio);
+    };
 
   if (pending_initial_pose_) {
     // RViz 手动给的初始位姿: 跳过惯性漂移检查(否则会被判成大幅跳变直接丢弃),
-    // 但仍然要过基准残差检查 —— 只有 RMSE+内点率达标且未越界, 才升级为新的基准 tf;
-    // 否则丢弃这次手动位姿, 保留原基准。
+    // 但仍然要过基准残差检查 —— 只有 RMSE+内点率达标且未越界, 才升级为新的基准 tf。
     pending_initial_pose_ = false;
     if (good) {
       initial_result_t_ = baseline_tf_ = candidate;
       result_t_ = previous_result_t_ = candidate;
       registration_initial_ = true;
       RCLCPP_INFO(this->get_logger(), "Initial pose accepted as the new baseline tf");
+    } else if (baseline_unset) {
+      // 还没有基准: 手动种子不丢弃, 继续作为下一轮迭代起点, 直到出现合格结果
+      hold_candidate_until_good(candidate, "Initial pose");
     } else {
       RCLCPP_WARN(
         this->get_logger(),
@@ -276,11 +294,18 @@ void SmallGicpRelocalizationNode::performRegistration()
         rmse, inlier_ratio);
       result_t_ = previous_result_t_ = baseline_tf_;
     }
-  } else if (!registration_initial_) {
-    // 基准 tf 取首次注册结果: init_pose 只是种子, 可能离真值很远, 不能拿它当基准
-    baseline_tf_ = initial_result_t_ = candidate;
-    registration_initial_ = true;
-    result_t_ = previous_result_t_ = candidate;
+  } else if (baseline_unset) {
+    // 首次基准初始化同样要过质量门: init_pose 只是种子, 可能离真值很远,
+    // 只有 RMSE+内点率达标且未越界的第一次重定位才冻结为基准 tf;
+    // 不合格的候选不发布也不冻结, 先留着收敛, 等出现合格结果再更新基准。
+    if (good) {
+      baseline_tf_ = initial_result_t_ = candidate;
+      registration_initial_ = true;
+      result_t_ = previous_result_t_ = candidate;
+      RCLCPP_INFO(this->get_logger(), "First registration accepted as the new baseline tf");
+    } else {
+      hold_candidate_until_good(candidate, "First registration");
+    }
   } else {
     applyInertialConstraint(candidate, good);
   }
@@ -412,9 +437,13 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
-    // 人工给定的初始位姿先只作为下一次注册的种子, 由基准残差检查决定是否升级为基准 tf
+    // 人工给定的初始位姿只作为下一次注册的种子, 由基准残差检查决定是否升级为基准 tf。
+    // 这里绝不能写进 result_t_: publishTransform 以 20Hz 广播 result_t_,
+    // 直接赋值会把这段没经过任何配准检查的位姿当成 map->odom 发出去,
+    // 且当本轮 GICP 不收敛(performRegistration 提前 return)时它不会被改回去,
+    // 于是"给了错误 2D pose"永远不会触发回退。
     pending_initial_pose_ = true;
-    previous_result_t_ = result_t_ = map_to_odom;
+    previous_result_t_ = map_to_odom;
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",
