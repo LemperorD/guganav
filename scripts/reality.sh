@@ -15,7 +15,7 @@ Modes:
 Examples:
   scripts/reality.sh n
   scripts/reality.sh map reserve
-  scripts/reality.sh nav rmul_2024 use_rviz:=True use_decision:=True
+  scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
 EOF
 }
 
@@ -178,7 +178,7 @@ case "$mode" in
 esac
 done
 
-world=rmul_2024
+world=floor2
 slam=$slam_value
 launch_args=()
 map_arg=""

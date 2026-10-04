@@ -18,11 +18,11 @@ point_lio:
     prop_at_freq_of_imu: True
     check_satu: True
     init_map_size: 10
-    point_filter_num: 8 # Options: 4, 3
+    point_filter_num: 4 # Options: 8, 3
     space_down_sample: True
-    filter_size_surf: 0.2 # Options: 0.5, 0.3, 0.2, 0.15, 0.1
-    filter_size_map: 0.2 # Options: 0.5, 0.3, 0.15, 0.1
-    ivox_nearby_type: 18 # Options: 0, 6, 18, 26
+    filter_size_surf: 0.5 # Options: 0.5, 0.3, 0.2, 0.15, 0.1
+    filter_size_map: 0.5 # Options: 0.5, 0.3, 0.15, 0.1
+    ivox_nearby_type: 6 # Options: 0, 6, 18, 26
     runtime_pos_log_enable: False # Option: True
 
     common:
@@ -65,7 +65,7 @@ point_lio:
       acc_cov_input: 0.1 # for IMU as input model
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
-      ivox_grid_resolution: 0.5
+      ivox_grid_resolution: 2.0
       gravity: [0.0, 0.18700098991394043, -0.9550490379333496] # gravity to be aligned
       gravity_init: [0.0, 0.18700098991394043, -0.9550490379333496] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [-0.011, -0.02329, 0.04412]

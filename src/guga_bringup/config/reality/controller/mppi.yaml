@@ -25,7 +25,7 @@ controller_server:
     # 起不再被加载，这组取值从未生效；其中 min_y=0.5 会把 0.5 m/s 以下的横向速度
     # 当作零，与 Omni 控制相冲突，故不沿用。
 
-    controller_frequency: 60.0
+    controller_frequency: 30.0
 
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
@@ -36,7 +36,7 @@ controller_server:
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.166666667
+      model_dt: 0.033333333
       batch_size: 1200
       vx_std: 0.5
       vy_std: 0.5
@@ -94,7 +94,7 @@ controller_server:
         collision_cost: 10000.0
         collision_margin_distance: 0.15
         near_goal_distance: 0.5
-        inflation_radius: 0.55 # (only in Humble)
+        inflation_radius: 0.40 # (only in Humble)
         cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
@@ -158,7 +158,7 @@ local_costmap:
 
       resolution: 0.05
 
-      robot_radius: 0.4
+      robot_radius: 0.37
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -208,7 +208,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.5 # 实车 MPPI 保守起步（仿真 0.40）
+        inflation_radius: 0.39 # 实车 MPPI 保守起步（仿真 0.40）
 
       always_send_full_costmap: False
 
@@ -225,7 +225,7 @@ global_costmap:
 
       robot_base_frame: base_footprint_nonrotating
 
-      robot_radius: 0.44
+      robot_radius: 0.37
 
       resolution: 0.05
 
@@ -279,7 +279,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.7
+        inflation_radius: 0.39
 
       always_send_full_costmap: False
 
