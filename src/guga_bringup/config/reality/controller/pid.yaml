@@ -70,25 +70,9 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      use_sim_time: False
-
-      update_frequency: 10.0
-
-      publish_frequency: 5.0
-
-      global_frame: odom
-
+      # 与控制器 profile 无关的节点级参数（坐标系、尺寸、频率、robot_radius、
+      # static_layer）统一放在 base.yaml；本文件只保留 profile 之间的差异。
       robot_base_frame: base_footprint
-
-      rolling_window: true
-
-      width: 5
-
-      height: 5
-
-      resolution: 0.05
-
-      robot_radius: 0.464 # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -131,35 +115,16 @@ local_costmap:
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
 
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
-
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
 
-      always_send_full_costmap: False
-
 global_costmap:
   global_costmap:
     ros__parameters:
-      use_sim_time: False
-
-      update_frequency: 5.0
-
-      publish_frequency: 2.0
-
-      global_frame: map
-
+      # 节点级参数在 base.yaml，见 local_costmap 前的说明
       robot_base_frame: base_footprint
-
-      robot_radius: 0.464 # 略大于车体：实测车体半径 364mm + 约 100mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
-
-      resolution: 0.05
-
-      track_unknown_space: true
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -202,16 +167,10 @@ global_costmap:
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
 
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
-
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
-
-      always_send_full_costmap: False
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
 # If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
