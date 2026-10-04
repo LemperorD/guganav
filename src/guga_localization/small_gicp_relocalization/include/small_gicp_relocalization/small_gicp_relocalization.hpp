@@ -77,6 +77,8 @@ private:
   double baseline_translation_tolerance_;
   double map_boundary_margin_;
   double previous_rmse_{0.0};  ///< 上一次注册的 RMSE (sqrt(error / num_inliers))
+  /// @brief 上一次注册的内点率 (num_inliers / 源点数); 与 previous_rmse_ 一起决定迭代脉冲是否拉满
+  double previous_inlier_ratio_{0.0};
   std::vector<double> init_pose_;
 
   std::string map_frame_;

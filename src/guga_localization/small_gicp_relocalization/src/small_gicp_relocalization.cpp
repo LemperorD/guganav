@@ -223,12 +223,12 @@ void SmallGicpRelocalizationNode::performRegistration()
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
   register_->optimizer.max_tz_step = max_tz_step_;
-  if (previous_rmse_ > error_max_) {
-    register_->optimizer.max_iterations = max_iterations_;
-  } 
-  else {
-    register_->optimizer.max_iterations = 10;
-  } 
+  // 迭代上限(频率脉冲)的触发条件与配准质量判定统一: 上一帧 RMSE 和内点率都达标才走
+  // 10 次的快路径, 只要任一不达标, 本次就把迭代上限拉满重新收敛。
+  // previous_* 初值为 0, 因此首帧必然走拉满这条路, 不会用 10 次去初始化基准。
+  const bool previous_good =
+    previous_rmse_ <= error_max_ && previous_inlier_ratio_ >= good_inlier_ratio_;
+  register_->optimizer.max_iterations = previous_good ? 10 : max_iterations_;
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
   // RMSE = sqrt(总误差 / 内点数); error 是各内点 error 之和(每个已是平方量), 开方后与内点数无关,
   // 便于跨帧/跨块比较, 也便于按"残差多大"直观设阈值
@@ -240,6 +240,7 @@ void SmallGicpRelocalizationNode::performRegistration()
     ? 0.0
     : static_cast<double>(result.num_inliers) / static_cast<double>(source_->size());
   previous_rmse_ = rmse;
+  previous_inlier_ratio_ = inlier_ratio;
   RCLCPP_INFO_THROTTLE(
     this->get_logger(), *this->get_clock(), 2000,
     "GICP RMSE: %.4f, inlier ratio: %.2f (inliers: %zu, converged: %d)",
