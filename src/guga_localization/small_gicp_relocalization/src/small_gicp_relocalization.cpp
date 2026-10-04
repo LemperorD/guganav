@@ -248,6 +248,19 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   if (!result.converged) {
     RCLCPP_DEBUG(this->get_logger(), "GICP did not converge.");
+    if (pending_initial_pose_) {
+      // 手动给的种子连收敛都做不到, 就必然过不了 good 这道质量门, 直接丢弃:
+      // 清掉 pending 并把种子复位到基准, 免得每一轮都从同一个错误位姿重新迭代。
+      pending_initial_pose_ = false;
+      if (registration_initial_) {
+        result_t_ = previous_result_t_ = baseline_tf_;
+      } else {
+        previous_result_t_ = result_t_;
+      }
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Initial pose rejected: GICP did not converge, falling back to the previous tf");
+    }
     accumulated_cloud_->clear();
     return;
   }

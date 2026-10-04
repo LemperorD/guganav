@@ -61,7 +61,8 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
 
   bool registration_initial_=false;
-  /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准
+  /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
+  ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
   bool pending_initial_pose_{false};
   int num_threads_;
   int num_neighbors_;
