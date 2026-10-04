@@ -51,6 +51,7 @@ private:
   void checkRegistration(Eigen::Isometry3d& result_t);
   /// @brief 惯性约束: 候选 tf 相对基准 tf 的平移偏差过大时, 舍弃本次变换并回到基准;
   ///        good 为真(配准质量达标)的一次重定位则被采纳为新的基准 tf。
+  ///        基准若来自手动定位(baseline_is_manual_), 则不设漂移上限, 允许注册把它修正回来。
   ///        会直接更新 result_t_ / previous_result_t_。
   /// @param good 配准质量是否达标(RMSE + 内点率 + 未越界, 由调用方判定)
   /// @return true 表示采纳本次结果, false 表示已回退到基准
@@ -98,6 +99,9 @@ private:
   Eigen::Isometry3d baseline_tf_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
+  /// @brief 当前基准是否来自手动定位(未过质量门)。为真时跳过惯性漂移检查,
+  ///        因为手动基准本身就是"待修正"的, 一旦 GICP 收敛出合格结果就会被替换掉。
+  bool baseline_is_manual_{false};
   Eigen::Vector3d map_min_bound_;
   Eigen::Vector3d map_max_bound_;
 

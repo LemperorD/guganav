@@ -251,12 +251,9 @@ void SmallGicpRelocalizationNode::performRegistration()
     if (pending_initial_pose_) {
       // 手动给的种子连收敛都做不到, 就必然过不了 good 这道质量门, 直接丢弃:
       // 清掉 pending 并把种子复位到基准, 免得每一轮都从同一个错误位姿重新迭代。
+      // (走到这里必然已有基准: 没有基准的手动位姿在 initialPoseCallback 里就直接生效了。)
       pending_initial_pose_ = false;
-      if (registration_initial_) {
-        result_t_ = previous_result_t_ = baseline_tf_;
-      } else {
-        previous_result_t_ = result_t_;
-      }
+      result_t_ = previous_result_t_ = baseline_tf_;
       RCLCPP_WARN(
         this->get_logger(),
         "Initial pose rejected: GICP did not converge, falling back to the previous tf");
@@ -291,15 +288,14 @@ void SmallGicpRelocalizationNode::performRegistration()
   if (pending_initial_pose_) {
     // RViz 手动给的初始位姿: 跳过惯性漂移检查(否则会被判成大幅跳变直接丢弃),
     // 但仍然要过基准残差检查 —— 只有 RMSE+内点率达标且未越界, 才升级为新的基准 tf。
+    // 走到这里必然已经有基准: 没有基准的手动位姿在 initialPoseCallback 里就直接生效了。
     pending_initial_pose_ = false;
     if (good) {
       initial_result_t_ = baseline_tf_ = candidate;
       result_t_ = previous_result_t_ = candidate;
       registration_initial_ = true;
+      baseline_is_manual_ = false;
       RCLCPP_INFO(this->get_logger(), "Initial pose accepted as the new baseline tf");
-    } else if (baseline_unset) {
-      // 还没有基准: 手动种子不丢弃, 继续作为下一轮迭代起点, 直到出现合格结果
-      hold_candidate_until_good(candidate, "Initial pose");
     } else {
       RCLCPP_WARN(
         this->get_logger(),
@@ -315,6 +311,7 @@ void SmallGicpRelocalizationNode::performRegistration()
     if (good) {
       baseline_tf_ = initial_result_t_ = candidate;
       registration_initial_ = true;
+      baseline_is_manual_ = false;
       result_t_ = previous_result_t_ = candidate;
       RCLCPP_INFO(this->get_logger(), "First registration accepted as the new baseline tf");
     } else {
@@ -331,7 +328,15 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   const Eigen::Isometry3d & candidate, bool good)
 {
   const double drift = (candidate.translation() - baseline_tf_.translation()).norm();
-  if (drift > baseline_translation_tolerance_) {
+  if (baseline_is_manual_) {
+    // 基准是手动定位给的, 本身就是"待修正"的: 不能再用漂移上限把它锁死,
+    // 否则 GICP 收敛到真值也会被判超限而回退, 系统就永远停在手动位姿上。
+    RCLCPP_INFO_THROTTLE(
+      this->get_logger(), *this->get_clock(), 5000,
+      "Inertial constraint skipped: baseline came from manual localization (drift %.2f m); "
+      "letting registration correct it",
+      drift);
+  } else if (drift > baseline_translation_tolerance_) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
       "Inertial constraint: candidate map->odom drifts %.2f m from the baseline (limit %.2f m), "
@@ -346,6 +351,7 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   // 基准是越界/惯性回退的目标, 必须保证它本身是可信的。
   if (good) {
     baseline_tf_ = candidate;
+    baseline_is_manual_ = false;
   }
   return true;
 }
@@ -450,6 +456,21 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
       tf_buffer_->lookupTransform(robot_base_frame_, current_scan_frame_id_, tf2::TimePointZero);
     Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
+
+    if (!registration_initial_) {
+      // 还没有基准, 说明自动重定位没能初始化出可信的 tf。实车手动定位时这段位姿
+      // 就是唯一可靠来源, 所以直接采信操作员给的 tf 作为基准, 不经过质量门, 也不等注册。
+      // 之后正常注册出合格结果时会自动把它升级掉。
+      baseline_tf_ = initial_result_t_ = result_t_ = previous_result_t_ = map_to_odom;
+      registration_initial_ = true;
+      baseline_is_manual_ = true;
+      pending_initial_pose_ = false;
+      RCLCPP_WARN(
+        this->get_logger(),
+        "No baseline yet; accepting the manual pose as the baseline tf (manual localization, "
+        "bypassing the quality gate)");
+      return;
+    }
 
     // 人工给定的初始位姿只作为下一次注册的种子, 由基准残差检查决定是否升级为基准 tf。
     // 这里绝不能写进 result_t_: publishTransform 以 20Hz 广播 result_t_,
