@@ -466,6 +466,11 @@ void ObstacleLayerLocal::checkGlobalFrameJump()
     tf_jump_ref_x_ = x;
     tf_jump_ref_y_ = y;
     tf_jump_ref_yaw_ = yaw;
+    // 首次读到变换时打一条 INFO：实车上区分"读不到 TF（坐标系名不对）"与
+    // "读到了但没有触发"只能靠这条，调试级别的日志默认看不到
+    RCLCPP_INFO(
+      logger_, "已读到 %s→%s：x=%.3f y=%.3f yaw=%.3f，之后按相邻两轮增量判定跳变",
+      global_frame_.c_str(), tf_jump_child_frame_.c_str(), x, y, yaw);
     return;
   }
 
@@ -486,12 +491,15 @@ void ObstacleLayerLocal::checkGlobalFrameJump()
   const double wrapped_yaw = std::remainder(d_yaw, 2.0 * M_PI);
   const double translation = std::hypot(dx, dy);
 
-  // 定位持续小幅修正时会不断越过阈值，这里限制重置频率，避免代价地图被反复清空
+  // 定位持续小幅修正时会不断越过阈值，这里限制重置频率，避免代价地图被反复清空。
+  // 用 INFO 加节流：被拦下的次数是判断"阈值是否与定位更新的单步幅度匹配"的直接依据，
+  // 只在 DEBUG 打印时实车上区分不了"没读到 TF"与"跳变被最小间隔拦下"。
   if (
     has_tf_jump_reset_time_ &&
     (clock_->now() - tf_jump_reset_time_).seconds() < tf_jump_min_interval_) {
-    RCLCPP_DEBUG(
-      logger_, "%s→%s 跳变 (Δ=%.3f m, Δyaw=%.3f rad)，距上次重置不足 %.2f s，本轮不重置",
+    RCLCPP_INFO_THROTTLE(
+      logger_, *clock_, 2000,
+      "%s→%s 跳变 (Δ=%.3f m, Δyaw=%.3f rad)，距上次重置不足 %.2f s，本轮不重置",
       global_frame_.c_str(), tf_jump_child_frame_.c_str(), translation, wrapped_yaw,
       tf_jump_min_interval_);
     return;
