@@ -2,6 +2,8 @@
 set -euo pipefail
 
 WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+GUGANAV_MODE="reality"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/common.sh"
 
 usage() {
   cat <<'EOF'
@@ -19,36 +21,12 @@ Examples:
 EOF
 }
 
-source_setup() {
-  local setup_file=$1
-  if [ -f "$setup_file" ]; then
-    set +u
-    source "$setup_file"
-    set -u
-  fi
-}
 
-require_workspace_setup() {
-  if [ -z "${ROS_DISTRO:-}" ]; then
-    source_setup /opt/ros/humble/setup.bash
-  fi
-  if [ ! -f "$WS/install/setup.bash" ]; then
-    echo "Missing workspace setup: $WS/install/setup.bash" >&2
-    exit 1
-  fi
-  source_setup "$WS/install/setup.bash"
-  cd "$WS"
-}
 
-is_true() {
-  case "${1,,}" in
-    true|1|yes|on) return 0 ;;
-    *) return 1 ;;
-  esac
-}
 
 # 实车清理:杀 reality_launch 相关节点,不动 /dev/shm
 REALITY_SHUTDOWN_FILE="/tmp/guganav_reality_shutdown_$$"
+GUGANAV_SHUTDOWN_FILE="$REALITY_SHUTDOWN_FILE"
 REALITY_CLEANUP_STARTED=0
 
 cleanup_reality_processes() {
@@ -107,14 +85,6 @@ cleanup_reality_processes() {
   fi
 }
 
-exit_with_launch_status() {
-  local status=$1
-  if [ "$status" -eq 130 ] || [ "$status" -eq 143 ] || \
-     { [ "$status" -ne 0 ] && [ -f "$REALITY_SHUTDOWN_FILE" ]; }; then
-    exit 0
-  fi
-  exit "$status"
-}
 
 install_reality_cleanup_traps() {
   trap 'cleanup_reality_processes' EXIT

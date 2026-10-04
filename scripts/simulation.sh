@@ -2,6 +2,8 @@
 set -euo pipefail
 
 WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+GUGANAV_MODE="simulation"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/common.sh"
 if [ -z "${SIMULATION_SESSION_ID:-}" ]; then
   export SIMULATION_SESSION_ID="$$-${RANDOM:-0}"
   rm -f "/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
@@ -9,6 +11,7 @@ else
   export SIMULATION_SESSION_ID
 fi
 SIMULATION_SHUTDOWN_FILE="/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
+GUGANAV_SHUTDOWN_FILE="$SIMULATION_SHUTDOWN_FILE"
 SIMULATION_CLEANUP_STARTED=0
 
 usage() {
@@ -47,70 +50,16 @@ controller (1-3).
 EOF
 }
 
-pause_if_interactive() {
-  if [ -t 0 ] && [ -t 1 ]; then
-    printf "\nPress Enter to close..."
-    read -r _
-  fi
-}
 
-source_setup() {
-  local setup_file=$1
-  if [ -f "$setup_file" ]; then
-    set +u
-    source "$setup_file"
-    set -u
-  fi
-}
 
-require_workspace_setup() {
-  if [ -z "${ROS_DISTRO:-}" ]; then
-    source_setup /opt/ros/humble/setup.bash
-  fi
 
-  if [ ! -f "$WS/install/setup.bash" ]; then
-    echo "Missing workspace setup: $WS/install/setup.bash" >&2
-    echo "Run colcon build before starting simulation." >&2
-    exit 1
-  fi
 
-  source_setup "$WS/install/setup.bash"
-  cd "$WS"
-}
-
-quote_command() {
-  printf "%q " "$@"
-}
-
-is_true() {
-  case "${1,,}" in
-    true | 1 | yes | on)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
 
 PLANNER_CHOICES="jps smac2d smachybrid"
 CONTROLLER_CHOICES="pid mppi mpc"
 
 SIMULATION_PARAMS_DIR="$WS/src/guga_bringup/config/simulation"
 
-validate_choice() {
-  local name=$1
-  local value=$2
-  local valid=$3
-  local choice
-  for choice in $valid; do
-    if [ "$choice" = "$value" ]; then
-      return 0
-    fi
-  done
-  echo "Invalid ${name}: '$value'. Valid values: $valid" >&2
-  return 1
-}
 
 select_planner() {
   local selection
@@ -375,18 +324,6 @@ cleanup_simulation_processes() {
     2>/dev/null || true
 }
 
-exit_with_launch_status() {
-  local status=$1
-
-  # 130=SIGINT(Ctrl-C)、143=SIGTERM：主动关闭信号，视为正常退出；
-  # 或者 SHUTDOWN_FILE 已创建（清理函数已执行）也视为主动关闭。
-  if [ "$status" -eq 130 ] || [ "$status" -eq 143 ] || \
-     { [ "$status" -ne 0 ] && [ -f "$SIMULATION_SHUTDOWN_FILE" ]; }; then
-    exit 0
-  fi
-
-  exit "$status"
-}
 
 install_simulation_cleanup_traps() {
   trap 'cleanup_simulation_processes' EXIT
