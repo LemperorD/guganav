@@ -35,6 +35,10 @@ public:
     max_escape_distance_ = max_escape_distance;
     escape_clearance_ = escape_clearance;
   }
+
+  void setTraverseCostThreshold(int threshold) { traverse_cost_threshold_ = threshold; }
+
+  void setRelaxedEscapeEnabled(bool enabled) { relaxed_escape_enabled_ = enabled; }
 };
 
 nav2_msgs::msg::Costmap makeCostmap()
@@ -156,6 +160,62 @@ TEST(BackUpFreeSpaceTest, RejectsObstacleAfterLeavingInitialRegion)
   const auto result = behavior.findBestDirection(costmap, pose, -M_PI, M_PI, 0.4, M_PI / 32.0);
 
   EXPECT_FALSE(result.has_value());
+}
+
+/**
+ * 允许穿越 253 的膨胀环：起点在环内，环外是自由空间。
+ * 旧实现把 253 当障碍，任何穿过环的射线都作废，于是返回无解；
+ * 现在只挡 >= traverse_cost_threshold（默认 254），因此能选出一个穿环方向。
+ */
+TEST(BackUpFreeSpaceTest, CrossesInscribedRingToReachFreeSpace)
+{
+  auto costmap = makeCostmap();
+  fillDisk(costmap, 0.20, nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE);
+  for (double x = -0.10; x <= 0.10; x += 0.05) {
+    for (double y = -0.10; y <= 0.10; y += 0.05) {
+      if (std::hypot(x, y) < 0.10) {
+        setCost(costmap, x, y, nav2_costmap_2d::FREE_SPACE);
+      }
+    }
+  }
+
+  TestBackUpFreeSpace behavior;
+  behavior.setEscapeParameters(0.5, 0.1);
+  geometry_msgs::msg::Pose2D pose;
+  const auto result = behavior.findBestDirection(costmap, pose, -M_PI, M_PI, 0.5, M_PI / 32.0);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->started_in_high_cost);
+  EXPECT_FLOAT_EQ(result->command_distance, 0.5f);
+
+  // 把阈值退回 253（旧语义）后同一个方向应当被否掉
+  behavior.setTraverseCostThreshold(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE);
+  const auto strict = behavior.findBestDirection(costmap, pose, -M_PI, M_PI, 0.5, M_PI / 32.0);
+  EXPECT_FALSE(strict.has_value());
+}
+
+/**
+ * 高代价区半径大于 max_escape_distance：严格条件下无解，放宽到请求距离后可以脱出。
+ */
+TEST(BackUpFreeSpaceTest, RelaxedEscapeDistanceFindsDirection)
+{
+  auto costmap = makeCostmap();
+  fillDisk(costmap, 0.70, nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE);
+
+  TestBackUpFreeSpace behavior;
+  behavior.setEscapeParameters(0.5, 0.1);
+  geometry_msgs::msg::Pose2D pose;
+  const auto relaxed = behavior.findBestDirection(costmap, pose, -M_PI, M_PI, 0.9, M_PI / 32.0);
+
+  ASSERT_TRUE(relaxed.has_value());
+  EXPECT_TRUE(relaxed->started_in_high_cost);
+  EXPECT_GT(relaxed->escape_distance, 0.5);
+  EXPECT_NEAR(relaxed->escape_distance, 0.75, 0.02);
+
+  // 关掉放宽后应当回到"无解"
+  behavior.setRelaxedEscapeEnabled(false);
+  const auto strict = behavior.findBestDirection(costmap, pose, -M_PI, M_PI, 0.9, M_PI / 32.0);
+  EXPECT_FALSE(strict.has_value());
 }
 
 }  // namespace pb_nav2_behaviors
