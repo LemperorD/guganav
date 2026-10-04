@@ -14,6 +14,7 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <cmath>
 #include <limits>
 
 #include "pcl/common/common.h"
@@ -42,6 +43,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("max_tz_step", 0.02);
   this->declare_parameter("error_max",10.0);
   this->declare_parameter("good_error_max", 0.5);
+  this->declare_parameter("good_inlier_ratio", 0.5);
   this->declare_parameter("baseline_translation_tolerance", 1.0);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
@@ -62,6 +64,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_tz_step", max_tz_step_);
   this->get_parameter("error_max",error_max_);
   this->get_parameter("good_error_max", good_error_max_);
+  this->get_parameter("good_inlier_ratio", good_inlier_ratio_);
   this->get_parameter("baseline_translation_tolerance", baseline_translation_tolerance_);
   this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
@@ -220,36 +223,44 @@ void SmallGicpRelocalizationNode::performRegistration()
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
   register_->optimizer.max_tz_step = max_tz_step_;
-  if (previous_error_ > error_max_) {
+  if (previous_rmse_ > error_max_) {
     register_->optimizer.max_iterations = max_iterations_;
   } 
   else {
     register_->optimizer.max_iterations = 10;
   } 
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
-  // 平均残差 = 总误差 / 内点数, 与内点数无关, 才能跨帧/跨块比较
-  const double mean_error = result.num_inliers > 0
-    ? result.error / static_cast<double>(result.num_inliers)
+  // RMSE = sqrt(总误差 / 内点数); error 是各内点 error 之和(每个已是平方量), 开方后与内点数无关,
+  // 便于跨帧/跨块比较, 也便于按"残差多大"直观设阈值
+  const double rmse = result.num_inliers > 0
+    ? std::sqrt(result.error / static_cast<double>(result.num_inliers))
     : std::numeric_limits<double>::infinity();
-  previous_error_ = mean_error;
+  // 内点率 = 有有效对应的源点数 / 源点总数; 只靠 RMSE 容易被"只匹配上少数点"的退化解骗过
+  const double inlier_ratio = source_->empty()
+    ? 0.0
+    : static_cast<double>(result.num_inliers) / static_cast<double>(source_->size());
+  previous_rmse_ = rmse;
   RCLCPP_INFO_THROTTLE(
     this->get_logger(), *this->get_clock(), 2000,
-    "GICP mean residual: %.4f (inliers: %zu, converged: %d)",
-    mean_error, result.num_inliers, static_cast<int>(result.converged));
+    "GICP RMSE: %.4f, inlier ratio: %.2f (inliers: %zu, converged: %d)",
+    rmse, inlier_ratio, result.num_inliers, static_cast<int>(result.converged));
 
   if (!result.converged) {
-    RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
+    RCLCPP_DEBUG(this->get_logger(), "GICP did not converge.");
     accumulated_cloud_->clear();
     return;
   }
 
   const Eigen::Isometry3d candidate = result.T_target_source;
   Eigen::Vector3d robot_in_map;
-  const bool good = mean_error < good_error_max_ && !isOutOfMap(candidate, robot_in_map);
+  // 配准质量 = RMSE 足够小 + 内点率足够高 + 未越界
+  const bool good =
+    rmse < good_error_max_ && inlier_ratio > good_inlier_ratio_ &&
+    !isOutOfMap(candidate, robot_in_map);
 
   if (pending_initial_pose_) {
     // RViz 手动给的初始位姿: 跳过惯性漂移检查(否则会被判成大幅跳变直接丢弃),
-    // 但仍然要过基准残差检查 —— 只有平均残差足够小且未越界, 才升级为新的基准 tf;
+    // 但仍然要过基准残差检查 —— 只有 RMSE+内点率达标且未越界, 才升级为新的基准 tf;
     // 否则丢弃这次手动位姿, 保留原基准。
     pending_initial_pose_ = false;
     if (good) {
@@ -260,9 +271,9 @@ void SmallGicpRelocalizationNode::performRegistration()
     } else {
       RCLCPP_WARN(
         this->get_logger(),
-        "Initial pose rejected by baseline residual check (mean residual %.4f), "
+        "Initial pose rejected by baseline check (RMSE %.4f, inlier ratio %.2f), "
         "keeping the previous baseline",
-        mean_error);
+        rmse, inlier_ratio);
       result_t_ = previous_result_t_ = baseline_tf_;
     }
   } else if (!registration_initial_) {
@@ -271,14 +282,14 @@ void SmallGicpRelocalizationNode::performRegistration()
     registration_initial_ = true;
     result_t_ = previous_result_t_ = candidate;
   } else {
-    applyInertialConstraint(candidate, mean_error);
+    applyInertialConstraint(candidate, good);
   }
 
   accumulated_cloud_->clear();
 }
 
 bool SmallGicpRelocalizationNode::applyInertialConstraint(
-  const Eigen::Isometry3d & candidate, double mean_error)
+  const Eigen::Isometry3d & candidate, bool good)
 {
   const double drift = (candidate.translation() - baseline_tf_.translation()).norm();
   if (drift > baseline_translation_tolerance_) {
@@ -292,10 +303,9 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   }
 
   result_t_ = previous_result_t_ = candidate;
-  // 只有"效果好"(平均残差很小)且没越界的一次重定位, 才被采纳为新的基准 tf;
+  // 只有"效果好"(RMSE 小且内点率高, 未越界)的一次重定位, 才被采纳为新的基准 tf;
   // 基准是越界/惯性回退的目标, 必须保证它本身是可信的。
-  Eigen::Vector3d robot_in_map;
-  if (mean_error < good_error_max_ && !isOutOfMap(candidate, robot_in_map)) {
+  if (good) {
     baseline_tf_ = candidate;
   }
   return true;

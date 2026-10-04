@@ -124,9 +124,10 @@ small_gicp_relocalization:
     max_roll_pitch_step: 0.002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
     max_tz_step: 0.01 # 单次迭代 tz 增量的大小上限(m)，0 关闭
     map_boundary_margin: 1.0 # 位姿超出先验地图外接框的允许余量(m)，超出则回退到基准 tf
-    error_max: 1.0 # 平均残差(每个内点的 GICP error)超过该值时本次迭代上限用 max_iterations, 否则用 10
-    baseline_translation_tolerance: 1.0 # 惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
-    good_error_max: 0.5 # 平均残差(每个内点的 GICP error)上限，只有低于该值且未越界的结果才能成为基准 tf，0.5 为占位值需按日志标定
+    error_max: 1.0 # RMSE(sqrt(每个内点的 GICP error 均值))超过该值时本次迭代上限用 max_iterations, 否则用 10
+    baseline_translation_tolerance: 4.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
+    good_error_max: 0.2 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
+    good_inlier_ratio: 0.99 # 内点率下限，只有 RMSE 达标且内点率高于该值、且未越界的结果才能成为基准 tf，需按日志标定
     map_frame: "map"
     odom_frame: "odom"
     base_frame: "base_footprint"

@@ -50,10 +50,11 @@ private:
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void checkRegistration(Eigen::Isometry3d& result_t);
   /// @brief 惯性约束: 候选 tf 相对基准 tf 的平移偏差过大时, 舍弃本次变换并回到基准;
-  ///        平均残差小于 good_error_max_ 且未越界的一次重定位则被采纳为新的基准 tf。
+  ///        good 为真(配准质量达标)的一次重定位则被采纳为新的基准 tf。
   ///        会直接更新 result_t_ / previous_result_t_。
+  /// @param good 配准质量是否达标(RMSE + 内点率 + 未越界, 由调用方判定)
   /// @return true 表示采纳本次结果, false 表示已回退到基准
-  bool applyInertialConstraint(const Eigen::Isometry3d & candidate, double mean_error);
+  bool applyInertialConstraint(const Eigen::Isometry3d & candidate, bool good);
   /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
@@ -72,9 +73,10 @@ private:
   double max_tz_step_;
   double error_max_;
   double good_error_max_;
+  double good_inlier_ratio_;
   double baseline_translation_tolerance_;
   double map_boundary_margin_;
-  double previous_error_{0.0};  ///< 上一次注册的平均残差 (error / num_inliers)
+  double previous_rmse_{0.0};  ///< 上一次注册的 RMSE (sqrt(error / num_inliers))
   std::vector<double> init_pose_;
 
   std::string map_frame_;
