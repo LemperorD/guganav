@@ -293,6 +293,16 @@ global_costmap:
           # 源级高度范围是 odom 绝对高度：留 0 会把地面返回的雷达射线在 ObservationBuffer 里滤掉。
           min_obstacle_height: -3.0
           max_obstacle_height: 3.0
+        # 定位修正会让 map→odom 突然变化，此前按旧变换写入本层的障碍标记落在错误位置；
+        # 跳变时清空本层累积的标记并按新变换重建。实车与仿真用同一组参数，便于对照验证。
+        # 只写在全局代价地图：局部代价地图走 odom，其全局系与观察子系同系，插件会自行跳过。
+        tf_jump_reset_enabled: true
+        tf_jump_child_frame: odom
+        tf_jump_translation_threshold: 0.05 # 平移跳变阈值（m）
+        tf_jump_yaw_threshold: 0.05 # 偏航跳变阈值（rad）
+        tf_jump_min_interval: 2.0 # 两次重置的最短间隔（s）
+        tf_jump_full_window: true # 重置那一轮把更新窗口扩到整张图
+        tf_jump_skip_marking_cycles: 1 # 跳变后丢弃的观测轮数
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
