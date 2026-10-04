@@ -1,0 +1,39 @@
+/**:
+  ros__parameters:
+    # Topics are relative so the same file works under the robot namespace.
+    cmd_vel_topic: "cmd_vel"
+    odometry_topic: "odometry"
+    local_plan_topic: "local_plan"
+    global_plan_topic: "plan"
+    predicted_plan_topic: "predicted_plan"
+    goal_topic: "goal_pose"
+    ground_truth_topic: "chassis_odometry_gt"
+    metrics_topic: "evaluation_metrics"
+
+    # A ground-truth subscription is enabled by scripts/evaluate.sh simulation.
+    use_ground_truth: false
+
+    # Live metrics are always published. Disk recording is opt-in in the script.
+    save_data: false
+    publish_period_sec: 0.1
+
+    # Files are updated during the run, so results survive an abnormal stop.
+    summary_period_sec: 5.0
+
+    # Pair only fresh commands and simulation truth with odometry samples.
+    max_cmd_age_sec: 0.5
+    max_ground_truth_age_sec: 0.2
+
+    # Derive body-frame velocity from consecutive poses. This is currently the
+    # most portable actual-velocity estimate for both the real car and Gazebo.
+    min_pose_dt_sec: 0.005
+    max_pose_dt_sec: 0.5
+    velocity_filter_alpha: 0.35
+
+    # A goal counts as reached only after continuously satisfying all gates.
+    goal_xy_tolerance: 0.15
+    goal_yaw_tolerance: 0.15
+    goal_speed_tolerance: 0.10
+    goal_dwell_sec: 0.5
+    goal_dedup_xy_tolerance: 0.01
+    goal_dedup_yaw_tolerance: 0.01

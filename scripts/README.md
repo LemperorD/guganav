@@ -10,6 +10,7 @@
 | `scripts/map.sh`           | 启动实车建图入口，`slam:=True`。                                       |
 | `scripts/nav_decision.sh`  | 基于统一实车 launch 启动导航决策测试，开启 RViz 与通信，关闭 robot state publisher。 |
 | `scripts/save_map.sh`      | 保存实车 2D 栅格地图到 `src/guga_bringup/map/reality/`。               |
+| `scripts/evaluate.sh`      | 实时显示导航评测指标；添加 `--save` 后记录 CSV 与汇总 JSON。              |
 
 示例：
 
@@ -19,6 +20,7 @@ scripts/simulation.sh nav
 scripts/simulation.sh m rmul_2025
 scripts/simulation.sh map rmul_2025
 scripts/simulation.sh nav rmuc_2025 use_rviz:=False
+scripts/evaluate.sh simulation
 ```
 
 ## 构建
