@@ -14,6 +14,8 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <limits>
+
 #include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
 #include "pcl_conversions/pcl_conversions.h"
@@ -27,7 +29,8 @@ namespace small_gicp_relocalization
 SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptions & options)
 : Node("small_gicp_relocalization", options),
   result_t_(Eigen::Isometry3d::Identity()),
-  previous_result_t_(Eigen::Isometry3d::Identity())
+  previous_result_t_(Eigen::Isometry3d::Identity()),
+  baseline_tf_(Eigen::Isometry3d::Identity())
 {
   this->declare_parameter("num_threads", 4);
   this->declare_parameter("num_neighbors", 20);
@@ -38,6 +41,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("max_roll_pitch_step", 0.05);
   this->declare_parameter("max_tz_step", 0.02);
   this->declare_parameter("error_max",10.0);
+  this->declare_parameter("good_error_max", 0.5);
+  this->declare_parameter("baseline_translation_tolerance", 1.0);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
@@ -56,6 +61,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
   this->get_parameter("max_tz_step", max_tz_step_);
   this->get_parameter("error_max",error_max_);
+  this->get_parameter("good_error_max", good_error_max_);
+  this->get_parameter("baseline_translation_tolerance", baseline_translation_tolerance_);
   this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
@@ -76,7 +83,6 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   initial_result_t_ = result_t_;
   RCLCPP_INFO(this->get_logger(), "initial_tf:%f %f %f",init_pose_[0], init_pose_[1], init_pose_[2]);
   previous_result_t_ = result_t_;
-  last_good_result_t_ = result_t_;
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -221,18 +227,78 @@ void SmallGicpRelocalizationNode::performRegistration()
     register_->optimizer.max_iterations = 10;
   } 
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
-    previous_error_ = result.error;
-  if(!registration_initial_){
-    initial_result_t_=result.T_target_source;
-    registration_initial_=true;
-  }
-  if (result.converged) {
-    result_t_ = previous_result_t_ = result.T_target_source;
-  } else {
+  // 平均残差 = 总误差 / 内点数, 与内点数无关, 才能跨帧/跨块比较
+  const double mean_error = result.num_inliers > 0
+    ? result.error / static_cast<double>(result.num_inliers)
+    : std::numeric_limits<double>::infinity();
+  previous_error_ = mean_error;
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(), *this->get_clock(), 2000,
+    "GICP mean residual: %.4f (inliers: %zu, converged: %d)",
+    mean_error, result.num_inliers, static_cast<int>(result.converged));
+
+  if (!result.converged) {
     RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
+    accumulated_cloud_->clear();
+    return;
+  }
+
+  const Eigen::Isometry3d candidate = result.T_target_source;
+  Eigen::Vector3d robot_in_map;
+  const bool good = mean_error < good_error_max_ && !isOutOfMap(candidate, robot_in_map);
+
+  if (pending_initial_pose_) {
+    // RViz 手动给的初始位姿: 跳过惯性漂移检查(否则会被判成大幅跳变直接丢弃),
+    // 但仍然要过基准残差检查 —— 只有平均残差足够小且未越界, 才升级为新的基准 tf;
+    // 否则丢弃这次手动位姿, 保留原基准。
+    pending_initial_pose_ = false;
+    if (good) {
+      initial_result_t_ = baseline_tf_ = candidate;
+      result_t_ = previous_result_t_ = candidate;
+      registration_initial_ = true;
+      RCLCPP_INFO(this->get_logger(), "Initial pose accepted as the new baseline tf");
+    } else {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Initial pose rejected by baseline residual check (mean residual %.4f), "
+        "keeping the previous baseline",
+        mean_error);
+      result_t_ = previous_result_t_ = baseline_tf_;
+    }
+  } else if (!registration_initial_) {
+    // 基准 tf 取首次注册结果: init_pose 只是种子, 可能离真值很远, 不能拿它当基准
+    baseline_tf_ = initial_result_t_ = candidate;
+    registration_initial_ = true;
+    result_t_ = previous_result_t_ = candidate;
+  } else {
+    applyInertialConstraint(candidate, mean_error);
   }
 
   accumulated_cloud_->clear();
+}
+
+bool SmallGicpRelocalizationNode::applyInertialConstraint(
+  const Eigen::Isometry3d & candidate, double mean_error)
+{
+  const double drift = (candidate.translation() - baseline_tf_.translation()).norm();
+  if (drift > baseline_translation_tolerance_) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Inertial constraint: candidate map->odom drifts %.2f m from the baseline (limit %.2f m), "
+      "discarding it and holding the baseline",
+      drift, baseline_translation_tolerance_);
+    result_t_ = previous_result_t_ = baseline_tf_;
+    return false;
+  }
+
+  result_t_ = previous_result_t_ = candidate;
+  // 只有"效果好"(平均残差很小)且没越界的一次重定位, 才被采纳为新的基准 tf;
+  // 基准是越界/惯性回退的目标, 必须保证它本身是可信的。
+  Eigen::Vector3d robot_in_map;
+  if (mean_error < good_error_max_ && !isOutOfMap(candidate, robot_in_map)) {
+    baseline_tf_ = candidate;
+  }
+  return true;
 }
 
 void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t)
@@ -284,17 +350,15 @@ void SmallGicpRelocalizationNode::publishTransform()
   }
   checkRegistration(result_t_);
 
-  // 越界: 不发布这次发散的 tf, 回退到上一次在界内的 map->odom (基准),
+  // 越界: 不发布这次发散的 tf, 回退到基准 tf (只在界内且残差很小的一次结果),
   // 同时把 GICP 的种子也一起重置, 免得下一轮还从越界位姿起步。
   Eigen::Vector3d robot_in_map;
   if (isOutOfMap(result_t_, robot_in_map)) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
-      "Relocalization leaves the map (x=%.2f, y=%.2f), holding last in-map map->odom",
+      "Relocalization leaves the map (x=%.2f, y=%.2f), holding the baseline map->odom",
       robot_in_map.x(), robot_in_map.y());
-    result_t_ = previous_result_t_ = last_good_result_t_;
-  } else {
-    last_good_result_t_ = result_t_;
+    result_t_ = previous_result_t_ = baseline_tf_;
   }
   
   geometry_msgs::msg::TransformStamped transform_stamped;
@@ -338,6 +402,8 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
+    // 人工给定的初始位姿先只作为下一次注册的种子, 由基准残差检查决定是否升级为基准 tf
+    pending_initial_pose_ = true;
     previous_result_t_ = result_t_ = map_to_odom;
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(

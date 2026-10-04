@@ -49,12 +49,19 @@ private:
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void checkRegistration(Eigen::Isometry3d& result_t);
+  /// @brief 惯性约束: 候选 tf 相对基准 tf 的平移偏差过大时, 舍弃本次变换并回到基准;
+  ///        平均残差小于 good_error_max_ 且未越界的一次重定位则被采纳为新的基准 tf。
+  ///        会直接更新 result_t_ / previous_result_t_。
+  /// @return true 表示采纳本次结果, false 表示已回退到基准
+  bool applyInertialConstraint(const Eigen::Isometry3d & candidate, double mean_error);
   /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
 
   bool registration_initial_=false;
+  /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准
+  bool pending_initial_pose_{false};
   int num_threads_;
   int num_neighbors_;
   int max_iterations_;
@@ -64,8 +71,10 @@ private:
   double max_roll_pitch_step_;
   double max_tz_step_;
   double error_max_;
+  double good_error_max_;
+  double baseline_translation_tolerance_;
   double map_boundary_margin_;
-  double previous_error_{0.0};
+  double previous_error_{0.0};  ///< 上一次注册的平均残差 (error / num_inliers)
   std::vector<double> init_pose_;
 
   std::string map_frame_;
@@ -79,7 +88,9 @@ private:
   Eigen::Isometry3d result_t_;
   Eigen::Isometry3d initial_result_t_;
   Eigen::Isometry3d previous_result_t_;
-  Eigen::Isometry3d last_good_result_t_;
+  /// @brief 唯一的基准 tf: 最近一次"残差很小且未越界"的重定位结果,
+  ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
+  Eigen::Isometry3d baseline_tf_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
   Eigen::Vector3d map_min_bound_;
