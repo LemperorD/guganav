@@ -53,10 +53,12 @@
 #ifndef PB_NAV2_PLUGINS__LAYERS__OBSTACLE_LAYER_LOCAL_HPP_
 #define PB_NAV2_PLUGINS__LAYERS__OBSTACLE_LAYER_LOCAL_HPP_
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "laser_geometry/laser_geometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #pragma GCC diagnostic push
@@ -138,6 +140,24 @@ public:
    * @brief 该图层是否需要处理清除操作
    */
   bool isClearable() override { return true; }
+
+  /**
+   * @brief 判断全局坐标系参考变换的两次采样差异是否超过阈值
+   * @param dx 平移在 X 方向的增量
+   * @param dy 平移在 Y 方向的增量
+   * @param d_yaw 偏航角增量（弧度，调用方无需归一）
+   * @param translation_threshold 平移阈值
+   * @param yaw_threshold 偏航角阈值
+   * @return 任一方向超过阈值返回 true
+   */
+  // 仅供测试使用
+  static bool tfJumpExceedsThresholds(
+    double dx, double dy, double d_yaw, double translation_threshold, double yaw_threshold)
+  {
+    // 角度差先归一到 ±π：定位在 -π/π 附近修正时，原始差值会接近 2π
+    const double wrapped_yaw = std::remainder(d_yaw, 2.0 * M_PI);
+    return std::hypot(dx, dy) > translation_threshold || std::fabs(wrapped_yaw) > yaw_threshold;
+  }
 
   /**
    * @brief 检测到参数变化时执行的回调
@@ -227,6 +247,14 @@ protected:
     double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y,
     double * max_x, double * max_y);
 
+  /**
+   * @brief 检查全局系参考变换（如 map→odom）是否跳变，跳变时清空本层累积的障碍标记
+   *
+   * 定位发生修正时 map→odom 会突然变化，此前按旧变换写入本层的障碍标记全部落在错误位置。
+   * 跳变时按 reset() 的流程丢弃这些标记，让代价地图按新变换重建。
+   */
+  void checkGlobalFrameJump();
+
   std::string global_frame_;    ///< @brief 代价地图使用的全局坐标系
   double min_obstacle_height_;  ///< @brief 障碍物最小高度
   double max_obstacle_height_;  ///< @brief 障碍物最大高度
@@ -255,6 +283,35 @@ protected:
   bool rolling_window_;
   bool was_reset_;
   int combination_method_;
+
+  // ── 全局系参考变换（map→odom）跳变检测 ──────────────────────────────
+  /// @brief 是否启用跳变重置
+  bool tf_jump_reset_enabled_{false};
+  /// @brief 跳变检测所观察的子坐标系（父坐标系取本层的 global_frame_）
+  std::string tf_jump_child_frame_{"odom"};
+  /// @brief 平移跳变阈值（米）
+  double tf_jump_translation_threshold_{0.05};
+  /// @brief 偏航跳变阈值（弧度）
+  double tf_jump_yaw_threshold_{0.05};
+  /// @brief 两次重置之间的最短间隔（秒），避免定位轻微抖动反复清图
+  double tf_jump_min_interval_{2.0};
+  /// @brief 跳变重置时是否把本周期更新窗口扩到整张图，使主代价地图里的旧标记一并被重置
+  bool tf_jump_full_window_{true};
+  /// @brief 跳变重置后丢弃观测的周期数（缓冲里的点云是按旧变换写入全局系的）
+  int tf_jump_skip_marking_cycles_{1};
+  /// @brief 是否已记录参考变换
+  bool has_tf_jump_ref_{false};
+  /// @brief 上一次采样的参考变换
+  double tf_jump_ref_x_{0.0};
+  double tf_jump_ref_y_{0.0};
+  double tf_jump_ref_yaw_{0.0};
+  /// @brief 上一次跳变重置的时刻
+  rclcpp::Time tf_jump_reset_time_{0, 0, RCL_ROS_TIME};
+  bool has_tf_jump_reset_time_{false};
+  /// @brief 剩余需要丢弃观测的周期数
+  int skip_observations_cycles_{0};
+  /// @brief 本周期是否把更新窗口扩到整张图
+  bool force_full_window_{false};
 };
 
 }  // namespace pb_nav2_costmap_2d
