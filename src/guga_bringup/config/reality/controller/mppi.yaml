@@ -38,8 +38,8 @@ controller_server:
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
       model_dt: 0.166666667
       batch_size: 1200
-      vx_std: 0.5
-      vy_std: 0.5
+      vx_std: 0.3
+      vy_std: 0.3
       wz_std: 1.0
       vx_max: 2.5
       vx_min: -2.5
@@ -143,7 +143,6 @@ local_costmap:
       # 与控制器 profile 无关的节点级参数（坐标系、尺寸、频率、robot_radius、
       # static_layer）统一放在 base.yaml；本文件只保留 profile 之间的差异。
       robot_base_frame: base_footprint_nonrotating
-
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
         enabled: true
