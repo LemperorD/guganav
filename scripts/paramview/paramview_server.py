@@ -112,7 +112,7 @@ def load_baseline(mode, controller, planner):
 class ParamTarget:
     """一个被调参的节点：一次批量读，一次写一个。"""
 
-    def __init__(self, spec, node, descriptions):
+    def __init__(self, spec, node, descriptions, graph=None):
         if ":" in spec:
             node_name, prefix = spec.split(":", 1)
         else:
@@ -120,6 +120,7 @@ class ParamTarget:
         self.node_name = node_name.strip("/")
         self.prefix = prefix.strip()
         self.descriptions = descriptions
+        self.graph = graph
         self.names = []
         self.values = {}
         self.read_ms = None
@@ -140,7 +141,18 @@ class ParamTarget:
         from rcl_interfaces.srv import ListParameters, GetParameters
 
         if not self.get_client.service_is_ready():
-            self.error = f"未发现 /{self.node_name}/get_parameters"
+            hint = ""
+            if self.graph is not None:
+                matched = [n for n in self.graph.get("nodes", []) if self.node_name in n]
+                if matched:
+                    hint = "；图里有同名节点：" + ", ".join(matched[:3]) + "（可能是命名空间不同，--target 里带上前缀）"
+                else:
+                    hint = (
+                        f"；图里共 {len(self.graph.get('nodes', []))} 个节点，没有名字含 "
+                        f"{self.node_name} 的节点（ROS_DOMAIN_ID={self.graph['domain_id']}、"
+                        f"ROS_LOCALHOST_ONLY={self.graph['localhost_only']}）"
+                    )
+            self.error = f"未发现 /{self.node_name}/get_parameters{hint}"
             return
         started = time.time()
         names = set()
@@ -332,6 +344,25 @@ def rcl_interfaces_srv_list():
     return ListParameters
 
 
+def graph_summary(node):
+    """服务端当前能看到的 ROS 图。用于把"未发现服务"分成
+    发现不到节点（DDS/域/网络）与名字写错（命名空间）两种。"""
+    nodes = []
+    try:
+        for name, namespace in node.get_node_names_and_namespaces():
+            full = f"{namespace.rstrip('/')}/{name}" if namespace not in ("", "/") else f"/{name}"
+            nodes.append(full)
+    except Exception:
+        pass
+    nodes.sort()
+    return {
+        "nodes": nodes,
+        "domain_id": os.environ.get("ROS_DOMAIN_ID", "0"),
+        "localhost_only": os.environ.get("ROS_LOCALHOST_ONLY", "0"),
+        "rmw": os.environ.get("RMW_IMPLEMENTATION", "默认"),
+    }
+
+
 class App:
     def __init__(self, targets, node, hz, baseline_args=None):
         self.targets = targets
@@ -348,13 +379,16 @@ class App:
             return {
                 "type": "params",
                 "stamp": self.last_refresh,
+                "graph": graph_summary(self.node),
                 "targets": [target.snapshot() for target in self.targets],
             }
 
     def refresh_once(self):
         if any(self.baseline_args):
             self.baseline = load_baseline(*self.baseline_args)
+        graph = graph_summary(self.node)
         for target in self.targets:
+            target.graph = graph
             try:
                 target.refresh(target.descriptions)
             except Exception as exc:  # 单个目标出错不应影响其它目标
@@ -389,6 +423,10 @@ def make_app(args):
     @routes.get("/")
     async def index(_request):
         return web.FileResponse(html_path)
+
+    @routes.get("/api/graph")
+    async def api_graph(_request):
+        return web.json_response(graph_summary(node))
 
     @routes.get("/api/baseline")
     async def api_baseline(_request):
@@ -474,7 +512,7 @@ def make_app(args):
 
     application.on_startup.append(start_push)
     application.on_cleanup.append(stop_push)
-    return application
+    return application, node
 
 
 def main():
@@ -511,9 +549,15 @@ def main():
     if not args.list:
         args.list = [os.path.join(WS_ROOT, "scripts/params_list/mppi_para.txt")]
 
-    application = make_app(args)
+    application, node = make_app(args)
     print(f"打开浏览器访问: http://{args.host}:{args.port}", flush=True)
     print("目标: " + ", ".join(args.target), flush=True)
+    env = graph_summary(node)
+    print(
+        f"ROS 环境: ROS_DOMAIN_ID={env['domain_id']} ROS_LOCALHOST_ONLY={env['localhost_only']} "
+        f"RMW={env['rmw']}；当前可见节点 {len(env['nodes'])} 个",
+        flush=True,
+    )
     web.run_app(application, host=args.host, port=args.port, print=None)
 
 
