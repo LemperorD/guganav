@@ -48,7 +48,7 @@ private:
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
-  void checkRegistration(Eigen::Isometry3d& result_t);
+  void regulateRegistration(Eigen::Isometry3d& result_t);
   /// @brief 惯性约束: 候选 tf 相对基准 tf 的平移偏差过大时, 舍弃本次变换并回到基准;
   ///        good 为真(配准质量达标)的一次重定位则被采纳为新的基准 tf。
   ///        基准若来自手动定位(baseline_is_manual_), 则不设漂移上限, 允许注册把它修正回来。

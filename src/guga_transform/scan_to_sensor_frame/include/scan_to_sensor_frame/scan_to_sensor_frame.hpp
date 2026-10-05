@@ -96,6 +96,8 @@ private:
   double min_odometry_dt_{1e-3};
   double max_linear_velocity_{10.0};
   double max_angular_velocity_{20.0};
+  /// @brief 临时平地模式: 为真时把 odom->base_footprint 的 z 强制为 0, 屏蔽 point_lio 的 z 漂移
+  bool zero_base_z_{false};
 
 private:  // 优化: 使用单独的四个线程执行本功能包的四个并行任务
   // 线程内调用的成员变量

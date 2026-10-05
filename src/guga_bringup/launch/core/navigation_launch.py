@@ -108,7 +108,7 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Full path to a single params file override (disables 3-file merge)",
+        description="Full path to a single params file override (disables 1.0le merge)",
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -282,7 +282,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }
@@ -395,7 +395,7 @@ def generate_launch_description():
                         ),
                         "init_spin_speed": PythonExpression(
                             [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
+                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
                             ]
                         ),
                     }

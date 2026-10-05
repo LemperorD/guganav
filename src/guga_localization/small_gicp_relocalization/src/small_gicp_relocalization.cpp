@@ -124,7 +124,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
 {
-  if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {
+  if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {//语义不明确
     RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", file_name.c_str());
     return;
   }
@@ -161,7 +161,7 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   pcl::PointXYZ max_bound;
   pcl::getMinMax3D(*global_map_, min_bound, max_bound);
   map_min_bound_ = min_bound.getVector3fMap().cast<double>();
-  map_max_bound_ = max_bound.getVector3fMap().cast<double>();
+  map_max_bound_ = max_bound.getVector3fMap().cast<double>();//能否一步到位
   has_map_bounds_ = true;
   RCLCPP_INFO_STREAM(
     this->get_logger(),
@@ -210,7 +210,7 @@ void SmallGicpRelocalizationNode::performRegistration()
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
     *accumulated_cloud_, registered_leaf_size_);
 
-  small_gicp::estimate_covariances_omp(*source_, num_neighbors_, num_threads_);
+  small_gicp::estimate_covariances_omp(*source_, num_neighbors_, num_threads_);//考虑突变后reset
 
   source_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
     source_, small_gicp::KdTreeBuilderOMP(num_threads_));
@@ -218,7 +218,8 @@ void SmallGicpRelocalizationNode::performRegistration()
   if (!source_ || !source_tree_) {
     return;
   }
-
+  //持有者不应该知道被持有类的内部结构
+  //benchmark是否可用
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_roll_pitch_step = max_roll_pitch_step_;
@@ -321,6 +322,22 @@ void SmallGicpRelocalizationNode::performRegistration()
     applyInertialConstraint(candidate, good);
   }
 
+  // 基准误差过大 -> 不再信任它: 作废, 回到"无基准"状态, 等下一次合格结果或手动位姿重建。
+  // 期间对外继续发布最后这个基准(冻结), 不会把发散的候选漏出去。
+  if (registration_initial_ && rmse > error_max_) {
+    registration_initial_ = false;
+    baseline_is_manual_ = false;
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Baseline error too large (RMSE %.4f > %.2f), dropping the baseline", rmse, error_max_);
+  }
+
+  // 对外发布的一直是基准 tf, 候选(哪怕被采纳)只用于刷新基准, 绝不直接发布;
+  // 否则每轮 GICP 候选都会把 map->odom 抖一次。没有基准时保持上一次发布值不变。
+  if (registration_initial_) {
+    result_t_ = baseline_tf_;
+  }
+
   accumulated_cloud_->clear();
 }
 
@@ -356,21 +373,24 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   return true;
 }
 
-void SmallGicpRelocalizationNode::checkRegistration(Eigen::Isometry3d& result_t)
+// NOTE: 发布路径改成"只发基准 tf"之后不再需要每帧重写位姿;
+// 而且这个函数把 eulerAngles(0,1,2)(= R = Rx*Ry*Rz)的角拿去按 Rz*Ry*Rx 重组,
+// 只要 roll/pitch 非零, 每次调用都会把旋转改坏一点。要重新启用必须先统一两侧约定。
+void SmallGicpRelocalizationNode::regulateRegistration(Eigen::Isometry3d& T)
 {
-    Eigen::Isometry3d& T=result_t;
-    Eigen::Vector3d initial_rpy=initial_result_t_.linear().eulerAngles(0, 1, 2);
-    Eigen::Vector3d rpy = T.linear().eulerAngles(0, 1, 2);
-    if(fabs(rpy[2]-initial_rpy[2])>=0.78){
-      
-      rpy[2]=initial_rpy[2];
-    }
-    T.linear()=
-    Eigen::AngleAxisd(rpy[2], Eigen::Vector3d::UnitZ()) *
-    Eigen::AngleAxisd(rpy[1], Eigen::Vector3d::UnitY()) *
-    Eigen::AngleAxisd(rpy[0], Eigen::Vector3d::UnitX()) 
+  // 保留当前旋转中的 yaw
+  const double yaw = std::atan2(
+    T.linear()(1, 0),
+    T.linear()(0, 0));
+
+  // z 位置置零
+  T.translation().z() = 0.0;
+
+  // 只保留 yaw，roll = pitch = 0
+  T.linear() =
+    Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ())
     .toRotationMatrix();
-  }
+}
 
 bool SmallGicpRelocalizationNode::isOutOfMap(
   const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const
@@ -400,30 +420,25 @@ bool SmallGicpRelocalizationNode::isOutOfMap(
 
 void SmallGicpRelocalizationNode::publishTransform()
 {
-  if (result_t_.matrix().isZero()) {
+  // 只决定"发什么": 有基准就发基准, 还没定位出基准时才退回 result_t_(init_pose)。
+  // 不回写 result_t_ / previous_result_t_ —— previous_result_t_ 是 2Hz 注册的迭代种子,
+  // 让 20Hz 的发布循环去改它会和注册互相抢状态。
+  Eigen::Isometry3d to_publish = registration_initial_ ? baseline_tf_ : result_t_;
+
+  regulateRegistration(to_publish);
+  if (to_publish.matrix().isZero()) {
     return;
   }
-  checkRegistration(result_t_);
-
-  // 越界: 不发布这次发散的 tf, 回退到基准 tf (只在界内且残差很小的一次结果),
-  // 同时把 GICP 的种子也一起重置, 免得下一轮还从越界位姿起步。
-  Eigen::Vector3d robot_in_map;
-  if (isOutOfMap(result_t_, robot_in_map)) {
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(), *this->get_clock(), 2000,
-      "Relocalization leaves the map (x=%.2f, y=%.2f), holding the baseline map->odom",
-      robot_in_map.x(), robot_in_map.y());
-    result_t_ = previous_result_t_ = baseline_tf_;
-  }
   
+
   geometry_msgs::msg::TransformStamped transform_stamped;
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615
   transform_stamped.header.stamp = last_scan_time_ + rclcpp::Duration::from_seconds(0.1);
   transform_stamped.header.frame_id = map_frame_;
   transform_stamped.child_frame_id = odom_frame_;
 
-  const Eigen::Vector3d translation = result_t_.translation();
-  const Eigen::Quaterniond rotation(result_t_.rotation());
+  const Eigen::Vector3d translation = to_publish.translation();
+  const Eigen::Quaterniond rotation(to_publish.rotation());
 
   transform_stamped.transform.translation.x = translation.x();
   transform_stamped.transform.translation.y = translation.y();
@@ -432,7 +447,6 @@ void SmallGicpRelocalizationNode::publishTransform()
   transform_stamped.transform.rotation.y = rotation.y();
   transform_stamped.transform.rotation.z = rotation.z();
   transform_stamped.transform.rotation.w = rotation.w();
-
   tf_broadcaster_->sendTransform(transform_stamped);
 }
 

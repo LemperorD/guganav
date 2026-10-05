@@ -93,6 +93,7 @@ scan_to_sensor_frame:
     min_odometry_dt: 0.001
     max_linear_velocity: 10.0
     max_angular_velocity: 20.0
+    zero_base_z: True # 临时平地模式: 锁 odom->base_footprint 的 z=0, 屏蔽 point_lio 的 z 漂移; 测完关掉
 
 terrain_analysis:
   ros__parameters:
@@ -121,12 +122,12 @@ small_gicp_relocalization:
     registered_leaf_size: 0.05
     max_dist_sq: 6.0
     max_iterations: 100
-    max_roll_pitch_step: 0.002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
-    max_tz_step: 0.0001 # 单次迭代 tz 增量的大小上限(m)，0 关闭
+    max_roll_pitch_step: 0.00002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
+    max_tz_step: 0.000001 # 单次迭代 tz 增量的大小上限(m)，0 关闭
     map_boundary_margin: 1.0 # 位姿超出先验地图外接框的允许余量(m)，超出则回退到基准 tf
-    error_max: 0.6 # 迭代脉冲触发上界: 上一帧 RMSE 超过该值(或内点率低于 good_inlier_ratio)时本次迭代上限用 max_iterations, 两者都达标才用 10
-    baseline_translation_tolerance: 4.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
-    good_error_max: 0.4 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
+    error_max: 1.0 # 迭代脉冲触发上界: 上一帧 RMSE 超过该值(或内点率低于 good_inlier_ratio)时本次迭代上限用 max_iterations, 两者都达标才用 10
+    baseline_translation_tolerance: 6.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
+    good_error_max: 0.7 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
     good_inlier_ratio: 0.99 # 内点率下限，只有 RMSE 达标且内点率高于该值、且未越界的结果才能成为基准 tf，需按日志标定
     map_frame: "map"
     odom_frame: "odom"

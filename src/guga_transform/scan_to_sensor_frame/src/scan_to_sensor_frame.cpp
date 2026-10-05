@@ -18,6 +18,7 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
   this->declare_parameter<double>("min_odometry_dt", 1e-3);
   this->declare_parameter<double>("max_linear_velocity", 10.0);
   this->declare_parameter<double>("max_angular_velocity", 20.0);
+  this->declare_parameter<bool>("zero_base_z", false);
 
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("base_frame", base_frame_);
@@ -25,6 +26,7 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
   this->get_parameter("min_odometry_dt", min_odometry_dt_);
   this->get_parameter("max_linear_velocity", max_linear_velocity_);
   this->get_parameter("max_angular_velocity", max_angular_velocity_);
+  this->get_parameter("zero_base_z", zero_base_z_);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -93,10 +95,17 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
   tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, last_pcd_stamp_);
   tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
 
+  tf2::Transform tf_odom_to_chassis = tf_odom_to_lidar_ * tf_lidar_to_chassis;
+  if (zero_base_z_) {
+    // 平地模式: 只保留 x/y, 把 base_footprint 锁在 odom 的 z=0 平面上,
+    // 让 point_lio 的 z 漂移不进入 odom->base_footprint。
+    tf_odom_to_chassis.setOrigin(tf2::Vector3(
+      tf_odom_to_chassis.getOrigin().x(), tf_odom_to_chassis.getOrigin().y(), 0.0));
+  }
   {
     std::lock_guard<std::mutex> lock(chassis_tf_mutex_);
     std::lock_guard<std::mutex> lock2(chassis_odom_mutex_);
-    tf_odom_to_chassis_ = tf_odom_to_lidar_ * tf_lidar_to_chassis;
+    tf_odom_to_chassis_ = tf_odom_to_chassis;
     chassis_odom_ready_ = true;
     chassis_tf_ready_ = true;
   }
