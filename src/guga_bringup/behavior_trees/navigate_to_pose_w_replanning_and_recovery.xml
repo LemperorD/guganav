@@ -3,7 +3,7 @@
       main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <RecoveryNode name="NavigateRecovery"
-                  number_of_retries="10">
+                  number_of_retries="20">
       <PipelineSequence name="NavigateWithReplanning">
         <RateController hz="1.25">
           <ComputePathToPose goal="{goal}"
@@ -15,30 +15,12 @@
       </PipelineSequence>
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
-        <ForceSuccess name="RecoveryAttempt">
-          <RoundRobin name="RecoveryActions">
-            <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
-                                service_name="local_costmap/clear_entirely_local_costmap"/>
-            <Wait wait_duration="1"/>
-            <BackUp backup_dist="0.4"
-                    backup_speed="0.5"/>
-          </RoundRobin>
-        </ForceSuccess>
       </ReactiveFallback>
     </RecoveryNode>
   </BehaviorTree>
 
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
-    <Action ID="BackUp"
-            editable="true">
-      <input_port name="backup_dist"/>
-      <input_port name="backup_speed"/>
-    </Action>
-    <Action ID="ClearEntireCostmap"
-            editable="true">
-      <input_port name="service_name"/>
-    </Action>
     <Action ID="ComputePathToPose"
             editable="true">
       <input_port name="goal"/>
@@ -62,12 +44,6 @@
              editable="true">
       <input_port name="number_of_retries"/>
     </Control>
-    <Control ID="RoundRobin"
-             editable="true"/>
-    <Action ID="Wait"
-            editable="true">
-      <input_port name="wait_duration"/>
-    </Action>
   </TreeNodesModel>
 
 </root>
