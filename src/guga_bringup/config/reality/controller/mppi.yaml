@@ -196,7 +196,15 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.364 # 实车 MPPI 保守起步（仿真 0.40）
+        # 原为 0.364，小于 robot_radius(0.369) 即 inscribed 半径：膨胀区里全部是 253
+        # （INSCRIBED），而 CostCritic 与 ObstaclesCritic 都把 253 直接判为碰撞，于是
+        # 机器人一进膨胀区，每条候选轨迹的首点就落在 253 上，全部轨迹作废、fail_flag
+        # 置位，优化器 reset 一次后抛 "Optimizer fail to compute path"，控制器停住。
+        # 取 0.60 之后，0.369～0.60 之间是有梯度的软代价区
+        # （253 × exp(-4.0 × (d - 0.369))：0.45 m 处约 183，0.60 m 处约 100），
+        # 机器人可以进入这一带而不再被判碰撞；253 区仍等于车体接触区。
+        # 硬碰撞边界由 robot_radius 决定，调大本条不压缩可通行的窄道宽度。
+        inflation_radius: 0.60
 
 global_costmap:
   global_costmap:
