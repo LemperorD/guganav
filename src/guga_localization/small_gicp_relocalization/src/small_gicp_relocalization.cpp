@@ -247,7 +247,7 @@ void SmallGicpRelocalizationNode::performRegistration()
     "GICP RMSE: %.4f, inlier ratio: %.2f (inliers: %zu, converged: %d)",
     rmse, inlier_ratio, result.num_inliers, static_cast<int>(result.converged));
 
-  if (!result.converged) {
+  if (!result.converged&&baseline_is_manual_) {
     RCLCPP_DEBUG(this->get_logger(), "GICP did not converge.");
     if (pending_initial_pose_) {
       // 手动给的种子连收敛都做不到, 就必然过不了 good 这道质量门, 直接丢弃:
@@ -286,18 +286,22 @@ void SmallGicpRelocalizationNode::performRegistration()
         source, rmse, inlier_ratio);
     };
 
-  if (pending_initial_pose_) {
+  if (pending_initial_pose_) 
+{
     // RViz 手动给的初始位姿: 跳过惯性漂移检查(否则会被判成大幅跳变直接丢弃),
     // 但仍然要过基准残差检查 —— 只有 RMSE+内点率达标且未越界, 才升级为新的基准 tf。
     // 走到这里必然已经有基准: 没有基准的手动位姿在 initialPoseCallback 里就直接生效了。
     pending_initial_pose_ = false;
-    if (good) {
+    if (good) 
+    {
       initial_result_t_ = baseline_tf_ = candidate;
       result_t_ = previous_result_t_ = candidate;
       registration_initial_ = true;
       baseline_is_manual_ = false;
       RCLCPP_INFO(this->get_logger(), "Initial pose accepted as the new baseline tf");
-    } else {
+    } 
+    else
+    {
       RCLCPP_WARN(
         this->get_logger(),
         "Initial pose rejected by baseline check (RMSE %.4f, inlier ratio %.2f), "
@@ -305,26 +309,34 @@ void SmallGicpRelocalizationNode::performRegistration()
         rmse, inlier_ratio);
       result_t_ = previous_result_t_ = baseline_tf_;
     }
-  } else if (baseline_unset) {
+} 
+  else if (baseline_unset) 
+  {
     // 首次基准初始化同样要过质量门: init_pose 只是种子, 可能离真值很远,
     // 只有 RMSE+内点率达标且未越界的第一次重定位才冻结为基准 tf;
     // 不合格的候选不发布也不冻结, 先留着收敛, 等出现合格结果再更新基准。
-    if (good) {
+    if (good) 
+    {
       baseline_tf_ = initial_result_t_ = candidate;
       registration_initial_ = true;
       baseline_is_manual_ = false;
       result_t_ = previous_result_t_ = candidate;
       RCLCPP_INFO(this->get_logger(), "First registration accepted as the new baseline tf");
-    } else {
+    } 
+    else 
+    {
       hold_candidate_until_good(candidate, "First registration");
     }
-  } else {
+  } 
+  else 
+  {
     applyInertialConstraint(candidate, good);
   }
 
   // 基准误差过大 -> 不再信任它: 作废, 回到"无基准"状态, 等下一次合格结果或手动位姿重建。
   // 期间对外继续发布最后这个基准(冻结), 不会把发散的候选漏出去。
-  if (registration_initial_ && rmse > error_max_) {
+  if (registration_initial_ && rmse > error_max_) 
+  {
     registration_initial_ = false;
     baseline_is_manual_ = false;
     RCLCPP_WARN_THROTTLE(
@@ -334,7 +346,8 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   // 对外发布的一直是基准 tf, 候选(哪怕被采纳)只用于刷新基准, 绝不直接发布;
   // 否则每轮 GICP 候选都会把 map->odom 抖一次。没有基准时保持上一次发布值不变。
-  if (registration_initial_) {
+  if (registration_initial_)
+  {
     result_t_ = baseline_tf_;
   }
 

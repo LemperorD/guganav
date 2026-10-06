@@ -629,7 +629,7 @@ set +e
 ros2 launch guga_bringup simulation_launch.py \
   world:="$world" \
   slam:="$slam" \
-  "${launch_args[@]}" | grep RMSE
-launch_status=$? 
+  "${launch_args[@]}"
+launch_status=$?
 set -e
 exit_with_launch_status "$launch_status"
