@@ -195,7 +195,7 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
   if(!registration_initial_&&accumulation_reset_){
     accumulated_cloud_ ->clear();
     accumulation_reset_=true;
-  }
+  }//如果配准初始化没有成功找到基准tf,意味着机器人发生大幅漂移，需要重置历史点云
   *accumulated_cloud_ += *scan;
 }
 
@@ -222,7 +222,6 @@ void SmallGicpRelocalizationNode::performRegistration()
   if (!source_ || !source_tree_) {
     return;
   }
-  //持有者不应该知道被持有类的内部结构
   //benchmark是否可用
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
