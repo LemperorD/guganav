@@ -47,7 +47,43 @@
 
 <script>
 const main = document.getElementById('main');
-const state = { targets: [], baseline: null };
+const state = { targets: [], baseline: null, drafts: new Map() };
+const rows = new Map();
+
+function rowKey(target, name) {
+  return target + '\0' + name;
+}
+
+function refreshValues() {
+  const filter = document.getElementById('filter').value.trim().toLowerCase();
+  const onlyChanged = document.getElementById('only-changed').checked;
+  const visible = new Set();
+  for (const target of state.targets) {
+    for (const p of target.params) {
+      const key = rowKey(target.target, p.name);
+      const base = baselineValue(target, p.name);
+      const changed = base !== undefined && String(base) !== String(p.value);
+      const hay = (p.name + ' ' + p.description).toLowerCase();
+      if (filter && !hay.includes(filter)) continue;
+      if (onlyChanged && !changed) continue;
+      visible.add(key);
+      const row = rows.get(key);
+      if (!row) continue;
+      row.value.className = 'val' + (changed ? ' changed' : '');
+      row.value.textContent = fmt(p.value);
+      row.value.title = changed ? '配置值 ' + fmt(base) : '';
+      row.description.textContent = p.description || '';
+      if (document.activeElement !== row.input && !state.drafts.has(key)) {
+        row.input.value = fmt(p.value);
+      }
+    }
+  }
+  // New or removed parameters need a structural redraw. Defer it during editing.
+  if ([...rows.keys()].some(key => !visible.has(key)) ||
+      [...visible].some(key => !rows.has(key))) {
+    if (!main.contains(document.activeElement) && state.drafts.size === 0) render();
+  }
+}
 
 function fmt(v) {
   if (Array.isArray(v)) return '[' + v.join(', ') + ']';
@@ -71,6 +107,7 @@ async function loadBaseline() {
 function render() {
   const filter = document.getElementById('filter').value.trim().toLowerCase();
   const onlyChanged = document.getElementById('only-changed').checked;
+  rows.clear();
   main.innerHTML = '';
   for (const target of state.targets) {
     const section = document.createElement('section');
@@ -113,7 +150,9 @@ function render() {
       const tdEdit = document.createElement('td');
       tdEdit.className = 'edit';
       const input = document.createElement('input');
-      input.value = fmt(p.value);
+      const key = rowKey(target.target, p.name);
+      input.value = state.drafts.has(key) ? state.drafts.get(key) : fmt(p.value);
+      input.oninput = () => state.drafts.set(key, input.value);
       tdEdit.appendChild(input);
 
       const send = async () => {
@@ -125,10 +164,16 @@ function render() {
             body: JSON.stringify({ target: target.target, name: p.name, value: input.value })
           });
           const data = await res.json();
-          apply.textContent = data.ok ? '应用' : '应用';
           apply.className = data.ok ? '' : 'warn';
           apply.title = data.msg || '';
-          if (!data.ok) { tdEdit.appendChild(msgNode(data.msg)); }
+          if (data.ok) {
+            state.drafts.delete(key);
+            const current = state.targets.find(t => t.target === target.target);
+            if (current && data.params) current.params = data.params.params;
+            refreshValues();
+          } else {
+            tdEdit.appendChild(msgNode(data.msg));
+          }
         } catch (e) {
           tdEdit.appendChild(msgNode(String(e)));
         } finally {
@@ -140,6 +185,7 @@ function render() {
 
       tr.append(tdName, tdDesc, tdVal, tdBtn, tdEdit);
       tbody.appendChild(tr);
+      rows.set(key, { value: tdVal, description: tdDesc, input });
     }
     table.appendChild(tbody);
     section.appendChild(table);
@@ -180,7 +226,8 @@ function connect() {
       state.targets = data.targets;
       state.stamp = data.stamp;
       updateHeader();
-      render();
+      if (rows.size) refreshValues();
+      else render();
     } else if (data.type === 'result') {
       // 单条写入的反馈由行内提示展示，这里只更新数值
     }
@@ -192,7 +239,9 @@ document.getElementById('refresh').onclick = async () => {
   const data = await res.json();
   state.targets = data.targets;
   state.stamp = data.stamp;
-  updateHeader(); render();
+  updateHeader();
+  if (rows.size) refreshValues();
+  else render();
 };
 document.getElementById('filter').oninput = render;
 document.getElementById('only-changed').onchange = render;
