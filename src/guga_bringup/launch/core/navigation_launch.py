@@ -219,6 +219,11 @@ def generate_launch_description():
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=configured_params,
+                # 恢复动作（后退等）的速度也必须走与控制器同一条链路：
+                # cmd_vel_controller -> velocity_smoother -> nonrotating_vel_transform -> cmd_vel。
+                # 不重映射时 behavior_server 直发 cmd_vel（串口驱动那一侧），
+                # 自旋模式下方向没有做坐标变换，也绕过速度平滑与 /chassis_stop。
+                remappings=[("cmd_vel", "cmd_vel_controller")],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -348,6 +353,8 @@ def generate_launch_description():
                 plugin="behavior_server::BehaviorServer",
                 name="behavior_server",
                 parameters=configured_params,
+                # 同上：恢复动作的速度与控制器共用一条链路
+                remappings=[("cmd_vel", "cmd_vel_controller")],
             ),
             ComposableNode(
                 package="nav2_bt_navigator",

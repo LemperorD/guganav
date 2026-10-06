@@ -121,10 +121,13 @@ protected:
   bool escaping_initial_high_cost_{false};
 
   // parameters
+  std::string costmap_frame_;  ///< 方向判定所用代价地图的坐标系（空则取 global_frame）
   std::string service_name_;
   double max_radius_{1.0};
   double max_escape_distance_{0.5};
   double escape_clearance_{0.1};
+  int traverse_cost_threshold_{254};  ///< 射线允许穿越的代价上限（>= 视为真障碍）
+  bool relaxed_escape_enabled_{true};  ///< 严格脱困失败时是否放宽脱困距离重扫
   bool visualize_{false};
 };
 
