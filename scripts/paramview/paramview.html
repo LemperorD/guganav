@@ -41,13 +41,18 @@
   <span class="stat">连接 <b id="stat-ws">-</b></span>
   <input id="filter" placeholder="过滤参数名 / 说明" style="width:220px"/>
   <button id="refresh">全部重读</button>
+  <button id="save" class="primary">保存到配置</button>
+  <span id="save-msg" class="row-msg"></span>
   <label class="stat"><input type="checkbox" id="only-changed"/> 只看与配置不同的</label>
 </header>
 <main id="main"></main>
 
 <script>
 const main = document.getElementById('main');
-const state = { targets: [], baseline: null };
+const saveBtn = document.getElementById('save');
+const saveMsg = document.getElementById('save-msg');
+const state = { targets: [], baseline: null, writable: true };
+const PLACEHOLDER = '<robot_namespace>';
 
 function fmt(v) {
   if (Array.isArray(v)) return '[' + v.join(', ') + ']';
@@ -55,10 +60,38 @@ function fmt(v) {
   return v === null || v === undefined ? '' : String(v);
 }
 
+// 配置里写成 <robot_namespace>/topic 的参数，运行时可能已被节点换成带命名空间的
+// 全名；比较前先归一成占位符，否则这类参数会被一直标成"偏离配置"。
+function canonical(v, base, ns) {
+  if (typeof v !== 'string' || typeof base !== 'string' || !base.includes(PLACEHOLDER) || !ns) return v;
+  return v.startsWith(ns) ? PLACEHOLDER + v.slice(ns.length) : v;
+}
+
+function sameValue(a, b) {
+  if (typeof a === 'boolean' || typeof b === 'boolean') return a === b;
+  if (typeof a === 'number' && typeof b === 'number') return a === b;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((x, i) => sameValue(x, b[i]));
+  }
+  if (a === null || a === undefined || b === null || b === undefined) return a === b;
+  return String(a) === String(b);
+}
+
 function baselineValue(target, name) {
   if (!state.baseline) return undefined;
   const node = state.baseline[target.node];
   return node ? node[name] : undefined;
+}
+
+function isChanged(target, p) {
+  const base = baselineValue(target, p.name);
+  if (base === undefined) return false;
+  return !sameValue(canonical(base, base, target.namespace), canonical(p.value, base, target.namespace));
+}
+
+function setSaveMsg(text, ok) {
+  saveMsg.textContent = text;
+  saveMsg.className = ok ? 'row-msg msg-ok' : 'row-msg msg-bad';
 }
 
 async function loadBaseline() {
@@ -85,7 +118,7 @@ function render() {
 
     for (const p of target.params) {
       const base = baselineValue(target, p.name);
-      const changed = base !== undefined && String(base) !== String(p.value);
+      const changed = isChanged(target, p);
       const hay = (p.name + ' ' + p.description).toLowerCase();
       if (filter && !hay.includes(filter)) continue;
       if (onlyChanged && !changed) continue;
@@ -179,6 +212,10 @@ function connect() {
     if (data.type === 'params') {
       state.targets = data.targets;
       state.stamp = data.stamp;
+      state.writable = data.writable !== false;
+      saveBtn.disabled = !state.writable;
+      saveBtn.title = state.writable ? '把当前与配置不同的参数写回 yaml（下次启动生效）'
+                                     : '服务端以只读模式启动（--no-save），不能写回配置';
       updateHeader();
       render();
     } else if (data.type === 'result') {
@@ -196,6 +233,24 @@ document.getElementById('refresh').onclick = async () => {
 };
 document.getElementById('filter').oninput = render;
 document.getElementById('only-changed').onchange = render;
+
+saveBtn.onclick = async () => {
+  saveBtn.disabled = true;
+  setSaveMsg('正在写回…', true);
+  try {
+    const res = await fetch('/api/save', { method: 'POST' });
+    const data = await res.json();
+    setSaveMsg(data.msg || '', data.ok);
+    if (data.ok && data.baseline) {
+      state.baseline = data.baseline;
+      render();
+    }
+  } catch (e) {
+    setSaveMsg(String(e), false);
+  } finally {
+    saveBtn.disabled = !state.writable;
+  }
+};
 
 loadBaseline().then(connect);
 </script>

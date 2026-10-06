@@ -23,6 +23,7 @@
 接口：
     GET  /api/params            返回缓存快照（不触发服务调用）
     POST /api/set                {"target":..., "name":..., "value":...} 写单个参数
+    POST /api/save              把与配置不同的参数写回 yaml（下次启动生效）
     POST /api/refresh           立即重读一次
     WS   /ws                    周期性推送 {"type":"params", ...}，接收 {"type":"set_param", ...}
 """
@@ -32,6 +33,8 @@ import asyncio
 import glob
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -107,6 +110,148 @@ def load_baseline(mode, controller, planner):
                 flatten("", inner["ros__parameters"], params)
                 flat[f"{key}/{inner_key}"] = params
     return flat
+
+
+# ── 回写配置文件 ─────────────────────────────────────────────────
+# 调好的参数要保留到下次启动，就得写回 yaml。这里用行级替换：只改目标行
+# "键: 值" 里的值，缩进、键名与行内注释都原样保留。改用 yaml.safe_dump 重新
+# 序列化会丢掉文件里的说明性注释（reality/controller/mppi.yaml 有 60 多处），
+# 那些注释记录了取值理由，不能丢。写回前每个文件都备份一份。
+
+CONFIG_ROOT = "src/guga_bringup/config"
+PLACEHOLDER = "<robot_namespace>"
+_YAML_KEYWORDS = {"true", "false", "yes", "no", "on", "off", "null", "none", "~"}
+_PLAIN_SCALAR_RE = re.compile(r"^[A-Za-z0-9_./<>@+-]+$")
+_NUMBER_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
+_KEY_RE = re.compile(r"^(?P<indent> *)(?P<key>[^:#\n]+?):(?P<rest>.*)$")
+
+
+def config_layers(mode, controller, planner):
+    """三层参数文件，顺序与 scripts/param_merge.py 的合并顺序一致。"""
+    if not (mode and controller and planner):
+        return []
+    return [
+        os.path.join(WS_ROOT, CONFIG_ROOT, mode, "base.yaml"),
+        os.path.join(WS_ROOT, CONFIG_ROOT, mode, "controller", f"{controller}.yaml"),
+        os.path.join(WS_ROOT, CONFIG_ROOT, mode, "planner", f"{planner}.yaml"),
+    ]
+
+
+def yaml_paths(text):
+    """返回 {键路径: 行号}，用于定位要替换的那一行。
+
+    只按缩进与 "键:" 判断层级，不解析 yaml 语义：解释性注释、行内注释与
+    空行都保留在原位，行号也不会因嵌套结构而错位。以 - 开头的列表项不入栈，
+    所以列表内部的键不会出现在结果里（这些参数不参与回写）。
+    """
+    found = {}
+    stack = []
+    for lineno, line in enumerate(text.splitlines()):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("-"):
+            continue
+        match = _KEY_RE.match(line)
+        if match is None:
+            continue
+        indent = len(match.group("indent"))
+        key = match.group("key").strip().strip("\"'")
+        rest = match.group("rest")
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        path = tuple(item[1] for item in stack) + (key,)
+        found[path] = lineno
+        # 值部分为空说明下面是嵌套映射，这个键要压栈
+        if not rest.strip() or rest.lstrip().startswith("#"):
+            stack.append((indent, key))
+    return found
+
+
+def split_comment(rest):
+    """把 " 值  # 注释" 拆成值与该注释（含值后面原有的空白），引号内的 # 不算注释。"""
+    quote = ""
+    for index, char in enumerate(rest):
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char == "#" and index and rest[index - 1] in " \t":
+            value = rest[:index].rstrip()
+            return value, rest[len(value):]
+    return rest.rstrip(), ""
+
+
+def replace_scalar(line, literal):
+    """把 "  键: 旧值  # 注释" 里的值换成 literal，保留缩进、键名与注释。"""
+    match = _KEY_RE.match(line)
+    if match is None:
+        return line
+    rest = match.group("rest")
+    _, comment = split_comment(rest)
+    head = line[: len(line) - len(rest)]
+    return f"{head} {literal}{comment}"
+
+
+def format_scalar(value):
+    """按 yaml 标量写法输出当前值。布尔沿用文件里 True/False 的写法。"""
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(format_scalar(item) for item in value) + "]"
+    text = str(value)
+    # 像数字或 yaml 关键字的字符串必须加引号，否则写回去后类型就变了
+    if (
+        _PLAIN_SCALAR_RE.match(text)
+        and not _NUMBER_RE.match(text)
+        and text.lower() not in _YAML_KEYWORDS
+    ):
+        return text
+    return json.dumps(text, ensure_ascii=False)
+
+
+def namespace_for(graph, node_name):
+    """从 ROS 图里取该节点的命名空间。
+
+    yaml 里的 topic 写成 <robot_namespace>/terrain_map，节点加载时会换成带
+    命名空间的完整名字；比较与回写都要把这一步还原，否则每个模板参数都会被
+    误判成"偏离配置"，保存时还会把实际命名空间写死进配置文件。
+    """
+    suffix = "/" + node_name.strip("/")
+    for full in graph.get("nodes", []):
+        if full == suffix or full.endswith(suffix):
+            return full[: -len(suffix)]
+    return ""
+
+
+def canonical(value, base, namespace):
+    """把运行时值里已展开的命名空间还原成 <robot_namespace> 占位符。
+
+    配置里用占位符的参数，运行时值可能已被节点替换
+    （/red_standard_robot1/terrain_map），也可能仍是字面量；两种写法都归一成
+    占位符后即可与基线直接比较，回写时也保持模板不被写死。
+    """
+    if not isinstance(value, str) or not isinstance(base, str) or PLACEHOLDER not in base:
+        return value
+    if namespace and value.startswith(namespace):
+        return PLACEHOLDER + value[len(namespace):]
+    return value
+
+
+def same_value(left, right):
+    """比较运行时值与配置值。数值按数值比，避免 1 与 1.0 被判成不同。"""
+    if isinstance(left, bool) != isinstance(right, bool):
+        return False
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return float(left) == float(right)
+    if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)):
+        return len(left) == len(right) and all(
+            same_value(a, b) for a, b in zip(left, right)
+        )
+    return str(left) == str(right)
 
 
 class ParamTarget:
@@ -282,6 +427,7 @@ class ParamTarget:
             "target": f"{self.node_name}:{self.prefix}" if self.prefix else self.node_name,
             "node": self.node_name,
             "prefix": self.prefix,
+            "namespace": namespace_for(self.graph or {}, self.node_name),
             "read_ms": self.read_ms,
             "error": self.error,
             "params": entries,
@@ -364,12 +510,14 @@ def graph_summary(node):
 
 
 class App:
-    def __init__(self, targets, node, hz, baseline_args=None):
+    def __init__(self, targets, node, hz, baseline_args=None, writable=True):
         self.targets = targets
         self.node = node
         self.hz = hz
         self.baseline_args = baseline_args or (None, None, None)
         self.baseline = load_baseline(*self.baseline_args)
+        self.layer_files = config_layers(*self.baseline_args)
+        self.writable = writable
         self.clients = set()
         self.lock = threading.Lock()
         self.last_refresh = 0.0
@@ -379,6 +527,7 @@ class App:
             return {
                 "type": "params",
                 "stamp": self.last_refresh,
+                "writable": self.writable,
                 "graph": graph_summary(self.node),
                 "targets": [target.snapshot() for target in self.targets],
             }
@@ -395,6 +544,111 @@ class App:
                 target.error = f"{type(exc).__name__}: {exc}"
         self.last_refresh = time.time()
 
+    def save_params(self):
+        """把与配置基线不同的参数写回 yaml，返回接口用的结果字典。
+
+        只处理"配置文件里有、且当前值不同"的参数：节点声明了但配置文件没有
+        的名字用的是节点默认值，写进去会改变文件结构，一律跳过并报告。
+        """
+        if not self.writable:
+            return {"ok": False, "msg": "只读模式启动，未写回配置文件"}
+        if not self.layer_files:
+            return {
+                "ok": False,
+                "msg": "缺少 --baseline-mode/--baseline-controller/--baseline-planner，"
+                "无法确定写回哪个文件",
+            }
+
+        with self.lock:
+            texts = {}
+            index = {}
+            for path in self.layer_files:
+                if not os.path.exists(path):
+                    return {"ok": False, "msg": f"参数文件不存在：{path}"}
+                with open(path, encoding="utf-8") as handle:
+                    texts[path] = handle.read()
+                index[path] = yaml_paths(texts[path])
+
+            edits = {}
+            skipped = []
+            for target in self.targets:
+                namespace = namespace_for(target.graph or {}, target.node_name)
+                node_base = self.baseline.get(target.node_name) or {}
+                for name in target.names:
+                    if name not in node_base:
+                        continue
+                    base = node_base[name]
+                    current = canonical(target.values.get(name), base, namespace)
+                    if same_value(canonical(base, base, namespace), current):
+                        continue
+                    # 键路径：节点段 + ros__parameters + 参数名的层级段
+                    key_path = (
+                        tuple(target.node_name.split("/"))
+                        + ("ros__parameters",)
+                        + tuple(name.split("."))
+                    )
+                    # 合并语义是后者覆盖前者，改动就写到最后出现该参数的文件里
+                    path = None
+                    for candidate in reversed(self.layer_files):
+                        if key_path in index[candidate]:
+                            path = candidate
+                            break
+                    if path is None:
+                        skipped.append(
+                            {"name": name, "reason": "参数文件里没有这个名字，写回会改变文件结构"}
+                        )
+                        continue
+                    edits.setdefault(path, {})[key_path] = (name, current)
+
+            if not edits:
+                return {
+                    "ok": True,
+                    "msg": "当前值与配置一致，没有需要写回的参数",
+                    "files": [],
+                    "skipped": skipped,
+                }
+
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            # 同一秒内保存两次时另起一个目录，避免后一次覆盖前一次的备份
+            while os.path.exists(os.path.join(WS_ROOT, "log", "paramview_backup", stamp)):
+                stamp += "-1"
+            written = []
+            for path, items in edits.items():
+                lines = texts[path].splitlines(keepends=True)
+                for key_path, (_, value) in items.items():
+                    lineno = index[path][key_path]
+                    line = lines[lineno]
+                    newline = "\n" if line.endswith("\n") else ""
+                    lines[lineno] = replace_scalar(line.rstrip("\n"), format_scalar(value)) + newline
+                backup = os.path.join(
+                    WS_ROOT, "log", "paramview_backup", stamp,
+                    os.path.relpath(path, WS_ROOT),
+                )
+                os.makedirs(os.path.dirname(backup), exist_ok=True)
+                shutil.copy2(path, backup)
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write("".join(lines))
+                written.append(
+                    {
+                        "path": os.path.relpath(path, WS_ROOT),
+                        "count": len(items),
+                        "backup": os.path.relpath(backup, WS_ROOT),
+                        "params": sorted(name for name, _ in items.values()),
+                    }
+                )
+            # 基线跟着更新：写回之后这些参数就不再是"偏离配置"了
+            self.baseline = load_baseline(*self.baseline_args)
+
+        total = sum(item["count"] for item in written)
+        msg = "已写回 {} 个参数（{}），下次启动生效".format(
+            total, "；".join(f"{item['path']} {item['count']} 项" for item in written)
+        )
+        if skipped:
+            msg += "。跳过 {} 个：{}".format(
+                len(skipped), "；".join(f"{item['name']}（{item['reason']}）" for item in skipped)
+            )
+        return {"ok": True, "msg": msg, "files": written, "skipped": skipped}
+
     def refresh_loop(self):
         period = 1.0 / self.hz if self.hz > 0 else 0.5
         while True:
@@ -409,6 +663,7 @@ def make_app(args):
     app_state = App(
         targets, node, args.hz,
         (args.baseline_mode, args.baseline_controller, args.baseline_planner),
+        writable=not args.no_save,
     )
 
     # 不在这里等每个服务就绪：目标节点的 3 个服务各等一次会让页面迟迟打不开，
@@ -440,6 +695,14 @@ def make_app(args):
     async def api_refresh(_request):
         await asyncio.get_event_loop().run_in_executor(None, app_state.refresh_once)
         return web.json_response(app_state.snapshot())
+
+    @routes.post("/api/save")
+    async def api_save(_request):
+        result = await asyncio.get_event_loop().run_in_executor(None, app_state.save_params)
+        if result.get("ok"):
+            # 写回后基线已变，界面上的"偏离配置"高亮要跟着刷新
+            result["baseline"] = app_state.baseline
+        return web.json_response(result)
 
     @routes.post("/api/set")
     async def api_set(request):
@@ -542,6 +805,10 @@ def main():
     )
     parser.add_argument("--baseline-controller", default=None, help="参数基线：控制器 profile")
     parser.add_argument("--baseline-planner", default=None, help="参数基线：规划器 profile")
+    parser.add_argument(
+        "--no-save", action="store_true",
+        help="只读模式：禁止把参数写回配置文件（界面上的保存按钮会失效）",
+    )
     args = parser.parse_args()
 
     if not args.target:
@@ -558,6 +825,14 @@ def main():
         f"RMW={env['rmw']}；当前可见节点 {len(env['nodes'])} 个",
         flush=True,
     )
+    layers = config_layers(args.baseline_mode, args.baseline_controller, args.baseline_planner)
+    if layers and args.no_save:
+        print("只读模式：参数不会写回配置文件", flush=True)
+    elif layers:
+        print(
+            "保存写回: " + "、".join(os.path.relpath(path, WS_ROOT) for path in layers),
+            flush=True,
+        )
     web.run_app(application, host=args.host, port=args.port, print=None)
 
 
