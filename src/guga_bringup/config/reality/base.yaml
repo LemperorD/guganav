@@ -121,8 +121,8 @@ small_gicp_relocalization:
     registered_leaf_size: 0.05
     max_dist_sq: 6.0
     max_iterations: 100
-    max_roll_pitch_step: 0.00002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
-    max_tz_step: 0.00001 # 单次迭代 tz 增量的大小上限(m)，0 关闭
+    max_roll_pitch_step: 0.002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
+    max_tz_step: 0.001 # 单次迭代 tz 增量的大小上限(m)，0 关闭
     map_boundary_margin: 1.0 # 位姿超出先验地图外接框的允许余量(m)，超出则回退到基准 tf
     error_max: 0.3 # 迭代脉冲触发上界: 上一帧 RMSE 超过该值(或内点率低于 good_inlier_ratio)时本次迭代上限用 max_iterations, 两者都达标才用 10
     baseline_translation_tolerance: 2.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
