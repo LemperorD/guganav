@@ -192,6 +192,10 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr scan(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::fromROSMsg(*msg, *scan);
+  if(!registration_initial_&&accumulation_reset_){
+    accumulated_cloud_ ->clear();
+    accumulation_reset_=true;
+  }
   *accumulated_cloud_ += *scan;
 }
 
@@ -339,6 +343,7 @@ void SmallGicpRelocalizationNode::performRegistration()
   {
     registration_initial_ = false;
     baseline_is_manual_ = false;
+    accumulation_reset_=false;
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
       "Baseline error too large (RMSE %.4f > %.2f), dropping the baseline", rmse, error_max_);
