@@ -8,7 +8,7 @@ local_costmap:
 
       height: 10
 
-      robot_radius: 0.35
+      robot_radius: 0.369
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -57,7 +57,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
         cost_scaling_factor: 8.0
-        inflation_radius: 0.40 # 收紧安全余量（robot_radius 0.35 + 5cm），改善窄口通行
+        inflation_radius: 0.40 # 收紧安全余量（robot_radius 0.369 + 约 3cm），改善窄口通行
         num_threads: 4
 
 behavior_server:
