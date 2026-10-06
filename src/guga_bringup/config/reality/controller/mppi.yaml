@@ -36,10 +36,10 @@ controller_server:
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.166666667
+      model_dt: 0.1
       batch_size: 1200
-      vx_std: 0.3
-      vy_std: 0.3
+      vx_std: 0.25
+      vy_std: 0.25
       wz_std: 1.0
       vx_max: 2.5
       vx_min: -2.5
@@ -99,7 +99,7 @@ controller_server:
       CostCritic:
         enabled: true
         cost_power: 10
-        cost_weight: 12.0
+        cost_weight: 14.0
         critical_cost: 300.0
         consider_footprint: false
         collision_cost: 1000000.0
