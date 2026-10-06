@@ -97,7 +97,7 @@ def generate_launch_description():
         ),
     )
     declare_planner_cmd = DeclareLaunchArgument(
-        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
+        "planner", default_value="smac2d", choices=["jps", "smac2d", "smachybrid"],
         description="Global planner: jps, smac2d, or smachybrid",
     )
     declare_controller_cmd = DeclareLaunchArgument(
@@ -122,7 +122,8 @@ def generate_launch_description():
         description="Controller-diff params file (pid default, mppi available)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
-        "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
+        "planner_params_file",
+        default_value=default_params_file("planner/smac2d.yaml"),
         description="Planner-diff params file",
     )
 
