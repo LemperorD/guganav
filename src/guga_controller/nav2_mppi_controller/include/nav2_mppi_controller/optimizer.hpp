@@ -264,6 +264,8 @@ protected:
   models::Trajectories generated_trajectories_;  ///< 本轮生成的候选轨迹。
   models::Path path_;  ///< 当前局部参考路径张量。
   xt::xtensor<float, 1> costs_;  ///< 各候选轨迹的累计成本。
+  /// 上一周期实际下发的速度指令，用于测量滞后补偿（上游 PR #6072）。
+  geometry_msgs::msg::Twist last_command_vel_;
 
   /// 传递给评分器的共享数据，其中包含对以上成员的引用。
   CriticData critics_data_ =

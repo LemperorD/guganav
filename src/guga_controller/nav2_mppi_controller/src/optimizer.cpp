@@ -162,6 +162,8 @@ void Optimizer::reset()
 
   settings_.constraints = settings_.base_constraints;
   motion_model_->setConstraints(settings_.constraints, settings_.model_dt);
+  // 复位后没有"上一帧指令"，测量滞后补偿从实测速度重新起步。
+  last_command_vel_ = geometry_msgs::msg::Twist();
 
   costs_ = xt::zeros<float>({settings_.batch_size});
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
@@ -183,6 +185,9 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
 
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
+
+  // 记录本次下发的指令，供下一周期的测量滞后补偿使用（上游 PR #6072）。
+  last_command_vel_ = control.twist;
 
   if (settings_.shift_control_sequence) {
     shiftControlSequence();
@@ -226,6 +231,28 @@ void Optimizer::prepare(
 {
   state_.pose = robot_pose;
   state_.speed = robot_speed;
+
+  // 测量滞后补偿（上游 PR #6072，仅在启用加速度约束时生效）：
+  // odom 往往比控制周期慢（本项目约 10 Hz vs 控制 30 Hz），直接用实测速度当初始
+  // 状态会让"一步可达"的判断基于过期数据。这里用上一帧下发指令把状态速度往前推
+  // 一个控制周期，并夹在加速度上限允许的范围内——预测永远不超过物理可达域。
+  if (accelConstraintsEnabled() && settings_.controller_period > 0.0f) {
+    const auto & c = settings_.constraints;
+    const float dt = settings_.controller_period;
+    if (c.ax_max > 0.0f || c.ax_min < 0.0f) {
+      state_.speed.linear.x = utils::clampVelocityByAccel(
+        robot_speed.linear.x, last_command_vel_.linear.x, dt * c.ax_min, dt * c.ax_max);
+    }
+    if (isHolonomic() && (c.ay_max > 0.0f || c.ay_min < 0.0f)) {
+      state_.speed.linear.y = utils::clampVelocityByAccel(
+        robot_speed.linear.y, last_command_vel_.linear.y, dt * c.ay_min, dt * c.ay_max);
+    }
+    if (c.az_max > 0.0f) {
+      state_.speed.angular.z = utils::clampVelocityByAccel(
+        robot_speed.angular.z, last_command_vel_.angular.z, -dt * c.az_max, dt * c.az_max);
+    }
+  }
+
   path_ = utils::toTensor(plan);
   costs_.fill(0);
 

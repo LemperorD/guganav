@@ -174,6 +174,21 @@ public:
     return state_;
   }
 
+  void setLastCommandVel(const double vx, const double vy, const double wz)
+  {
+    last_command_vel_.linear.x = vx;
+    last_command_vel_.linear.y = vy;
+    last_command_vel_.angular.z = wz;
+  }
+
+  void prepareWrapper(
+    const geometry_msgs::msg::PoseStamped & pose,
+    const geometry_msgs::msg::Twist & speed,
+    const nav_msgs::msg::Path & plan)
+  {
+    prepare(pose, speed, plan, nullptr);
+  }
+
   models::ControlSequence & grabControlSequence()
   {
     return control_sequence_;
@@ -856,6 +871,44 @@ TEST(OptimizerTests, AccelConstraintsArePerAxis)
   EXPECT_NEAR(state.wz(0, 1), 2.0, 1e-6);
   EXPECT_NEAR(state.wz(0, 4), 2.0, 1e-6);
   EXPECT_NEAR(state.vy(0, 4), 5.0, 1e-6);
+
+  optimizer_tester.shutdown();
+}
+
+// 测量滞后补偿（上游 PR #6072）：启用加速度约束时，初始速度按"上一帧指令"往前推
+// 一个控制周期，并夹在加速度可达范围内；未启用时严格等于实测速度。
+TEST(OptimizerTests, PrepareLatencyCompensationTests)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_latency_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(1));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(5));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.05));
+  node->declare_parameter("mppic.ax_max", rclcpp::ParameterValue(2.0));
+  node->declare_parameter("mppic.ax_min", rclcpp::ParameterValue(-2.0));
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(20.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_latency", "", "dummy_costmap_accel_latency");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetDiffModel();
+
+  geometry_msgs::msg::PoseStamped pose;
+  geometry_msgs::msg::Twist speed;  // 实测速度 0，yaw 0.7
+  speed.angular.z = 0.7;
+  nav_msgs::msg::Path plan;
+  plan.poses.resize(17);
+
+  // 上一帧指令 5.0 m/s，但一个控制周期（0.05 s × 2.0 m/s²）只能到 0.1
+  optimizer_tester.setLastCommandVel(5.0, 0.0, 0.0);
+  optimizer_tester.prepareWrapper(pose, speed, plan);
+  auto & state = optimizer_tester.grabState();
+  EXPECT_NEAR(state.speed.linear.x, 0.1, 1e-6);
+  // az_max 为 0 → yaw 不做补偿，保持实测值
+  EXPECT_NEAR(state.speed.angular.z, 0.7, 1e-6);
 
   optimizer_tester.shutdown();
 }
