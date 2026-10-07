@@ -25,32 +25,36 @@ controller_server:
     # 起不再被加载，这组取值从未生效；其中 min_y=0.5 会把 0.5 m/s 以下的横向速度
     # 当作零，与 Omni 控制相冲突，故不沿用。
 
-    controller_frequency: 60.0
+    # 与仿真 profile 对齐：由 60.0 改为 30.0，model_dt 随之改为 1/30。
+    controller_frequency: 30.0
 
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
-      time_steps: 48
+      # 以下采样与速度参数与仿真 profile（config/simulation/controller/mppi.yaml）保持一致。
+      time_steps: 56
       # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
       #   - period < model_dt → 仅告警，控制序列移位关闭
       #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.1
-      batch_size: 1200
-      vx_std: 0.25
-      vy_std: 0.25
+      model_dt: 0.033333333
+      batch_size: 1800
+      vx_std: 0.2
+      vy_std: 0.2
       wz_std: 1.0
       vx_max: 2.5
       vx_min: -2.5
-      ax_max: 5.0
-      ay_max: 5.0
+      # ax_max / ay_max 已删除：Humble 的 nav2_mppi_controller 1.1.20 不声明这两个参数
+      # （加速度限幅是 Rolling 之后才加入的），写在这里既不生效，也会让人误以为限幅已配置。
+      # 实车的加速度约束由 velocity_smoother 的 max_accel / max_decel 承担。
       vy_max: 2.5
+      # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
       wz_max: 0.0
 
       iteration_count: 1
       temperature: 0.3
-      gamma: 0.015
+      gamma: 0.012
       motion_model: "Omni"
       visualize: false
       TrajectoryVisualizer:
@@ -85,23 +89,28 @@ controller_server:
         cost_power: 1
         cost_weight: 5.0
         threshold_to_consider: 0.5
+      # 注意：本块未列入上面的 critics 列表，当前不参与计算；取值与仿真 profile 对齐。
+      # 若要启用，需先把 inflation_radius / cost_scaling_factor 改成与 local costmap
+      # 膨胀层完全一致（local 当前是 0.364 / 4.0，否则距离反算本身就是错的）。
       ObstaclesCritic:
         enabled: true
         cost_power: 1
-        repulsion_weight: 1.0
+        repulsion_weight: 2.0
         critical_weight: 25.0
         consider_footprint: false
         collision_cost: 10000.0
         collision_margin_distance: 0.15
         near_goal_distance: 0.5
-        inflation_radius: 0.55 # (only in Humble)
+        inflation_radius: 0.369 # (only in Humble)
         cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
-        cost_power: 10
-        cost_weight: 14.0
+        # 与仿真一致（原为 cost_power 10 / cost_weight 14）。照搬后实车避障的保守程度
+        # 与仿真相同，而仿真这套参数的已知表现是偶发擦碰障碍，实车验证时重点看这一项。
+        cost_power: 1
+        cost_weight: 6.0
         critical_cost: 300.0
-        consider_footprint: false
+        consider_footprint: True
         collision_cost: 1000000.0
         near_goal_distance: 1.0
         trajectory_point_step: 2
@@ -117,7 +126,7 @@ controller_server:
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 8.0
+        cost_weight: 6.0
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
@@ -187,7 +196,15 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.364 # 实车 MPPI 保守起步（仿真 0.40）
+        # 原为 0.364，小于 robot_radius(0.369) 即 inscribed 半径：膨胀区里全部是 253
+        # （INSCRIBED），而 CostCritic 与 ObstaclesCritic 都把 253 直接判为碰撞，于是
+        # 机器人一进膨胀区，每条候选轨迹的首点就落在 253 上，全部轨迹作废、fail_flag
+        # 置位，优化器 reset 一次后抛 "Optimizer fail to compute path"，控制器停住。
+        # 取 0.60 之后，0.369～0.60 之间是有梯度的软代价区
+        # （253 × exp(-4.0 × (d - 0.369))：0.45 m 处约 183，0.60 m 处约 100），
+        # 机器人可以进入这一带而不再被判碰撞；253 区仍等于车体接触区。
+        # 硬碰撞边界由 robot_radius 决定，调大本条不压缩可通行的窄道宽度。
+        inflation_radius: 0.60
 
 global_costmap:
   global_costmap:

@@ -327,7 +327,7 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 **关键约定**：
 - **ChassisMode 枚举统一 0/1/2**（`simple_decision` 为源头）：0=CHASSIS_FOLLOWED、1=LITTLE_TES、2=GO_HOME；消费者 `nonrotating_vel_transform`、`pb_omni_pid_pursuit_controller` 已对齐，改枚举要三方同步
 - **spin 外推**：`nonrotating_vel_transform::estimateRobotBaseAngle()` 用 `spin_speed` 外推底盘 yaw，弥补 odometry（~10Hz）低频导致的旋转补偿跳变（解决小陀螺下 cmd_vel 持续飘）
-- **MPPI `model_dt` 必须 = 1/`controller_frequency`**（检查容差 1e-6，否则 configure 抛异常）；当前 30Hz → `model_dt: 0.033333333`，改频率必须同步改
+- **MPPI `model_dt` 必须 = 1/`controller_frequency`**（检查容差 1e-6，否则 configure 抛异常）；仿真与实车的 mppi profile 现均为 30 Hz → `model_dt: 0.033333333`，改频率必须同步改
 
 ### 近期完成（已提交到 main）
 
