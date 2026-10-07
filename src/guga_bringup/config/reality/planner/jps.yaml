@@ -15,7 +15,7 @@ planner_server:
       esdf_weight: 400.0
       esdf_safe_distance: 1.5
       corridor_halfwidth: 15.0
-      smoothness_weight: 20.0
+      smoothness_weight: 160.0
       distance_weight: 0.3
       max_control_points: 24
       max_iterations: 300
@@ -29,7 +29,7 @@ local_costmap:
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer
         enabled: true
-        max_distance: 2.0
+        max_distance: 4.0
         publish_esdf_grid: false
         write_to_master: true
         incremental_update: true
@@ -49,7 +49,7 @@ global_costmap:
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer
         enabled: true
-        max_distance: 3.0
+        max_distance: 4.0
         publish_esdf_grid: false
         write_to_master: true
         incremental_update: true
