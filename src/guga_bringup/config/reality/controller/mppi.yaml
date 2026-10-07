@@ -54,7 +54,7 @@ controller_server:
 
       iteration_count: 1
       temperature: 0.3
-      gamma: 0.015
+      gamma: 0.012
       motion_model: "Omni"
       visualize: false
       TrajectoryVisualizer:
@@ -101,16 +101,16 @@ controller_server:
         collision_cost: 10000.0
         collision_margin_distance: 0.15
         near_goal_distance: 0.5
-        inflation_radius: 0.40 # (only in Humble)
+        inflation_radius: 0.369 # (only in Humble)
         cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
         # 与仿真一致（原为 cost_power 10 / cost_weight 14）。照搬后实车避障的保守程度
         # 与仿真相同，而仿真这套参数的已知表现是偶发擦碰障碍，实车验证时重点看这一项。
         cost_power: 1
-        cost_weight: 4.0
+        cost_weight: 6.0
         critical_cost: 300.0
-        consider_footprint: false
+        consider_footprint: True
         collision_cost: 1000000.0
         near_goal_distance: 1.0
         trajectory_point_step: 2
@@ -126,7 +126,7 @@ controller_server:
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 8.0
+        cost_weight: 6.0
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
