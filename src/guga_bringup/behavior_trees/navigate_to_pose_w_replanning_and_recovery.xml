@@ -13,8 +13,16 @@
         <FollowPath path="{path}"
                     controller_id="FollowPath"/>
       </PipelineSequence>
+      <!-- 恢复子树：目标更新时立即重试；否则等待 wait_duration 秒后重试。
+           重试次数由上面的 number_of_retries 给出，与 wait_duration 一起构成时间上限：
+           20 × 0.5 s ≈ 10 s。若这里只有 ForceSuccess(GoalUpdated)，恢复子树会在同一
+           次 tick 内反复成功，RecoveryNode 的 while 循环一次就把 20 次重试耗尽，
+           导航会瞬间判失败（见 docs/MPPI调参手册.md 关于重试与 tick 的说明）。 -->
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
+        <ForceSuccess name="RecoveryAttempt">
+          <Wait wait_duration="0.5"/>
+        </ForceSuccess>
       </ReactiveFallback>
     </RecoveryNode>
   </BehaviorTree>
@@ -34,6 +42,12 @@
     </Action>
     <Action ID="GoalUpdated"
             editable="true"/>
+    <Action ID="Wait"
+            editable="true">
+      <input_port name="wait_duration"/>
+    </Action>
+    <Control ID="ReactiveFallback"
+             editable="true"/>
     <Control ID="PipelineSequence"
              editable="true"/>
     <Decorator ID="RateController"
