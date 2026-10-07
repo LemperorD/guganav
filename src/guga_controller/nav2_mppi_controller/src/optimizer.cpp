@@ -107,6 +107,21 @@ void Optimizer::getParams()
   }
   s.base_constraints.az_max = std::fabs(s.base_constraints.az_max);
 
+  // 某一轴只填了一侧时给提示：另一侧按"不限制"处理（不是"不允许变化"），
+  // 所以只填 ax_max 时机器人仍然可以正常减速，但加速上限才生效。
+  if ((s.base_constraints.ax_max > 0.0f) != (s.base_constraints.ax_min < 0.0f)) {
+    RCLCPP_WARN(
+      logger_,
+      "ax_max/ax_min 建议成对填写（加速为正、减速为负）；当前只填了一侧，"
+      "另一侧按不限制处理");
+  }
+  if ((s.base_constraints.ay_max > 0.0f) != (s.base_constraints.ay_min < 0.0f)) {
+    RCLCPP_WARN(
+      logger_,
+      "ay_max/ay_min 建议成对填写（加速为正、减速为负）；当前只填了一侧，"
+      "另一侧按不限制处理");
+  }
+
   getParam(motion_model_name, "motion_model", std::string("DiffDrive"));
 
   s.constraints = s.base_constraints;
@@ -316,11 +331,11 @@ void Optimizer::applyControlSequenceInterIterationConstraints()
 
   auto & s = settings_;
   const float first_dt = s.controller_period > 0.0f ? s.controller_period : s.model_dt;
-  const float max_delta_vx = first_dt * c.ax_max;
-  const float min_delta_vx = first_dt * c.ax_min;
-  const float max_delta_vy = first_dt * c.ay_max;
-  const float min_delta_vy = first_dt * c.ay_min;
-  const float max_delta_wz = first_dt * c.az_max;
+  const float max_delta_vx = utils::maxAccelDelta(c.ax_max, first_dt);
+  const float min_delta_vx = utils::minAccelDelta(c.ax_min, first_dt);
+  const float max_delta_vy = utils::maxAccelDelta(c.ay_max, first_dt);
+  const float min_delta_vy = utils::minAccelDelta(c.ay_min, first_dt);
+  const float max_delta_wz = utils::maxAccelDelta(c.az_max, first_dt);
 
   const float speed_vx = static_cast<float>(state_.speed.linear.x);
   const float speed_vy = static_cast<float>(state_.speed.linear.y);
@@ -383,11 +398,11 @@ void Optimizer::applyControlSequenceConstraints()
   const bool limit_wz = c.az_max > 0.0f;
 
   float first_dt = s.controller_period > 0.0f ? s.controller_period : s.model_dt;
-  float max_delta_vx = first_dt * c.ax_max;
-  float min_delta_vx = first_dt * c.ax_min;
-  float max_delta_vy = first_dt * c.ay_max;
-  float min_delta_vy = first_dt * c.ay_min;
-  float max_delta_wz = first_dt * c.az_max;
+  float max_delta_vx = utils::maxAccelDelta(c.ax_max, first_dt);
+  float min_delta_vx = utils::minAccelDelta(c.ax_min, first_dt);
+  float max_delta_vy = utils::maxAccelDelta(c.ay_max, first_dt);
+  float min_delta_vy = utils::minAccelDelta(c.ay_min, first_dt);
+  float max_delta_wz = utils::maxAccelDelta(c.az_max, first_dt);
 
   const bool is_holo = isHolonomic();
   float vx_last = static_cast<float>(state_.speed.linear.x);
@@ -411,11 +426,11 @@ void Optimizer::applyControlSequenceConstraints()
   for (size_t i = 0; i < steps; ++i) {
     if (i == 1) {
       // 第 1 步之后切换到预测步长。
-      max_delta_vx = s.model_dt * c.ax_max;
-      min_delta_vx = s.model_dt * c.ax_min;
-      max_delta_vy = s.model_dt * c.ay_max;
-      min_delta_vy = s.model_dt * c.ay_min;
-      max_delta_wz = s.model_dt * c.az_max;
+      max_delta_vx = utils::maxAccelDelta(c.ax_max, s.model_dt);
+      min_delta_vx = utils::minAccelDelta(c.ax_min, s.model_dt);
+      max_delta_vy = utils::maxAccelDelta(c.ay_max, s.model_dt);
+      min_delta_vy = utils::minAccelDelta(c.ay_min, s.model_dt);
+      max_delta_wz = utils::maxAccelDelta(c.az_max, s.model_dt);
     }
 
     if (limit_vx) {

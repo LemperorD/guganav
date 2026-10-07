@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include "nav2_mppi_controller/models/constraints.hpp"
@@ -97,11 +98,18 @@ public:
     const bool limit_vy =
       control_constraints_.ay_max > 0.0f || control_constraints_.ay_min < 0.0f;
     const bool limit_wz = control_constraints_.az_max > 0.0f;
-    const float max_delta_vx = model_dt_ * control_constraints_.ax_max;
-    const float min_delta_vx = model_dt_ * control_constraints_.ax_min;
-    const float max_delta_vy = model_dt_ * control_constraints_.ay_max;
-    const float min_delta_vy = model_dt_ * control_constraints_.ay_min;
-    const float max_delta_wz = model_dt_ * control_constraints_.az_max;
+    // 单边留 0 表示"该方向不限制"（配合启动告警），不能读成"该方向不允许变化"：
+    // 只填 ax_max 时如果 min_delta=0，机器人就永远不能减速，这是危险的读法。
+    const float max_delta_vx = control_constraints_.ax_max > 0.0f ?
+      model_dt_ * control_constraints_.ax_max : std::numeric_limits<float>::infinity();
+    const float min_delta_vx = control_constraints_.ax_min < 0.0f ?
+      model_dt_ * control_constraints_.ax_min : -std::numeric_limits<float>::infinity();
+    const float max_delta_vy = control_constraints_.ay_max > 0.0f ?
+      model_dt_ * control_constraints_.ay_max : std::numeric_limits<float>::infinity();
+    const float min_delta_vy = control_constraints_.ay_min < 0.0f ?
+      model_dt_ * control_constraints_.ay_min : -std::numeric_limits<float>::infinity();
+    const float max_delta_wz = control_constraints_.az_max > 0.0f ?
+      model_dt_ * control_constraints_.az_max : std::numeric_limits<float>::infinity();
 
     const size_t rows = state.vx.shape(0);
     const size_t cols = state.vx.shape(1);

@@ -24,10 +24,14 @@ namespace mppi::models
  *
  * 加速度字段移植自上游 nav2（PR #4352 引入、#6072 补齐 ay_min 与 controller_period
  * 的用法）：
- *   ax_max/ax_min —— 纵向加/减速上限（m/s²，ax_min 必须为负）
- *   ay_max/ay_min —— 横向加/减速上限（m/s²，仅全向底盘使用）
- *   az_max        —— 偏航角加速度上限（rad/s²，对称）
- * 全部为 0 表示"不启用加速度约束"，与移植前的行为完全一致。
+ *   ax_max/ax_min —— 纵向加/减速上限（m/s²；ax_max 为正、ax_min 为负）
+ *   ay_max/ay_min —— 横向加/减速上限（m/s²；仅全向底盘使用）
+ *   az_max        —— 偏航角加速度上限（rad/s²，对称，没有 az_min）
+ *
+ * 零值的含义是"该方向不限制"，不是"不允许变化"：
+ *   某轴两侧都留 0 → 该轴不做加速度限制（与移植前行为一致）；
+ *   只填一侧（另一侧留 0）→ 只管住填了的那一侧，另一侧按不限制处理，
+ *   这样只填 ax_max 时机器人仍然可以正常减速（启动时会 WARN 提示成对填写）。
  */
 struct ControlConstraints
 {

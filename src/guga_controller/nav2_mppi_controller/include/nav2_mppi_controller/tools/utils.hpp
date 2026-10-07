@@ -722,6 +722,32 @@ inline float clampVelocityByAccel(
   return clamp(last_vel - max_delta, last_vel - min_delta, curr_vel);
 }
 
+/**
+ * @brief 加速侧上限 → 单步允许的速度增量
+ *
+ * 上限留 0 表示这一侧"不做限制"，返回 +inf。不能返回 0：那会被
+ * clampVelocityByAccel 读成"这一侧不允许变化"（只填 ax_max 就永远不能减速）。
+ *
+ * @param limit: 加速侧上限（ax_max/ay_max，正常为正；az_max 用于对称的 wz）
+ * @param dt: 步长（控制周期或预测步长）
+ * @return 返回值: dt 内允许的正向速度增量
+ */
+inline float maxAccelDelta(const float limit, const float dt)
+{
+  return limit > 0.0f ? limit * dt : std::numeric_limits<float>::infinity();
+}
+
+/**
+ * @brief 减速侧下限 → 单步允许的速度增量（负值）
+ * @param limit: 减速侧下限（ax_min/ay_min，正常为负）
+ * @param dt: 步长
+ * @return 返回值: dt 内允许的负向速度增量；未设置时返回 -inf
+ */
+inline float minAccelDelta(const float limit, const float dt)
+{
+  return limit < 0.0f ? limit * dt : -std::numeric_limits<float>::infinity();
+}
+
 }  // namespace mppi::utils
 
 #endif  // NAV2_MPPI_CONTROLLER__TOOLS__UTILS_HPP_
