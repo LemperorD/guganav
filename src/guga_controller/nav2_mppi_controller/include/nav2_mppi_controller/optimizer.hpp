@@ -160,9 +160,22 @@ protected:
   void generateNoisedTrajectories();
 
   /**
-   * @brief 对控制序列应用底盘硬约束
+   * @brief 在加噪之前把控制序列第 0 项约束到"从当前速度出发一步可达"的范围内
+   *
+   * 移植自上游 nav2 PR #6072：迭代间可行性。只在启用加速度约束时生效。
+   */
+  void applyControlSequenceInterIterationConstraints();
+
+  /**
+   * @brief 对控制序列应用底盘硬约束（速度上限 + 加速度可行性）
    */
   void applyControlSequenceConstraints();
+
+  /**
+   * @brief 是否启用了任一轴的加速度约束
+   * @return 返回值: 任一加速度上限非零时为 true；全零表示保持移植前行为
+   */
+  bool accelConstraintsEnabled() const;
 
   /**
    * @brief 更新状态张量内每个时间步的预测速度

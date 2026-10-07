@@ -80,6 +80,32 @@ void Optimizer::getParams()
   getParam(s.sampling_std.vy, "vy_std", 0.2);
   getParam(s.sampling_std.wz, "wz_std", 0.4);
   getParam(s.retry_attempt_limit, "retry_attempt_limit", 1);
+  // 加速度约束（移植自上游 nav2 PR #4352 + #5266 + #6072 的语义）。
+  // 默认全部为 0 = 不启用，行为与移植前逐位一致；要启用就在 yaml 里显式给实测值。
+  getParam(s.base_constraints.ax_max, "ax_max", 0.0f);
+  getParam(s.base_constraints.ax_min, "ax_min", 0.0f);
+  getParam(s.base_constraints.ay_max, "ay_max", 0.0f);
+  getParam(s.base_constraints.ay_min, "ay_min", 0.0f);
+  getParam(s.base_constraints.az_max, "az_max", 0.0f);
+  // 平滑阶数：1 = 9 点滑动均值（更平滑），2 = 二次九点 Savitzky-Golay（默认）。
+  getParam(s.sgf_order, "sgf_order", 2);
+  if (s.sgf_order < 1 || s.sgf_order > 2) {
+    RCLCPP_WARN(logger_, "sgf_order 只能取 1 或 2，回退为 2");
+    s.sgf_order = 2;
+  }
+
+  // 符号保护：加速上限取正、减速下限取负，写反时自动纠正并告警。
+  s.base_constraints.ax_max = std::fabs(s.base_constraints.ax_max);
+  if (s.base_constraints.ax_min > 0.0f) {
+    s.base_constraints.ax_min = -1.0f * s.base_constraints.ax_min;
+    RCLCPP_WARN(logger_, "ax_min 应为负值，已按 %f 处理", s.base_constraints.ax_min);
+  }
+  s.base_constraints.ay_max = std::fabs(s.base_constraints.ay_max);
+  if (s.base_constraints.ay_min > 0.0f) {
+    s.base_constraints.ay_min = -1.0f * s.base_constraints.ay_min;
+    RCLCPP_WARN(logger_, "ay_min 应为负值，已按 %f 处理", s.base_constraints.ay_min);
+  }
+  s.base_constraints.az_max = std::fabs(s.base_constraints.az_max);
 
   getParam(motion_model_name, "motion_model", std::string("DiffDrive"));
 
@@ -90,12 +116,24 @@ void Optimizer::getParams()
   double controller_frequency;
   getParentParam(controller_frequency, "controller_frequency", 0.0, ParameterType::Static);
   setOffset(controller_frequency);
+
+  // 把生效的约束打到日志里：现场判断"加速度限制到底开没开"只看这一行。
+  RCLCPP_INFO(
+    logger_,
+    "加速度约束 ax=[%.3f, %.3f] ay=[%.3f, %.3f] az=%.3f（0 表示该轴不做加速度限制）；"
+    "controller_period=%.4f sgf_order=%u",
+    s.base_constraints.ax_min, s.base_constraints.ax_max,
+    s.base_constraints.ay_min, s.base_constraints.ay_max,
+    s.base_constraints.az_max, settings_.controller_period, s.sgf_order);
 }
 
 void Optimizer::setOffset(double controller_frequency)
 {
   const double controller_period = 1.0 / controller_frequency;
   constexpr double eps = 1e-6;
+
+  // t=0 那一步的加速度可行性要用真实控制周期，而不是预测步长（上游 PR #6072）。
+  settings_.controller_period = static_cast<float>(controller_period);
 
   if ((controller_period + eps) < settings_.model_dt) {
     RCLCPP_WARN(
@@ -123,6 +161,7 @@ void Optimizer::reset()
   control_history_[3] = {0.0, 0.0, 0.0};
 
   settings_.constraints = settings_.base_constraints;
+  motion_model_->setConstraints(settings_.constraints, settings_.model_dt);
 
   costs_ = xt::zeros<float>({settings_.batch_size});
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
@@ -220,6 +259,7 @@ void Optimizer::shiftControlSequence()
 
 void Optimizer::generateNoisedTrajectories()
 {
+  applyControlSequenceInterIterationConstraints();
   noise_generator_.setNoisedControls(state_, control_sequence_);
   noise_generator_.generateNextNoises();
   updateStateVelocities(state_);
@@ -228,9 +268,73 @@ void Optimizer::generateNoisedTrajectories()
 
 bool Optimizer::isHolonomic() const {return motion_model_->isHolonomic();}
 
+bool Optimizer::accelConstraintsEnabled() const
+{
+  const auto & c = settings_.constraints;
+  return c.ax_max > 0.0f || c.ax_min < 0.0f ||
+         c.ay_max > 0.0f || c.ay_min < 0.0f ||
+         c.az_max > 0.0f;
+}
+
+void Optimizer::applyControlSequenceInterIterationConstraints()
+{
+  const auto & c = settings_.constraints;
+  // 逐轴独立：某轴上限留 0 表示该轴不做加速度限制。
+  const bool limit_vx = c.ax_max > 0.0f || c.ax_min < 0.0f;
+  const bool limit_vy = c.ay_max > 0.0f || c.ay_min < 0.0f;
+  const bool limit_wz = c.az_max > 0.0f;
+  if (!limit_vx && !limit_vy && !limit_wz) {
+    return;
+  }
+
+  auto & s = settings_;
+  const float first_dt = s.controller_period > 0.0f ? s.controller_period : s.model_dt;
+  const float max_delta_vx = first_dt * c.ax_max;
+  const float min_delta_vx = first_dt * c.ax_min;
+  const float max_delta_vy = first_dt * c.ay_max;
+  const float min_delta_vy = first_dt * c.ay_min;
+  const float max_delta_wz = first_dt * c.az_max;
+
+  const float speed_vx = static_cast<float>(state_.speed.linear.x);
+  const float speed_vy = static_cast<float>(state_.speed.linear.y);
+  const float speed_wz = static_cast<float>(state_.speed.angular.z);
+
+  if (s.shift_control_sequence) {
+    // 序列前移模式下 vx(0) 代表"现在"、不会被下发；把它钉在当前速度上，
+    // 真正下发的 vx(1) 才只能离当前速度一步（否则前移逻辑白送一个时间步）。
+    if (limit_vx) {
+      control_sequence_.vx(0) = speed_vx;
+    }
+    if (limit_wz) {
+      control_sequence_.wz(0) = speed_wz;
+    }
+    if (limit_vy && isHolonomic()) {
+      control_sequence_.vy(0) = speed_vy;
+    }
+    return;
+  }
+
+  // 非前移模式下 vx(0) 就是下发值，直接夹到"从当前速度出发一步可达"的范围内。
+  if (limit_vx) {
+    control_sequence_.vx(0) = utils::clampVelocityByAccel(
+      speed_vx, control_sequence_.vx(0), min_delta_vx, max_delta_vx);
+  }
+  if (limit_wz) {
+    control_sequence_.wz(0) = utils::clampVelocityByAccel(
+      speed_wz, control_sequence_.wz(0), -max_delta_wz, max_delta_wz);
+  }
+  if (limit_vy && isHolonomic()) {
+    control_sequence_.vy(0) = utils::clampVelocityByAccel(
+      speed_vy, control_sequence_.vy(0), min_delta_vy, max_delta_vy);
+  }
+}
+
 void Optimizer::applyControlSequenceConstraints()
 {
   auto & s = settings_;
+
+  // 先让运动模型施加自身硬约束（如阿克曼最小转弯半径）。
+  motion_model_->applyConstraints(control_sequence_);
 
   if (isHolonomic()) {
     control_sequence_.vy = xt::clip(control_sequence_.vy, -s.constraints.vy, s.constraints.vy);
@@ -239,6 +343,74 @@ void Optimizer::applyControlSequenceConstraints()
   control_sequence_.vx = xt::clip(control_sequence_.vx, s.constraints.vx_min, s.constraints.vx_max);
   control_sequence_.wz = xt::clip(control_sequence_.wz, -s.constraints.wz, s.constraints.wz);
 
+  if (!accelConstraintsEnabled()) {
+    return;
+  }
+
+  // 加速度可行性：第 0 步用真实控制周期，第 1 步起用预测步长；起点取当前实测速度，
+  // 保证"从当前状态出发"这一步也可行（上游 PR #6072 的核心修正）。
+  // 逐轴独立：上限留 0 的轴不做加速度限制，保持速度 clip 后的值。
+  const auto & c = s.constraints;
+  const bool limit_vx = c.ax_max > 0.0f || c.ax_min < 0.0f;
+  const bool limit_vy = c.ay_max > 0.0f || c.ay_min < 0.0f;
+  const bool limit_wz = c.az_max > 0.0f;
+
+  float first_dt = s.controller_period > 0.0f ? s.controller_period : s.model_dt;
+  float max_delta_vx = first_dt * c.ax_max;
+  float min_delta_vx = first_dt * c.ax_min;
+  float max_delta_vy = first_dt * c.ay_max;
+  float min_delta_vy = first_dt * c.ay_min;
+  float max_delta_wz = first_dt * c.az_max;
+
+  const bool is_holo = isHolonomic();
+  float vx_last = static_cast<float>(state_.speed.linear.x);
+  float vy_last = static_cast<float>(state_.speed.linear.y);
+  float wz_last = static_cast<float>(state_.speed.angular.z);
+
+  if (s.shift_control_sequence) {
+    // 前移模式下 vx(0) 是"现在"，钉住它，使 vx(1) 只能离当前速度一步。
+    if (limit_vx) {
+      control_sequence_.vx(0) = vx_last;
+    }
+    if (limit_wz) {
+      control_sequence_.wz(0) = wz_last;
+    }
+    if (limit_vy && is_holo) {
+      control_sequence_.vy(0) = vy_last;
+    }
+  }
+
+  const size_t steps = control_sequence_.vx.size();
+  for (size_t i = 0; i < steps; ++i) {
+    if (i == 1) {
+      // 第 1 步之后切换到预测步长。
+      max_delta_vx = s.model_dt * c.ax_max;
+      min_delta_vx = s.model_dt * c.ax_min;
+      max_delta_vy = s.model_dt * c.ay_max;
+      min_delta_vy = s.model_dt * c.ay_min;
+      max_delta_wz = s.model_dt * c.az_max;
+    }
+
+    if (limit_vx) {
+      vx_last = utils::clampVelocityByAccel(
+        vx_last, control_sequence_.vx(i), min_delta_vx, max_delta_vx);
+      control_sequence_.vx(i) = vx_last;
+    }
+
+    if (limit_wz) {
+      wz_last = utils::clampVelocityByAccel(
+        wz_last, control_sequence_.wz(i), -max_delta_wz, max_delta_wz);
+      control_sequence_.wz(i) = wz_last;
+    }
+
+    if (limit_vy && is_holo) {
+      vy_last = utils::clampVelocityByAccel(
+        vy_last, control_sequence_.vy(i), min_delta_vy, max_delta_vy);
+      control_sequence_.vy(i) = vy_last;
+    }
+  }
+
+  // 再施加一次运动模型约束：确保加速度修正没有破坏它的专属限制。
   motion_model_->applyConstraints(control_sequence_);
 }
 
@@ -417,6 +589,8 @@ void Optimizer::setMotionModel(const std::string & model)
               "Model " + model + " is not valid! Valid options are DiffDrive, Omni, "
               "or Ackermann"));
   }
+  // 运动模型需要约束集与步长才能在 predict() 里做加速度夹紧。
+  motion_model_->setConstraints(settings_.constraints, settings_.model_dt);
 }
 
 void Optimizer::setSpeedLimit(double speed_limit, bool percentage)
@@ -444,6 +618,8 @@ void Optimizer::setSpeedLimit(double speed_limit, bool percentage)
       s.constraints.wz = s.base_constraints.wz * ratio;
     }
   }
+  // 约束集变了（限速），运动模型持有的副本也要同步。
+  motion_model_->setConstraints(s.constraints, s.model_dt);
 }
 
 models::Trajectories & Optimizer::getGeneratedTrajectories()

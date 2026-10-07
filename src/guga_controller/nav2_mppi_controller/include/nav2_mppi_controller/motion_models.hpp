@@ -15,9 +15,12 @@
 #ifndef NAV2_MPPI_CONTROLLER__MOTION_MODELS_HPP_
 #define NAV2_MPPI_CONTROLLER__MOTION_MODELS_HPP_
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 
+#include "nav2_mppi_controller/models/constraints.hpp"
 #include "nav2_mppi_controller/models/control_sequence.hpp"
 #include "nav2_mppi_controller/models/state.hpp"
 #include <xtensor/xmath.hpp>
@@ -48,21 +51,92 @@ public:
   virtual ~MotionModel() = default;
 
   /**
+   * @brief 注入当前生效的约束与积分步长
+   * @param control_constraints: 含加速度字段的约束集
+   * @param model_dt: 相邻预测点之间的积分步长
+   */
+  void setConstraints(
+    const models::ControlConstraints & control_constraints, float model_dt)
+  {
+    control_constraints_ = control_constraints;
+    model_dt_ = model_dt;
+  }
+
+  /**
    * @brief 根据采样控制量预测底盘各时间步的速度
    * @param state: 包含采样控制量并接收预测速度的状态张量
+   *
+   * 未启用加速度约束时走原来的整体视图赋值，与移植前逐位一致。
+   * 启用后改为逐样本串行夹紧**状态速度** `vx/vy/wz`，而采样控制量
+   * `cvx/cvy/cwz` 保持原始值（上游 PR #5266 的语义）：加速度上限描述的是
+   * "底盘实际能做到什么"，作用在状态量上；控制量保持未夹紧，softmax 才能
+   * 分辨"略微超限"与"严重超限"，否则会出现 PR #6072 里那种 chattering。
    */
   virtual void predict(models::State & state)
   {
     using namespace xt::placeholders;  // NOLINT
-    xt::noalias(xt::view(state.vx, xt::all(), xt::range(1, _))) =
-      xt::view(state.cvx, xt::all(), xt::range(0, -1));
+    if (!accelConstraintsEnabled()) {
+      xt::noalias(xt::view(state.vx, xt::all(), xt::range(1, _))) =
+        xt::view(state.cvx, xt::all(), xt::range(0, -1));
 
-    xt::noalias(xt::view(state.wz, xt::all(), xt::range(1, _))) =
-      xt::view(state.cwz, xt::all(), xt::range(0, -1));
+      xt::noalias(xt::view(state.wz, xt::all(), xt::range(1, _))) =
+        xt::view(state.cwz, xt::all(), xt::range(0, -1));
 
-    if (isHolonomic()) {
-      xt::noalias(xt::view(state.vy, xt::all(), xt::range(1, _))) =
-        xt::view(state.cvy, xt::all(), xt::range(0, -1));
+      if (isHolonomic()) {
+        xt::noalias(xt::view(state.vy, xt::all(), xt::range(1, _))) =
+          xt::view(state.cvy, xt::all(), xt::range(0, -1));
+      }
+      return;
+    }
+
+    const bool is_holo = isHolonomic();
+    // 逐轴独立：某一轴的上限留 0 表示该轴不做加速度限制（保持控制量直通），
+    // 只有显式给了上限的轴才夹紧。否则"只开 ax、az 留 0"会把 wz 冻结成常量。
+    const bool limit_vx =
+      control_constraints_.ax_max > 0.0f || control_constraints_.ax_min < 0.0f;
+    const bool limit_vy =
+      control_constraints_.ay_max > 0.0f || control_constraints_.ay_min < 0.0f;
+    const bool limit_wz = control_constraints_.az_max > 0.0f;
+    const float max_delta_vx = model_dt_ * control_constraints_.ax_max;
+    const float min_delta_vx = model_dt_ * control_constraints_.ax_min;
+    const float max_delta_vy = model_dt_ * control_constraints_.ay_max;
+    const float min_delta_vy = model_dt_ * control_constraints_.ay_min;
+    const float max_delta_wz = model_dt_ * control_constraints_.az_max;
+
+    const size_t rows = state.vx.shape(0);
+    const size_t cols = state.vx.shape(1);
+    for (size_t i = 0; i < rows; ++i) {
+      // 第 0 列是当前实测速度，作为加速度积分的起点。
+      float vx_last = state.vx(i, 0);
+      float vy_last = is_holo ? state.vy(i, 0) : 0.0f;
+      float wz_last = state.wz(i, 0);
+      for (size_t j = 1; j < cols; ++j) {
+        if (limit_vx) {
+          vx_last = std::clamp(
+            state.cvx(i, j - 1), vx_last + min_delta_vx, vx_last + max_delta_vx);
+        } else {
+          vx_last = state.cvx(i, j - 1);
+        }
+        state.vx(i, j) = vx_last;
+
+        if (limit_wz) {
+          wz_last = std::clamp(
+            state.cwz(i, j - 1), wz_last - max_delta_wz, wz_last + max_delta_wz);
+        } else {
+          wz_last = state.cwz(i, j - 1);
+        }
+        state.wz(i, j) = wz_last;
+
+        if (is_holo) {
+          if (limit_vy) {
+            vy_last = std::clamp(
+              state.cvy(i, j - 1), vy_last + min_delta_vy, vy_last + max_delta_vy);
+          } else {
+            vy_last = state.cvy(i, j - 1);
+          }
+          state.vy(i, j) = vy_last;
+        }
+      }
     }
   }
 
@@ -77,6 +151,21 @@ public:
    * @param control_sequence: 待就地约束的控制序列
    */
   virtual void applyConstraints(models::ControlSequence & /*control_sequence*/) {}
+
+protected:
+  /**
+   * @brief 是否启用了任一轴的加速度约束
+   * @return 返回值: 任一加速度上限非零时为 true
+   */
+  bool accelConstraintsEnabled() const
+  {
+    return control_constraints_.ax_max > 0.0f || control_constraints_.ax_min < 0.0f ||
+           control_constraints_.ay_max > 0.0f || control_constraints_.ay_min < 0.0f ||
+           control_constraints_.az_max > 0.0f;
+  }
+
+  float model_dt_{0.0f};  ///< 相邻预测点的积分步长（s）。
+  models::ControlConstraints control_constraints_{0, 0, 0, 0, 0, 0, 0, 0, 0};  ///< 当前生效约束。
 };
 
 /**

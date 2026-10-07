@@ -27,14 +27,18 @@ namespace mppi::models
  */
 struct OptimizerSettings
 {
-  // 参数配置的原始速度约束，不受运行时限速影响。
-  models::ControlConstraints base_constraints{0, 0, 0, 0};
-  // 当前生效的速度约束，可能被运行时限速修改。
-  models::ControlConstraints constraints{0, 0, 0, 0};
+  // 参数配置的原始速度/加速度约束，不受运行时限速影响。
+  models::ControlConstraints base_constraints{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  // 当前生效的约束，可能被运行时限速修改。
+  models::ControlConstraints constraints{0, 0, 0, 0, 0, 0, 0, 0, 0};
   // 三个控制维度的采样噪声标准差。
   models::SamplingStd sampling_std{0, 0, 0};
   // 相邻预测状态之间的积分时间间隔。
   float model_dt{0};
+  // 控制周期 1/controller_frequency；t=0 的加速度可行性用它而不是 model_dt。
+  float controller_period{0};
+  // Savitzky-Golay 滤波阶数：1 = 9 点滑动均值（更平滑），2 = 二次九点（默认）。
+  unsigned int sgf_order{2u};
   // 轨迹成本转换为权重时使用的温度参数。
   float temperature{0};
   // 控制扰动成本的正则化系数。

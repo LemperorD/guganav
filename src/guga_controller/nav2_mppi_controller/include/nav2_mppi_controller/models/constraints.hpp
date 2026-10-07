@@ -20,7 +20,14 @@ namespace mppi::models
 
 /**
  * @struct mppi::models::ControlConstraints
- * @brief 控制量的速度与角速度约束
+ * @brief 控制量的速度、角速度与加速度约束
+ *
+ * 加速度字段移植自上游 nav2（PR #4352 引入、#6072 补齐 ay_min 与 controller_period
+ * 的用法）：
+ *   ax_max/ax_min —— 纵向加/减速上限（m/s²，ax_min 必须为负）
+ *   ay_max/ay_min —— 横向加/减速上限（m/s²，仅全向底盘使用）
+ *   az_max        —— 偏航角加速度上限（rad/s²，对称）
+ * 全部为 0 表示"不启用加速度约束"，与移植前的行为完全一致。
  */
 struct ControlConstraints
 {
@@ -32,6 +39,16 @@ struct ControlConstraints
   float vy;
   // 偏航角速度绝对值上限。
   float wz;
+  // 纵向加速度上限（m/s²）。
+  float ax_max;
+  // 纵向减速度下限（m/s²，负值）。
+  float ax_min;
+  // 横向加速度上限（m/s²）。
+  float ay_max;
+  // 横向减速度下限（m/s²，负值）。
+  float ay_min;
+  // 偏航角加速度上限（rad/s²）。
+  float az_max;
 };
 
 /**

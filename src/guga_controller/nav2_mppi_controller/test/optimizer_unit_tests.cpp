@@ -154,6 +154,26 @@ public:
     return applyControlSequenceConstraints();
   }
 
+  void applyControlSequenceInterIterationConstraintsWrapper()
+  {
+    return applyControlSequenceInterIterationConstraints();
+  }
+
+  void propagateStateVelocitiesFromInitialsWrapper(models::State & state)
+  {
+    return propagateStateVelocitiesFromInitials(state);
+  }
+
+  models::OptimizerSettings & grabSettings()
+  {
+    return settings_;
+  }
+
+  models::State & grabState()
+  {
+    return state_;
+  }
+
   models::ControlSequence & grabControlSequence()
   {
     return control_sequence_;
@@ -633,4 +653,209 @@ TEST(OptimizerTests, integrateStateVelocitiesTests)
     EXPECT_NEAR(traj.x(1, i), x, 1e-6);
     EXPECT_NEAR(traj.y(1, i), y, 1e-6);
   }
+}
+
+// 加速度约束默认关闭：不配 ax/ay/az 时必须与移植前逐位一致
+TEST(OptimizerTests, AccelConstraintsDisabledByDefault)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_default_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(10));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(10));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.05));
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(20.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_default", "", "dummy_costmap_accel_default");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetOmniModel();
+
+  auto & settings = optimizer_tester.grabSettings();
+  EXPECT_FLOAT_EQ(settings.base_constraints.ax_max, 0.0f);
+  EXPECT_FLOAT_EQ(settings.base_constraints.ax_min, 0.0f);
+  EXPECT_FLOAT_EQ(settings.base_constraints.ay_max, 0.0f);
+  EXPECT_FLOAT_EQ(settings.base_constraints.az_max, 0.0f);
+  EXPECT_EQ(settings.sgf_order, 2u);
+
+  // 未启用加速度约束时，状态速度还是"采样控制量直接前移一位"
+  models::State state;
+  state.reset(1, 5);
+  state.cvx = 5.0 * xt::ones<float>({1, 5});
+  state.cvy = 3.0 * xt::ones<float>({1, 5});
+  state.cwz = 2.0 * xt::ones<float>({1, 5});
+  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(state);
+  EXPECT_NEAR(state.vx(0, 1), 5.0, 1e-6);
+  EXPECT_NEAR(state.vx(0, 4), 5.0, 1e-6);
+  EXPECT_NEAR(state.vy(0, 1), 3.0, 1e-6);
+  EXPECT_NEAR(state.wz(0, 4), 2.0, 1e-6);
+
+  optimizer_tester.shutdown();
+}
+
+// 迭代间加速度可行性（移植自上游 PR #6072）
+TEST(OptimizerTests, InterIterationAccelConstraintsTests)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_inter_iter_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(10));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(10));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.05));
+  node->declare_parameter("mppic.ax_max", rclcpp::ParameterValue(2.0));
+  node->declare_parameter("mppic.ax_min", rclcpp::ParameterValue(-1.0));
+  node->declare_parameter("mppic.ay_max", rclcpp::ParameterValue(2.0));
+  node->declare_parameter("mppic.ay_min", rclcpp::ParameterValue(-1.0));
+  node->declare_parameter("mppic.az_max", rclcpp::ParameterValue(2.0));
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(20.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_inter_iter", "", "dummy_costmap_accel_inter_iter");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetOmniModel();
+
+  auto & settings = optimizer_tester.grabSettings();
+  auto & state = optimizer_tester.grabState();
+  auto & seq = optimizer_tester.grabControlSequence();
+
+  // 20 Hz + model_dt 0.05 → 控制序列前移开启，controller_period = 0.05
+  EXPECT_TRUE(settings.shift_control_sequence);
+  EXPECT_NEAR(settings.controller_period, 0.05f, 1e-6);
+  EXPECT_FLOAT_EQ(settings.constraints.ax_max, 2.0f);
+  EXPECT_FLOAT_EQ(settings.constraints.ax_min, -1.0f);
+
+  // 前移模式下 index 0 代表"现在"，应被钉在当前实测速度上
+  state.speed.linear.x = 0.1;
+  state.speed.linear.y = 0.3;
+  state.speed.angular.z = 0.2;
+  seq.reset(10);
+  seq.vx(0) = 5.0;
+  seq.vy(0) = 5.0;
+  seq.wz(0) = 5.0;
+  optimizer_tester.applyControlSequenceInterIterationConstraintsWrapper();
+  EXPECT_NEAR(seq.vx(0), 0.1, 1e-6);
+  EXPECT_NEAR(seq.vy(0), 0.3, 1e-6);
+  EXPECT_NEAR(seq.wz(0), 0.2, 1e-6);
+
+  // 非前移模式（控制器 40 Hz）：第 0 项按 controller_period 夹到一步可达范围
+  settings.shift_control_sequence = false;
+  settings.controller_period = 0.025f;
+  state.speed.linear.x = 0.0;
+  state.speed.linear.y = 0.0;
+  state.speed.angular.z = 0.0;
+  seq.reset(10);
+  seq.vx(0) = 5.0;
+  seq.vy(0) = 5.0;
+  seq.wz(0) = 5.0;
+  optimizer_tester.applyControlSequenceInterIterationConstraintsWrapper();
+  EXPECT_NEAR(seq.vx(0), 0.05, 1e-6);  // 0.025 * ax_max(2.0)
+  EXPECT_NEAR(seq.vy(0), 0.05, 1e-6);  // 0.025 * ay_max(2.0)
+  EXPECT_NEAR(seq.wz(0), 0.05, 1e-6);  // 0.025 * az_max(2.0)
+
+  // 非对称：从 +0.5 往前，硬刹到 -5 应被夹到 0.5 + 0.025*ax_min = 0.475
+  state.speed.linear.x = 0.5;
+  seq.reset(10);
+  seq.vx(0) = -5.0;
+  optimizer_tester.applyControlSequenceInterIterationConstraintsWrapper();
+  EXPECT_NEAR(seq.vx(0), 0.475, 1e-6);
+
+  // 加速侧：0.5 + 0.025*ax_max = 0.55
+  seq.vx(0) = 5.0;
+  optimizer_tester.applyControlSequenceInterIterationConstraintsWrapper();
+  EXPECT_NEAR(seq.vx(0), 0.55, 1e-6);
+
+  optimizer_tester.shutdown();
+}
+
+// 运动模型：加速度约束作用在状态速度上，采样控制量保持原始（PR #5266 语义）
+TEST(OptimizerTests, MotionModelAccelClampOnStateVelocities)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_motion_model_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(1));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(5));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.1));
+  node->declare_parameter("mppic.ax_max", rclcpp::ParameterValue(1.0));
+  node->declare_parameter("mppic.ax_min", rclcpp::ParameterValue(-1.0));
+  node->declare_parameter("mppic.ay_max", rclcpp::ParameterValue(1.0));
+  node->declare_parameter("mppic.ay_min", rclcpp::ParameterValue(-1.0));
+  node->declare_parameter("mppic.az_max", rclcpp::ParameterValue(1.0));
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(10.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_model", "", "dummy_costmap_accel_model");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetOmniModel();
+
+  // 起步速度 0，控制量全是 5 m/s；model_dt 0.1 与 a_max 1.0 → 每步最多 +0.1
+  models::State state;
+  state.reset(1, 5);
+  state.cvx = 5.0 * xt::ones<float>({1, 5});
+  state.cvy = 5.0 * xt::ones<float>({1, 5});
+  state.cwz = 5.0 * xt::ones<float>({1, 5});
+  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(state);
+  EXPECT_NEAR(state.vx(0, 1), 0.1, 1e-6);
+  EXPECT_NEAR(state.vx(0, 2), 0.2, 1e-6);
+  EXPECT_NEAR(state.vx(0, 4), 0.4, 1e-6);
+  EXPECT_NEAR(state.vy(0, 4), 0.4, 1e-6);
+  EXPECT_NEAR(state.wz(0, 4), 0.4, 1e-6);
+  // 采样控制量本身不被夹紧，softmax 才能分辨超限程度
+  EXPECT_NEAR(state.cvx(0, 0), 5.0, 1e-6);
+  EXPECT_NEAR(state.cwz(0, 4), 5.0, 1e-6);
+
+  // 反向：从 0 起步给 -5，每步最多 -0.1
+  state.reset(1, 5);
+  state.cvx = -5.0 * xt::ones<float>({1, 5});
+  state.cwz = -5.0 * xt::ones<float>({1, 5});
+  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(state);
+  EXPECT_NEAR(state.vx(0, 1), -0.1, 1e-6);
+  EXPECT_NEAR(state.vx(0, 4), -0.4, 1e-6);
+
+  optimizer_tester.shutdown();
+}
+
+// 逐轴独立：上限留 0 表示该轴不限制，而不是"不允许变化"
+TEST(OptimizerTests, AccelConstraintsArePerAxis)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_per_axis_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(1));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(5));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.1));
+  // 只给纵向加速度上限，az/ay 保持 0
+  node->declare_parameter("mppic.ax_max", rclcpp::ParameterValue(1.0));
+  node->declare_parameter("mppic.ax_min", rclcpp::ParameterValue(-1.0));
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(10.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_per_axis", "", "dummy_costmap_accel_per_axis");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetOmniModel();
+
+  models::State state;
+  state.reset(1, 5);
+  state.cvx = 5.0 * xt::ones<float>({1, 5});
+  state.cvy = 5.0 * xt::ones<float>({1, 5});
+  state.cwz = 2.0 * xt::ones<float>({1, 5});
+  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(state);
+
+  // 纵向被夹到一步 0.1
+  EXPECT_NEAR(state.vx(0, 1), 0.1, 1e-6);
+  EXPECT_NEAR(state.vx(0, 4), 0.4, 1e-6);
+  // wz / vy 未设上限 → 与控制量直通，不能被冻结成 0
+  EXPECT_NEAR(state.wz(0, 1), 2.0, 1e-6);
+  EXPECT_NEAR(state.wz(0, 4), 2.0, 1e-6);
+  EXPECT_NEAR(state.vy(0, 4), 5.0, 1e-6);
+
+  optimizer_tester.shutdown();
 }

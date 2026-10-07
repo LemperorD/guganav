@@ -447,9 +447,17 @@ inline void savitskyGolayFilter(
   std::array<mppi::models::Control, 4> & control_history,
   const models::OptimizerSettings & settings)
 {
-  // 二次九点 Savitzky-Golay 滤波系数。
-  xt::xtensor<float, 1> filter = {-21.0, 14.0, 39.0, 54.0, 59.0, 54.0, 39.0, 14.0, -21.0};
-  filter /= 231.0;
+  // 滤波系数，按 sgf_order 选择：
+  //   1 = 9 点滑动均值，更平滑（上游实测对"已执行指令平滑度/迭代间抖动"最好）
+  //   2 = 二次九点 Savitzky-Golay（默认，保留更多细节）
+  xt::xtensor<float, 1> filter;
+  if (settings.sgf_order == 1) {
+    filter = xt::xtensor<float, 1>{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+    filter /= 9.0;
+  } else {
+    filter = xt::xtensor<float, 1>{-21.0, 14.0, 39.0, 54.0, 59.0, 54.0, 39.0, 14.0, -21.0};
+    filter /= 231.0;
+  }
 
   const unsigned int num_sequences = control_sequence.vx.shape(0) - 1;
 
@@ -677,6 +685,41 @@ inline size_t findClosestPathPt(const std::vector<float> & vec, float dist, size
     return iter - 1 - vec.begin();
   }
   return iter - vec.begin();
+}
+
+/**
+ * @brief 把输入夹到 [lower_bound, upper_bound]
+ * @param lower_bound: 下界
+ * @param upper_bound: 上界
+ * @param input: 待夹紧的值
+ * @return 返回值: 夹紧后的值
+ */
+inline float clamp(const float lower_bound, const float upper_bound, const float input)
+{
+  return std::min(upper_bound, std::max(input, lower_bound));
+}
+
+/**
+ * @brief 按加速度上限夹紧速度（移植自上游 nav2 PR #6072）
+ *
+ * 前进（last_vel >= 0）时用 max_delta 限制加速、min_delta 限制减速；
+ * 倒车（last_vel < 0）时把两个方向对调，这样"倒车时继续后退"用的是
+ * ax_max、"倒车时刹停"用的是 ax_min，符合非对称加减速的物理含义。
+ *
+ * @param last_vel: 上一步速度
+ * @param curr_vel: 本步期望速度
+ * @param min_delta: 允许的最大速度变化量（减速侧，通常为负）
+ * @param max_delta: 允许的最大速度变化量（加速侧，通常为正）
+ * @return 返回值: 夹紧后的速度
+ */
+inline float clampVelocityByAccel(
+  const float last_vel, const float curr_vel,
+  const float min_delta, const float max_delta)
+{
+  if (last_vel >= 0) {
+    return clamp(last_vel + min_delta, last_vel + max_delta, curr_vel);
+  }
+  return clamp(last_vel - max_delta, last_vel - min_delta, curr_vel);
 }
 
 }  // namespace mppi::utils
