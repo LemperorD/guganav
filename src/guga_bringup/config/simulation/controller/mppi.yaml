@@ -8,7 +8,7 @@ local_costmap:
 
       height: 10
 
-      robot_radius: 0.369
+      robot_radius: 0.367
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -57,10 +57,10 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
         cost_scaling_factor: 8.0
-        # 原为 0.40，只比 inscribed 半径(0.369) 大 3 cm，带内代价高达 197～253：
+        # 原为 0.40，只比 inscribed 半径(0.367) 大 3 cm，带内代价高达 197～253：
         # 机器人一进膨胀区就等同于被判碰撞，没有可行轨迹可用而停住。取 0.60 后，
-        # 0.369～0.60 之间是有梯度的软代价区
-        # （253 × exp(-8.0 × (d - 0.369))：0.45 m 处约 132，0.60 m 处约 40）。
+        # 0.367～0.60 之间是有梯度的软代价区
+        # （253 × exp(-8.0 × (d - 0.367))：0.45 m 处约 132，0.60 m 处约 40）。
         inflation_radius: 0.60
         num_threads: 4
 

@@ -97,34 +97,46 @@ def generate_launch_description():
         ),
     )
     declare_planner_cmd = DeclareLaunchArgument(
-        "planner", default_value="smac2d", choices=["jps", "smac2d", "smachybrid"],
-        description="Global planner: jps, smac2d, or smachybrid",
+        "planner", default_value="smac2d", choices=["jps", "smac2d"],
+        description="Global planner: jps or smac2d (config/reality/planner/)",
     )
     declare_controller_cmd = DeclareLaunchArgument(
-        "controller", default_value="mppi", choices=["pid", "mppi", "mpc"],
-        description="Controller: pid, mppi, or mpc",
+        "controller", default_value="mppi", choices=["pid", "mppi"],
+        description="Controller: pid or mppi (config/reality/controller/)",
     )
 
-    def default_params_file(which):
-        return PythonExpression(
-            [
-                "'", params_file, "' != '' and '", params_file,
-                "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
-            ]
-        )
+    def reality_params_file(which):
+        return os.path.join(bringup_dir, "config", "reality", which)
+
+    # 单文件覆盖模式未启用（见 declare_params_file_cmd 的说明），三文件合并固定生效：
+    # base 固定，controller/planner 两层的文件由 controller:=/planner:= 决定，
+    # 否则选了 pid/jps 却仍然加载 mppi/smac2d 的参数。
     params_file = ""
     declare_base_params_file_cmd = DeclareLaunchArgument(
-        "base_params_file", default_value=default_params_file("base.yaml"),
+        "base_params_file", default_value=reality_params_file("base.yaml"),
         description="Common params file (merge base layer)",
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
-        "controller_params_file", default_value=default_params_file("controller/mppi.yaml"),
-        description="Controller-diff params file (pid default, mppi available)",
+        "controller_params_file",
+        default_value=PythonExpression(
+            [
+                "'", controller, "' == 'mppi' and '",
+                reality_params_file("controller/mppi.yaml"),
+                "' or '", reality_params_file("controller/pid.yaml"), "'",
+            ]
+        ),
+        description="Controller-diff params file, chosen by controller:= (mppi|pid)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
         "planner_params_file",
-        default_value=default_params_file("planner/smac2d.yaml"),
-        description="Planner-diff params file",
+        default_value=PythonExpression(
+            [
+                "'", planner, "' == 'jps' and '",
+                reality_params_file("planner/jps.yaml"),
+                "' or '", reality_params_file("planner/smac2d.yaml"), "'",
+            ]
+        ),
+        description="Planner-diff params file, chosen by planner:= (jps|smac2d)",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(

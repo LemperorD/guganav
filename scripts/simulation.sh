@@ -62,87 +62,19 @@ SIMULATION_PARAMS_DIR="$WS/src/guga_bringup/config/simulation"
 
 
 select_planner() {
-  local selection
-
-  # stdout is captured by the caller, so use /dev/tty to detect and read an
-  # actual interactive terminal instead of checking stdout's terminal state.
-  if [ ! -r /dev/tty ]; then
-    printf 'jps'
-    return 0
-  fi
-
-  cat >&2 <<'EOF'
-
-Select global planner:
-  1) JPS (jps)
-  2) SmacPlanner2D (smac2d)
-  3) SmacPlannerHybrid (smachybrid)
-EOF
-  while true; do
-    printf 'Planner [1]: ' >&2
-    if ! read -r selection < /dev/tty; then
-      selection=1
-    fi
-    case "${selection:-1}" in
-      1)
-        printf 'jps'
-        return 0
-        ;;
-      2)
-        printf 'smac2d'
-        return 0
-        ;;
-      3)
-        printf 'smachybrid'
-        return 0
-        ;;
-      *)
-        echo "Please select 1, 2, or 3." >&2
-        ;;
-    esac
-  done
+  # 交互实现与 reality.sh 共用（scripts/lib/common.sh 的 select_profile）：
+  # 无可用终端时返回默认值，stdout 只输出结果，菜单走 stderr。
+  select_profile "Select global planner:" "Planner" "jps" \
+    "jps|JPS (jps)" \
+    "smac2d|SmacPlanner2D (smac2d)" \
+    "smachybrid|SmacPlannerHybrid (smachybrid)"
 }
 
 select_controller() {
-  local selection
-
-  # stdout is captured by the caller, so use /dev/tty to detect and read an
-  # actual interactive terminal instead of checking stdout's terminal state.
-  if [ ! -r /dev/tty ]; then
-    printf 'pid'
-    return 0
-  fi
-
-  cat >&2 <<'EOF'
-
-Select controller:
-  1) omni PID (pid)
-  2) MPPI (mppi)
-  3) MPC (mpc)
-EOF
-  while true; do
-    printf 'Controller [1]: ' >&2
-    if ! read -r selection < /dev/tty; then
-      selection=1
-    fi
-    case "${selection:-1}" in
-      1)
-        printf 'pid'
-        return 0
-        ;;
-      2)
-        printf 'mppi'
-        return 0
-        ;;
-      3)
-        printf 'mpc'
-        return 0
-        ;;
-      *)
-        echo "Please select 1, 2, or 3." >&2
-        ;;
-    esac
-  done
+  select_profile "Select controller:" "Controller" "pid" \
+    "pid|omni PID (pid)" \
+    "mppi|MPPI (mppi)" \
+    "mpc|MPC (mpc)"
 }
 
 # ────────────────────────────────────────────────────────────────
@@ -381,6 +313,53 @@ EOF
   return 1
 }
 
+# map_server 只加载 <world>.yaml，同目录下的 .pgm 由 yaml 的 image 字段引用；
+# 只有 pgm 没有 yaml 时，map_server 会在 configure 阶段抛错、localization 的
+# 生命周期 bringup 中止，现象是"话题在、但没有任何发布者"（订阅者是两个
+# costmap 的 static_layer），原因只出现在 launch 日志里，很难第一眼看到。
+# 这里与上面的 prior PCD 检查用同一套提前拦截。
+ensure_simulation_map() {
+  local world_arg=$1
+  local map_arg=${2:-}
+  local source_map="$WS/src/guga_bringup/map/simulation/${world_arg}.yaml"
+  local install_map="$WS/install/guga_bringup/share/guga_bringup/map/simulation/${world_arg}.yaml"
+
+  if [ -n "$map_arg" ]; then
+    if [ -f "$map_arg" ]; then
+      return 0
+    fi
+    echo "Missing map YAML: $map_arg" >&2
+    return 1
+  fi
+
+  if [ -f "$source_map" ] || [ -f "$install_map" ]; then
+    return 0
+  fi
+
+  cat >&2 <<EOF
+Missing simulation map YAML for world '$world_arg'.
+
+Expected one of:
+  $source_map
+  $install_map
+
+The 'nav' mode starts nav2_map_server with this file. Without it map_server
+fails at configure, the localization lifecycle bringup aborts, and nothing is
+published on <namespace>/map -- the topic still exists because the two
+costmaps' static_layer subscribe to it.
+
+Use one of these options:
+  1. Add ${world_arg}.yaml next to ${world_arg}.pgm in
+     src/guga_bringup/map/simulation/ (image/resolution/origin must match
+     that .pgm), then rebuild or source the symlink-install workspace.
+  2. Run SLAM mode instead (slam_toolbox publishes the map):
+     scripts/simulation.sh map $world_arg
+  3. Explicitly pass a map YAML:
+     scripts/simulation.sh nav $world_arg map:=/path/to/${world_arg}.yaml
+EOF
+  return 1
+}
+
 run_in_terminal() {
   local title=$1
   shift
@@ -416,6 +395,7 @@ run_complete_simulation() {
   local world_arg=rmul_2025
   local slam_arg=False
   local prior_pcd_arg=""
+  local map_arg=""
 
   if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
     world_arg=$1
@@ -432,11 +412,15 @@ run_complete_simulation() {
       prior_pcd_file:=*)
         prior_pcd_arg=${arg#prior_pcd_file:=}
         ;;
+      map:=*)
+        map_arg=${arg#map:=}
+        ;;
     esac
   done
 
   if [ "$run_mode" = nav ] && ! is_true "$slam_arg"; then
     ensure_simulation_prior_pcd "$world_arg" "$prior_pcd_arg"
+    ensure_simulation_map "$world_arg" "$map_arg"
   fi
 
   if run_in_terminal "guganav gazebo" "$WS/scripts/simulation.sh" __gazebo world:="$world_arg"; then
@@ -551,12 +535,16 @@ done
 
 if [ "$slam" = "False" ]; then
   prior_pcd_arg=""
+  map_arg=""
   for arg in "${launch_args[@]}"; do
     if [[ "$arg" == prior_pcd_file:=* ]]; then
       prior_pcd_arg=${arg#prior_pcd_file:=}
+    elif [[ "$arg" == map:=* ]]; then
+      map_arg=${arg#map:=}
     fi
   done
   ensure_simulation_prior_pcd "$world" "$prior_pcd_arg"
+  ensure_simulation_map "$world" "$map_arg"
 fi
 
 require_workspace_setup

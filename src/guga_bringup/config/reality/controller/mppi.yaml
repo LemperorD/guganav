@@ -42,12 +42,23 @@ controller_server:
       batch_size: 1800
       vx_std: 0.2
       vy_std: 0.2
-      wz_std: 1.0
+      wz_std: 0.00001
       vx_max: 2.5
       vx_min: -2.5
-      # ax_max / ay_max 已删除：Humble 的 nav2_mppi_controller 1.1.20 不声明这两个参数
-      # （加速度限幅是 Rolling 之后才加入的），写在这里既不生效，也会让人误以为限幅已配置。
-      # 实车的加速度约束由 velocity_smoother 的 max_accel / max_decel 承担。
+      # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072），
+      # 全部默认 0 = 关闭。开启后约束作用在预测轨迹的**状态速度**上，采样控制量保持原始；
+      # 第 0 步用真实控制周期、之后用 model_dt（见 optimizer.cpp 的
+      # applyControlSequenceInterIterationConstraints / applyControlSequenceConstraints）。
+      # 起始值建议先与 velocity_smoother 的 max_accel/max_decel 对齐（当前 4.5 / -4.5），
+      # 台架实测后再收；ay 受麦克纳姆轮横向摩擦限制，通常比 ax 小。
+      # 注意单位：ax/ay 是 m/s²，az 是 rad/s²（实车 wz_max=0，az 暂时用不到）。
+      # 采样标准差建议同步按 a_max·model_dt 收缩（4.5 × 1/30 ≈ 0.15），
+      # 否则 vx_std=0.2 会在采样物理不可达的状态，表现为抖动。
+      ax_max: 3.0
+      ax_min: -3.0
+      ay_max: 3.0
+      ay_min: -3.0
+      az_max: 0.0
       vy_max: 2.5
       # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
       wz_max: 0.0
@@ -91,7 +102,11 @@ controller_server:
         threshold_to_consider: 0.5
       # 注意：本块未列入上面的 critics 列表，当前不参与计算；取值与仿真 profile 对齐。
       # 若要启用，需先把 inflation_radius / cost_scaling_factor 改成与 local costmap
-      # 膨胀层完全一致（local 当前是 0.364 / 4.0，否则距离反算本身就是错的）。
+      # 膨胀层完全一致（local 当前是 0.60 / 4.0，否则距离反算本身就是错的）。
+      # consider_footprint 保持 false：它的 distanceToObstacle() 在 footprint 模式下
+      # 从 253 反算出的距离恒为内切半径（Humble 已知缺陷，issue #4057），这里要的是
+      # 中心点代价那套公式。costmap 改成 footprint 后启用它会多一条
+      # "Inconsistent configuration in collision checking" 的 WARN，属预期，不抛异常。
       ObstaclesCritic:
         enabled: true
         cost_power: 1
@@ -101,7 +116,7 @@ controller_server:
         collision_cost: 10000.0
         collision_margin_distance: 0.15
         near_goal_distance: 0.5
-        inflation_radius: 0.369 # (only in Humble)
+        inflation_radius: 0.367 # (only in Humble)
         cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
@@ -110,7 +125,17 @@ controller_server:
         cost_power: 1
         cost_weight: 6.0
         critical_cost: 300.0
-        consider_footprint: True
+        # 依赖 local costmap 里显式写出的 16 边形 footprint（config/reality/base.yaml），
+        # 那边 use_radius_ 才会是 false。只写 robot_radius 时这里开 true 会命中
+        # cost_critic.cpp:56-66 的 "Considering footprint in collision checking but no
+        # robot footprint provided in the costmap."：controller_server configure 失败 →
+        # lifecycle_manager_navigation 中止 bringup → planner_server 不 configure，
+        # global_costmap 没有发布者（表现为启动后没有代价地图）。
+        # 语义变化：consider_footprint=true 时 inCollision() 对 253(INSCRIBED) 返回
+        # false，只有压到 254(LETHAL) 才算碰撞（1e6），253 只累加 critical_cost
+        # （cost_critic.cpp:187-211）。即"中心进内切环"从硬碰撞降为软惩罚，机器人
+        # 可以用上膨胀带；代价是更贴障碍，要配合 inflation_radius/权重一起看。
+        consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 1.0
         trajectory_point_step: 2
@@ -196,12 +221,12 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        # 原为 0.364，小于 robot_radius(0.369) 即 inscribed 半径：膨胀区里全部是 253
+        # 原为 0.364，小于 robot_radius(0.367) 即 inscribed 半径：膨胀区里全部是 253
         # （INSCRIBED），而 CostCritic 与 ObstaclesCritic 都把 253 直接判为碰撞，于是
         # 机器人一进膨胀区，每条候选轨迹的首点就落在 253 上，全部轨迹作废、fail_flag
         # 置位，优化器 reset 一次后抛 "Optimizer fail to compute path"，控制器停住。
-        # 取 0.60 之后，0.369～0.60 之间是有梯度的软代价区
-        # （253 × exp(-4.0 × (d - 0.369))：0.45 m 处约 183，0.60 m 处约 100），
+        # 取 0.60 之后，0.367～0.60 之间是有梯度的软代价区
+        # （253 × exp(-4.0 × (d - 0.367))：0.45 m 处约 183，0.60 m 处约 100），
         # 机器人可以进入这一带而不再被判碰撞；253 区仍等于车体接触区。
         # 硬碰撞边界由 robot_radius 决定，调大本条不压缩可通行的窄道宽度。
         inflation_radius: 0.60
