@@ -41,6 +41,20 @@ void BackUpFreeSpace::onConfigure()
     node, "max_escape_distance", rclcpp::ParameterValue(0.5));
   nav2_util::declare_parameter_if_not_declared(
     node, "escape_clearance", rclcpp::ParameterValue(0.1));
+  // 射线允许穿越的代价上限：>= 该值的格子视为真障碍，方向作废。
+  // 与"是否算被困"用的 253（INSCRIBED）分开：253 只是安全余量，254 才是障碍。
+  nav2_util::declare_parameter_if_not_declared(
+    node, "traverse_cost_threshold",
+    rclcpp::ParameterValue(static_cast<int>(nav2_costmap_2d::LETHAL_OBSTACLE)));
+  // 严格脱困（在 max_escape_distance 内离开 >=253 区）找不到方向时，把脱困距离上限
+  // 放宽到请求距离重扫一次；仍然要求终点低于 253，只是允许走得更远才脱离。
+  nav2_util::declare_parameter_if_not_declared(
+    node, "relaxed_escape_enabled", rclcpp::ParameterValue(true));
+  // 取代价地图与位姿所用的坐标系。空字符串表示沿用 behavior_server 的 global_frame。
+  // 方向判定要读哪张图，位姿就必须取该图的坐标系：服务换成局部代价地图（odom 系）
+  // 之后这里必须跟着设成 odom，否则会拿 map 系的坐标去索引 odom 系的栅格。
+  nav2_util::declare_parameter_if_not_declared(
+    node, "costmap_frame", rclcpp::ParameterValue(std::string("")));
   nav2_util::declare_parameter_if_not_declared(
     node, "service_name", rclcpp::ParameterValue("local_costmap/get_costmap"));
   nav2_util::declare_parameter_if_not_declared(node, "visualize", rclcpp::ParameterValue(false));
@@ -49,7 +63,13 @@ void BackUpFreeSpace::onConfigure()
   node->get_parameter("max_radius", max_radius_);
   node->get_parameter("max_escape_distance", max_escape_distance_);
   node->get_parameter("escape_clearance", escape_clearance_);
+  node->get_parameter("traverse_cost_threshold", traverse_cost_threshold_);
+  node->get_parameter("relaxed_escape_enabled", relaxed_escape_enabled_);
+  node->get_parameter("costmap_frame", costmap_frame_);
   node->get_parameter("service_name", service_name_);
+  if (costmap_frame_.empty()) {
+    costmap_frame_ = global_frame_;
+  }
   node->get_parameter("visualize", visualize_);
 
   if (max_radius_ <= 0.0 || max_escape_distance_ <= 0.0 || escape_clearance_ < 0.0) {
@@ -95,7 +115,7 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   auto costmap = result.get()->map;
 
   if (!nav2_util::getCurrentPose(
-        initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        initial_pose_, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
     return nav2_behaviors::Status::FAILED;
   }
@@ -120,7 +140,8 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   }
 
   // Calculate move command
-  // findBestDirection returns an angle in global_frame_. DriveOnHeading expects
+  // findBestDirection 返回的是 costmap_frame_（本例为局部代价地图所在的 odom）下的角度。
+  // DriveOnHeading expects
   // velocity components in robot_base_frame_, so rotate the vector into the
   // current robot frame before publishing it.
   const double speed = std::fabs(command->speed);
@@ -137,7 +158,7 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   end_time_ = clock_->now() + command_time_allowance_;
 
   if (!nav2_util::getCurrentPose(
-        initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        initial_pose_, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
     return nav2_behaviors::Status::FAILED;
   }
@@ -162,7 +183,7 @@ nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
 
   geometry_msgs::msg::PoseStamped current_pose;
   if (!nav2_util::getCurrentPose(
-        current_pose, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        current_pose, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Current robot pose is not available.");
     return nav2_behaviors::Status::FAILED;
   }
@@ -282,108 +303,132 @@ std::optional<BackUpFreeSpace::EscapeDirection> BackUpFreeSpace::findBestDirecti
     double accumulated_cost;
     bool valid;
   };
-  std::vector<Candidate> candidates;
+  // 每个方向都要走一遍射线，脱困距离上限是它的输入。严格条件（max_escape_distance）
+  // 下一个有效方向都没有时，放宽到请求距离重扫一次：仍然要求终点低于 253，
+  // 只是允许走得更远才脱离高代价区。凹角、两障碍夹击这类"必须多退一点"的几何
+  // 因此不再直接判无解。
+  const auto scan = [&](float escape_limit) {
+    std::vector<Candidate> candidates;
 
-  for (float angle = start_angle; angle < end_angle; angle += angle_increment) {
-    bool escaped = !starts_in_high_cost;
-    bool valid = true;
-    float escape_distance = 0.0f;
-    float command_distance = requested_distance;
-    uint8_t previous_cost = *start_cost;
-    double accumulated_cost = 0.0;
+    for (float angle = start_angle; angle < end_angle; angle += angle_increment) {
+      bool escaped = !starts_in_high_cost;
+      bool valid = true;
+      float escape_distance = 0.0f;
+      float command_distance = requested_distance;
+      uint8_t previous_cost = *start_cost;
+      double accumulated_cost = 0.0;
 
-    for (float r = resolution; r <= requested_distance + resolution * 0.5f; r += resolution) {
-      const auto cost = cost_at(pose.x + r * std::cos(angle), pose.y + r * std::sin(angle));
-      if (!cost) {
-        valid = false;
-        break;
-      }
-
-      if (!escaped) {
-        if (*cost >= kCollisionCost) {
-          if (r > max_escape_distance_ + resolution * 0.5f || *cost > previous_cost) {
-            valid = false;
-            break;
-          }
-          previous_cost = *cost;
-          continue;
-        }
-
-        escaped = true;
-        escape_distance = r;
-        command_distance = escape_distance + static_cast<float>(escape_clearance_);
-        if (command_distance > requested_distance + resolution * 0.5f) {
+      for (float r = resolution; r <= requested_distance + resolution * 0.5f; r += resolution) {
+        const auto cost = cost_at(pose.x + r * std::cos(angle), pose.y + r * std::sin(angle));
+        if (!cost) {
           valid = false;
           break;
         }
-      }
 
-      if (*cost >= kCollisionCost) {
-        valid = false;
-        break;
-      }
+        if (!escaped) {
+          if (*cost >= kCollisionCost) {
+            // 仍在高代价区。真障碍格（>= traverse 阈值，通常 254）只在起点本身就位于
+            // 障碍区（自标记、幽灵标记）时才允许穿越，且限在严格脱困距离内；253 那一圈
+            // 只是安全余量，放宽后允许一直走到请求距离，这样凹角、两障碍夹击不再无解。
+            const float cell_limit = *cost >= traverse_cost_threshold_
+                                       ? static_cast<float>(max_escape_distance_)
+                                       : escape_limit;
+            if (r > cell_limit + resolution * 0.5f || *cost > previous_cost) {
+              valid = false;
+              break;
+            }
+            previous_cost = *cost;
+            continue;
+          }
 
-      // Reject directions that turn back toward inflated obstacles immediately
-      // after leaving the initial high-cost component. Small rasterization
-      // changes are tolerated on diagonal rays.
-      if (
-        starts_in_high_cost && r <= command_distance + resolution * 0.5f &&
-        static_cast<int>(*cost) > static_cast<int>(previous_cost) + kInflationCostTolerance) {
-        valid = false;
-        break;
-      }
+          escaped = true;
+          escape_distance = r;
+          command_distance = escape_distance + static_cast<float>(escape_clearance_);
+          if (command_distance > requested_distance + resolution * 0.5f) {
+            valid = false;
+            break;
+          }
+        }
 
-      accumulated_cost += *cost;
-      previous_cost = *cost;
-
-      if (starts_in_high_cost && r >= command_distance - resolution * 0.5f) {
-        break;
-      }
-    }
-
-    if (starts_in_high_cost && !escaped) {
-      valid = false;
-    }
-
-    if (valid && collision_checker_) {
-      bool footprint_safe = false;
-      for (float target_distance = command_distance;
-           target_distance <= requested_distance + resolution * 0.5f;
-           target_distance += resolution) {
-        const auto target_cost = cost_at(
-          pose.x + target_distance * std::cos(angle), pose.y + target_distance * std::sin(angle));
-        if (!target_cost || *target_cost >= kCollisionCost) {
+        if (*cost >= traverse_cost_threshold_) {
+          valid = false;
           break;
         }
+
+        // Reject directions that turn back toward inflated obstacles immediately
+        // after leaving the initial high-cost component. Small rasterization
+        // changes are tolerated on diagonal rays.
         if (
-          starts_in_high_cost && static_cast<int>(*target_cost) >
-                                   static_cast<int>(previous_cost) + kInflationCostTolerance) {
+          starts_in_high_cost && r <= command_distance + resolution * 0.5f &&
+          static_cast<int>(*cost) > static_cast<int>(previous_cost) + kInflationCostTolerance) {
+          valid = false;
           break;
         }
 
-        geometry_msgs::msg::Pose2D target_pose;
-        target_pose.x = pose.x + target_distance * std::cos(angle);
-        target_pose.y = pose.y + target_distance * std::sin(angle);
-        target_pose.theta = pose.theta;
-        if (collision_checker_->isCollisionFree(target_pose, true)) {
-          command_distance = target_distance;
-          footprint_safe = true;
-          break;
-        }
+        accumulated_cost += *cost;
+        previous_cost = *cost;
 
-        accumulated_cost += *target_cost;
-        previous_cost = *target_cost;
-        if (!starts_in_high_cost) {
+        if (starts_in_high_cost && r >= command_distance - resolution * 0.5f) {
           break;
         }
       }
-      if (!footprint_safe) {
+
+      if (starts_in_high_cost && !escaped) {
         valid = false;
       }
-    }
 
-    candidates.push_back(
-      {{angle, escape_distance, command_distance, starts_in_high_cost}, accumulated_cost, valid});
+      if (valid && collision_checker_) {
+        bool footprint_safe = false;
+        for (float target_distance = command_distance;
+             target_distance <= requested_distance + resolution * 0.5f;
+             target_distance += resolution) {
+          const auto target_cost = cost_at(
+            pose.x + target_distance * std::cos(angle), pose.y + target_distance * std::sin(angle));
+          if (!target_cost || *target_cost >= traverse_cost_threshold_) {
+            break;
+          }
+          if (
+            starts_in_high_cost && static_cast<int>(*target_cost) >
+                                     static_cast<int>(previous_cost) + kInflationCostTolerance) {
+            break;
+          }
+
+          geometry_msgs::msg::Pose2D target_pose;
+          target_pose.x = pose.x + target_distance * std::cos(angle);
+          target_pose.y = pose.y + target_distance * std::sin(angle);
+          target_pose.theta = pose.theta;
+          if (collision_checker_->isCollisionFree(target_pose, true)) {
+            command_distance = target_distance;
+            footprint_safe = true;
+            break;
+          }
+
+          accumulated_cost += *target_cost;
+          previous_cost = *target_cost;
+          if (!starts_in_high_cost) {
+            break;
+          }
+        }
+        if (!footprint_safe) {
+          valid = false;
+        }
+      }
+
+      candidates.push_back(
+        {{angle, escape_distance, command_distance, starts_in_high_cost}, accumulated_cost, valid});
+    }
+    return candidates;
+  };
+
+  std::vector<Candidate> candidates = scan(static_cast<float>(max_escape_distance_));
+  const bool any_valid = std::any_of(
+    candidates.begin(), candidates.end(),
+    [](const Candidate & candidate) { return candidate.valid; });
+  if (!any_valid && relaxed_escape_enabled_) {
+    RCLCPP_WARN(
+      logger_, "%.2f m 内没有方向能脱离 >=%u 的高代价区，放宽到请求距离 %.2f m 重扫",
+      max_escape_distance_, static_cast<unsigned>(kCollisionCost), requested_distance);
+    candidates = scan(requested_distance + resolution * 0.5f);
   }
 
   float minimum_escape_distance = std::numeric_limits<float>::infinity();
@@ -476,7 +521,7 @@ void BackUpFreeSpace::visualize(
   visualization_msgs::msg::MarkerArray markers;
 
   visualization_msgs::msg::Marker sector_marker;
-  sector_marker.header.frame_id = global_frame_;
+  sector_marker.header.frame_id = costmap_frame_;
   sector_marker.header.stamp = clock_->now();
   sector_marker.ns = "direction";
   sector_marker.id = 0;
@@ -517,7 +562,7 @@ void BackUpFreeSpace::visualize(
 
   auto create_arrow = [&](float angle, int id, float r, float g, float b) {
     visualization_msgs::msg::Marker arrow;
-    arrow.header.frame_id = global_frame_;
+    arrow.header.frame_id = costmap_frame_;
     arrow.header.stamp = clock_->now();
     arrow.ns = "direction";
     arrow.id = id;

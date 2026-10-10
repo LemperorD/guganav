@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <title>动态调参</title>
+  <style>
+    :root {
+      --bg: #14161a;
+      --fg: #e6e6e6;
+      --dim: #8b939e;
+      --line: #2a2f37;
+      --accent: #4c9aff;
+      --ok: #3fb950;
+      --bad: #f85149;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 -apple-system, "Noto Sans CJK SC", sans-serif;
+    }
+
+    header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+    }
+
+    header h1 {
+      font-size: 15px;
+      margin: 0 10px 0 0;
+      font-weight: 600;
+    }
+
+    .stat {
+      color: var(--dim);
+    }
+
+    .stat b {
+      color: var(--fg);
+      font-weight: 600;
+    }
+
+    input,
+    button,
+    select {
+      background: #1c2027;
+      color: var(--fg);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 4px 8px;
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #08131f;
+      font-weight: 600;
+    }
+
+    main {
+      padding: 12px 14px 60px;
+    }
+
+    section {
+      margin-bottom: 22px;
+    }
+
+    section>h2 {
+      font-size: 13px;
+      margin: 0 0 8px;
+      color: var(--dim);
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--dim);
+      font-weight: 500;
+    }
+
+    td.name {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+    }
+
+    td.desc {
+      color: var(--dim);
+    }
+
+    td.val {
+      width: 130px;
+      font-family: ui-monospace, monospace;
+    }
+
+    td.val.changed {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    td.edit {
+      width: 150px;
+    }
+
+    td.edit input {
+      width: 100%;
+    }
+
+    .msg-ok {
+      color: var(--ok);
+    }
+
+    .msg-bad {
+      color: var(--bad);
+    }
+
+    .row-msg {
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .warn {
+      color: var(--bad);
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>动态调参</h1>
+    <span class="stat">目标 <b id="stat-target">-</b></span>
+    <span class="stat">读耗时 <b id="stat-read">-</b></span>
+    <span class="stat">上次刷新 <b id="stat-age">-</b></span>
+    <span class="stat">连接 <b id="stat-ws">-</b></span>
+    <input id="filter" placeholder="过滤参数名 / 说明" style="width:220px" />
+    <button id="refresh">全部重读</button>
+    <button id="save" class="primary">保存到配置</button>
+    <span id="save-msg" class="row-msg"></span>
+    <label class="stat"><input type="checkbox" id="only-changed" /> 只看与配置不同的</label>
+  </header>
+  <main id="main"></main>
+
+  <script>
+    const main = document.getElementById('main');
+    const saveBtn = document.getElementById('save');
+    const saveMsg = document.getElementById('save-msg');
+    const state = { targets: [], baseline: null, drafts: new Map(), writable: true };
+    const rows = new Map();
+
+    function rowKey(target, name) {
+      return target + '\0' + name;
+    }
+
+    function refreshValues() {
+      const filter = document.getElementById('filter').value.trim().toLowerCase();
+      const onlyChanged = document.getElementById('only-changed').checked;
+      const visible = new Set();
+      for (const target of state.targets) {
+        for (const p of target.params) {
+          const key = rowKey(target.target, p.name);
+          const base = baselineValue(target, p.name);
+          const changed = isChanged(target, p);
+          const hay = (p.name + ' ' + p.description).toLowerCase();
+          if (filter && !hay.includes(filter)) continue;
+          if (onlyChanged && !changed) continue;
+          visible.add(key);
+          const row = rows.get(key);
+          if (!row) continue;
+          row.value.className = 'val' + (changed ? ' changed' : '');
+          row.value.textContent = fmt(p.value);
+          row.value.title = changed ? '配置值 ' + fmt(base) : '';
+          row.description.textContent = p.description || '';
+          if (document.activeElement !== row.input && !state.drafts.has(key)) {
+            row.input.value = fmt(p.value);
+          }
+        }
+      }
+      // New or removed parameters need a structural redraw. Defer it during editing.
+      if ([...rows.keys()].some(key => !visible.has(key)) ||
+        [...visible].some(key => !rows.has(key))) {
+        if (!main.contains(document.activeElement) && state.drafts.size === 0) render();
+      }
+    }
+
+    function fmt(v) {
+      if (Array.isArray(v)) return '[' + v.join(', ') + ']';
+      if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+      return v === null || v === undefined ? '' : String(v);
+    }
+
+    function baselineValue(target, name) {
+      if (!state.baseline) return undefined;
+      const node = state.baseline[target.node];
+      return node ? node[name] : undefined;
+    }
+
+    const PLACEHOLDER = '<robot_namespace>';
+
+    // 配置里写成 <robot_namespace>/topic 的参数，运行时已被节点换成带命名空间的全名。
+    // 比较前先归一成占位符，否则这类参数会被一直标成"偏离配置"；服务端回写时同样处理。
+    function canonical(v, base, ns) {
+      if (typeof v !== 'string' || typeof base !== 'string' || !base.includes(PLACEHOLDER) || !ns) return v;
+      return v.startsWith(ns) ? PLACEHOLDER + v.slice(ns.length) : v;
+    }
+
+    function sameValue(a, b) {
+      if (typeof a === 'boolean' || typeof b === 'boolean') return a === b;
+      if (typeof a === 'number' && typeof b === 'number') return a === b;
+      if (Array.isArray(a) && Array.isArray(b)) {
+        return a.length === b.length && a.every((x, i) => sameValue(x, b[i]));
+      }
+      if (a === null || a === undefined || b === null || b === undefined) return a === b;
+      return String(a) === String(b);
+    }
+
+    function isChanged(target, p) {
+      const base = baselineValue(target, p.name);
+      if (base === undefined) return false;
+      return !sameValue(
+        canonical(base, base, target.namespace),
+        canonical(p.value, base, target.namespace)
+      );
+    }
+
+    async function loadBaseline() {
+      try {
+        const res = await fetch('/api/baseline');
+        if (res.ok) state.baseline = await res.json();
+      } catch (e) { /* 没有基线也能用 */ }
+    }
+
+    function setSaveMsg(text, ok) {
+      saveMsg.textContent = text;
+      saveMsg.className = ok ? 'row-msg msg-ok' : 'row-msg msg-bad';
+    }
+
+    function syncSaveButton() {
+      saveBtn.disabled = !state.writable;
+      saveBtn.title = state.writable
+        ? '把当前与配置不同的参数写回 yaml（下次启动生效）'
+        : '服务端以只读模式启动（--no-save），不能写回配置';
+    }
+
+    function render() {
+      const filter = document.getElementById('filter').value.trim().toLowerCase();
+      const onlyChanged = document.getElementById('only-changed').checked;
+      rows.clear();
+      main.innerHTML = '';
+      for (const target of state.targets) {
+        const section = document.createElement('section');
+        const title = document.createElement('h2');
+        title.textContent = target.target + (target.error ? '  ⚠ ' + target.error : '');
+        if (target.error) title.className = 'warn';
+        section.appendChild(title);
+
+        const table = document.createElement('table');
+        table.innerHTML = '<thead><tr><th>参数</th><th>说明</th><th>当前值</th><th></th><th>新值</th></tr></thead>';
+        const tbody = document.createElement('tbody');
+
+        for (const p of target.params) {
+          const base = baselineValue(target, p.name);
+          const changed = isChanged(target, p);
+          const hay = (p.name + ' ' + p.description).toLowerCase();
+          if (filter && !hay.includes(filter)) continue;
+          if (onlyChanged && !changed) continue;
+
+          const tr = document.createElement('tr');
+          const tdName = document.createElement('td');
+          tdName.className = 'name';
+          tdName.textContent = p.short;
+          tdName.title = p.name;
+
+          const tdDesc = document.createElement('td');
+          tdDesc.className = 'desc';
+          tdDesc.textContent = p.description || '';
+
+          const tdVal = document.createElement('td');
+          tdVal.className = 'val' + (changed ? ' changed' : '');
+          tdVal.textContent = fmt(p.value);
+          if (changed) tdVal.title = '配置值 ' + fmt(base);
+
+          const tdBtn = document.createElement('td');
+          const apply = document.createElement('button');
+          apply.textContent = '应用';
+          tdBtn.appendChild(apply);
+
+          const tdEdit = document.createElement('td');
+          tdEdit.className = 'edit';
+          const input = document.createElement('input');
+          const key = rowKey(target.target, p.name);
+          input.value = state.drafts.has(key) ? state.drafts.get(key) : fmt(p.value);
+          input.oninput = () => state.drafts.set(key, input.value);
+          tdEdit.appendChild(input);
+
+          const send = async () => {
+            apply.disabled = true;
+            try {
+              const res = await fetch('/api/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target: target.target, name: p.name, value: input.value })
+              });
+              const data = await res.json();
+              apply.className = data.ok ? '' : 'warn';
+              apply.title = data.msg || '';
+              if (data.ok) {
+                state.drafts.delete(key);
+                const current = state.targets.find(t => t.target === target.target);
+                if (current && data.params) current.params = data.params.params;
+                refreshValues();
+              } else {
+                tdEdit.appendChild(msgNode(data.msg));
+              }
+            } catch (e) {
+              tdEdit.appendChild(msgNode(String(e)));
+            } finally {
+              apply.disabled = false;
+            }
+          };
+          apply.onclick = send;
+          input.onkeydown = (ev) => { if (ev.key === 'Enter') send(); };
+
+          tr.append(tdName, tdDesc, tdVal, tdBtn, tdEdit);
+          tbody.appendChild(tr);
+          rows.set(key, { value: tdVal, description: tdDesc, input });
+        }
+        table.appendChild(tbody);
+        section.appendChild(table);
+        main.appendChild(section);
+      }
+    }
+
+    function msgNode(text) {
+      const span = document.createElement('span');
+      span.className = 'row-msg';
+      span.textContent = ' ' + text;
+      return span;
+    }
+
+    function updateHeader() {
+      const first = state.targets[0];
+      document.getElementById('stat-target').textContent = state.targets.map(t => t.target).join(', ') || '-';
+      const reads = state.targets.map(t => t.read_ms).filter(v => v !== null && v !== undefined);
+      document.getElementById('stat-read').textContent = reads.length
+        ? (reads.reduce((a, b) => a + b, 0) / reads.length).toFixed(1) + ' ms' : '-';
+      if (state.stamp) {
+        document.getElementById('stat-age').textContent = ((Date.now() / 1000 - state.stamp) * 1000).toFixed(0) + ' ms 前';
+      }
+      if (first && first.read_ms !== null && first.read_ms !== undefined) {
+        document.getElementById('stat-read').title = '一次批量 GetParameters 的往返耗时（不做逐参数读取）';
+      }
+    }
+
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      ws.onopen = () => { document.getElementById('stat-ws').textContent = '已连接'; };
+      ws.onclose = () => { document.getElementById('stat-ws').textContent = '断开，重连中'; setTimeout(connect, 1000); };
+      ws.onerror = () => ws.close();
+      ws.onmessage = (ev) => {
+        const data = JSON.parse(ev.data);
+        if (data.type === 'params') {
+          state.targets = data.targets;
+          state.stamp = data.stamp;
+          state.writable = data.writable !== false;
+          syncSaveButton();
+          updateHeader();
+          if (rows.size) refreshValues();
+          else render();
+        } else if (data.type === 'result') {
+          // 单条写入的反馈由行内提示展示，这里只更新数值
+        }
+      };
+    }
+
+    document.getElementById('refresh').onclick = async () => {
+      const res = await fetch('/api/refresh', { method: 'POST' });
+      const data = await res.json();
+      state.targets = data.targets;
+      state.stamp = data.stamp;
+      state.writable = data.writable !== false;
+      syncSaveButton();
+      updateHeader();
+      if (rows.size) refreshValues();
+      else render();
+    };
+    document.getElementById('filter').oninput = render;
+    document.getElementById('only-changed').onchange = render;
+
+    // 保存：把"当前与配置不同"的参数写回 yaml（服务端 /api/save）。
+    // 只改目标行，保留注释与排版，写前备份到 log/paramview_backup/。
+    saveBtn.onclick = async () => {
+      saveBtn.disabled = true;
+      setSaveMsg('正在写回…', true);
+      try {
+        const res = await fetch('/api/save', { method: 'POST' });
+        const data = await res.json();
+        setSaveMsg(data.msg || '', data.ok);
+        if (data.ok && data.baseline) {
+          state.baseline = data.baseline;
+          state.drafts.clear();
+          render();
+        }
+      } catch (e) {
+        setSaveMsg(String(e), false);
+      } finally {
+        syncSaveButton();
+      }
+    };
+
+    syncSaveButton();
+    loadBaseline().then(connect);
+  </script>
+</body>
+
+</html>
