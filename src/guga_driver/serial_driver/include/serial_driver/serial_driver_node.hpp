@@ -138,7 +138,7 @@ namespace serial_driver {
         40.0};  // 速度指令缩放系数（m/s → mm/s）,理论值为1000但可以被调参
     std::deque<float> vx_buffer_;    // x速度指令滤波缓存
     std::deque<float> vy_buffer_;    // y速度指令滤波缓存
-    size_t filter_window_size_{10};  // 滤波窗口大小
+    size_t filter_window_size_{10};  // 滤波窗口帧数（ROS 参数 filter_window_size，1 = 关闭）
 
     // 串口底层
     std::shared_ptr<SerialDriverMain> serial_driver_main_;

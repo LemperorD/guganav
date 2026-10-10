@@ -4,7 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import IfElseSubstitution, LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile, ParameterValue
 from nav2_common.launch import RewrittenYaml
@@ -31,6 +31,17 @@ def generate_launch_description():
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    # 末端（驱动之前）再挂一个官方 velocity_smoother，用来替代串口自研的滑动窗口均值
+    use_driver_vel_smoother = LaunchConfiguration("use_driver_vel_smoother")
+    # 打开时 nonrotating 的输出先给末端 smoother，由它整形后再发 cmd_vel（驱动订阅的话题）；
+    # 关闭时保持原拓扑（nonrotating 直接发 cmd_vel）。
+    # 这里直接把 LaunchConfiguration 交给 IfElseSubstitution（它按 bool 解析，
+    # 与 IfCondition 同一套 YAML 布尔规则），不要外面再套 IfCondition。
+    nonrotating_output_topic = IfElseSubstitution(
+        condition=use_driver_vel_smoother,
+        if_value="cmd_vel_driver_raw",
+        else_value="cmd_vel",
+    )
 
     lifecycle_nodes = [
         "controller_server",
@@ -154,6 +165,47 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    declare_use_driver_vel_smoother_cmd = DeclareLaunchArgument(
+        "use_driver_vel_smoother",
+        default_value="False",
+        description=(
+            "在 nonrotating_vel_transform 与串口驱动之间再挂一个官方 "
+            "nav2_velocity_smoother（节点名 velocity_smoother_driver，独立 lifecycle "
+            "manager），用于替代串口里自研的滑动窗口均值。开启后 nonrotating 的输出"
+            "改为 cmd_vel_driver_raw，由该节点按 max_accel/max_decel 整形后发 cmd_vel"
+        ),
+    )
+
+    # 末端官方 velocity_smoother：独立进程（不随 use_composition 变化），
+    # 配一个专属 lifecycle_manager，避免改动已有 lifecycle_nodes 列表。
+    start_driver_vel_smoother_cmd = Node(
+        package="nav2_velocity_smoother",
+        executable="velocity_smoother",
+        name="velocity_smoother_driver",
+        output="screen",
+        condition=IfCondition(use_driver_vel_smoother),
+        parameters=configured_params,
+        arguments=["--ros-args", "--log-level", log_level],
+        remappings=[
+            ("cmd_vel", "cmd_vel_driver_raw"),  # 输入：nonrotating 的输出
+            ("cmd_vel_smoothed", "cmd_vel"),  # 输出：串口驱动订阅的话题
+        ],
+    )
+
+    start_driver_vel_smoother_manager_cmd = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="lifecycle_manager_driver_smoother",
+        output="screen",
+        condition=IfCondition(use_driver_vel_smoother),
+        arguments=["--ros-args", "--log-level", log_level],
+        parameters=[
+            {"use_sim_time": use_sim_time},
+            {"autostart": autostart},
+            {"node_names": ["velocity_smoother_driver"]},
+        ],
+    )
+
     # 非组合模式：独立进程运行 terrain_analysis（组件化后仍保留独立入口）
     start_terrain_analysis_cmd = Node(
         package="terrain_analysis",
@@ -275,7 +327,7 @@ def generate_launch_description():
                         "odom_topic": "odometry",
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
+                        "output_cmd_vel_topic": nonrotating_output_topic,
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
                         # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
@@ -390,7 +442,7 @@ def generate_launch_description():
                         "odom_topic": "odometry",
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
+                        "output_cmd_vel_topic": nonrotating_output_topic,
                         "cmd_spin_topic": "cmd_spin",
                         "chassis_mode_topic": "chassis_mode",
                         # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
@@ -444,9 +496,13 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_use_driver_vel_smoother_cmd)
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_terrain_analysis_cmd)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
+    # 末端官方 velocity_smoother（默认关闭，条件启动）
+    ld.add_action(start_driver_vel_smoother_cmd)
+    ld.add_action(start_driver_vel_smoother_manager_cmd)
 
     return ld

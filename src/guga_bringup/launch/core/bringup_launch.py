@@ -43,6 +43,8 @@ def generate_launch_description():
     planner_params_file = LaunchConfiguration("planner_params_file")
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
+    # 末端官方 velocity_smoother（替代串口自研滑动均值），默认关闭
+    use_driver_vel_smoother = LaunchConfiguration("use_driver_vel_smoother")
 
     # ── <robot_namespace> 文件替换 ──
     # nav2_common 的 ReplaceString 把输入当文件打开：simulation 分层模式下
@@ -183,6 +185,16 @@ def generate_launch_description():
         description="Whether to respawn if a node crashes. Applied when composition is disabled.",
     )
 
+    declare_use_driver_vel_smoother_cmd = DeclareLaunchArgument(
+        "use_driver_vel_smoother",
+        default_value="False",
+        description=(
+            "在 nonrotating_vel_transform 与串口驱动之间再挂一个官方 "
+            "nav2_velocity_smoother（velocity_smoother_driver），替代串口自研的"
+            "滑动窗口均值；默认关闭，开启时拓扑见 navigation_launch.py"
+        ),
+    )
+
     declare_log_level_cmd = DeclareLaunchArgument(
         "log_level", default_value="info", description="log level"
     )
@@ -250,6 +262,7 @@ def generate_launch_description():
                     "controller": controller,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
+                    "use_driver_vel_smoother": use_driver_vel_smoother,
                     "container_name": "nav2_container",
                 }.items(),
             ),
@@ -278,6 +291,7 @@ def generate_launch_description():
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_use_respawn_cmd)
+    ld.add_action(declare_use_driver_vel_smoother_cmd)
     ld.add_action(declare_log_level_cmd)
 
     # Add the actions to launch all of the navigation nodes

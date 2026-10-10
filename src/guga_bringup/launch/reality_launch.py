@@ -32,6 +32,8 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
     use_decision = LaunchConfiguration("use_decision")
+    # 末端官方 velocity_smoother（替代串口自研的滑动窗口均值），默认关闭
+    use_driver_vel_smoother = LaunchConfiguration("use_driver_vel_smoother")
     # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
@@ -157,6 +159,16 @@ def generate_launch_description():
         description="Whether to respawn if a node crashes. Applied when composition is disabled.",
     )
 
+    declare_use_driver_vel_smoother_cmd = DeclareLaunchArgument(
+        "use_driver_vel_smoother",
+        default_value="False",
+        description=(
+            "在 nonrotating_vel_transform 与串口驱动之间再挂一个官方 "
+            "nav2_velocity_smoother（velocity_smoother_driver），用它替代串口里"
+            "自研的滑动窗口均值（此时串口 filter_window_size 建议设 1 = 关闭）"
+        ),
+    )
+
     declare_use_robot_state_pub_cmd = DeclareLaunchArgument(
         "use_robot_state_pub",
         # default_value="False", # disable robot_state_publisher when using reality
@@ -267,6 +279,7 @@ def generate_launch_description():
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
+            "use_driver_vel_smoother": use_driver_vel_smoother,
         }.items(),
     )
 
@@ -316,6 +329,7 @@ def generate_launch_description():
     ld.add_action(declare_use_communication_cmd)
     ld.add_action(declare_use_decision_cmd)
     ld.add_action(declare_use_respawn_cmd)
+    ld.add_action(declare_use_driver_vel_smoother_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_robot_state_publisher_cmd)
