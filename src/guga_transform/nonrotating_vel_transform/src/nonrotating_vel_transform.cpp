@@ -135,19 +135,30 @@ void NonrotatingVelTransform::publishCommand()
   }
 
   const double since_last = (this->now() - last_cmd_vel_time_).seconds();
+  const double yaw_diff =
+    selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, estimateRobotBaseAngle());
+
   if (since_last > cmd_vel_timeout_) {
-    // 上游停了（控制器/smoother 挂了）：必须主动下发 0，不能继续重发最后一条
-    // 非零指令，否则机器人会带着旧速度一直跑。全 0 与坐标系无关，直接发。
-    cmd_vel_chassis_pub_->publish(geometry_msgs::msg::Twist());
+    // 上游停了（控制器停发/到达目标/节点挂了）：线性部分必须归零，不能继续重发最后
+    // 一条非零速度，否则机器人会带着旧速度一直跑；但**角速度不清**——自旋是底盘级
+    // 行为（由 cmd_spin / chassis_mode 决定，与整车轨迹无关），到达目标后应当继续
+    // 小陀螺。所以仍然走 transformVelocity()：
+    //   littleTES → angular.z = 0 + spin_speed_（继续自旋）
+    //   chassisFollowed → angular.z = 0（该模式下本就无自旋，等价于完全停下）
+    auto zero = std::make_shared<geometry_msgs::msg::Twist>();
+    auto aft_tf_vel = transformVelocity(zero, yaw_diff);
+    cmd_vel_chassis_pub_->publish(aft_tf_vel);
+    if (++vis_pub_counter_ % 3 == 0) {
+      visualizeVelocity(aft_tf_vel);
+    }
     RCLCPP_WARN_THROTTLE(
       get_logger(), *get_clock(), 2000,
-      "%.2f s 未收到速度指令（> cmd_vel_timeout %.2f s），已下发 0 速度", since_last,
-      cmd_vel_timeout_);
+      "%.2f s 未收到速度指令（> cmd_vel_timeout %.2f s），线性已归零、角速度按模式保留"
+      "（littleTES 保持自旋 %.2f rad/s）", since_last, cmd_vel_timeout_,
+      static_cast<double>(spin_speed_));
     return;
   }
 
-  const double yaw_diff =
-    selectVelocityYawDiff(chassis_mode_, chassis_followed_yaw_, estimateRobotBaseAngle());
   auto aft_tf_vel = transformVelocity(latest_cmd_vel_, yaw_diff);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
   // 可视化约 1/3 频率（50 Hz 下 ~17 Hz），避免 RViz 被 marker 刷屏
