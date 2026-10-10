@@ -51,6 +51,14 @@ private:
   void chassisModeCallback(std_msgs::msg::UInt8::SharedPtr msg);
   void updateGimbalYaw();
   void publishTransform();
+  /**
+   * @brief 按 publish_frequency 定时重发最新一条速度指令（无损传输）
+   *
+   * 只做旋转补偿，不做任何再次限速/滤波：控制器（MPPI）的预测基于它自己下发的
+   * 指令序列，控制器之后任何改写都会让实际执行偏离预测。超过 cmd_vel_timeout
+   * 没有新指令时下发 0 速度（而不是继续重发最后一条非零指令）。
+   */
+  void publishCommand();
   /** @brief littleTES/goHome 下用 spin 外推底盘 yaw，避免 odom 低频导致补偿跳变。 */
   double estimateRobotBaseAngle() const;
   geometry_msgs::msg::Twist transformVelocity(
@@ -75,6 +83,7 @@ private:
 
   rclcpp::TimerBase::SharedPtr tf_sub_timer_;
   rclcpp::TimerBase::SharedPtr tf_pub_timer_;
+  rclcpp::TimerBase::SharedPtr cmd_vel_pub_timer_;
 
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -100,6 +109,11 @@ private:
   double current_robot_base_angle_{0.0};
   rclcpp::Time last_odom_stamp_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_controller_activate_time_;
+  // 最新指令的到达时刻与重发配置（见 publishCommand()）
+  rclcpp::Time last_cmd_vel_time_{0, 0, RCL_ROS_TIME};
+  double publish_frequency_{50.0};
+  double cmd_vel_timeout_{0.5};
+  size_t vis_pub_counter_{0};
 };
 
 }  // namespace nonrotating_vel_transform

@@ -122,36 +122,34 @@ odom 系的 yaw，使 Nav2 看到的机器人朝向恒为 odom 对齐（`yaw = 0
 速度链为：
 
 ```text
-controller_server
+controller_server（MPPI，30 Hz，加速度约束在控制器内部）
     -> cmd_vel_controller
-velocity_smoother
+velocity_smoother（nav2 官方，控制器输出侧）
     -> cmd_vel_smoothed
-nonrotating_vel_transform（旋转补偿 + 叠加自旋）
+nonrotating_vel_transform（旋转补偿 + 叠加自旋，50 Hz 定时重发）
     -> cmd_vel
-串口驱动（滑动窗口均值 + MCU 相对角旋转）
+串口驱动（可选滑动窗口均值 filter_window_size，默认 10；MCU 相对角旋转）
     -> MCU
 ```
 
-可选拓扑（`reality_launch.py use_driver_vel_smoother:=True`，默认关闭）：在
-`nonrotating_vel_transform` 与串口驱动之间再挂一个**官方** `velocity_smoother`
-实例（节点名 `velocity_smoother_driver`，独立 lifecycle manager），用来替代串口里
-自研的 10 帧滑动窗口均值：
+**设计约束（重要）：控制器之后不允许再"整形"指令。** MPPI 用 odom 实测速度做初值、
+用自己那份 `control_sequence_` 积分预测；控制器之后的任何改写（再加一级限速、
+滑动窗口均值、或在末端再挂一个 `velocity_smoother`）都会让"实际执行"偏离"预测"，
+闭环里多出一个控制器不知道的环节，表现为抖/飘。整形必须放在 MPPI 内部——本仓库
+已移植的加速度约束正是打在**预测状态速度**上，规划出的轨迹本身物理可达。
 
-```text
-nonrotating_vel_transform
-    -> cmd_vel_driver_raw
-velocity_smoother_driver（官方插件，速率限制）
-    -> cmd_vel
-串口驱动（filter_window_size 建议设 1 = 关闭）
-    -> MCU
-```
+因此：
 
-理由：官方节点是定时器驱动的速率限制器，会把上游 ~10 Hz 的阶梯指令插值成斜坡，
-而 10 帧均值在 10 Hz 下等于 1 s 历史、~450 ms 群延迟；同样的速度台阶用
-`max_accel 4.5 m/s²` 只需 ~100 ms。注意它在底盘系里限速（自旋快时指令分量本身
-就以 ω·|v| 变化），收紧上限前要在台架确认。串口 `filter_window_size` 已经参数化
-（`serial_driver/config/serial_driver.yaml`，1 = 关闭），滤波也移到了 MCU 相对角
-旋转**之前**，避免在随相对角旋转的坐标系里求平均。
+- `nonrotating_vel_transform` 按 `publish_frequency`（默认 **50 Hz**）定时重发
+  **最新一条**指令并用当前角度估计重新做旋转补偿，只做无损传输、不再限速。
+  这样控制器 30 Hz 的加速可行指令原样到达 MCU（此前只在 odom 同步时发布，约
+  10 Hz，等于把 3 个控制周期压成一个 0.45 m/s 的阶跃，等效 13.5 m/s²，本来就已经
+  在执行 MPPI 没规划过的轨迹）；旋转补偿也从 ~10 Hz 提到 50 Hz。
+- 上游停止发布超过 `cmd_vel_timeout`（默认 **0.5 s**）时，节点主动下发 0 速度，
+  不再继续重发最后一条非零指令（旧实现在这种场景下会让机器人带着旧指令继续跑）。
+- 串口侧的 `filter_window_size` 是历史遗留的补丁，已参数化
+  （`serial_driver/config/serial_driver.yaml`，1 = 关闭），滤波也移到了 MCU 相对角
+  旋转**之前**（避免在随相对角旋转的坐标系里求平均）。整链修好后建议设 1。
 
 `simple_decision` 发布 `chassis_mode` 与 `cmd_spin`：决策层进入 `LITTLE_TES`
 模式时，`nonrotating_vel_transform` 将 `spin_speed_`（来自 `cmd_spin` 话题）
