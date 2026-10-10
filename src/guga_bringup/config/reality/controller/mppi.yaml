@@ -40,6 +40,9 @@ controller_server:
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
       model_dt: 0.033333333
       batch_size: 1800
+      # 耗时归因：true 时每 2 s 打印一行单周期拆解（prepare/optimize/平滑）以及每个
+      # critic 的耗时（critic_manager.cpp / optimizer.cpp）。定位"算不过来"时打开
+      debug_timing: false
       vx_std: 0.2
       vy_std: 0.2
       wz_std: 0.00001

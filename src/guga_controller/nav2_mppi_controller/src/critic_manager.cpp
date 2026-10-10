@@ -15,6 +15,10 @@
 
 #include "nav2_mppi_controller/critic_manager.hpp"
 
+#include <chrono>
+#include <cstdio>
+#include <string>
+
 namespace mppi {
 
   void CriticManager::on_configure(
@@ -37,6 +41,8 @@ namespace mppi {
     auto getParam = parameters_handler_->getParamGetter(name_);
     getParam(critic_names_, "critics", std::vector<std::string>{},
              ParameterType::Static);
+    // 打开后每 2 s 打一行各 critic 的单周期耗时，用于定位"算不过来"的时间去哪了
+    getParam(debug_timing_, "debug_timing", false);
   }
 
   void CriticManager::loadCritics() {
@@ -63,11 +69,38 @@ namespace mppi {
   }
 
   void CriticManager::evalTrajectoriesScores(CriticData& data) const {
+    if (debug_timing_ && critic_ms_.size() != critics_.size()) {
+      critic_ms_.assign(critics_.size(), 0.0);
+    }
     for (size_t q = 0; q < critics_.size(); q++) {
       if (data.fail_flag) {
         break;
       }
+      if (!debug_timing_) {
+        critics_[q]->score(data);
+        continue;
+      }
+      const auto t0 = std::chrono::steady_clock::now();
       critics_[q]->score(data);
+      critic_ms_[q] = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t0).count();
+    }
+
+    if (debug_timing_) {
+      std::string report;
+      double total = 0.0;
+      char buf[80];
+      for (size_t q = 0; q < critics_.size(); q++) {
+        total += critic_ms_[q];
+        snprintf(buf, sizeof(buf), " %s=%.1f", critic_names_[q].c_str(), critic_ms_[q]);
+        report += buf;
+      }
+      auto node = parent_.lock();
+      if (node) {
+        RCLCPP_INFO_THROTTLE(
+          logger_, *node->get_clock(), 2000, "MPPI critics 合计 %.1f ms:%s", total,
+          report.c_str());
+      }
     }
   }
 

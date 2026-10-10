@@ -87,6 +87,8 @@ void Optimizer::getParams()
   getParam(s.base_constraints.ay_max, "ay_max", 0.0f);
   getParam(s.base_constraints.ay_min, "ay_min", 0.0f);
   getParam(s.base_constraints.az_max, "az_max", 0.0f);
+  // 耗时归因开关：打开后每 2 s 打印一行单周期拆解（prepare/optimize/平滑）
+  getParam(debug_timing_, "debug_timing", false);
   // 平滑阶数：1 = 9 点滑动均值（更平滑），2 = 二次九点 Savitzky-Golay（默认）。
   getParam(s.sgf_order, "sgf_order", 2);
   if (s.sgf_order < 1 || s.sgf_order > 2) {
@@ -192,14 +194,34 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
   const geometry_msgs::msg::Twist & robot_speed,
   const nav_msgs::msg::Path & plan, nav2_core::GoalChecker * goal_checker)
 {
+  const auto t_start = std::chrono::steady_clock::now();
   prepare(robot_pose, robot_speed, plan, goal_checker);
+  const auto t_prepared = std::chrono::steady_clock::now();
 
   do {
     optimize();
   } while (fallback(critics_data_.fail_flag));
+  const auto t_optimized = std::chrono::steady_clock::now();
 
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
+  const auto t_done = std::chrono::steady_clock::now();
+
+  if (debug_timing_) {
+    static rclcpp::Clock timing_clock(RCL_SYSTEM_TIME);
+    const double prepare_ms =
+      std::chrono::duration<double, std::milli>(t_prepared - t_start).count();
+    const double optimize_ms =
+      std::chrono::duration<double, std::milli>(t_optimized - t_prepared).count();
+    const double finish_ms =
+      std::chrono::duration<double, std::milli>(t_done - t_optimized).count();
+    const double total_ms = std::chrono::duration<double, std::milli>(t_done - t_start).count();
+    RCLCPP_INFO_THROTTLE(
+      logger_, timing_clock, 2000,
+      "MPPI 周期 %.1f ms（prepare %.1f / optimize %.1f / 平滑+取命令 %.1f），预算 %.1f ms",
+      total_ms, prepare_ms, optimize_ms, finish_ms,
+      1000.0 / (settings_.controller_period > 0.0f ? 1.0 / settings_.controller_period : 30.0));
+  }
 
   // 记录本次下发的指令，供下一周期的测量滞后补偿使用（上游 PR #6072）。
   last_command_vel_ = control.twist;

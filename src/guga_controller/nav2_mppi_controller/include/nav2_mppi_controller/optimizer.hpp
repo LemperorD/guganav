@@ -266,6 +266,8 @@ protected:
   xt::xtensor<float, 1> costs_;  ///< 各候选轨迹的累计成本。
   /// 上一周期实际下发的速度指令，用于测量滞后补偿（上游 PR #6072）。
   geometry_msgs::msg::Twist last_command_vel_;
+  /// 是否每 2 s 打印一次单周期耗时拆解（参数 <plugin>.debug_timing，默认 false）
+  bool debug_timing_{false};
 
   /// 传递给评分器的共享数据，其中包含对以上成员的引用。
   CriticData critics_data_ =

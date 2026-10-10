@@ -97,6 +97,11 @@ protected:
   std::unique_ptr<pluginlib::ClassLoader<critics::CriticFunction>> loader_;  ///< 评分插件加载器。
   std::vector<std::unique_ptr<critics::CriticFunction>> critics_;  ///< 已实例化的评分器列表。
 
+  /// 是否打印每个 critic 的单周期耗时（参数 <plugin>.debug_timing，默认 false）
+  bool debug_timing_{false};
+  /// 各 critic 上一轮耗时（ms），仅 debug_timing_ 打开时更新
+  mutable std::vector<double> critic_ms_;
+
   rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};  ///< 管理器日志记录器。
 };
 
