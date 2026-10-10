@@ -20,10 +20,11 @@ from nav_msgs.msg import Odometry, Path as PathMsg
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from guga_evaluate.metrics import (
+    RisingEdgeCounter,
     SeriesStats,
     TopicTiming,
     nearest_path_error,
@@ -66,6 +67,8 @@ class GoalState:
     yaw: float
     candidate_since: Optional[float] = None
     reached_at: Optional[float] = None
+    failed_at: Optional[float] = None
+    failure_reason: Optional[str] = None
 
 
 class CsvSink:
@@ -114,6 +117,8 @@ class EvaluateNode(Node):
             "predicted_plan": TopicTiming(),
             "goal": TopicTiming(),
             "ground_truth": TopicTiming(),
+            "collision": TopicTiming(),
+            "emergency_stop": TopicTiming(),
         }
         self.speed_error_linear = SeriesStats()
         self.speed_error_vx = SeriesStats()
@@ -128,6 +133,11 @@ class EvaluateNode(Node):
         self.command_jerk = SeriesStats()
         self.gt_position_error = SeriesStats()
         self.gt_yaw_error = SeriesStats()
+        self.time_to_reach = SeriesStats()
+        self.collision_events = RisingEdgeCounter(
+            debounce_sec=float(self.safety_event_debounce_sec))
+        self.emergency_stop_events = RisingEdgeCounter(
+            debounce_sec=float(self.safety_event_debounce_sec))
         self.plan_metrics: dict[str, list[dict]] = {
             "local": [], "global": [], "predicted": []
         }
@@ -180,7 +190,12 @@ class EvaluateNode(Node):
         self.declare_parameter("predicted_plan_topic", "predicted_plan")
         self.declare_parameter("goal_topic", "goal_pose")
         self.declare_parameter("ground_truth_topic", "chassis_odometry_gt")
+        self.declare_parameter("collision_topic", "collision_detected")
+        self.declare_parameter("emergency_stop_topic", "emergency_stop")
         self.declare_parameter("use_ground_truth", False)
+        self.declare_parameter("use_collision_topic", False)
+        self.declare_parameter("use_emergency_stop_topic", False)
+        self.declare_parameter("safety_event_debounce_sec", 0.5)
         self.declare_parameter("summary_period_sec", 5.0)
         self.declare_parameter("max_cmd_age_sec", 0.5)
         self.declare_parameter("max_ground_truth_age_sec", 0.2)
@@ -193,6 +208,7 @@ class EvaluateNode(Node):
         self.declare_parameter("goal_dwell_sec", 0.5)
         self.declare_parameter("goal_dedup_xy_tolerance", 0.01)
         self.declare_parameter("goal_dedup_yaw_tolerance", 0.01)
+        self.declare_parameter("goal_timeout_sec", 0.0)
 
     def _load_parameters(self) -> None:
         for name in (
@@ -200,11 +216,14 @@ class EvaluateNode(Node):
             "publish_period_sec", "cmd_vel_topic",
             "odometry_topic", "local_plan_topic", "global_plan_topic",
             "predicted_plan_topic", "goal_topic", "ground_truth_topic",
-            "use_ground_truth", "summary_period_sec", "max_cmd_age_sec",
+            "collision_topic", "emergency_stop_topic", "use_ground_truth",
+            "use_collision_topic", "use_emergency_stop_topic",
+            "safety_event_debounce_sec", "summary_period_sec", "max_cmd_age_sec",
             "max_ground_truth_age_sec", "min_pose_dt_sec", "max_pose_dt_sec",
             "velocity_filter_alpha", "goal_xy_tolerance",
             "goal_yaw_tolerance", "goal_speed_tolerance", "goal_dwell_sec",
             "goal_dedup_xy_tolerance", "goal_dedup_yaw_tolerance",
+            "goal_timeout_sec",
         ):
             setattr(self, name, self.get_parameter(name).value)
 
@@ -285,6 +304,14 @@ class EvaluateNode(Node):
             self.create_subscription(
                 Odometry, self.ground_truth_topic,
                 self._on_ground_truth, sensor_qos)
+        if self.use_collision_topic:
+            self.create_subscription(
+                Bool, self.collision_topic,
+                self._on_collision_state, reliable_qos)
+        if self.use_emergency_stop_topic:
+            self.create_subscription(
+                Bool, self.emergency_stop_topic,
+                self._on_emergency_stop_state, reliable_qos)
 
     def _now(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
@@ -405,6 +432,26 @@ class EvaluateNode(Node):
         self.topic_timing["ground_truth"].observe(now, header_time)
         self.latest_ground_truth = self._odom_sample(msg)
 
+    def _on_collision_state(self, msg: Bool) -> None:
+        now = self._now()
+        self.topic_timing["collision"].observe(now)
+        if self.collision_events.observe(msg.data, now):
+            self.event_csv.write(
+                time_sec=now, event="collision", goal_id=self._goal_id(),
+                value=self.collision_events.count)
+
+    def _on_emergency_stop_state(self, msg: Bool) -> None:
+        now = self._now()
+        self.topic_timing["emergency_stop"].observe(now)
+        if self.emergency_stop_events.observe(msg.data, now):
+            self.event_csv.write(
+                time_sec=now, event="emergency_stop",
+                goal_id=self._goal_id(),
+                value=self.emergency_stop_events.count)
+
+    def _goal_id(self):
+        return self.current_goal.goal_id if self.current_goal else ""
+
     def _on_plan(self, source: str, msg: PathMsg) -> None:
         now = self._now()
         header_time = stamp_seconds(msg.header.stamp)
@@ -443,8 +490,12 @@ class EvaluateNode(Node):
             yaw_delta = abs(wrap_angle(yaw - self.current_goal.yaw))
             if (same_frame
                     and position_delta <= self.goal_dedup_xy_tolerance
-                    and yaw_delta <= self.goal_dedup_yaw_tolerance):
+                    and yaw_delta <= self.goal_dedup_yaw_tolerance
+                    and self.current_goal.failed_at is None):
                 return
+
+        if self.current_goal is not None:
+            self._fail_goal(self.current_goal, now, "superseded")
 
         self.goal_sequence += 1
         goal = GoalState(
@@ -580,7 +631,8 @@ class EvaluateNode(Node):
         velocity: Optional[tuple[float, float, float]],
     ) -> None:
         goal = self.current_goal
-        if goal is None or goal.reached_at is not None:
+        if (goal is None or goal.reached_at is not None
+                or goal.failed_at is not None):
             return
         speed = math.inf
         if velocity is not None:
@@ -598,9 +650,29 @@ class EvaluateNode(Node):
             return
         if now - goal.candidate_since >= self.goal_dwell_sec:
             goal.reached_at = now
+            duration = now - goal.received_at
+            self.time_to_reach.add(duration)
             self.event_csv.write(
                 time_sec=now, event="goal_reached", goal_id=goal.goal_id,
-                value=f"{now - goal.received_at:.6f}")
+                value=f"{duration:.6f}")
+
+    def _fail_goal(self, goal: GoalState, now: float, reason: str) -> None:
+        if goal.reached_at is not None or goal.failed_at is not None:
+            return
+        goal.failed_at = now
+        goal.failure_reason = reason
+        self.event_csv.write(
+            time_sec=now, event="goal_failed", goal_id=goal.goal_id,
+            value=reason)
+
+    def _check_goal_timeout(self, now: float) -> None:
+        goal = self.current_goal
+        if (goal is None or goal.reached_at is not None
+                or goal.failed_at is not None):
+            return
+        if (self.goal_timeout_sec > 0.0
+                and now - goal.received_at >= self.goal_timeout_sec):
+            self._fail_goal(goal, now, "timeout")
 
     @staticmethod
     def _aggregate_plan_metrics(items: list[dict]) -> dict:
@@ -616,13 +688,23 @@ class EvaluateNode(Node):
         return result
 
     def summary(self) -> dict:
+        self._check_goal_timeout(self._now())
         goals = []
         for goal in self.goal_history:
+            if goal.reached_at is not None:
+                status = "reached"
+            elif goal.failed_at is not None:
+                status = "failed"
+            else:
+                status = "active"
             goals.append({
                 "goal_id": goal.goal_id,
                 "received_at_sec": goal.received_at,
+                "status": status,
                 "reached": goal.reached_at is not None,
                 "reached_at_sec": goal.reached_at,
+                "failed_at_sec": goal.failed_at,
+                "failure_reason": goal.failure_reason,
                 "time_to_reach_sec": (
                     goal.reached_at - goal.received_at
                     if goal.reached_at is not None else None),
@@ -633,6 +715,8 @@ class EvaluateNode(Node):
             "updated_at_utc": datetime.now(timezone.utc).isoformat(),
             "mode": self.mode,
             "save_data": self.save_data,
+            "mission": self._mission_summary(),
+            "safety": self._safety_summary(),
             "topics": {
                 name: timing.summary()
                 for name, timing in self.topic_timing.items()
@@ -664,6 +748,65 @@ class EvaluateNode(Node):
             "goals": goals,
         }
 
+    def _mission_summary(self) -> dict:
+        now = self._now()
+        received = len(self.goal_history)
+        reached = sum(
+            goal.reached_at is not None for goal in self.goal_history)
+        failed = sum(
+            goal.failed_at is not None for goal in self.goal_history)
+        active = received - reached - failed
+        completed = reached + failed
+        current_status = None
+        if self.current_goal is not None:
+            if self.current_goal.reached_at is not None:
+                current_status = "reached"
+            elif self.current_goal.failed_at is not None:
+                current_status = "failed"
+            else:
+                current_status = "active"
+        return {
+            "goals_received": received,
+            "goals_reached": reached,
+            "goals_failed": failed,
+            "goals_active": active,
+            "success_rate": reached / received if received else None,
+            "completed_success_rate": (
+                reached / completed if completed else None),
+            "time_to_reach_sec": self.time_to_reach.summary(),
+            "latest_time_to_reach_sec": (
+                self.time_to_reach.values[-1]
+                if self.time_to_reach.values else None),
+            "current_goal_id": self._goal_id() or None,
+            "current_goal_status": current_status,
+            "current_goal_elapsed_sec": (
+                now - self.current_goal.received_at
+                if self.current_goal is not None
+                and current_status == "active" else None),
+        }
+
+    def _safety_summary(self) -> dict:
+        collision = self.collision_events.summary(
+            bool(self.use_collision_topic))
+        emergency_stop = self.emergency_stop_events.summary(
+            bool(self.use_emergency_stop_topic))
+        collision_free = (
+            collision["count"] == 0
+            if collision["data_available"] else None)
+        emergency_stop_free = (
+            emergency_stop["count"] == 0
+            if emergency_stop["data_available"] else None)
+        return {
+            "collision": collision,
+            "emergency_stop": emergency_stop,
+            "collision_free": collision_free,
+            "emergency_stop_free": emergency_stop_free,
+            "safe_run": (
+                collision_free and emergency_stop_free
+                if collision_free is not None
+                and emergency_stop_free is not None else None),
+        }
+
     @staticmethod
     def _finite_or_none(value: float):
         return float(value) if math.isfinite(value) else None
@@ -673,7 +816,10 @@ class EvaluateNode(Node):
         return stats.summary().get(key)
 
     def live_snapshot(self) -> dict:
+        self._check_goal_timeout(self._now())
         current_goal = self.current_goal
+        mission = self._mission_summary()
+        safety = self._safety_summary()
         return {
             "time_sec": self._now(),
             "mode": self.mode,
@@ -681,6 +827,8 @@ class EvaluateNode(Node):
             "command": self.live_command,
             "actual": self.live_actual,
             "tracking": self.live_tracking,
+            "mission": mission,
+            "safety": safety,
             "aggregate": {
                 "speed_error_rmse_mps": self._summary_value(
                     self.speed_error_linear, "rmse"),

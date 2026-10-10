@@ -34,11 +34,26 @@ scripts/evaluate.sh simulation --save --output output/my_run \
 scripts/evaluate.sh simulation --no-gui
 ```
 
+接入已经归一化为 `std_msgs/Bool` 的碰撞和急停状态时：
+
+```bash
+scripts/evaluate.sh reality --save \
+  use_collision_topic:=true \
+  collision_topic:=collision_detected \
+  use_emergency_stop_topic:=true \
+  emergency_stop_topic:=emergency_stop \
+  goal_timeout_sec:=60.0
+```
+
+碰撞和急停均按 `false → true` 上升沿计数，并带 0.5 秒防抖。没有启用数据源或
+尚未收到第一条状态消息时显示 `N/A`，不会误报为零次。
+
 实时界面默认开启，显示以下四个区域：
 
 - 指令线速度与实际线速度
 - 指令角速度与实际角速度
 - 横向路径误差与目标距离
+- 目标成功率、到达耗时、碰撞与急停次数
 - 当前误差、RMSE、话题频率、目标状态和记录状态
 
 关闭界面不会停止评测节点；在启动评测的终端按 `Ctrl-C` 可以完整结束。
@@ -68,6 +83,8 @@ ros2 launch guga_evaluate evaluate.launch.py \
 | MPC 预测路径 | `predicted_plan` |
 | 目标点 | `goal_pose` |
 | Gazebo 真值 | `chassis_odometry_gt`，仅仿真模式 |
+| 碰撞状态 | `collision_detected`，可选 `std_msgs/Bool` |
+| 急停状态 | `emergency_stop`，可选 `std_msgs/Bool` |
 | 实时评测指标 | `evaluation_metrics`，由评测节点发布 |
 
 话题均为相对名称，可以通过 `namespace` 或 `config/evaluate.yaml` 适配。
@@ -83,8 +100,14 @@ ros2 launch guga_evaluate evaluate.launch.py \
 | `command.csv` | `cmd_vel`、加速度和 jerk |
 | `tracking.csv` | 路径误差、目标误差、速度误差、真值误差 |
 | `plans.csv` | 路径长度、点数和曲率 |
-| `events.csv` | 目标接收和目标到达事件 |
+| `events.csv` | 目标、碰撞和急停事件 |
 | `summary.json` | 频率、延迟、RMSE、P50/P95/P99 等汇总 |
+
+`summary.json` 的 `mission` 字段包含目标总数、成功数、失败数、成功率和到达耗时
+统计；`safety` 字段包含碰撞及急停数据是否可用、当前状态和事件次数。新目标覆盖
+尚未完成的旧目标时，旧目标记为 `superseded` 失败。`goal_timeout_sec > 0` 时，超时
+目标记为 `timeout` 失败；默认值 0 表示不启用超时。`success_rate` 按成功数/收到的
+全部目标计算，`completed_success_rate` 只对已经成功或失败的目标计算。
 
 速度跟踪默认使用连续位姿差分得到的车体系速度，而不是盲目信任 `Odometry.twist`。
 路径跟踪优先使用 `local_plan`，没有局部路径时回退到 `plan`。不同坐标系之间通过 TF
@@ -95,4 +118,6 @@ ros2 launch guga_evaluate evaluate.launch.py \
 
 - 实车没有外部真值时，速度和路径跟踪结果包含定位误差。
 - 仿真真值与导航里程计必须使用相同 frame 才会计算定位误差。
-- 当前工具不计算障碍物净空和碰撞指标，后续需要接入 costmap 与 Gazebo 碰撞事件。
+- 碰撞统计依赖外部真实碰撞检测或 Gazebo 接触传感器提供布尔状态；工具不会把规划器
+  的预测碰撞当成已经发生的物理碰撞。
+- 当前工具仍不计算障碍物净空，后续需要接入 costmap 距离或 ESDF。

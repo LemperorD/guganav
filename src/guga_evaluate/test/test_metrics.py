@@ -1,6 +1,7 @@
 import math
 
 from guga_evaluate.metrics import (
+    RisingEdgeCounter,
     SeriesStats,
     nearest_path_error,
     path_curvatures,
@@ -41,3 +42,18 @@ def test_corner_curvature():
     values = path_curvatures([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)])
     assert len(values) == 1
     assert math.isclose(values[0], math.sqrt(2.0), rel_tol=1e-12)
+
+
+def test_rising_edge_counter_debounces_events():
+    counter = RisingEdgeCounter(debounce_sec=0.5)
+    assert counter.summary(enabled=True)["count"] is None
+    assert counter.observe(False, 1.0) is False
+    assert counter.observe(True, 1.1) is True
+    assert counter.observe(True, 1.2) is False
+    assert counter.observe(False, 1.3) is False
+    assert counter.observe(True, 1.4) is False
+    assert counter.observe(False, 1.5) is False
+    assert counter.observe(True, 1.7) is True
+    summary = counter.summary(enabled=True)
+    assert summary["count"] == 2
+    assert summary["active"] is True

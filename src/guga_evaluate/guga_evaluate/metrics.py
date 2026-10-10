@@ -102,6 +102,41 @@ class TopicTiming:
         }
 
 
+@dataclass
+class RisingEdgeCounter:
+    """Count debounced false-to-true state transitions."""
+
+    debounce_sec: float = 0.5
+    count: int = 0
+    active: bool = False
+    available: bool = False
+    last_event_time: Optional[float] = None
+
+    def observe(self, state: bool, stamp: float) -> bool:
+        """Return true only when this observation creates a new event."""
+        self.available = True
+        rising = state and not self.active
+        self.active = state
+        if not rising:
+            return False
+        if (self.last_event_time is not None
+                and stamp - self.last_event_time < self.debounce_sec):
+            return False
+        self.count += 1
+        self.last_event_time = stamp
+        return True
+
+    def summary(self, enabled: bool) -> dict:
+        return {
+            "enabled": enabled,
+            "data_available": self.available if enabled else False,
+            "active": self.active if self.available and enabled else None,
+            "count": self.count if self.available and enabled else None,
+            "last_event_time_sec": (
+                self.last_event_time if self.available and enabled else None),
+        }
+
+
 def path_length(points: Sequence[Tuple[float, float]]) -> float:
     return sum(
         math.hypot(b[0] - a[0], b[1] - a[1])

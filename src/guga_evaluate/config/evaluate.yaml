@@ -9,9 +9,18 @@
     goal_topic: "goal_pose"
     ground_truth_topic: "chassis_odometry_gt"
     metrics_topic: "evaluation_metrics"
+    collision_topic: "collision_detected"
+    emergency_stop_topic: "emergency_stop"
 
     # A ground-truth subscription is enabled by scripts/evaluate.sh simulation.
     use_ground_truth: false
+
+    # Optional normalized std_msgs/Bool inputs. A false-to-true transition is
+    # counted as one event. They remain disabled until a real data source is
+    # connected, so missing data is reported as N/A rather than zero events.
+    use_collision_topic: false
+    use_emergency_stop_topic: false
+    safety_event_debounce_sec: 0.5
 
     # Live metrics are always published. Disk recording is opt-in in the script.
     save_data: false
@@ -37,3 +46,6 @@
     goal_dwell_sec: 0.5
     goal_dedup_xy_tolerance: 0.01
     goal_dedup_yaw_tolerance: 0.01
+    # Zero disables automatic failure. A positive value marks an active goal as
+    # failed when it has not been reached within this many seconds.
+    goal_timeout_sec: 0.0

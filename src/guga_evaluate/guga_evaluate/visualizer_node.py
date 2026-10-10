@@ -27,6 +27,20 @@ def format_number(value, unit: str, digits: int = 3) -> str:
     return f"{value:.{digits}f} {unit}".rstrip()
 
 
+def format_rate(value) -> str:
+    if not isinstance(value, (int, float)) or not math.isfinite(value):
+        return "--"
+    return f"{100.0 * value:.1f}%"
+
+
+def format_event_count(value: dict) -> str:
+    count = value.get("count")
+    if not isinstance(count, int):
+        return "N/A"
+    suffix = " ACTIVE" if value.get("active") else ""
+    return f"{count}{suffix}"
+
+
 class MetricsReceiver(Node):
     """Receive evaluator snapshots and retain a bounded time window."""
 
@@ -152,19 +166,31 @@ class Dashboard:
         tracking = latest.get("tracking", {})
         aggregate = latest.get("aggregate", {})
         actual = latest.get("actual", {})
-        reached = aggregate.get("goal_reached")
-        if reached is True:
-            goal_state = "REACHED"
-        elif aggregate.get("goal_id") is not None:
-            goal_state = "TRACKING"
-        else:
-            goal_state = "NO GOAL"
+        mission = latest.get("mission", {})
+        safety = latest.get("safety", {})
+        current_status = mission.get("current_goal_status")
+        goal_state = current_status.upper() if current_status else "NO GOAL"
+        reached = mission.get("goals_reached", 0)
+        received = mission.get("goals_received", 0)
+        goal_time = mission.get("current_goal_elapsed_sec")
+        goal_time_label = "goal elapsed"
+        if goal_time is None:
+            goal_time = mission.get("latest_time_to_reach_sec")
+            goal_time_label = "latest goal time"
         recording = "ON" if latest.get("save_data") else "OFF"
         self.status_text.set_text(
             f"mode              {latest.get('mode', '--')}\n"
             f"recording         {recording}\n"
             f"velocity source   {actual.get('source', '--')}\n"
             f"goal              {goal_state}\n"
+            f"success           {reached}/{received} "
+            f"({format_rate(mission.get('success_rate'))})\n"
+            f"{goal_time_label:<18}"
+            f"{format_number(goal_time, 's', 2)}\n"
+            f"collisions        "
+            f"{format_event_count(safety.get('collision', {}))}\n"
+            f"emergency stops   "
+            f"{format_event_count(safety.get('emergency_stop', {}))}\n"
             f"\n"
             f"speed error       "
             f"{format_number(tracking.get('speed_error_mps'), 'm/s')}\n"

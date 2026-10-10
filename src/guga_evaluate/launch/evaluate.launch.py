@@ -21,6 +21,12 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     save_data = LaunchConfiguration("save_data")
     show_visualization = LaunchConfiguration("show_visualization")
+    use_collision_topic = LaunchConfiguration("use_collision_topic")
+    use_emergency_stop_topic = LaunchConfiguration(
+        "use_emergency_stop_topic")
+    collision_topic = LaunchConfiguration("collision_topic")
+    emergency_stop_topic = LaunchConfiguration("emergency_stop_topic")
+    goal_timeout_sec = LaunchConfiguration("goal_timeout_sec")
 
     declarations = [
         DeclareLaunchArgument(
@@ -50,6 +56,21 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "show_visualization", default_value="true",
             description="Open the live Matplotlib dashboard"),
+        DeclareLaunchArgument(
+            "use_collision_topic", default_value="false",
+            description="Count collision state rising edges"),
+        DeclareLaunchArgument(
+            "use_emergency_stop_topic", default_value="false",
+            description="Count emergency-stop state rising edges"),
+        DeclareLaunchArgument(
+            "collision_topic", default_value="collision_detected",
+            description="std_msgs/Bool collision state topic"),
+        DeclareLaunchArgument(
+            "emergency_stop_topic", default_value="emergency_stop",
+            description="std_msgs/Bool emergency-stop state topic"),
+        DeclareLaunchArgument(
+            "goal_timeout_sec", default_value="0.0",
+            description="Goal failure timeout; zero disables it"),
     ]
 
     evaluator = Node(
@@ -64,6 +85,14 @@ def generate_launch_description():
                 "output_dir": output_dir,
                 "workspace": workspace,
                 "save_data": ParameterValue(save_data, value_type=bool),
+                "use_collision_topic": ParameterValue(
+                    use_collision_topic, value_type=bool),
+                "use_emergency_stop_topic": ParameterValue(
+                    use_emergency_stop_topic, value_type=bool),
+                "collision_topic": collision_topic,
+                "emergency_stop_topic": emergency_stop_topic,
+                "goal_timeout_sec": ParameterValue(
+                    goal_timeout_sec, value_type=float),
                 "use_ground_truth": ParameterValue(
                     use_ground_truth, value_type=bool),
                 "use_sim_time": ParameterValue(use_sim_time, value_type=bool),
