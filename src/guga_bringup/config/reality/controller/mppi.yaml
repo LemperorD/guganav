@@ -126,22 +126,19 @@ controller_server:
         cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
-        # 与仿真一致（原为 cost_power 10 / cost_weight 14）。照搬后实车避障的保守程度
-        # 与仿真相同，而仿真这套参数的已知表现是偶发擦碰障碍，实车验证时重点看这一项。
+        # 对齐仿真（已验证的那套）：cost_weight 4.0、consider_footprint false。
+        # consider_footprint: false 的语义：inCollision() 把 253(INSCRIBED) 也判为碰撞
+        # （cost_critic.cpp:187-211），即"车中心不得进入内切环"，与仿真行为一致
+        # （仿真实测几乎不会卡在内切区域）。代价是若中心真的落在环内，所有候选轨迹
+        # 判碰撞 → fallback 重试 → 超限抛异常停车；用 base.yaml 的 footprint_padding
+        # 0.03 + 全局膨胀余量把这种情形挡住。
+        # 之前用 true 的理由（只写 robot_radius 时 initialize() 会抛 PlannerException）
+        # 已随 base.yaml 回到 robot_radius 形态消失：use_radius_==true 与
+        # consider_footprint_==false 自洽，不会再有 "Inconsistent configuration" WARN。
         cost_power: 1
-        cost_weight: 6.0
+        cost_weight: 4.0
         critical_cost: 300.0
-        # 依赖 local costmap 里显式写出的 16 边形 footprint（config/reality/base.yaml），
-        # 那边 use_radius_ 才会是 false。只写 robot_radius 时这里开 true 会命中
-        # cost_critic.cpp:56-66 的 "Considering footprint in collision checking but no
-        # robot footprint provided in the costmap."：controller_server configure 失败 →
-        # lifecycle_manager_navigation 中止 bringup → planner_server 不 configure，
-        # global_costmap 没有发布者（表现为启动后没有代价地图）。
-        # 语义变化：consider_footprint=true 时 inCollision() 对 253(INSCRIBED) 返回
-        # false，只有压到 254(LETHAL) 才算碰撞（1e6），253 只累加 critical_cost
-        # （cost_critic.cpp:187-211）。即"中心进内切环"从硬碰撞降为软惩罚，机器人
-        # 可以用上膨胀带；代价是更贴障碍，要配合 inflation_radius/权重一起看。
-        consider_footprint: true
+        consider_footprint: false
         collision_cost: 1000000.0
         near_goal_distance: 1.0
         trajectory_point_step: 2
@@ -226,15 +223,17 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 4.0
-        # 原为 0.364，小于 robot_radius(0.367) 即 inscribed 半径：膨胀区里全部是 253
-        # （INSCRIBED），而 CostCritic 与 ObstaclesCritic 都把 253 直接判为碰撞，于是
-        # 机器人一进膨胀区，每条候选轨迹的首点就落在 253 上，全部轨迹作废、fail_flag
-        # 置位，优化器 reset 一次后抛 "Optimizer fail to compute path"，控制器停住。
-        # 取 0.60 之后，0.367～0.60 之间是有梯度的软代价区
-        # （253 × exp(-4.0 × (d - 0.367))：0.45 m 处约 183，0.60 m 处约 100），
-        # 机器人可以进入这一带而不再被判碰撞；253 区仍等于车体接触区。
-        # 硬碰撞边界由 robot_radius 决定，调大本条不压缩可通行的窄道宽度。
+        # 对齐仿真（8.0）：膨胀代价 252·exp(-scale·(d - inscribed))，scale 越大带外掉得越快，
+        # 才有"离障碍远一点更便宜"的梯度。原先 4.0 时整圈 0.4~0.6 m 都还在 100~250，
+        # 几乎是个平台 → 车贴着 253 边界走也不吃亏（实测确实会进内切带）。
+        # 现在 inscribed = robot_radius 0.367 + footprint_padding 0.03 ≈ 0.397：
+        #   d = 0.42 m 处 ≈ 252·exp(-8×0.023) ≈ 210
+        #   d = 0.50 m 处 ≈ 252·exp(-8×0.103) ≈ 111
+        #   d = 0.60 m 处 ≈ 252·exp(-8×0.203) ≈ 50
+        # 0.397 以内是 253（INSCRIBED），而 CostCritic.consider_footprint: false 把它判为
+        # 碰撞 → 车中心不得进入；再往外才是软代价梯度。调大本条不压缩可通行的窄道宽度，
+        # 硬边界只由 robot_radius + padding 决定。
+        cost_scaling_factor: 8.0
         inflation_radius: 0.60
 
 global_costmap:
@@ -296,8 +295,14 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 4.0
-        inflation_radius: 0.366
+        # 对齐仿真（10.0 / 0.55）。原为 0.366，小于内切半径（0.367 + padding 0.03 =
+        # 0.397），nav2 会一直报 "inflation radius smaller than the computed inscribed
+        # radius"，而且全局路径的安全距离等于局部内切半径 → 全局路径本身就贴着相切带走，
+        # 局部 MPPI 只能跟着。0.55 > 0.397 之后膨胀带才有意义。
+        # 注意别再往上提到 0.9：膨胀代价按面积走（∝r²），而 global costmap 的
+        # inflation 跑在控制器同一个容器里，会抢 CPU。
+        cost_scaling_factor: 10.0
+        inflation_radius: 0.55
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
 # If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py

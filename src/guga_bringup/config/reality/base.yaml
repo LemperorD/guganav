@@ -334,21 +334,17 @@ local_costmap:
 
       resolution: 0.05
 
-      # 显式 16 边形替代 robot_radius：几何与 nav2 由 robot_radius 隐式生成的完全一致
-      # （makeFootprintFromRadius(0.367) 取 16 等分点，再叠加 footprint_padding 0.01
-      # → 内切 ≈0.370、外接 ≈0.377），所以膨胀层与规划器看到的地图不变。
-      # 显式写出来的唯一目的：只有 footprint 非空时 nav2 才把 use_radius_ 置为 false，
-      # MPPI 的 CostCritic 才能开 consider_footprint: true（只写 robot_radius 时
-      # getUseRadius()==true，critic 的 initialize() 会直接抛 PlannerException）。
-      # 形状必须旋转对称：mppi 启动即小陀螺，local costmap 的 robot_base_frame 是
-      # base_footprint_nonrotating（见 controller/mppi.yaml），多边形不跟着车体实际
-      # 朝向转，只有圆在任何 yaw 下都成立。真实车体是 0.57×0.43 的矩形（底盘
-      # 0.36×0.24 + 轮组），外接半径 ≈0.356，正是"实测车体半径 364mm"的来源；
-      # 换矩形会让内切半径掉到 0.217，自旋时四角扫过的区域就没人管了。
-      footprint: "[[0.3670, 0.0000], [0.3391, 0.1404], [0.2595, 0.2595], [0.1404, 0.3391], [0.0000, 0.3670], [-0.1404, 0.3391], [-0.2595, 0.2595], [-0.3391, 0.1404], [-0.3670, 0.0000], [-0.3391, -0.1404], [-0.2595, -0.2595], [-0.1404, -0.3391], [0.0000, -0.3670], [0.1404, -0.3391], [0.2595, -0.2595], [0.3391, -0.1404]]"
-      footprint_padding: 0.01 # nav2 默认值；上面的 0.370/0.377 是叠加它之后的值
+      # 用 robot_radius 而不是显式 16 边形：两者几何完全一致（makeFootprintFromRadius(0.367)
+      # 就是取 16 等分点），但只有 radius 形态下 use_radius_ == true，可以与
+      # CostCritic.consider_footprint: false 自洽（controller/mppi.yaml），不会打
+      # "Inconsistent configuration in collision checking" 的 WARN。
+      # consider_footprint: false 的语义 = 中心点不得进入内切环（253 视为碰撞），
+      # 已按仿真验证过的那套对齐：仿真里几乎不会卡在内切区域。
+      # footprint_padding 0.03 是给实车定位误差留的余量，会把硬边界从 0.367 推到
+      # ≈0.397（内切/外接同值，圆在任意 yaw 下都成立，mppi 启动即小陀螺也没问题）。
+      footprint_padding: 0.03
 
-      robot_radius: 0.367 # footprint 为空时的回退值（本配置下不生效）
+      robot_radius: 0.367 # 实测车体半径 364mm + 约 3mm 裕量（未含上面的 padding）
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -369,11 +365,11 @@ global_costmap:
 
       resolution: 0.05
 
-      # 这里刻意保留 robot_radius 不写 footprint：只有控制器读的 local costmap 需要
-      # 显式 footprint 才能让 CostCritic 的 consider_footprint 生效；两者由同一个
-      # 0.367 生成，内切/外接半径完全一致（local 的 16 边形就是 nav2 从 robot_radius
-      # 隐式生成的那一个），所以全局图的行为与之前相同，不必重复一份多边形。
-      robot_radius: 0.367 # 略大于车体：实测车体半径 364mm + 约 3mm 裕量。硬碰撞边界(inscribed)，膨胀由 inflation_radius 承担
+      # 与 local 保持一致：同样的 robot_radius + 同样的 footprint_padding，否则全局
+      # 规划器以为车更小而给出贴障碍的路径，局部却按 0.397 禁入内切环 → 两侧打架。
+      robot_radius: 0.367 # 实测车体半径 364mm + 约 3mm 裕量（未含下面的 padding）
+
+      footprint_padding: 0.03 # 与 local 相同，给定位误差留余量（硬边界 → ≈0.397）
 
       track_unknown_space: true
 
