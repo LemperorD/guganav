@@ -49,21 +49,28 @@ controller_server:
       vx_max: 2.5
       vx_min: -2.5
       # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072）。
-      # 已开启，取值先照仿真已验证的那组（ax/ay = ±3.0）：
+      # 只限制**加速**（ax_max/ay_max = 3.0），**减速侧不设限**（ax_min/ay_min = 0）：
+      #   - 0 的语义是"该方向不做限制"（utils::maxAccelDelta/minAccelDelta 返回 ±inf），
+      #     不是"不允许变化"；所以 ax_max=3.0 + ax_min=0 = 只限加速、减速自由。
+      #     该单边语义有单元测试覆盖（AccelSingleSidedLimitIsUnboundedOnOtherSide）
+      #   - 实车实测：减速限到 -3.0 时整机"非常大的滞后"（停不住、慢半拍），去掉减速限制
+      #     后正常。真实刹车能力本来由下游 velocity_smoother.max_decel = -4.5 决定，
+      #     之前被 MPPI 更紧的 -3.0 掩蔽了
+      #   - 已知副作用（接受）：MPPI 的预测在减速方向变乐观——允许瞬间刹停，而执行端只能
+      #     4.5 m/s²。制动比规划"更慢"属安全方向；等台架测出真实可达减速度（如 -8）后，
+      #     建议把 ax_min 设为该实测值并同步放宽 velocity_smoother.max_decel，让
+      #     "预测=执行"重新成立
       #   - 约束作用在预测轨迹的**状态速度**上，采样控制量保持原始；第 0 步用真实控制周期、
       #     之后用 model_dt（optimizer.cpp 的 applyControlSequenceInterIterationConstraints /
       #     applyControlSequenceConstraints），启用后 prepare() 还会做 odom 滞后补偿
-      #   - 必须**不宽于**下游 velocity_smoother 的 max_accel/max_decel（当前 4.5 / -4.5），
-      #     否则执行端会二次限速、控制器预测与实际不一致：3.0 < 4.5 ✓
-      #   - 逐轴独立，某轴留 0 = 该轴不做限制；az 保持 0，因为实车 wz_max=0、z 通道是
-      #     底盘自旋（由 nonrotating_vel_transform 叠加 cmd_spin），与整车轨迹无关
-      #   - 单位：ax/ay = m/s²，az = rad/s²；ay 受麦克纳姆轮横向摩擦限制，台架实测后再调
-      #   - vx_std/vy_std 0.2 对应 a_max·model_dt ≈ 0.1；若现场发现采样大多被夹到边界
-      #     （表现为响应变钝），可把它们收到 0.15
+      #   - 加速侧必须**不宽于**下游 max_accel（4.5）：3.0 < 4.5 ✓
+      #   - 逐轴独立；az 保持 0，因为实车 wz_max=0、z 通道是底盘自旋
+      #     （由 nonrotating_vel_transform 叠加 cmd_spin），与整车轨迹无关
+      #   - 单位：ax/ay = m/s²，az = rad/s²；ay 受麦克纳姆轮横向摩擦限制
       ax_max: 3.0
-      ax_min: -3.0
+      ax_min: 0.0
       ay_max: 3.0
-      ay_min: -3.0
+      ay_min: 0.0
       az_max: 0.0
       vy_max: 2.5
       # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。

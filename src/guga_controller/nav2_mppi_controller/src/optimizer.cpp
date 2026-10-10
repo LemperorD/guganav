@@ -109,20 +109,9 @@ void Optimizer::getParams()
   }
   s.base_constraints.az_max = std::fabs(s.base_constraints.az_max);
 
-  // 某一轴只填了一侧时给提示：另一侧按"不限制"处理（不是"不允许变化"），
-  // 所以只填 ax_max 时机器人仍然可以正常减速，但加速上限才生效。
-  if ((s.base_constraints.ax_max > 0.0f) != (s.base_constraints.ax_min < 0.0f)) {
-    RCLCPP_WARN(
-      logger_,
-      "ax_max/ax_min 建议成对填写（加速为正、减速为负）；当前只填了一侧，"
-      "另一侧按不限制处理");
-  }
-  if ((s.base_constraints.ay_max > 0.0f) != (s.base_constraints.ay_min < 0.0f)) {
-    RCLCPP_WARN(
-      logger_,
-      "ay_max/ay_min 建议成对填写（加速为正、减速为负）；当前只填了一侧，"
-      "另一侧按不限制处理");
-  }
+  // 注意：单边留 0 是**有意**配置（例如"只限加速、减速自由"），另一侧按不限制处理，
+  // 不是"不允许变化"（见 utils::maxAccelDelta/minAccelDelta 与 constraints.hpp）。
+  // 这里不再用 WARN 打扰，实际生效值由下面的汇总行给出。
 
   getParam(motion_model_name, "motion_model", std::string("DiffDrive"));
 
@@ -137,7 +126,7 @@ void Optimizer::getParams()
   // 把生效的约束打到日志里：现场判断"加速度限制到底开没开"只看这一行。
   RCLCPP_INFO(
     logger_,
-    "加速度约束 ax=[%.3f, %.3f] ay=[%.3f, %.3f] az=%.3f（0 表示该轴不做加速度限制）；"
+    "加速度约束 ax=[%.3f, %.3f] ay=[%.3f, %.3f] az=%.3f（某侧为 0 表示该方向不限制）；"
     "controller_period=%.4f sgf_order=%u",
     s.base_constraints.ax_min, s.base_constraints.ax_max,
     s.base_constraints.ay_min, s.base_constraints.ay_max,
