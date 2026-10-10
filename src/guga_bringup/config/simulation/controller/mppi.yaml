@@ -131,6 +131,7 @@ controller_server:
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
       time_steps: 56
+      debug_timing: false
       # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
       #   - period < model_dt → 仅告警，控制序列移位关闭
       #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
@@ -146,7 +147,17 @@ controller_server:
       vx_min: -2.5
       vy_max: 2.5
       wz_max: 3.0
-
+      # 第 0 步用真实控制周期、之后用 model_dt（见 optimizer.cpp 的
+      # applyControlSequenceInterIterationConstraints / applyControlSequenceConstraints）。
+      # 起始值建议先与 velocity_smoother 的 max_accel/max_decel 对齐（当前 4.5 / -4.5），
+      # 台架实测后再收；ay 受麦克纳姆轮横向摩擦限制，通常比 ax 小。
+      # 注意单位：ax/ay 是 m/s²，az 是 rad/s²（实车 wz_max=0，az 暂时用不到）。
+      # 采样标准差建议同步按 a_max·model_dt 收缩（4.5 × 1/30 ≈ 0.15），
+      # 否则 vx_std=0.2 会在采样物理不可达的状态，表现为抖动。
+      ax_max: 3.0
+      ax_min: -3.0
+      ay_max: 3.0
+      ay_min: -3.0
       iteration_count: 1
       temperature: 0.3
       gamma: 0.015
