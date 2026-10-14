@@ -28,6 +28,8 @@
 #include <xtensor/xmath.hpp>
 #include <xtensor/xview.hpp>
 
+#include "nav2_mppi_controller/tools/accel_limits.hpp"
+
 #include "angles/angles.h"
 
 #include "tf2/utils.h"
@@ -685,67 +687,6 @@ inline size_t findClosestPathPt(const std::vector<float> & vec, float dist, size
     return iter - 1 - vec.begin();
   }
   return iter - vec.begin();
-}
-
-/**
- * @brief 把输入夹到 [lower_bound, upper_bound]
- * @param lower_bound: 下界
- * @param upper_bound: 上界
- * @param input: 待夹紧的值
- * @return 返回值: 夹紧后的值
- */
-inline float clamp(const float lower_bound, const float upper_bound, const float input)
-{
-  return std::min(upper_bound, std::max(input, lower_bound));
-}
-
-/**
- * @brief 按加速度上限夹紧速度（移植自上游 nav2 PR #6072）
- *
- * 前进（last_vel >= 0）时用 max_delta 限制加速、min_delta 限制减速；
- * 倒车（last_vel < 0）时把两个方向对调，这样"倒车时继续后退"用的是
- * ax_max、"倒车时刹停"用的是 ax_min，符合非对称加减速的物理含义。
- *
- * @param last_vel: 上一步速度
- * @param curr_vel: 本步期望速度
- * @param min_delta: 允许的最大速度变化量（减速侧，通常为负）
- * @param max_delta: 允许的最大速度变化量（加速侧，通常为正）
- * @return 返回值: 夹紧后的速度
- */
-inline float clampVelocityByAccel(
-  const float last_vel, const float curr_vel,
-  const float min_delta, const float max_delta)
-{
-  if (last_vel >= 0) {
-    return clamp(last_vel + min_delta, last_vel + max_delta, curr_vel);
-  }
-  return clamp(last_vel - max_delta, last_vel - min_delta, curr_vel);
-}
-
-/**
- * @brief 加速侧上限 → 单步允许的速度增量
- *
- * 上限留 0 表示这一侧"不做限制"，返回 +inf。不能返回 0：那会被
- * clampVelocityByAccel 读成"这一侧不允许变化"（只填 ax_max 就永远不能减速）。
- *
- * @param limit: 加速侧上限（ax_max/ay_max，正常为正；az_max 用于对称的 wz）
- * @param dt: 步长（控制周期或预测步长）
- * @return 返回值: dt 内允许的正向速度增量
- */
-inline float maxAccelDelta(const float limit, const float dt)
-{
-  return limit > 0.0f ? limit * dt : std::numeric_limits<float>::infinity();
-}
-
-/**
- * @brief 减速侧下限 → 单步允许的速度增量（负值）
- * @param limit: 减速侧下限（ax_min/ay_min，正常为负）
- * @param dt: 步长
- * @return 返回值: dt 内允许的负向速度增量；未设置时返回 -inf
- */
-inline float minAccelDelta(const float limit, const float dt)
-{
-  return limit < 0.0f ? limit * dt : -std::numeric_limits<float>::infinity();
 }
 
 }  // namespace mppi::utils

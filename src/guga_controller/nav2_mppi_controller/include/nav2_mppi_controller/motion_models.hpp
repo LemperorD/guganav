@@ -30,6 +30,7 @@
 #include <xtensor/xnoalias.hpp>
 
 #include "nav2_mppi_controller/tools/parameters_handler.hpp"
+#include "nav2_mppi_controller/tools/accel_limits.hpp"
 
 namespace mppi
 {
@@ -120,16 +121,20 @@ public:
       float wz_last = state.wz(i, 0);
       for (size_t j = 1; j < cols; ++j) {
         if (limit_vx) {
-          vx_last = std::clamp(
-            state.cvx(i, j - 1), vx_last + min_delta_vx, vx_last + max_delta_vx);
+          // 必须与钳制控制序列用同一套"前进/倒车对调"语义（utils::clampVelocityByAccel）：
+          // 之前这里用相对 vx_last 的对称 clamp，单边配置（ax_min=0）下倒车方向会把
+          // "加速"和"刹车"的角色弄反 —— 预测里倒车可以瞬间加速、刹车却被限制，而真正
+          // 下发的序列是反过来的，于是倒车方向预测≠执行，表现为一卡一卡。
+          vx_last = utils::clampVelocityByAccel(
+            vx_last, state.cvx(i, j - 1), min_delta_vx, max_delta_vx);
         } else {
           vx_last = state.cvx(i, j - 1);
         }
         state.vx(i, j) = vx_last;
 
         if (limit_wz) {
-          wz_last = std::clamp(
-            state.cwz(i, j - 1), wz_last - max_delta_wz, wz_last + max_delta_wz);
+          wz_last = utils::clampVelocityByAccel(
+            wz_last, state.cwz(i, j - 1), -max_delta_wz, max_delta_wz);
         } else {
           wz_last = state.cwz(i, j - 1);
         }
@@ -137,8 +142,8 @@ public:
 
         if (is_holo) {
           if (limit_vy) {
-            vy_last = std::clamp(
-              state.cvy(i, j - 1), vy_last + min_delta_vy, vy_last + max_delta_vy);
+            vy_last = utils::clampVelocityByAccel(
+              vy_last, state.cvy(i, j - 1), min_delta_vy, max_delta_vy);
           } else {
             vy_last = state.cvy(i, j - 1);
           }

@@ -946,13 +946,63 @@ TEST(OptimizerTests, AccelSingleSidedLimitIsUnboundedOnOtherSide)
   optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(accel_state);
   EXPECT_NEAR(accel_state.vx(0, 1), 0.1, 1e-6);
 
-  // 减速侧：从 +0.5 起步给 -5，一步就该到 -5（未设 ax_min → 不限制）
-  models::State decel_state;
-  decel_state.reset(1, 5);
-  decel_state.vx(0, 0) = 0.5;
-  decel_state.cvx = -5.0 * xt::ones<float>({1, 5});
-  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(decel_state);
-  EXPECT_NEAR(decel_state.vx(0, 1), -5.0, 1e-6);
+  // 减速侧不限制：从 +0.5 起步给 0 可以一步刹停
+  models::State brake_state;
+  brake_state.reset(1, 5);
+  brake_state.vx(0, 0) = 0.5;
+  brake_state.cvx = xt::zeros<float>({1, 5});
+  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(brake_state);
+  EXPECT_NEAR(brake_state.vx(0, 1), 0.0, 1e-6);
+
+  // 换向：从 +0.5 直接给 -5，可以一步刹到 0，但"在反方向加速"仍受 ax_max 限制 → -0.1
+  models::State cross_state;
+  cross_state.reset(1, 5);
+  cross_state.vx(0, 0) = 0.5;
+  cross_state.cvx = -5.0 * xt::ones<float>({1, 5});
+  optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(cross_state);
+  EXPECT_NEAR(cross_state.vx(0, 1), -0.1, 1e-6);
+
+  optimizer_tester.shutdown();
+}
+
+// 前进与倒车必须**行为对称**：|v| 增大受加速度上限约束、减小不受限。
+// 回归的是"只开 ax_max（减速不限）时倒车方向加速/刹车角色倒挂"的 bug。
+TEST(OptimizerTests, AccelLimitsSymmetricInBothDirections)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_symmetry_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(1));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(5));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.1));
+  node->declare_parameter("mppic.ax_max", rclcpp::ParameterValue(1.0));  // 只限加速侧
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(10.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_symmetry", "", "dummy_costmap_accel_symmetry");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetDiffModel();
+
+  auto predict_from = [&](const float start, const float cmd) {
+      models::State st;
+      st.reset(1, 5);
+      st.vx(0, 0) = start;
+      st.cvx = cmd * xt::ones<float>({1, 5});
+      optimizer_tester.propagateStateVelocitiesFromInitialsWrapper(st);
+      return st.vx(0, 1);
+    };
+
+  // 前进侧：加速受限（0 → +5 只到 +0.1）、刹车不限（+1 → 0 一步到位）
+  EXPECT_NEAR(predict_from(0.0f, 5.0f), 0.1f, 1e-6);
+  EXPECT_NEAR(predict_from(1.0f, 0.0f), 0.0f, 1e-6);
+  // 倒车侧必须镜像：加速受限（-1 → -5 只到 -1.1）、刹车不限（-1 → 0 一步到位）
+  EXPECT_NEAR(predict_from(-1.0f, -5.0f), -1.1f, 1e-6);
+  EXPECT_NEAR(predict_from(-1.0f, 0.0f), 0.0f, 1e-6);
+  // 换向两侧都受另一方向加速度上限约束
+  EXPECT_NEAR(predict_from(1.0f, -5.0f), -0.1f, 1e-6);
+  EXPECT_NEAR(predict_from(-1.0f, 5.0f), 0.1f, 1e-6);
 
   optimizer_tester.shutdown();
 }
