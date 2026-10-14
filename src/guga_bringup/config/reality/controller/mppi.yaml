@@ -31,53 +31,57 @@ controller_server:
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
       # 以下采样与速度参数与仿真 profile（config/simulation/controller/mppi.yaml）保持一致。
-      time_steps: 56
+      time_steps: 48
       # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
       #   - period < model_dt → 仅告警，控制序列移位关闭
       #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.033333333
-      batch_size: 1800
+      model_dt: 0.03333333333
+      batch_size: 1400
       # 耗时归因：true 时每 2 s 打印一行单周期拆解（prepare/optimize/平滑）以及每个
       # critic 的耗时（critic_manager.cpp / optimizer.cpp）。定位"算不过来"时打开
       debug_timing: false
-      vx_std: 0.2
-      vy_std: 0.2
+      vx_std: 0.3
+      vy_std: 0.3
       wz_std: 0.00001
-      vx_max: 2.5
-      vx_min: -2.5
+      vx_max: 4.0
+      vx_min: -4.0
       # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072）。
-      # 只限制**加速**（ax_max/ay_max = 3.0），**减速侧不设限**（ax_min/ay_min = 0）：
+      # **减速侧必须与执行端一致**：ax_min/ay_min = -4.5 = velocity_smoother.max_decel。
+      # 这是"滞后"与"过冲"这对症状的平衡点，别再只动一边：
+      #   - 减速侧设成 0（不限制）：模型允许瞬间刹停，执行端只有 4.5 m/s² → 预测乐观、
+      #     欠刹车 → **过冲**；而且 prepare() 的 odom 滞后补偿在减速方向变成无界
+      #     （minAccelDelta 返回 -inf），会把预测状态速度往下拽得比实际更低 → 更不刹车，
+      #     过冲更明显。实测就是这样：去掉减速限制后滞后没了，过冲回来了
+      #   - 减速侧设成 -3.0（比执行端 -4.5 更紧）：模型比执行端保守 → 刹车偏慢、
+      #     整机"非常大的滞后"（停不住、慢半拍）
+      #   - 设成 -4.5（= 执行端）：预测与执行一致，既不乐观也不过保守
+      # 想更快刹车：把 velocity_smoother.max_decel 与这里的 ax_min/ay_min **一起**放到
+      # 台架实测值（如 -8），只改一边必然又回到"要么过冲、要么变慢"。
+      # 若 -4.5 下仍过冲，残差来自执行/反馈滞后（串口滑动均值窗口、odom 延迟），
+      # 按收益顺序调：serial filter_window_size 10→3、smoothing_frequency 20→30、
+      # 用 `ros2 topic delay /odometry` 量反馈滞后。
       #   - 0 的语义是"该方向不做限制"（utils::maxAccelDelta/minAccelDelta 返回 ±inf），
-      #     不是"不允许变化"；所以 ax_max=3.0 + ax_min=0 = 只限加速、减速自由。
-      #     该单边语义有单元测试覆盖（AccelSingleSidedLimitIsUnboundedOnOtherSide）
-      #   - 实车实测：减速限到 -3.0 时整机"非常大的滞后"（停不住、慢半拍），去掉减速限制
-      #     后正常。真实刹车能力本来由下游 velocity_smoother.max_decel = -4.5 决定，
-      #     之前被 MPPI 更紧的 -3.0 掩蔽了
-      #   - 已知副作用（接受）：MPPI 的预测在减速方向变乐观——允许瞬间刹停，而执行端只能
-      #     4.5 m/s²。制动比规划"更慢"属安全方向；等台架测出真实可达减速度（如 -8）后，
-      #     建议把 ax_min 设为该实测值并同步放宽 velocity_smoother.max_decel，让
-      #     "预测=执行"重新成立
+      #     不是"不允许变化"；单边语义有单测覆盖，且换向仍受另一侧加速度上限约束
       #   - 约束作用在预测轨迹的**状态速度**上，采样控制量保持原始；第 0 步用真实控制周期、
-      #     之后用 model_dt（optimizer.cpp 的 applyControlSequenceInterIterationConstraints /
-      #     applyControlSequenceConstraints），启用后 prepare() 还会做 odom 滞后补偿
+      #     之后用 model_dt；启用后 prepare() 还会做 odom 滞后补偿
       #   - 加速侧必须**不宽于**下游 max_accel（4.5）：3.0 < 4.5 ✓
       #   - 逐轴独立；az 保持 0，因为实车 wz_max=0、z 通道是底盘自旋
       #     （由 nonrotating_vel_transform 叠加 cmd_spin），与整车轨迹无关
       #   - 单位：ax/ay = m/s²，az = rad/s²；ay 受麦克纳姆轮横向摩擦限制
       ax_max: 3.0
-      ax_min: 0.0
+      ax_min: -4.5
       ay_max: 3.0
-      ay_min: 0.0
+      ay_min: -4.5
       az_max: 0.0
-      vy_max: 2.5
-      # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
+      vy_max: 4.0
+      vy_min: -4.0      # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
       wz_max: 0.0
 
-      iteration_count: 1
-      temperature: 0.3
+      iteration_count: 2
+      temperature: 0.2
       gamma: 0.012
       motion_model: "Omni"
       visualize: false
@@ -155,7 +159,7 @@ controller_server:
         cost_weight: 4.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
-        threshold_to_consider: 0.2
+        threshold_to_consider: 0.5
         offset_from_furthest: 10
         use_path_orientations: false
       PathFollowCritic:
@@ -241,7 +245,7 @@ local_costmap:
         # 碰撞 → 车中心不得进入；再往外才是软代价梯度。调大本条不压缩可通行的窄道宽度，
         # 硬边界只由 robot_radius + padding 决定。
         cost_scaling_factor: 8.0
-        inflation_radius: 0.60
+        inflation_radius: 0.50
 
 global_costmap:
   global_costmap:
@@ -309,7 +313,7 @@ global_costmap:
         # 注意别再往上提到 0.9：膨胀代价按面积走（∝r²），而 global costmap 的
         # inflation 跑在控制器同一个容器里，会抢 CPU。
         cost_scaling_factor: 10.0
-        inflation_radius: 0.55
+        inflation_radius: 0.50
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
 # If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
