@@ -112,18 +112,18 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 5.0
-        threshold_to_consider: 2.0
+        threshold_to_consider: 1.4
       # 到点摆正车头：离目标 threshold_to_consider 以内时，按"轨迹末端朝向 vs 路径末端朝向"
       # 计代价。无小陀螺后车头只能靠控制器转，这个权重太小就摆不正（3.0 → 5.0）。
       # symmetric_yaw_tolerance=true 时反向对齐也算过（车头/车尾不分），按需打开。
       GoalAngleCritic:
-        enabled: true
+        enabled: False
         cost_power: 1
         cost_weight: 5.0
         threshold_to_consider: 0.5
       PreferForwardCritic:
-        enabled: true
-        cost_power: 1
+        enabled: False
+        cost_power: 2
         cost_weight: 5.0
         threshold_to_consider: 0.5
       # 注意：本块未列入上面的 critics 列表，当前不参与计算；取值与仿真 profile 对齐。
@@ -165,7 +165,7 @@ controller_server:
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 4.0
+        cost_weight: 5.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
         threshold_to_consider: 0.5
@@ -175,10 +175,10 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 7.0
-        offset_from_furthest: 5
-        threshold_to_consider: 1.4
+        offset_from_furthest: 6
+        threshold_to_consider: 0.8
       PathAngleCritic:
-        enabled: true
+        enabled: False
         cost_power: 1
         cost_weight: 2.0
         offset_from_furthest: 4
@@ -196,7 +196,7 @@ controller_server:
       # 参数名坑：本 fork 读的是 cost_power / cost_weight；yaml 里原来的
       # twirling_cost_power / twirling_cost_weight **不会被读取**（默认 10.0 生效过）。
       TwirlingCritic:
-        enabled: true
+        enabled: False
         cost_power: 1
         cost_weight: 3.0
 local_costmap:
