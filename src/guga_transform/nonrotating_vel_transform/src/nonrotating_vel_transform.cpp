@@ -244,7 +244,8 @@ geometry_msgs::msg::Twist NonrotatingVelTransform::transformVelocity(
   const double nonrotating_to_chassis_yaw = chassis_followed_yaw_ - yaw_diff;
   auto out = output_in_chassis_frame_ ? rotateVelocity(*twist, nonrotating_to_chassis_yaw)
                                       : rotateVelocity(*twist, yaw_diff);
-  if (chassis_mode_ == chassisFollowed) {
+  // enable_spin=false 时角速度原样透传（不叠加自旋），便于把"自旋叠加"单独摘出来 A/B
+  if (chassis_mode_ == chassisFollowed || !enable_spin_) {
     out.angular.z = twist->angular.z;
   } else {
     out.angular.z = twist->angular.z + spin_speed_;
@@ -348,6 +349,9 @@ void NonrotatingVelTransform::onConfigure()
   this->declare_parameter<double>("publish_frequency", 50.0);
   // 超过该时长没有新指令就下发 0 速度（默认 0.5 s）
   this->declare_parameter<double>("cmd_vel_timeout", 0.5);
+  // 是否允许本节点改写输出角速度（叠加自旋）。false = angular.z 原样透传，
+  // 只做坐标/旋转补偿；可运行时 ros2 param set 切换，便于台架 A/B。
+  this->declare_parameter<bool>("enable_spin", true);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
@@ -364,6 +368,7 @@ void NonrotatingVelTransform::onConfigure()
   this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
   this->get_parameter("publish_frequency", publish_frequency_);
   this->get_parameter("cmd_vel_timeout", cmd_vel_timeout_);
+  this->get_parameter("enable_spin", enable_spin_);
   if (publish_frequency_ < 1.0) {
     RCLCPP_WARN(get_logger(), "publish_frequency=%.2f 过小，按 1 Hz 处理", publish_frequency_);
     publish_frequency_ = 1.0;
@@ -373,8 +378,27 @@ void NonrotatingVelTransform::onConfigure()
     cmd_vel_timeout_ = 0.05;
   }
   RCLCPP_INFO(
-    get_logger(), "速度指令重发 %.1f Hz（无损传输），超时 %.2f s 下发 0", publish_frequency_,
-    cmd_vel_timeout_);
+    get_logger(), "速度指令重发 %.1f Hz（无损传输），超时 %.2f s 线性归零；"
+    "enable_spin=%s（false 时 angular.z 原样透传）",
+    publish_frequency_, cmd_vel_timeout_, enable_spin_ ? "true" : "false");
+
+  // 允许运行时切换 enable_spin（台架 A/B 不用重启）
+  param_cb_handle_ = this->add_on_set_parameters_callback(
+    [this](const std::vector<rclcpp::Parameter> & params) {
+      rcl_interfaces::msg::SetParametersResult result;
+      result.successful = true;
+      for (const auto & p : params) {
+        if (p.get_name() != "enable_spin") {
+          continue;
+        }
+        std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+        enable_spin_ = p.as_bool();
+        RCLCPP_INFO(
+          get_logger(), "enable_spin -> %s（%s）", enable_spin_ ? "true" : "false",
+          enable_spin_ ? "叠加底盘自旋" : "angular.z 原样透传");
+      }
+      return result;
+    });
   // initial_chassis_mode：启动时默认小陀螺（launch 中按 navigation_profile 区分）
   int initial_chassis_mode{1};
   this->get_parameter("initial_chassis_mode", initial_chassis_mode);

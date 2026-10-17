@@ -276,6 +276,10 @@ def generate_launch_description():
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
                         "output_cmd_vel_topic": "cmd_vel",
+                        # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
+                        # false = angular.z 原样透传，只做坐标/旋转补偿；运行时也可
+                        # ros2 param set /nonrotating_vel_transform enable_spin false
+                        "enable_spin": True,
                         # 50 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样
                         # 按更高频率送到 MCU，不做再滤波/再限速，保证 MPPI 的预测与实际
                         # 执行一致；旋转补偿也随之从 ~10 Hz（odom 同步）提升到 50 Hz
@@ -395,6 +399,10 @@ def generate_launch_description():
                         "local_plan_topic": "local_plan",
                         "input_cmd_vel_topic": "cmd_vel_smoothed",
                         "output_cmd_vel_topic": "cmd_vel",
+                        # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
+                        # false = angular.z 原样透传，只做坐标/旋转补偿；运行时也可
+                        # ros2 param set /nonrotating_vel_transform enable_spin false
+                        "enable_spin": True,
                         # 50 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样
                         # 按更高频率送到 MCU，不做再滤波/再限速，保证 MPPI 的预测与实际
                         # 执行一致；旋转补偿也随之从 ~10 Hz（odom 同步）提升到 50 Hz

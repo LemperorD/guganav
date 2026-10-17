@@ -84,6 +84,8 @@ private:
   rclcpp::TimerBase::SharedPtr tf_sub_timer_;
   rclcpp::TimerBase::SharedPtr tf_pub_timer_;
   rclcpp::TimerBase::SharedPtr cmd_vel_pub_timer_;
+  /// enable_spin 的动态参数回调句柄（不保存则回调会被注销）
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
 
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -101,6 +103,14 @@ private:
   std::string chassis_mode_topic_;
   float spin_speed_;
   bool output_in_chassis_frame_{false};
+  /**
+   * @brief 是否允许本节点改写输出角速度（叠加底盘自旋）
+   *
+   * false 时 angular.z 原样透传（只做坐标系/旋转补偿，不改角速度），用于把
+   * "自旋叠加"从整条链里摘出来做 A/B（例如排查与转向耦合的抖动/过冲）。
+   * 不影响 TF（robot_base_frame -> nonrotating_robot_base_frame）与线速度的补偿。
+   */
+  bool enable_spin_{true};
   uint8_t chassis_mode_{littleTES};
   double chassis_followed_yaw_ = 0.0;
 
