@@ -168,6 +168,11 @@ protected:
 
   /**
    * @brief 对控制序列应用底盘硬约束（速度上限 + 加速度可行性）
+   *
+   * 加速度约束的起点是**上一周期下发的指令**（`last_command_vel_`），不是
+   * `state_.speed`。`state_.speed` 来自 odom，实车约 10 Hz、比 30 Hz 控制周期
+   * 慢 3 拍；若命令也从它起夹，减速命令会被"钉"在陈旧速度上（|ax_min| 越小越
+   * 明显），表现为到点停不住/过冲。预测初值仍用 `state_.speed`，两者解耦。
    */
   void applyControlSequenceConstraints();
 
@@ -266,6 +271,8 @@ protected:
   xt::xtensor<float, 1> costs_;  ///< 各候选轨迹的累计成本。
   /// 上一周期实际下发的速度指令，用于测量滞后补偿（上游 PR #6072）。
   geometry_msgs::msg::Twist last_command_vel_;
+  /// 是否已有上一周期指令；reset 后首拍用实测速度播种，避免从 0 起爬。
+  bool has_last_command_{false};
   /// 是否每 2 s 打印一次单周期耗时拆解（参数 <plugin>.debug_timing，默认 false）
   bool debug_timing_{false};
 

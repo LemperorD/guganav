@@ -1007,6 +1007,63 @@ TEST(OptimizerTests, AccelLimitsSymmetricInBothDirections)
   optimizer_tester.shutdown();
 }
 
+// 命令侧加速度钳制必须以**上一周期下发的指令**为起点，而不是滞后的 state_.speed。
+// 回归：实车 odom 约 10 Hz、控制 30 Hz，减速时 state_.speed 被 prepare() 夹在陈旧的
+// 高速度上；旧实现从它起夹，命令每拍只能降一个加速度步，下一拍又被抬回去，于是命令
+// 被"钉"在旧速度上（|ax_min| 越小越明显），表现为到点停不住/过冲。新实现从命令链
+// 起夹，命令可以正常以 ax 为斜率下降。
+TEST(OptimizerTests, AccelCommandClampUsesLastCommandNotStaleState)
+{
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_cmd_base_node");
+  OptimizerTester optimizer_tester;
+  node->declare_parameter("mppic.batch_size", rclcpp::ParameterValue(1));
+  node->declare_parameter("mppic.time_steps", rclcpp::ParameterValue(10));
+  node->declare_parameter("mppic.model_dt", rclcpp::ParameterValue(0.033333333));
+  node->declare_parameter("mppic.ax_max", rclcpp::ParameterValue(2.0));
+  node->declare_parameter("mppic.ax_min", rclcpp::ParameterValue(-4.5));
+  node->declare_parameter("mppic.ay_max", rclcpp::ParameterValue(3.0));
+  node->declare_parameter("mppic.ay_min", rclcpp::ParameterValue(-4.5));
+  node->declare_parameter("controller_frequency", rclcpp::ParameterValue(30.0));
+  auto costmap_ros = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "dummy_costmap_accel_cmd_base", "", "dummy_costmap_accel_cmd_base");
+  ParametersHandler param_handler(node);
+  rclcpp_lifecycle::State lstate;
+  costmap_ros->on_configure(lstate);
+  optimizer_tester.initialize(node, "mppic", costmap_ros, &param_handler);
+  optimizer_tester.resetMotionModel();
+  optimizer_tester.testSetOmniModel();
+
+  auto & settings = optimizer_tester.grabSettings();
+  auto & state = optimizer_tester.grabState();
+  auto & seq = optimizer_tester.grabControlSequence();
+  ASSERT_TRUE(settings.shift_control_sequence);
+
+  // 滞后一拍以上的场景：实测仍是 2.0，上一周期指令已经降到 1.8，目标 0。
+  state.speed.linear.x = 2.0;
+  optimizer_tester.setLastCommandVel(1.8, 0.0, 0.0);
+  seq.reset(10);
+  optimizer_tester.applyControlSequenceConstraintsWrapper();
+
+  // index 0 只用于预测（钉在实测 2.0），不下发。
+  EXPECT_NEAR(seq.vx(0), 2.0, 1e-5);
+  // index 1 才是下发值：必须从 1.8 再降 4.5 * (1/30) = 0.15 → 1.65。
+  // 旧实现从 state 2.0 起夹，会得到 1.85，于是命令被钉在 1.85/1.8 附近。
+  EXPECT_NEAR(seq.vx(1), 1.65, 1e-4);
+  // 后续步继续以同一斜率下降，不会被陈旧状态抬回去。
+  EXPECT_NEAR(seq.vx(2), 1.50, 1e-4);
+  EXPECT_NEAR(seq.vx(3), 1.35, 1e-4);
+
+  // 前移关闭时 index 0 就是下发值，同样从上一周期指令起夹。
+  settings.shift_control_sequence = false;
+  state.speed.linear.x = 2.0;
+  optimizer_tester.setLastCommandVel(1.8, 0.0, 0.0);
+  seq.reset(10);
+  optimizer_tester.applyControlSequenceConstraintsWrapper();
+  EXPECT_NEAR(seq.vx(0), 1.65, 1e-4);
+
+  optimizer_tester.shutdown();
+}
+
 // 性能基线：加速度约束对运动模型 predict() 的单次耗时影响。
 // 用实车配置的规模（batch 1800 × time_steps 56）。这是新增代码里最重的一段
 // （逐样本串行夹紧替换了原来的整体视图赋值），但只覆盖 predict，不代表整个控制周期。

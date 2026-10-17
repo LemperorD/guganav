@@ -170,6 +170,7 @@ void Optimizer::reset()
   motion_model_->setConstraints(settings_.constraints, settings_.model_dt);
   // 复位后没有"上一帧指令"，测量滞后补偿从实测速度重新起步。
   last_command_vel_ = geometry_msgs::msg::Twist();
+  has_last_command_ = false;
 
   costs_ = xt::zeros<float>({settings_.batch_size});
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
@@ -184,6 +185,12 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
   const nav_msgs::msg::Path & plan, nav2_core::GoalChecker * goal_checker)
 {
   const auto t_start = std::chrono::steady_clock::now();
+  // 复位/首拍没有上一帧指令：用实测速度播种，避免命令钳制从 0 开始爬（激活时
+  // 车已经在动会被硬刹一下）。之后 last_command_vel_ 由本函数末尾更新。
+  if (!has_last_command_) {
+    last_command_vel_ = robot_speed;
+    has_last_command_ = true;
+  }
   prepare(robot_pose, robot_speed, plan, goal_checker);
   const auto t_prepared = std::chrono::steady_clock::now();
 
@@ -193,6 +200,10 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
   const auto t_optimized = std::chrono::steady_clock::now();
 
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
+  // SGF 在本函数的约束**之后**执行（上游是在每次 updateControlSequence 里先平滑
+  // 再约束），其边界项可能把命令重新推出加速度包络。下发前再钳一次，保证实际
+  // 指令与模型假设一致；平滑值本来大多就在包络内，这一步只削掉越界部分。
+  applyControlSequenceConstraints();
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
   const auto t_done = std::chrono::steady_clock::now();
 
@@ -400,9 +411,17 @@ void Optimizer::applyControlSequenceConstraints()
     return;
   }
 
-  // 加速度可行性：第 0 步用真实控制周期，第 1 步起用预测步长；起点取当前实测速度，
-  // 保证"从当前状态出发"这一步也可行（上游 PR #6072 的核心修正）。
-  // 逐轴独立：上限留 0 的轴不做加速度限制，保持速度 clip 后的值。
+  // 加速度可行性：第 0 步用真实控制周期，第 1 步起用预测步长。逐轴独立：上限留 0
+  // 的轴不做加速度限制，保持速度 clip 后的值。
+  //
+  // **起点是上一周期下发的指令**，不是 state_.speed：实车 odom 约 10 Hz，比 30 Hz
+  // 控制周期慢约 3 拍，prepare() 的滞后补偿会把 state_.speed 夹在"陈旧实测速度"
+  // 附近（减速时偏高）。若命令也从它起夹，命令就只能比这个偏高的陈旧值低一个
+  // 加速度步；下一拍它又被抬回来，于是命令被"钉"在旧速度上，直到 odom 追上。
+  // |ax_min| 越小（如 -3.0 比 -4.5 小）抬升越久，表现为到点停不住/过冲；设成 0
+  // 只是让减速侧不设限，把这个 bug 掩盖掉，并不是正确配置。
+  // 用命令链做起点后，命令以 ax 为斜率独立变化；state_.speed 仍只作为预测初值，
+  // 预测看到的仍是真实（含滞后）速度。
   const auto & c = s.constraints;
   const bool limit_vx = c.ax_max > 0.0f || c.ax_min < 0.0f;
   const bool limit_vy = c.ay_max > 0.0f || c.ay_min < 0.0f;
@@ -416,25 +435,28 @@ void Optimizer::applyControlSequenceConstraints()
   float max_delta_wz = utils::maxAccelDelta(c.az_max, first_dt);
 
   const bool is_holo = isHolonomic();
-  float vx_last = static_cast<float>(state_.speed.linear.x);
-  float vy_last = static_cast<float>(state_.speed.linear.y);
-  float wz_last = static_cast<float>(state_.speed.angular.z);
+  float vx_last = static_cast<float>(last_command_vel_.linear.x);
+  float vy_last = static_cast<float>(last_command_vel_.linear.y);
+  float wz_last = static_cast<float>(last_command_vel_.angular.z);
 
+  size_t first = 0;
   if (s.shift_control_sequence) {
-    // 前移模式下 vx(0) 是"现在"，钉住它，使 vx(1) 只能离当前速度一步。
+    // 前移模式下 vx(0) 是"现在"、不会下发：只用于预测，钉在 state 上。
+    // 真正下发的 vx(1) 从上一条指令起算（见上）。
     if (limit_vx) {
-      control_sequence_.vx(0) = vx_last;
+      control_sequence_.vx(0) = static_cast<float>(state_.speed.linear.x);
     }
     if (limit_wz) {
-      control_sequence_.wz(0) = wz_last;
+      control_sequence_.wz(0) = static_cast<float>(state_.speed.angular.z);
     }
     if (limit_vy && is_holo) {
-      control_sequence_.vy(0) = vy_last;
+      control_sequence_.vy(0) = static_cast<float>(state_.speed.linear.y);
     }
+    first = 1;
   }
 
   const size_t steps = control_sequence_.vx.size();
-  for (size_t i = 0; i < steps; ++i) {
+  for (size_t i = first; i < steps; ++i) {
     if (i == 1) {
       // 第 1 步之后切换到预测步长。
       max_delta_vx = utils::maxAccelDelta(c.ax_max, s.model_dt);

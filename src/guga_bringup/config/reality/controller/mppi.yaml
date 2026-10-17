@@ -52,29 +52,31 @@ controller_server:
       # **减速侧必须与执行端一致**：ax_min/ay_min = -4.5 = velocity_smoother.max_decel。
       # 这是"滞后"与"过冲"这对症状的平衡点，别再只动一边：
       #   - 减速侧设成 0（不限制）：模型允许瞬间刹停，执行端只有 4.5 m/s² → 预测乐观、
-      #     欠刹车 → **过冲**；而且 prepare() 的 odom 滞后补偿在减速方向变成无界
-      #     （minAccelDelta 返回 -inf），会把预测状态速度往下拽得比实际更低 → 更不刹车，
-      #     过冲更明显。实测就是这样：去掉减速限制后滞后没了，过冲回来了
-      #   - 减速侧设成 -3.0（比执行端 -4.5 更紧）：模型比执行端保守 → 刹车偏慢、
-      #     整机"非常大的滞后"（停不住、慢半拍）
-      #   - 设成 -4.5（= 执行端）：预测与执行一致，既不乐观也不过保守
+      #     欠刹车 → **过冲**。0 只是"该方向不限制"（minAccelDelta 返回 -inf），不是
+      #     "不允许变化"；它能把下面那条 odom 滞后 bug 掩盖掉，但不是正确配置
+      #   - 减速侧设成 -3.0（比执行端 -4.5 更紧）：命令只能以 3 m/s² 下降，比执行端
+      #     的 4.5 慢 → 刹车偏慢、整机"非常大的滞后"（停不住/过冲）
+      #   - 设成 -4.5（= 执行端）：命令斜率与执行一致，既不乐观也不过保守
+      # 命令侧的加速度钳制**以上一周期下发的指令为起点**（不是 state_.speed）：
+      # 实车 odom 约 10 Hz、比 30 Hz 控制周期慢约 3 拍，prepare() 的滞后补偿会把
+      # state_.speed 夹在陈旧实测值附近；若命令也从它起夹，减速命令会被钉在旧速度上，
+      # |ax_min| 越小越明显——这正是"ax_min 不设 0 就过冲"的根因。现在 state_.speed
+      # 只作预测初值，命令链独立按 ax 变化，odom 再慢也不会把刹车命令抬回去。
       # 想更快刹车：把 velocity_smoother.max_decel 与这里的 ax_min/ay_min **一起**放到
       # 台架实测值（如 -8），只改一边必然又回到"要么过冲、要么变慢"。
       # 若 -4.5 下仍过冲，残差来自执行/反馈滞后（串口滑动均值窗口、odom 延迟），
-      # 按收益顺序调：serial filter_window_size 10→3、smoothing_frequency 20→30、
-      # 用 `ros2 topic delay /odometry` 量反馈滞后。
-      #   - 0 的语义是"该方向不做限制"（utils::maxAccelDelta/minAccelDelta 返回 ±inf），
-      #     不是"不允许变化"；单边语义有单测覆盖，且换向仍受另一侧加速度上限约束
-      #   - 约束作用在预测轨迹的**状态速度**上，采样控制量保持原始；第 0 步用真实控制周期、
-      #     之后用 model_dt；启用后 prepare() 还会做 odom 滞后补偿
-      #   - 加速侧必须**不宽于**下游 max_accel（4.5）：3.0 < 4.5 ✓
-      #   - 逐轴独立；az 保持 0，因为实车 wz_max=0、z 通道是底盘自旋
-      #     （由 nonrotating_vel_transform 叠加 cmd_spin），与整车轨迹无关
+      # 按收益顺序调：serial filter_window_size 10→3、用 `ros2 topic delay /odometry`
+      # 量反馈滞后（smoothing_frequency 已与控制器对齐到 30 Hz）。
+      #   - 约束作用在预测轨迹的状态速度上、采样控制量保持原始；命令序列本身按
+      #     上一周期指令逐步钳制。第 0 步用真实控制周期、之后用 model_dt
+      #   - 加速侧必须**不宽于**下游 max_accel（4.5）：2.0 < 4.5 ✓（偏保守，只影响起步）
+      #   - 逐轴独立；az 保持 0，因为 z 通道是底盘自旋（由 nonrotating_vel_transform
+      #     叠加 cmd_spin），与整车轨迹无关
       #   - 单位：ax/ay = m/s²，az = rad/s²；ay 受麦克纳姆轮横向摩擦限制
       ax_max: 2.0
-      ax_min: 0.0
+      ax_min: -4.5
       ay_max: 3.0
-      ay_min: 0.0
+      ay_min: -4.5
       az_max: 0.0
       vy_max: 4.0
       vy_min: -4.0      # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
@@ -405,7 +407,10 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: False
 
-    smoothing_frequency: 20.0
+    # 与 controller_server.controller_frequency（30 Hz）对齐：此参数同时是 smoother
+    # 的发布频率，设成 20 会先把控制器的 30 Hz 抽成 20 Hz，再交给 nonrotating 补到
+    # 60 Hz——补出来的大部分是重复值。保持 30，让每一条控制指令都进入下游。
+    smoothing_frequency: 30.0
 
     scale_velocities: False
 
