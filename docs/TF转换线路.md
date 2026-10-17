@@ -126,7 +126,7 @@ controller_server（MPPI，30 Hz，加速度约束在控制器内部）
     -> cmd_vel_controller
 velocity_smoother（nav2 官方，控制器输出侧）
     -> cmd_vel_smoothed
-nonrotating_vel_transform（旋转补偿 + 叠加自旋，50 Hz 定时重发）
+nonrotating_vel_transform（旋转补偿 + 叠加自旋，60 Hz 定时重发）
     -> cmd_vel
 串口驱动（可选滑动窗口均值 filter_window_size，默认 10；MCU 相对角旋转）
     -> MCU
@@ -140,11 +140,14 @@ nonrotating_vel_transform（旋转补偿 + 叠加自旋，50 Hz 定时重发）
 
 因此：
 
-- `nonrotating_vel_transform` 按 `publish_frequency`（默认 **50 Hz**）定时重发
+- `nonrotating_vel_transform` 按 `publish_frequency`（实车/仿真配置 **60 Hz**，代码默认
+  50 Hz；运行时 `ros2 param set` 改频率会重建定时器并立即生效）定时重发
   **最新一条**指令并用当前角度估计重新做旋转补偿，只做无损传输、不再限速。
   这样控制器 30 Hz 的加速可行指令原样到达 MCU（此前只在 odom 同步时发布，约
   10 Hz，等于把 3 个控制周期压成一个 0.45 m/s 的阶跃，等效 13.5 m/s²，本来就已经
-  在执行 MPPI 没规划过的轨迹）；旋转补偿也从 ~10 Hz 提到 50 Hz。
+  在执行 MPPI 没规划过的轨迹）；旋转补偿也从 ~10 Hz 提到 60 Hz。
+  这里补的是**旋转补偿角**（`estimateRobotBaseAngle()` 每个 tick 重算），不是速度值：
+  `base_footprint_nonrotating` 系内的控制指令原样保留，控制器预测不受影响。
 - 上游停止发布超过 `cmd_vel_timeout`（默认 **0.5 s**）时，节点把**线性速度归零**，
   不再继续重发最后一条非零指令（旧实现在这种场景下会让机器人带着旧指令继续跑）；
   但**角速度不清** —— 自旋是底盘级行为（由 `cmd_spin` / `chassis_mode` 决定，与整车

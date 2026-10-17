@@ -108,7 +108,10 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Full path to a single params file override (disables 1.0le merge)",
+        description=(
+            "Full path to a single params file override (disables 3-file merge); "
+            "该文件需自带 nonrotating_vel_transform 段，否则该节点拿不到话题名"
+        ),
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -266,41 +269,10 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[
-                    {
-                        "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
-                        "chassis_frame": "chassis",
-                        "odom_topic": "odometry",
-                        "local_plan_topic": "local_plan",
-                        "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
-                        # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
-                        # 当前为 False：不叠加自旋（无小陀螺试验），angular.z 只来自
-                        # 控制器（MPPI 的 wz，受 wz_max 限制）。运行时仍可动态切回：
-                        #   ros2 param set /nonrotating_vel_transform enable_spin true
-                        "enable_spin": False,
-                        # 50 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样
-                        # 按更高频率送到 MCU，不做再滤波/再限速，保证 MPPI 的预测与实际
-                        # 执行一致；旋转补偿也随之从 ~10 Hz（odom 同步）提升到 50 Hz
-                        "publish_frequency": 50.0,
-                        "cmd_spin_topic": "cmd_spin",
-                        "chassis_mode_topic": "chassis_mode",
-                        # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
-                        # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
-                        "initial_chassis_mode": PythonExpression(
-                            [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
-                            ]
-                        ),
-                        "init_spin_speed": PythonExpression(
-                            [
-                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
-                            ]
-                        ),
-                    }
-                ],
+                # 参数在 config/{reality,simulation}/base.yaml 的
+                # nonrotating_vel_transform 段；initial_chassis_mode / init_spin_speed
+                # 按控制器差异在 controller/<profile>.yaml 里。
+                parameters=configured_params,
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -390,41 +362,10 @@ def generate_launch_description():
                 package="nonrotating_vel_transform",
                 plugin="nonrotating_vel_transform::NonrotatingVelTransform",
                 name="nonrotating_vel_transform",
-                parameters=[
-                    {
-                        "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
-                        "chassis_frame": "chassis",
-                        "odom_topic": "odometry",
-                        "local_plan_topic": "local_plan",
-                        "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
-                        # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
-                        # 当前为 False：不叠加自旋（无小陀螺试验），angular.z 只来自
-                        # 控制器（MPPI 的 wz，受 wz_max 限制）。运行时仍可动态切回：
-                        #   ros2 param set /nonrotating_vel_transform enable_spin true
-                        "enable_spin": False,
-                        # 50 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样
-                        # 按更高频率送到 MCU，不做再滤波/再限速，保证 MPPI 的预测与实际
-                        # 执行一致；旋转补偿也随之从 ~10 Hz（odom 同步）提升到 50 Hz
-                        "publish_frequency": 50.0,
-                        "cmd_spin_topic": "cmd_spin",
-                        "chassis_mode_topic": "chassis_mode",
-                        # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
-                        # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
-                        "initial_chassis_mode": PythonExpression(
-                            [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
-                            ]
-                        ),
-                        "init_spin_speed": PythonExpression(
-                            [
-                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
-                            ]
-                        ),
-                    }
-                ],
+                # 参数在 config/{reality,simulation}/base.yaml 的
+                # nonrotating_vel_transform 段；initial_chassis_mode / init_spin_speed
+                # 按控制器差异在 controller/<profile>.yaml 里。
+                parameters=configured_params,
             ),
             ComposableNode(
                 package="nav2_lifecycle_manager",

@@ -313,8 +313,8 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 ```
 
 **调转速的位置**（两处通常同步改）：
-- 决策层转速：`src/guga_decision/simple_decision/config/simple_decision.yaml` → `spin_speed`（默认 6.28 rad/s）
-- 启动兜底转速：`src/guga_bringup/launch/core/navigation_launch.py` → `init_spin_speed`（由 `controller` 推断：mppi/mpc=6.28，pid=0.0）
+- 决策层转速：`src/guga_decision/simple_decision/config/simple_decision.yaml` → `spin_speed`（默认 3.14 rad/s）
+- 启动兜底转速：`src/guga_bringup/config/<mode>/controller/<profile>.yaml` → `init_spin_speed`（mppi/mpc=1.0，pid=0.0）
 
 **参数分层机制**（`simulation.sh` + `simulation_launch.py` + `navigation_launch.py`）：
 - **9 种 planner/controller 组合**（`planner:=jps|smac2d|smachybrid` × `controller:=pid|mppi|mpc`），参数由三份 yaml 在 launch 侧按 base → controller → planner 顺序叶子级覆盖合并（不再在 shell 里生成合并文件）：

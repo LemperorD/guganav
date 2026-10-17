@@ -268,3 +268,10 @@ velocity_smoother:
     deadband_velocity: [0.0, 0.0, 0.0]
 
     velocity_timeout: 1.0
+
+# ── 底盘模式：pid 的 costmap 仍用旋转的 base_footprint，不能自旋 ──
+# 跟随模式下本节点不叠加自旋（enable_spin 开关在 base.yaml 里，另行控制）。
+nonrotating_vel_transform:
+  ros__parameters:
+    initial_chassis_mode: 0 # 0 = chassisFollowed
+    init_spin_speed: 0.0

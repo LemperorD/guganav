@@ -325,3 +325,11 @@ global_costmap:
         cost_scaling_factor: 10.0
         inflation_radius: 0.55
         num_threads: 4
+
+# ── 启动即小陀螺（导航启动时的底盘模式与自旋速度）──
+# mppi 的 costmap 走 base_footprint_nonrotating，可以自旋；pid 的 costmap 仍用
+# 旋转的 base_footprint，不能自旋，见 controller/pid.yaml。
+nonrotating_vel_transform:
+  ros__parameters:
+    initial_chassis_mode: 1 # 1 = littleTES，启动即自旋
+    init_spin_speed: 1.0 # 未收到 cmd_spin 前的固定自旋角速度 (rad/s)

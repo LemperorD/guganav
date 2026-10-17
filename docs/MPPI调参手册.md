@@ -44,7 +44,7 @@ auto && softmaxes = xt::eval(exponents / xt::sum(exponents, immediate));
 
 ### 1.3 本项目特有的两处约定
 
-- **底盘常转（小陀螺）**：MPPI 输出的速度表达在 `base_footprint_nonrotating` 系，yaw 不参与控制。`controller:=mppi` 启动时 `init_spin_speed=6.28`（`launch/core/navigation_launch.py`）。这解释了两份配置里 `GoalAngleCritic` 关闭、`reality` 中 `wz_max: 0.0` 的原因。
+- **底盘常转（小陀螺）**：MPPI 输出的速度表达在 `base_footprint_nonrotating` 系，yaw 不参与控制。`controller:=mppi` 启动时 `init_spin_speed=1.0`（`config/reality/controller/mppi.yaml`、`config/simulation/controller/mppi.yaml`）。这解释了两份配置里 `GoalAngleCritic` 关闭、`reality` 中 `wz_max: 0.0` 的原因。
 - **速度最终由 velocity_smoother 限幅**：`velocity_smoother` 的 `max_velocity: [2.5, 2.5, 3.0]`（`config/simulation/base.yaml`）、`max_accel: [2.0, 2.0, 2.5]`、`max_decel: [-3.0, -3.0, -4.0]`。MPPI 输出的速度指令会再经过这一层加速度整形，因此"起步慢""加速慢"一类现象未必是 MPPI 的问题。
 
 ---

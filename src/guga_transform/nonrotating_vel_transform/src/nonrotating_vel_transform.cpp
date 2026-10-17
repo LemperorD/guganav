@@ -15,6 +15,16 @@ namespace nonrotating_vel_transform
 // 控制器尚未激活（没收到 local_plan）的时间阈值，用于决定 odom 是否直接更新角度
 constexpr double CONTROLLER_TIMEOUT = 0.5;
 
+namespace
+{
+/// publish_frequency (Hz) → 定时器周期。限幅 1..200 Hz，避免 0/负值算出 0 周期。
+std::chrono::nanoseconds commandPeriod(double hz)
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::duration<double>(1.0 / std::clamp(hz, 1.0, 200.0)));
+}
+}  // namespace
+
 NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & options)
 : Node("nonrotating_vel_transform", options)
 {
@@ -67,10 +77,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   // 定时重发速度指令（默认 50 Hz）：控制器只在 30 Hz 更新指令，而本节点此前只在
   // odom+local_plan 同步时（约 10 Hz）发布，等于把 3 个控制周期压成一个阶跃。
   // 这里按固定频率把最新指令 + 当前角度补偿重发出去，只做无损传输。
-  const double period_s = 1.0 / std::clamp(publish_frequency_, 1.0, 200.0);
   cmd_vel_pub_timer_ = this->create_wall_timer(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-      std::chrono::duration<double>(period_s)),
+    commandPeriod(publish_frequency_),
     std::bind(&NonrotatingVelTransform::publishCommand, this));
 }
 
@@ -115,7 +123,7 @@ double NonrotatingVelTransform::estimateRobotBaseAngle() const
   if (dt <= 0.0 || dt > 0.5) {
     return current_robot_base_angle_;
   }
-  return current_robot_base_angle_ + spin_speed_ * dt;
+  return current_robot_base_angle_ + spin_speed_ * dt * correct_ratio_;
 }
 
 void NonrotatingVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
@@ -161,7 +169,7 @@ void NonrotatingVelTransform::publishCommand()
 
   auto aft_tf_vel = transformVelocity(latest_cmd_vel_, yaw_diff);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
-  // 可视化约 1/3 频率（50 Hz 下 ~17 Hz），避免 RViz 被 marker 刷屏
+  // 可视化约 1/3 频率（60 Hz 下 ~20 Hz），避免 RViz 被 marker 刷屏
   if (++vis_pub_counter_ % 3 == 0) {
     visualizeVelocity(aft_tf_vel);
   }
@@ -352,6 +360,7 @@ void NonrotatingVelTransform::onConfigure()
   // 是否允许本节点改写输出角速度（叠加自旋）。false = angular.z 原样透传，
   // 只做坐标/旋转补偿；可运行时 ros2 param set 切换，便于台架 A/B。
   this->declare_parameter<bool>("enable_spin", true);
+  this->declare_parameter<double>("correct_ratio",1.2);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
@@ -369,6 +378,7 @@ void NonrotatingVelTransform::onConfigure()
   this->get_parameter("publish_frequency", publish_frequency_);
   this->get_parameter("cmd_vel_timeout", cmd_vel_timeout_);
   this->get_parameter("enable_spin", enable_spin_);
+  this->get_parameter("correct_ratio", correct_ratio_);
   if (publish_frequency_ < 1.0) {
     RCLCPP_WARN(get_logger(), "publish_frequency=%.2f 过小，按 1 Hz 处理", publish_frequency_);
     publish_frequency_ = 1.0;
@@ -382,20 +392,36 @@ void NonrotatingVelTransform::onConfigure()
     "enable_spin=%s（false 时 angular.z 原样透传）",
     publish_frequency_, cmd_vel_timeout_, enable_spin_ ? "true" : "false");
 
-  // 允许运行时切换 enable_spin（台架 A/B 不用重启）
+  // 允许运行时切换 enable_spin / publish_frequency（台架 A/B 不用重启）
   param_cb_handle_ = this->add_on_set_parameters_callback(
     [this](const std::vector<rclcpp::Parameter> & params) {
       rcl_interfaces::msg::SetParametersResult result;
       result.successful = true;
       for (const auto & p : params) {
-        if (p.get_name() != "enable_spin") {
+        if (p.get_name() == "enable_spin") {
+          std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+          enable_spin_ = p.as_bool();
+          RCLCPP_INFO(
+            get_logger(), "enable_spin -> %s（%s）", enable_spin_ ? "true" : "false",
+            enable_spin_ ? "叠加底盘自旋" : "angular.z 原样透传");
           continue;
         }
-        std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
-        enable_spin_ = p.as_bool();
-        RCLCPP_INFO(
-          get_logger(), "enable_spin -> %s（%s）", enable_spin_ ? "true" : "false",
-          enable_spin_ ? "叠加底盘自旋" : "angular.z 原样透传");
+        if (p.get_name() == "publish_frequency") {
+          const double requested = p.as_double();
+          const double hz = std::clamp(requested, 1.0, 200.0);
+          if (hz != requested) {
+            RCLCPP_WARN(
+              get_logger(), "publish_frequency=%.2f 超出 1..200 Hz，按 %.1f Hz 处理", requested,
+              hz);
+          }
+          publish_frequency_ = hz;
+          // rclcpp Humble 的 TimerBase 没有 set_period()：改频率只能重建定时器。
+          // 这里是参数服务回调（不是定时器回调），单线程 executor 下替换安全。
+          cmd_vel_pub_timer_ = this->create_wall_timer(
+            commandPeriod(hz), std::bind(&NonrotatingVelTransform::publishCommand, this));
+          RCLCPP_INFO(
+            get_logger(), "publish_frequency -> %.1f Hz（重发定时器已重建，立即生效）", hz);
+        }
       }
       return result;
     });

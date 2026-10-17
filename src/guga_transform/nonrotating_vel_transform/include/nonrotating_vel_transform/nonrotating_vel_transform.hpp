@@ -102,6 +102,7 @@ private:
   double vis_scale_{1.0};
   std::string chassis_mode_topic_;
   float spin_speed_;
+  double correct_ratio_{1.2};
   bool output_in_chassis_frame_{false};
   /**
    * @brief 是否允许本节点改写输出角速度（叠加底盘自旋）
