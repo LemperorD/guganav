@@ -391,7 +391,7 @@ local_costmap:
       # ≈0.397（内切/外接同值，圆在任意 yaw 下都成立，mppi 启动即小陀螺也没问题）。
       footprint_padding: 0.03
 
-      robot_radius: 0.367 # 实测车体半径 364mm + 约 3mm 裕量（未含上面的 padding）
+      robot_radius: 0.365 # 实测车体半径 364mm + 约 3mm 裕量（未含上面的 padding）
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"

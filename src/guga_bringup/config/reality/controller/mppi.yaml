@@ -26,7 +26,7 @@ controller_server:
     # 当作零，与 Omni 控制相冲突，故不沿用。
 
     # 与仿真 profile 对齐：由 60.0 改为 30.0，model_dt 随之改为 1/30。
-    controller_frequency: 40.0
+    controller_frequency: 30.0
 
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
@@ -38,14 +38,14 @@ controller_server:
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.025
+      model_dt: 0.03333333333
       batch_size: 1400
       # 耗时归因：true 时每 2 s 打印一行单周期拆解（prepare/optimize/平滑）以及每个
       # critic 的耗时（critic_manager.cpp / optimizer.cpp）。定位"算不过来"时打开
       debug_timing: false
-      vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 0.1
+      vx_std: 0.3
+      vy_std: 0.3
+      wz_std: 0.01
       vx_max: 3.0
       vx_min: -3.0
       # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072）。
@@ -78,7 +78,7 @@ controller_server:
       ay_max: 3.0
       ay_min: -4.5
       az_max: 0.0
-      vy_max: 4.0
+      vy_max: 3.0
       vy_min: -4.0      # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
       wz_max: 1.0
 
