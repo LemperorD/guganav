@@ -146,7 +146,21 @@ controller_server:
       vx_min: -2.5
       vy_max: 2.5
       wz_max: 3.0
-
+     # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072），
+      # 全部默认 0 = 关闭。开启后约束作用在预测轨迹的**状态速度**上，采样控制量保持原始；
+      # 第 0 步用真实控制周期、之后用 model_dt（见 optimizer.cpp 的
+      # applyControlSequenceInterIterationConstraints / applyControlSequenceConstraints）。
+      # 起始值建议先与 velocity_smoother 的 max_accel/max_decel 对齐（当前 4.5 / -4.5），
+      # 台架实测后再收；ay 受麦克纳姆轮横向摩擦限制，通常比 ax 小。
+      # 注意单位：ax/ay 是 m/s²，az 是 rad/s²（实车 wz_max=0，az 暂时用不到）。
+      # 采样标准差建议同步按 a_max·model_dt 收缩（4.5 × 1/30 ≈ 0.15），
+      # 否则 vx_std=0.2 会在采样物理不可达的状态，表现为抖动。
+      ax_max: 0.1
+      ax_min: -0.1
+      ay_max: 0.1
+      ay_min: -0.1
+      az_max: 0.0
+      
       iteration_count: 1
       temperature: 0.3
       gamma: 0.015
