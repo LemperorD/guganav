@@ -1,3 +1,12 @@
+# ── 无小陀螺前向导航的调参顺序（从上到下，前三条影响最大）────────────────────
+#   1) wz_max / wz_std / az_max：先给足 yaw 权限并限住 yaw 加速度
+#   2) PathAngleCritic.cost_weight：车头对齐路径切向的主开关
+#   3) vy_max：侧移吸引力（过大 → 车会横着滑而不转头）
+#   4) GoalAngleCritic：到点是否摆正车头
+#   5) temperature / wz_std / az_max：抖或来回摆时再动
+#   注意：vy_min 不是 MPPI 参数（只读对称的 vy_max，写了不生效）；
+#        CostCritic.trajectory_point_step 在 fork 里未被 CostCritic 读取；
+#        ax_min/ay_min 建议与 velocity_smoother.max_decel 一致（-4.5），设 0 会过冲。
   FollowPath.PathAlignCritic.cost_weight|贴路径程度（大→严格贴线）
   FollowPath.PathFollowCritic.cost_weight|路径跟随（大→死贴路径）
   FollowPath.CostCritic.cost_weight|代价地图权重（大→怕障碍）
@@ -6,6 +15,13 @@
   FollowPath.vx_max|最大前进速度
   FollowPath.vy_max|最大侧向速度
   FollowPath.wz_max|最大角速度
+FollowPath.ax_max|加速侧的加速度上限（m/s²）；0=不限制。建议与 velocity_smoother.max_accel 一致或略紧（3.0~4.5）
+FollowPath.ax_min|减速侧的加速度上限（m/s²，必须为负）；0=不限制（会让预测乐观→过冲）。建议 = velocity_smoother.max_decel（-4.5）
+FollowPath.ay_max|侧向加速上限（m/s²）；0=不限制；建议 ≤ ax_max（麦轮横向摩擦通常更差）
+FollowPath.ay_min|侧向减速上限（m/s²，必须为负）；0=不限制
+FollowPath.az_max|偏航角加速度上限（rad/s²，对称）；0=不限制。无小陀螺时建议 4~6：串口不过滤 wz，没有它会周期间跳变
+FollowPath.sgf_order|控制序列平滑阶数：1=9 点滑动均值（更平滑），2=二次九点 Savitzky-Golay（默认 2）
+FollowPath.debug_timing|每 2 s 打印单周期耗时拆解（prepare/optimize/平滑）与每个 critic 的耗时，定位"算不过来"
   FollowPath.temperature|采样温度（大→激进/抖）
   FollowPath.gamma|代价衰减（小→看得远）
   FollowPath.batch_size|采样轨迹数（大→平滑但慢）
