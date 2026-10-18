@@ -243,6 +243,15 @@ scripts/simulation.sh nav rmul_2025
 scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 ```
 
+需要在 RViz 中查看当前场景的先验 PCD 时，显式打开点云发布：
+
+```bash
+scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
+```
+
+该选项默认关闭，建图模式下会被强制关闭。打开发布后，在 RViz 中勾选
+`Prior PCD` 显示项即可查看 `/cloud_pcd`；坐标系为 `map`。
+
 ### 仿真建图
 
 ```bash
@@ -257,6 +266,16 @@ cd ~/guganav
 source install/setup.bash
 ros2 launch guga_bringup reality_launch.py
 ```
+
+实车导航脚本同样支持按需查看先验点云：
+
+```bash
+scripts/reality.sh nav floor2 show_prior_pcd:=True
+```
+
+该选项默认关闭，建图模式下会被强制关闭。打开发布后，在 RViz 中勾选
+`Prior PCD` 显示项即可查看 `/cloud_pcd`。也可通过
+`prior_pcd_file:=/path/to/map.pcd` 指定其他 PCD。
 
 ### 实车建图
 

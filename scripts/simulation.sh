@@ -25,6 +25,11 @@ Examples:
   scripts/simulation.sh m rmul_2025
   scripts/simulation.sh map rmul_2025
   scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
+  scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
+
+Prior PCD visualization (disabled by default):
+  show_prior_pcd:=True
+      Publish the selected prior PCD as /cloud_pcd for RViz.
 
 Planner (planner:=):
   planner:=jps         JPS global planner
@@ -259,6 +264,7 @@ cleanup_simulation_processes() {
     "ign_sim_pointcloud_tool"
     "point_lio"
     "small_gicp"
+    "pcd_to_pointcloud"
     "scan_to_sensor_frame"
     "terrain_analysis"
     "controller_server"
@@ -344,7 +350,7 @@ wait_for_simulation_terminal_close() {
   fi
 }
 
-ensure_simulation_prior_pcd() {
+resolve_simulation_prior_pcd() {
   local world_arg=$1
   local prior_pcd_arg=${2:-}
   local source_pcd="$WS/src/guga_bringup/pcd/simulation/${world_arg}.pcd"
@@ -352,13 +358,20 @@ ensure_simulation_prior_pcd() {
 
   if [ -n "$prior_pcd_arg" ]; then
     if [ -f "$prior_pcd_arg" ]; then
+      printf '%s\n' "$prior_pcd_arg"
       return 0
     fi
     echo "Missing prior PCD file: $prior_pcd_arg" >&2
     return 1
   fi
 
-  if [ -f "$source_pcd" ] || [ -f "$install_pcd" ]; then
+  if [ -f "$source_pcd" ]; then
+    printf '%s\n' "$source_pcd"
+    return 0
+  fi
+
+  if [ -f "$install_pcd" ]; then
+    printf '%s\n' "$install_pcd"
     return 0
   fi
 
@@ -379,6 +392,10 @@ Use one of these options:
      scripts/simulation.sh nav $world_arg prior_pcd_file:=/path/to/${world_arg}.pcd
 EOF
   return 1
+}
+
+ensure_simulation_prior_pcd() {
+  resolve_simulation_prior_pcd "$@" >/dev/null
 }
 
 run_in_terminal() {
@@ -535,6 +552,7 @@ if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
 fi
 
 launch_args=()
+show_prior_pcd=False
 for arg in "$@"; do
   case "$arg" in
     world:=*)
@@ -543,14 +561,17 @@ for arg in "$@"; do
     slam:=*)
       slam=${arg#slam:=}
       ;;
+    show_prior_pcd:=*)
+      show_prior_pcd=${arg#show_prior_pcd:=}
+      ;;
     *)
       launch_args+=("$arg")
       ;;
   esac
 done
 
+prior_pcd_arg=""
 if [ "$slam" = "False" ]; then
-  prior_pcd_arg=""
   for arg in "${launch_args[@]}"; do
     if [[ "$arg" == prior_pcd_file:=* ]]; then
       prior_pcd_arg=${arg#prior_pcd_file:=}
@@ -561,6 +582,33 @@ fi
 
 require_workspace_setup
 
+case "${show_prior_pcd,,}" in
+  true | 1 | yes | on | false | 0 | no | off)
+    ;;
+  *)
+    echo "Invalid show_prior_pcd: '$show_prior_pcd'. Use True or False." >&2
+    exit 2
+    ;;
+esac
+
+if is_true "$slam" && is_true "$show_prior_pcd"; then
+  echo "Ignoring show_prior_pcd in mapping mode."
+  show_prior_pcd=False
+fi
+
+prior_pcd_publisher_pid=""
+if is_true "$show_prior_pcd"; then
+  prior_pcd_file=$(resolve_simulation_prior_pcd "$world" "$prior_pcd_arg")
+  echo "Prior PCD visualization enabled: $prior_pcd_file"
+  echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
+  ros2 run pcl_ros pcd_to_pointcloud --ros-args \
+    -r __node:=prior_pcd_publisher \
+    -p file_name:="$prior_pcd_file" \
+    -p tf_frame:=map \
+    -p publishing_period_ms:=1000 &
+  prior_pcd_publisher_pid=$!
+fi
+
 install_simulation_cleanup_traps
 set +e
 ros2 launch guga_bringup simulation_launch.py \
@@ -569,4 +617,9 @@ ros2 launch guga_bringup simulation_launch.py \
   "${launch_args[@]}"
 launch_status=$?
 set -e
+
+if [ -n "$prior_pcd_publisher_pid" ] && kill -0 "$prior_pcd_publisher_pid" 2>/dev/null; then
+  kill "$prior_pcd_publisher_pid" 2>/dev/null || true
+fi
+
 exit_with_launch_status "$launch_status"

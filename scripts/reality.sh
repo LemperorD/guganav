@@ -18,6 +18,11 @@ Examples:
   scripts/reality.sh n
   scripts/reality.sh map reserve
   scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
+  scripts/reality.sh nav floor2 show_prior_pcd:=True
+
+Prior PCD visualization (disabled by default):
+  show_prior_pcd:=True
+      Publish the selected prior PCD as /cloud_pcd for RViz.
 EOF
 }
 
@@ -42,6 +47,7 @@ cleanup_reality_processes() {
     "component_container"
     "point_lio"
     "small_gicp"
+    "pcd_to_pointcloud"
     "scan_to_sensor_frame"
     "terrain_analysis"
     "controller_server"
@@ -126,6 +132,18 @@ EOF
   printf 'Using map=%s\nUsing prior_pcd=%s\n' "$map_arg" "$prior_pcd_arg"
 }
 
+resolve_reality_prior_pcd() {
+  local world_arg=$1
+  local prior_pcd_arg=${2:-}
+  local prior_pcd="$WS/src/guga_bringup/pcd/reality/${world_arg}.pcd"
+
+  if [ -n "$prior_pcd_arg" ]; then
+    printf '%s\n' "$prior_pcd_arg"
+  else
+    printf '%s\n' "$prior_pcd"
+  fi
+}
+
 mode=${1:-}
 if [ -z "$mode" ]; then
   if [ -t 0 ]; then
@@ -153,6 +171,12 @@ slam=$slam_value
 launch_args=()
 map_arg=""
 prior_pcd_arg=""
+show_prior_pcd=False
+
+if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
+  world=$1
+  shift
+fi
 
 for arg in "$@"; do
   case "$arg" in
@@ -160,6 +184,7 @@ for arg in "$@"; do
     slam:=*) slam=${arg#slam:=} ;;
     map:=*) map_arg=${arg#map:=}; launch_args+=("$arg") ;;
     prior_pcd_file:=*) prior_pcd_arg=${arg#prior_pcd_file:=}; launch_args+=("$arg") ;;
+    show_prior_pcd:=*) show_prior_pcd=${arg#show_prior_pcd:=} ;;
     *) launch_args+=("$arg") ;;
   esac
 done
@@ -169,6 +194,38 @@ if [ "$launch_mode" = nav ] && ! is_true "$slam"; then
 fi
 
 require_workspace_setup
+
+case "${show_prior_pcd,,}" in
+  true | 1 | yes | on | false | 0 | no | off)
+    ;;
+  *)
+    echo "Invalid show_prior_pcd: '$show_prior_pcd'. Use True or False." >&2
+    exit 2
+    ;;
+esac
+
+if is_true "$slam" && is_true "$show_prior_pcd"; then
+  echo "Ignoring show_prior_pcd in mapping mode."
+  show_prior_pcd=False
+fi
+
+prior_pcd_publisher_pid=""
+if is_true "$show_prior_pcd"; then
+  prior_pcd_file=$(resolve_reality_prior_pcd "$world" "$prior_pcd_arg")
+  if [ ! -f "$prior_pcd_file" ]; then
+    echo "Missing prior PCD file: $prior_pcd_file" >&2
+    exit 1
+  fi
+  echo "Prior PCD visualization enabled: $prior_pcd_file"
+  echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
+  ros2 run pcl_ros pcd_to_pointcloud --ros-args \
+    -r __node:=prior_pcd_publisher \
+    -p file_name:="$prior_pcd_file" \
+    -p tf_frame:=map \
+    -p publishing_period_ms:=1000 &
+  prior_pcd_publisher_pid=$!
+fi
+
 install_reality_cleanup_traps
 set +e
 ros2 launch guga_bringup reality_launch.py \
@@ -177,4 +234,9 @@ ros2 launch guga_bringup reality_launch.py \
   "${launch_args[@]}" | grep RMSE
 launch_status=$?
 set -e
+
+if [ -n "$prior_pcd_publisher_pid" ] && kill -0 "$prior_pcd_publisher_pid" 2>/dev/null; then
+  kill "$prior_pcd_publisher_pid" 2>/dev/null || true
+fi
+
 exit_with_launch_status "$launch_status"
