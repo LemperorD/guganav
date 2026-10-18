@@ -114,6 +114,7 @@ terrain_analysis:
 
 small_gicp_relocalization:
   ros__parameters:
+    # 实车与仿真 TF 已统一，使用现有 TF；不额外配置跨模型地图补偿。
     use_sim_time: False
     num_threads: 16
     num_neighbors: 20

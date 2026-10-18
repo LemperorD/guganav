@@ -188,7 +188,8 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file,
+                    "publish_prior_pcd": LaunchConfiguration("publish_prior_pcd")}],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -220,7 +221,8 @@ def generate_launch_description():
                 package="small_gicp_relocalization",
                 plugin="small_gicp_relocalization::SmallGicpRelocalizationNode",
                 name="small_gicp_relocalization",
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file,
+                    "publish_prior_pcd": LaunchConfiguration("publish_prior_pcd")}],
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
@@ -250,6 +252,7 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
+    ld.add_action(DeclareLaunchArgument("publish_prior_pcd", default_value="false"))
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

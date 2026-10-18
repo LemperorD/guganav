@@ -257,6 +257,7 @@ def generate_launch_description():
             "slam": slam,
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
+            "publish_prior_pcd": LaunchConfiguration("publish_prior_pcd"),
             "use_sim_time": use_sim_time,
             "controller": controller,
             "planner": planner,
@@ -301,6 +302,7 @@ def generate_launch_description():
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
+    ld.add_action(DeclareLaunchArgument("publish_prior_pcd", default_value="false"))
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_planner_cmd)

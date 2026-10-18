@@ -40,9 +40,23 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 | TF `robot_base_frame <- current_scan_frame_id` | `tf2` | 收到 `initialpose` 时 | 把 RViz 给的机器人位姿换算成 `map -> odom` |
 | TF `map -> odom` | `tf2` | 发布（20 Hz） | 唯一的输出，即定位修正量 |
 
-先验 PCD 由 Point-LIO 一类算法在雷达里程计系下建图得到，节点在初始化阶段用
-`base_frame <- lidar_frame` 的安装变换把它换算到 `odom` 系，因此项目其余节点看到的
-始终是与底盘对齐的 `odom` 系。
+先验 PCD 的坐标属于建图时的机器人。跨模型复用地图时，配置
+`prior_pcd_to_map: [x, y, z, roll, pitch, yaw]`，含义为
+`p_map = Rz(yaw) * Ry(pitch) * Rx(roll) * p_pcd + t`（米、弧度）。
+该变换必须使用建图时的坐标定义；它不是实车的雷达安装外参，也不是定位初值
+`init_pose`。空数组沿用旧行为，查询当前 `base_frame <- lidar_frame`；已经在 map
+系的 PCD 配置六个零，避免重复变换。
+
+当前实车与仿真 TF 已统一，实车配置不设置 `prior_pcd_to_map`，
+沿用现有 TF 的地图坐标转换，不再叠加之前的 simulation_robot 固定补偿。
+TF 一致不等于原始 PCD 已在 map 系，因此不能仅凭 TF 一致改成六个零。
+只有确认 PCD 本身已经转换到 map 系时才使用单位变换。
+
+`publish_planar_transform` 默认 true，实车恢复默认的平面 `map -> odom` 发布方式。
+
+验证时用 RViz 的 map 固定坐标系比较静态墙面、地面与实时点云，给出正确的
+2D Pose Estimate 后，检查 `map -> odom` 以及转弯后墙面是否持续重合。
+本修改不对原始 PCD 做离线重写。
 
 ### 参数
 
@@ -162,3 +176,12 @@ cd ..
     ```zsh
     ros2 launch small_gicp_relocalization small_gicp_relocalization_launch.py
     ```
+
+### 先验地图显示
+
+`publish_prior_pcd: true` 时，节点在 `/cloud_pcd` 发布坐标变换后的配准地图，
+frame 为 `map_frame`，每秒一次。`scripts/reality.sh nav room_207` 默认启用，
+`show_prior_pcd:=False` 可关闭；直接使用 ROS launch 时传 `publish_prior_pcd:=true`。
+此显示依赖定位节点，建图模式不发布先验地图。
+不要再通过 `pcd_to_pointcloud` 将原始 PCD 直接标记为 `map`：修改 frame 名称不会
+旋转坐标，会让仿真雷达系的 PCD 在 RViz 中倾斜，即使内部配准地图已经修正。

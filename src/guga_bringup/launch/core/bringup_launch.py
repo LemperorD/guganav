@@ -229,6 +229,7 @@ def generate_launch_description():
                     "params_file": params_file,
                     "base_params_file": base_params_file,
                     "prior_pcd_file": prior_pcd_file,
+                    "publish_prior_pcd": LaunchConfiguration("publish_prior_pcd"),
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
@@ -273,6 +274,7 @@ def generate_launch_description():
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
+    ld.add_action(DeclareLaunchArgument("publish_prior_pcd", default_value="false"))
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

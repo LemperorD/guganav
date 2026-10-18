@@ -83,6 +83,8 @@ private:
   /// @brief 上一次注册的内点率 (num_inliers / 源点数); 与 previous_rmse_ 一起决定迭代脉冲是否拉满
   double previous_inlier_ratio_{0.0};
   std::vector<double> init_pose_;
+  std::vector<double> prior_pcd_to_map_;
+  bool publish_planar_transform_{true};
 
   std::string map_frame_;
   std::string odom_frame_;
@@ -98,6 +100,8 @@ private:
   /// @brief 唯一的基准 tf: 最近一次"残差很小且未越界"的重定位结果,
   ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
   Eigen::Isometry3d baseline_tf_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_map_pub_;
+  rclcpp::TimerBase::SharedPtr prior_map_publish_timer_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
   /// @brief 当前基准是否来自手动定位(未过质量门)。为真时跳过惯性漂移检查,

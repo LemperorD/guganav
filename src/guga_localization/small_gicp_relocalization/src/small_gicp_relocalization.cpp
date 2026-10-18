@@ -14,8 +14,10 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 #include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
@@ -52,6 +54,9 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("robot_base_frame", "");
   this->declare_parameter("lidar_frame", "");
   this->declare_parameter("prior_pcd_file", "");
+  this->declare_parameter("prior_pcd_to_map", std::vector<double>{});
+  this->declare_parameter("publish_planar_transform", true);
+  const bool publish_prior_pcd = this->declare_parameter("publish_prior_pcd", false);
   this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
 
   this->get_parameter("num_threads", num_threads_);
@@ -74,6 +79,14 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("prior_pcd_file", prior_pcd_file_);
   this->get_parameter("init_pose", init_pose_);
+  this->get_parameter("prior_pcd_to_map", prior_pcd_to_map_);
+  this->get_parameter("publish_planar_transform", publish_planar_transform_);
+  if (!prior_pcd_to_map_.empty() &&
+    (prior_pcd_to_map_.size() != 6 ||
+    !std::all_of(prior_pcd_to_map_.begin(), prior_pcd_to_map_.end(),
+      [](double value) {return std::isfinite(value);}))) {
+    throw std::invalid_argument("prior_pcd_to_map must be empty or six finite values [x,y,z,roll,pitch,yaw]");
+  }
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
@@ -97,6 +110,14 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
+  if (publish_prior_pcd) {
+    // Humble intra-process publishers only support volatile durability.
+    // Keep the latched map available to late RViz subscribers through DDS.
+    rclcpp::PublisherOptions map_publisher_options;
+    map_publisher_options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    prior_map_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "cloud_pcd", rclcpp::QoS(1).transient_local(), map_publisher_options);
+  }
   loadGlobalMap(prior_pcd_file_);
 
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -139,22 +160,28 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
     return;
   }
 
-  // NOTE: Transform global pcd_map (based on `lidar_odom` frame) to the `odom` frame
-  Eigen::Affine3d odom_to_lidar_odom;
-  try {
-    const auto tf_stamped =
-      tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
-    odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-  } catch (const tf2::TransformException & ex) {
-    RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
-    return;
+  // Map coordinates belong to the mapping session, not the current robot.
+  Eigen::Affine3d pcd_to_map = Eigen::Affine3d::Identity();
+  if (!prior_pcd_to_map_.empty()) {
+    pcd_to_map.translation() << prior_pcd_to_map_[0], prior_pcd_to_map_[1], prior_pcd_to_map_[2];
+    pcd_to_map.linear() = (
+      Eigen::AngleAxisd(prior_pcd_to_map_[5], Eigen::Vector3d::UnitZ()) *
+      Eigen::AngleAxisd(prior_pcd_to_map_[4], Eigen::Vector3d::UnitY()) *
+      Eigen::AngleAxisd(prior_pcd_to_map_[3], Eigen::Vector3d::UnitX())).toRotationMatrix();
+  } else {
+    // Compatibility for maps made with the currently running robot model.
+    try {
+      pcd_to_map = tf2::transformToEigen(
+        tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero).transform);
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
+      return;
+    }
   }
-
   RCLCPP_INFO_STREAM(
-    this->get_logger(), "odom_to_lidar_odom: translation = "
-                          << odom_to_lidar_odom.translation().transpose() << ", rpy = "
-                          << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
-  pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
+    this->get_logger(), "prior PCD -> map: translation = "
+      << pcd_to_map.translation().transpose() << ", rotation = " << pcd_to_map.rotation());
+  pcl::transformPointCloud(*global_map_, *global_map_, pcd_to_map);
 
   // Map footprint used to detect a transform that pushes the robot off the map
   pcl::PointXYZ min_bound;
@@ -179,6 +206,17 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   target_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
     target_, small_gicp::KdTreeBuilderOMP(num_threads_));
 
+  if (prior_map_pub_) {
+    // RViz must see the same transformed map as the registration target.
+    auto map_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
+    pcl::toROSMsg(*global_map_, *map_msg);
+    map_msg->header.frame_id = map_frame_;
+    prior_map_publish_timer_ = this->create_wall_timer(
+      std::chrono::seconds(1), [this, map_msg]() {
+        map_msg->header.stamp = this->now();
+        prior_map_pub_->publish(*map_msg);
+      });
+  }
   global_map_ready_ = true;
   map_initialization_timer_->cancel();
   RCLCPP_INFO(this->get_logger(), "Global map registration target is ready");
@@ -442,7 +480,9 @@ void SmallGicpRelocalizationNode::publishTransform()
   // 让 20Hz 的发布循环去改它会和注册互相抢状态。
   Eigen::Isometry3d to_publish = registration_initial_ ? baseline_tf_ : result_t_;
 
-  regulateRegistration(to_publish);
+  if (publish_planar_transform_) {
+    regulateRegistration(to_publish);
+  }
   if (to_publish.matrix().isZero()) {
     return;
   }

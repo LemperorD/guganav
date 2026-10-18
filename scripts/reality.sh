@@ -20,7 +20,7 @@ Examples:
   scripts/reality.sh nav room_207 use_rviz:=True use_decision:=True
   scripts/reality.sh nav room_207 show_prior_pcd:=True
 
-Prior PCD visualization (disabled by default):
+Prior PCD visualization (enabled by default, localization mode):
   show_prior_pcd:=True
       Publish the selected prior PCD as /cloud_pcd for RViz.
 EOF
@@ -204,21 +204,8 @@ case "${show_prior_pcd,,}" in
     ;;
 esac
 
-prior_pcd_publisher_pid=""
 if is_true "$show_prior_pcd"; then
-  prior_pcd_file=$(resolve_reality_prior_pcd "$world" "$prior_pcd_arg")
-  if [ ! -f "$prior_pcd_file" ]; then
-    echo "Missing prior PCD file: $prior_pcd_file" >&2
-    exit 1
-  fi
-  echo "Prior PCD visualization enabled: $prior_pcd_file"
-  echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
-  ros2 run pcl_ros pcd_to_pointcloud --ros-args \
-    -r __node:=prior_pcd_publisher \
-    -p file_name:="$prior_pcd_file" \
-    -p tf_frame:=map \
-    -p publishing_period_ms:=1000 &
-  prior_pcd_publisher_pid=$!
+  echo "Prior PCD visualization: /cloud_pcd, published after the localization map transform"
 fi
 
 install_reality_cleanup_traps
@@ -226,12 +213,9 @@ set +e
 ros2 launch guga_bringup reality_launch.py \
   world:="$world" \
   slam:="$slam" \
+  publish_prior_pcd:="$show_prior_pcd" \
   "${launch_args[@]}" | grep RMSE
 launch_status=$?
 set -e
-
-if [ -n "$prior_pcd_publisher_pid" ] && kill -0 "$prior_pcd_publisher_pid" 2>/dev/null; then
-  kill "$prior_pcd_publisher_pid" 2>/dev/null || true
-fi
 
 exit_with_launch_status "$launch_status"
