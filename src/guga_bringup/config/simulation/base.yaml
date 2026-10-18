@@ -63,9 +63,12 @@ point_lio:
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [0.0, -4.9, -8.487047153776548] # gravity to be aligned # rpy = [0, pi/6, 0]
-      gravity_init: [0.0, -4.9, -8.487047153776548] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
-      extrinsic_T: [0.0, 0.0, 0.0]
+      # 与 reality/base.yaml 使用相同的重力方向；仿真 IMU 单位为 m/s^2，模长取 9.81。
+      # 保留实车标定方向，而非用理想 -10 度安装角重新推算，以保持建图坐标约定一致。
+      gravity: [0.0, 1.8850277063359282, -9.6271891300808]
+      gravity_init: [0.0, 1.8850277063359282, -9.6271891300808]
+      # 与实车一致的 LiDAR -> IMU 外参；仿真传感器位置见 mid360/model.sdf.xmacro。
+      extrinsic_T: [-0.011, -0.02329, 0.04412]
       extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 
     odometry:
