@@ -99,6 +99,7 @@ private:
   ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
   Eigen::Isometry3d baseline_tf_;
   bool global_map_ready_{false};
+  bool prior_map_in_map_frame_{false};
   bool has_map_bounds_{false};
   /// @brief 当前基准是否来自手动定位(未过质量门)。为真时跳过惯性漂移检查,
   ///        因为手动基准本身就是"待修正"的, 一旦 GICP 收敛出合格结果就会被替换掉。

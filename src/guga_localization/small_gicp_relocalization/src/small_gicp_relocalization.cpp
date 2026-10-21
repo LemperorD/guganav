@@ -15,6 +15,7 @@
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
 #include <cmath>
+#include <fstream>
 #include <limits>
 
 #include "pcl/common/common.h"
@@ -128,6 +129,18 @@ void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
     RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", file_name.c_str());
     return;
   }
+  std::ifstream input(file_name, std::ios::binary);
+  std::string line;
+  while (std::getline(input, line)) {
+    if (line == "# guganav_frame: map") {
+      prior_map_in_map_frame_ = true;
+    }
+    if (line.rfind("DATA ", 0) == 0) {
+      break;
+    }
+  }
+  RCLCPP_INFO(this->get_logger(), "Prior PCD frame: %s",
+    prior_map_in_map_frame_ ? "map" : "legacy lidar odometry");
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
 }
 
@@ -139,15 +152,18 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
     return;
   }
 
-  // NOTE: Transform global pcd_map (based on `lidar_odom` frame) to the `odom` frame
-  Eigen::Affine3d odom_to_lidar_odom;
-  try {
-    const auto tf_stamped =
-      tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
-    odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-  } catch (const tf2::TransformException & ex) {
-    RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
-    return;
+  // Legacy maps use lidar odometry coordinates. New marked maps were already
+  // transformed at save time and must not use this robot's mounting transform.
+  Eigen::Affine3d odom_to_lidar_odom = Eigen::Affine3d::Identity();
+  if (!prior_map_in_map_frame_) {
+    try {
+      const auto tf_stamped =
+        tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
+      odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
+      return;
+    }
   }
 
   RCLCPP_INFO_STREAM(

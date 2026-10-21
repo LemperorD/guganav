@@ -26,6 +26,10 @@
  *   角速度和加速度本身被估计, 每帧同时做激光量测和 IMU 量测更新
  */
 
+#include <filesystem>
+#include <fstream>
+#include <pcl/common/transforms.h>
+
 #include "point_lio/laserMapping.h"
 #include "point_lio/core/FrameProcessor.h"
 
@@ -332,9 +336,8 @@ void LaserMappingNode::publishFrameWorld() {
         pcd_index_++;
         string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_")
                               + to_string(pcd_index_) + string(".pcd"));
-        pcl::PCDWriter pcd_writer;
         std::cout << "current scan saved to /PCD/" << all_points_dir << '\n';
-        pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
+        saveMapCloud(all_points_dir);
         state_.pcl_wait_save->clear();
         pcd_scan_count_ = 0;
       }
@@ -382,6 +385,44 @@ void LaserMappingNode::savePcd() {
 
   string file_name = string("scans_" + str_time + ".pcd");
   string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
-  pcl::PCDWriter pcd_writer;
-  pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
+  saveMapCloud(all_points_dir);
+}
+
+// New maps are stored in the mapping session's base-aligned odom/map frame.
+// Keep the frame marker inside the PCD so copying the file preserves its meaning.
+void LaserMappingNode::saveMapCloud(const std::string& path) {
+  if (!resolveOdomExtrinsic()) {
+    throw std::runtime_error("Cannot save map without lidar-to-base transform");
+  }
+  Eigen::Matrix4d transform = Eigen::Matrix4d::Identity();
+  transform.block<3, 3>(0, 0) = odom_rotation_;
+  transform.block<3, 1>(0, 3) = odom_translation_;
+  PointCloudXYZI cloud;
+  pcl::transformPointCloud(*state_.pcl_wait_save, cloud, transform);
+  const auto raw_path = path + ".raw.tmp";
+  const auto marked_path = path + ".tmp";
+  try {
+    pcl::PCDWriter writer;
+    if (writer.writeBinary(raw_path, cloud) != 0) {
+      throw std::runtime_error("Failed to write PCD: " + raw_path);
+    }
+    std::ifstream input(raw_path, std::ios::binary);
+    std::ofstream output(marked_path, std::ios::binary);
+    if (!input || !output) {
+      throw std::runtime_error("Failed to open PCD temporary file");
+    }
+    output << "# guganav_frame: map\n" << input.rdbuf();
+    output.close();
+    if (!output) {
+      throw std::runtime_error("Failed to write map-frame PCD");
+    }
+    std::filesystem::rename(marked_path, path);
+    std::filesystem::remove(raw_path);
+    RCLCPP_INFO(get_logger(), "Saved map-frame PCD: %s", path.c_str());
+  } catch (...) {
+    std::error_code error;
+    std::filesystem::remove(raw_path, error);
+    std::filesystem::remove(marked_path, error);
+    throw;
+  }
 }

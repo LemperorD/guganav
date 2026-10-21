@@ -55,8 +55,8 @@ def generate_launch_description():
 
     declare_world_cmd = DeclareLaunchArgument(
         "world",
-        default_value="floor2",
-        description="Select world: 'floor2' (map file share the same name as the this parameter)",
+        default_value="room_207",
+        description="Select world: 'room_207' (map file share the same name as the this parameter)",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
@@ -178,7 +178,7 @@ def generate_launch_description():
 
     declare_show_prior_pcd_cmd = DeclareLaunchArgument(
         "show_prior_pcd",
-        default_value="False",
+        default_value="True",
         description="Publish the prior PCD on /cloud_pcd; ignored in mapping mode",
     )
 

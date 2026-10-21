@@ -63,8 +63,9 @@ output_frame:
 
 `z_filter` 在点云换算到 `odom` 后执行，因此阈值以机器人 `odom` 系为基准，
 不是雷达局部坐标。滤波作用于 `registered_scan` 和 `pcd_save` 累积的离线 PCD；
-`cloud_registered` 与 `Laser_map` 仍保留 Point-LIO 原始输出。保存的 PCD 点坐标
-仍位于 Point-LIO 雷达里程计系，只使用 odom 系 Z 值决定是否保留。参数阈值需按
+`cloud_registered` 与 `Laser_map` 仍保留 Point-LIO 原始输出。新保存的 PCD 点坐标
+在写盘时转换到建图会话的底盘对齐 map 系（建图时 map 与 odom 重合），文件头包含
+`# guganav_frame: map`。该标记与点云一起复制，定位加载时不会重复乘安装变换。参数阈值需按
 实际地面高度和需要保留的障碍高度调整。
 
 留空时若查不到 TF，节点会按 2 秒节流打印警告，并且**暂不发布**这两个话题，而不是用
@@ -310,3 +311,14 @@ PULSAR is a self-rotating UAV actuated by only one motor, [PULSAR](https://githu
 ## 7. Contact us
 
 If you have any questions about this work, please feel free to contact me <hdj65822ATconnect.hku.hk> and Dr. Fu Zhang <fuzhangAThku.hk> via email.
+
+### 仿真地图用于实车定位
+
+新版本建图生成的 PCD 可以直接作为实车 `prior_pcd_file`，无需手工旋转点云。
+同时复制同一建图会话生成的栅格地图及 YAML，以保持两种地图的原点一致。
+实车在地图中的起点由 RViz 的初始位姿设置；地图可复用不代表两次启动的动态
+`odom -> lidar` 必须相同，实物场景也必须与仿真地图匹配。
+
+旧 PCD 没有坐标标记，仍按雷达里程计系加载；不能只添加标记冒充新地图。
+建议重新建图。外部点云编辑器若移除注释，需在确认坐标未变的前提下保留该标记。
+新格式用于 small_gicp 定位，`prior_pcd.enable`（Point-LIO 内部地图预加载）仍应保持 False。

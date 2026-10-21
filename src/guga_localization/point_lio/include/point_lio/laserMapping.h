@@ -117,4 +117,5 @@ private:
 
   void savePendingPcd();
   void savePcd();
+  void saveMapCloud(const std::string& path);
 };

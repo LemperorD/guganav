@@ -27,7 +27,7 @@ Examples:
   scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
   scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
 
-Prior PCD visualization (disabled by default):
+Prior PCD visualization (enabled by default in navigation mode):
   show_prior_pcd:=True
       Publish the selected prior PCD as /cloud_pcd for RViz.
 
@@ -552,7 +552,7 @@ if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
 fi
 
 launch_args=()
-show_prior_pcd=False
+show_prior_pcd=True
 for arg in "$@"; do
   case "$arg" in
     world:=*)
@@ -571,13 +571,14 @@ for arg in "$@"; do
 done
 
 prior_pcd_arg=""
-if [ "$slam" = "False" ]; then
+if ! is_true "$slam"; then
   for arg in "${launch_args[@]}"; do
     if [[ "$arg" == prior_pcd_file:=* ]]; then
       prior_pcd_arg=${arg#prior_pcd_file:=}
     fi
   done
-  ensure_simulation_prior_pcd "$world" "$prior_pcd_arg"
+  prior_pcd_arg=$(resolve_simulation_prior_pcd "$world" "$prior_pcd_arg")
+  launch_args+=("prior_pcd_file:=$prior_pcd_arg")
 fi
 
 require_workspace_setup

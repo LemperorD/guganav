@@ -211,7 +211,7 @@ def generate_launch_description():
 
     declare_show_prior_pcd_cmd = DeclareLaunchArgument(
         "show_prior_pcd",
-        default_value="False",
+        default_value="True",
         description="Publish the prior PCD on /cloud_pcd; ignored in mapping mode",
     )
 

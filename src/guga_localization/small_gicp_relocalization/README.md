@@ -35,14 +35,15 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 |-----------|------|------|------|
 | `registered_scan` | `sensor_msgs/PointCloud2` | 订阅 | Point-LIO 输出的 `odom` 系注册点云，累积后作为 GICP 源点云 |
 | `initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | 订阅 | RViz 手动初始位姿，仅在自动重定位失败或需要人工干预时使用 |
-| TF `base_frame <- lidar_frame` | `tf2` | 启动时查询一次 | 把雷达里程计系的先验地图换算到 `odom` 系；查不到时每秒重试 |
+| TF `base_frame <- lidar_frame` | `tf2` | 旧格式地图初始化时查询 | 转换无坐标标记的旧 PCD；查不到时每秒重试。map 格式无需此转换 |
 | TF `odom_frame <- base_frame` | `tf2` | 每轮查询 | 越界检查时计算机器人在地图中的水平位置 |
 | TF `robot_base_frame <- current_scan_frame_id` | `tf2` | 收到 `initialpose` 时 | 把 RViz 给的机器人位姿换算成 `map -> odom` |
 | TF `map -> odom` | `tf2` | 发布（20 Hz） | 唯一的输出，即定位修正量 |
 
-先验 PCD 由 Point-LIO 一类算法在雷达里程计系下建图得到，节点在初始化阶段用
-`base_frame <- lidar_frame` 的安装变换把它换算到 `odom` 系，因此项目其余节点看到的
-始终是与底盘对齐的 `odom` 系。
+新 Point-LIO 保存的 PCD 含 `# guganav_frame: map` 文件头标记，坐标已在建图时
+转换到 map 系，加载时直接使用，不再依赖定位机器的安装外参。
+无标记的旧 PCD 仍按雷达里程计系处理，初始化时使用
+`base_frame <- lidar_frame` 的安装变换换算，兼容已有地图。
 
 ### 参数
 
@@ -84,8 +85,8 @@ small_gicp_relocalization:
 
 ### 重定位逻辑
 
-- 启动阶段加载 `prior_pcd_file`，用 `base_frame <- lidar_frame` 把先验地图换算到
-  `odom` 系并计算地图外接框；随后按 `global_leaf_size` 降采样、估计协方差、建 KD 树。
+- 启动阶段加载 `prior_pcd_file`；有 map 标记则直接使用，否则用
+  `base_frame <- lidar_frame` 转换旧格式先验地图。之后计算地图外接框；随后按 `global_leaf_size` 降采样、估计协方差、建 KD 树。
   TF 没就绪时每秒重试一次，不阻塞地图就绪之后的流程。
 - 2 Hz（500 ms）把累积的 `registered_scan` 作为源点云，按 `registered_leaf_size`
   降采样后做 GICP。`StepLimitOptimizer` 限制每次迭代的 roll/pitch 增量

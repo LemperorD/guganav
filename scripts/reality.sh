@@ -17,10 +17,10 @@ Modes:
 Examples:
   scripts/reality.sh n
   scripts/reality.sh map reserve
-  scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
-  scripts/reality.sh nav floor2 show_prior_pcd:=True
+  scripts/reality.sh nav room_207 use_rviz:=True use_decision:=True
+  scripts/reality.sh nav room_207 show_prior_pcd:=True
 
-Prior PCD visualization (disabled by default):
+Prior PCD visualization (enabled by default in navigation mode):
   show_prior_pcd:=True
       Publish the selected prior PCD as /cloud_pcd for RViz.
 EOF
@@ -166,12 +166,12 @@ case "$mode" in
 esac
 done
 
-world=floor2
+world=room_207
 slam=$slam_value
 launch_args=()
 map_arg=""
 prior_pcd_arg=""
-show_prior_pcd=False
+show_prior_pcd=True
 
 if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
   world=$1

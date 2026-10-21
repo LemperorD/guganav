@@ -110,7 +110,9 @@ controller_server:
         cost_power: 1
         cost_weight: 6.0
         critical_cost: 300.0
-        consider_footprint: True
+        # base.yaml 使用 robot_radius 圆形模型，碰撞检查通过膨胀层的内切代价判断。
+        # 开启多边形 footprint 检查会因未配置 footprint 导致控制器 configure 失败。
+        consider_footprint: false
         collision_cost: 1000000.0
         near_goal_distance: 1.0
         trajectory_point_step: 2
