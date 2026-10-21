@@ -74,6 +74,7 @@ namespace nav2_mppi_controller {
     optimizer_.reset();
   }
 
+  // 主循环，robot_pose 与 speed 的坐标系在 yaml 里确定，目前是 nonrotating 系。
   geometry_msgs::msg::TwistStamped MPPIController::computeVelocityCommands(
       const geometry_msgs::msg::PoseStamped& robot_pose,
       const geometry_msgs::msg::Twist& robot_speed,
@@ -85,9 +86,10 @@ namespace nav2_mppi_controller {
     if (clock_->now() - last_time_called_
         > rclcpp::Duration::from_seconds(reset_period_)) {
       reset();
-    }
+    }  // 大时间间隙重置，保证实时性
     last_time_called_ = clock_->now();
 
+    // 上锁
     std::lock_guard<std::mutex> param_lock(*parameters_handler_->getLock());
     nav_msgs::msg::Path transformed_plan = path_handler_.transformPath(
         robot_pose);

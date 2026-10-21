@@ -28,6 +28,8 @@
 #include <xtensor/xmath.hpp>
 #include <xtensor/xview.hpp>
 
+#include "nav2_mppi_controller/tools/accel_limits.hpp"
+
 #include "angles/angles.h"
 
 #include "tf2/utils.h"
@@ -447,9 +449,17 @@ inline void savitskyGolayFilter(
   std::array<mppi::models::Control, 4> & control_history,
   const models::OptimizerSettings & settings)
 {
-  // 二次九点 Savitzky-Golay 滤波系数。
-  xt::xtensor<float, 1> filter = {-21.0, 14.0, 39.0, 54.0, 59.0, 54.0, 39.0, 14.0, -21.0};
-  filter /= 231.0;
+  // 滤波系数，按 sgf_order 选择：
+  //   1 = 9 点滑动均值，更平滑（上游实测对"已执行指令平滑度/迭代间抖动"最好）
+  //   2 = 二次九点 Savitzky-Golay（默认，保留更多细节）
+  xt::xtensor<float, 1> filter;
+  if (settings.sgf_order == 1) {
+    filter = xt::xtensor<float, 1>{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+    filter /= 9.0;
+  } else {
+    filter = xt::xtensor<float, 1>{-21.0, 14.0, 39.0, 54.0, 59.0, 54.0, 39.0, 14.0, -21.0};
+    filter /= 231.0;
+  }
 
   const unsigned int num_sequences = control_sequence.vx.shape(0) - 1;
 

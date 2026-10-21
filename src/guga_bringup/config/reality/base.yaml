@@ -50,7 +50,7 @@ point_lio:
       imu_en: True
       extrinsic_est_en: False # for aggressive motion, set this variable False
       imu_time_inte: 0.005 # = 1 / frequency of IMU
-      lidar_time_inte: 0.1
+      lidar_time_inte: 0.02 # = 1 / lidar frame rate（驱动 publish_freq=50 Hz）
       satu_acc: 4.0 # the saturation value of IMU's acceleration. not related to the units
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
       acc_norm: 1.0 # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
@@ -92,6 +92,7 @@ scan_to_sensor_frame:
     lidar_frame: "front_mid360"
     base_frame: "base_footprint"
     robot_base_frame: "base_footprint"
+    zero_base_z: True # 临时平地模式: 锁 odom->base_footprint 的 z=0, 屏蔽 point_lio 的 z 漂移; 测完关掉
 
 terrain_analysis:
   ros__parameters:
@@ -104,7 +105,7 @@ terrain_analysis:
     limitGroundLift: False
     maxGroundLift: 0.3
     minBlockPointNum: 10
-    minObstacleHeight: 0.04 # 障碍输出下界(距局部地面)：地面带死区，吸收地面高度估计误差，实车取 4cm。清除用的返回的雷达射线不受此下界约束
+    minObstacleHeight: 0.1 # 障碍输出下界(距局部地面)：地面带死区，吸收地面高度估计误差，实车取 4cm。清除用的返回的雷达射线不受此下界约束
     ceilingClearance: 0.62 # 障碍输出上界，也是唯一上界(距局部地面)：按车体高度+100mm 设定（车高520mm→0.62）。配合 minObstacleHeight 组成输出带 minObstacleHeight<=h<该值；原 vehicleHeight 截断已删除，换车只需改这一个值
     minRelZ: -1.5 # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理
     groundFloorZ: -0.2 # 地面候选的绝对高度地板(odom z)：低于此值的点不参与地面估计，也是该阶段唯一的候选筛选。须贴近实际地面z：odom原点与base_footprint重合（实测 odom→base_footprint 为单位变换），平地地面z≈0，故取地面下方约0.2m。注意 lidar_z 是雷达高度(平地+0.230)，不是本值的基准；下坡时地面会低于该地板而被排除，坡面需重设
@@ -114,11 +115,19 @@ terrain_analysis:
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: False
-    num_threads: 4
+    num_threads: 16
     num_neighbors: 20
     global_leaf_size: 0.1
     registered_leaf_size: 0.05
-    max_dist_sq: 3.0
+    max_dist_sq: 6.0
+    max_iterations: 100
+    max_roll_pitch_step: 0.002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
+    max_tz_step: 0.001 # 单次迭代 tz 增量的大小上限(m)，0 关闭
+    map_boundary_margin: 1.0 # 位姿超出先验地图外接框的允许余量(m)，超出则回退到基准 tf
+    error_max: 0.3 # 迭代脉冲触发上界: 上一帧 RMSE 超过该值(或内点率低于 good_inlier_ratio)时本次迭代上限用 max_iterations, 两者都达标才用 10
+    baseline_translation_tolerance: 2.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
+    good_error_max: 0.25 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
+    good_inlier_ratio: 0.99 # 内点率下限，只有 RMSE 达标且内点率高于该值、且未越界的结果才能成为基准 tf，需按日志标定
     map_frame: "map"
     odom_frame: "odom"
     base_frame: "base_footprint"
@@ -301,3 +310,122 @@ waypoint_follower:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: True
       waypoint_pause_duration: 200
+
+# ── 自旋速度变换（TES 速度补偿 + 伪坐标系）──
+# 参数含义见 src/guga_transform/nonrotating_vel_transform/README.md。
+# 与控制器无关的键放在 base 层；initial_chassis_mode / init_spin_speed 依赖
+# 控制器（pid 不能自旋），放在 config/reality/controller/<profile>.yaml。
+nonrotating_vel_transform:
+  ros__parameters:
+    use_sim_time: False
+
+    # 坐标系与话题：与 velocity_smoother -> cmd_vel -> 串口驱动这条链路对齐
+    robot_base_frame: base_footprint
+    nonrotating_robot_base_frame: base_footprint_nonrotating
+    chassis_frame: chassis
+    odom_topic: odometry
+    local_plan_topic: local_plan
+    cmd_spin_topic: cmd_spin
+    chassis_mode_topic: chassis_mode
+    input_cmd_vel_topic: cmd_vel_smoothed
+    output_cmd_vel_topic: cmd_vel
+
+    # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
+    # False = 不叠加自旋（无小陀螺试验），angular.z 只来自控制器（MPPI 的 wz，
+    # 受 wz_max 限制）。运行时仍可动态切回：
+    #   ros2 param set /nonrotating_vel_transform enable_spin true
+    enable_spin: true
+
+    # 60 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样按更高频率送到
+    # MCU，不做再滤波/再限速，保证 MPPI 的预测与实际执行一致；旋转补偿也随之从
+    # odom 同步频率（实车约 50 Hz）提升到 60 Hz。运行时可直接调（会重建定时器，
+    # 立即生效）：
+    #   ros2 param set /nonrotating_vel_transform publish_frequency 60.0
+    publish_frequency: 60.0
+
+    # 超过该时长没有新指令就把线性速度归零（角速度按 chassis_mode 保留：
+    # littleTES 下继续自旋）。
+    cmd_vel_timeout: 0.5
+
+    # spin 外推修正系数：odom 与点云同频（实车约 50 Hz），两次更新之间仍用
+    # spin_speed * dt 外推底盘 yaw；实车按旋转补偿是滞后还是超前微调
+    # （1.0 = 完全按标称自旋速度外推）。
+    correct_ratio: 1.0
+
+    # cmd_vel 可视化（RViz Marker）。enable_vis: False 时节点不发布 Marker，
+    # 只影响 RViz 显示，不影响送 MCU 的 cmd_vel；运行时也可动态切换：
+    #   ros2 param set /red_standard_robot1/nonrotating_vel_transform enable_vis false
+    enable_vis: True
+    vis_cmd_vel_topic: cmd_vel_marker
+    vis_scale: 1.0
+
+    # 输出是否直接变换到 chassis_frame（默认 False，输出到 robot_base_frame）
+    output_in_chassis_frame: False
+
+# ── 代价地图节点级参数 ──
+# 与 simulation/base.yaml 采用同一层次划分：坐标系、尺寸、频率、robot_radius、
+# static_layer 这些与控制器 profile 无关的键放在 base 层；controller/<profile>.yaml
+# 只保留 profile 之间的差异（robot_base_frame、各图层的膨胀参数、障碍层参数）。
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: False
+
+      update_frequency: 10.0
+
+      publish_frequency: 5.0
+
+      global_frame: odom
+
+      rolling_window: true
+
+      width: 5
+
+      height: 5
+
+      resolution: 0.05
+
+      # 用 robot_radius 而不是显式 16 边形：两者几何完全一致（makeFootprintFromRadius(0.367)
+      # 就是取 16 等分点），但只有 radius 形态下 use_radius_ == true，可以与
+      # CostCritic.consider_footprint: false 自洽（controller/mppi.yaml），不会打
+      # "Inconsistent configuration in collision checking" 的 WARN。
+      # consider_footprint: false 的语义 = 中心点不得进入内切环（253 视为碰撞），
+      # 已按仿真验证过的那套对齐：仿真里几乎不会卡在内切区域。
+      # footprint_padding 0.03 是给实车定位误差留的余量，会把硬边界从 0.367 推到
+      # ≈0.397（内切/外接同值，圆在任意 yaw 下都成立，mppi 启动即小陀螺也没问题）。
+      footprint_padding: 0.03
+
+      robot_radius: 0.365 # 实测车体半径 364mm + 约 3mm 裕量（未含上面的 padding）
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      always_send_full_costmap: False
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: False
+
+      update_frequency: 5.0
+
+      publish_frequency: 2.0
+
+      global_frame: map
+
+      resolution: 0.05
+
+      # 与 local 保持一致：同样的 robot_radius + 同样的 footprint_padding，否则全局
+      # 规划器以为车更小而给出贴障碍的路径，局部却按 0.397 禁入内切环 → 两侧打架。
+      robot_radius: 0.367 # 实测车体半径 364mm + 约 3mm 裕量（未含下面的 padding）
+
+      footprint_padding: 0.03 # 与 local 相同，给定位误差留余量（硬边界 → ≈0.397）
+
+      track_unknown_space: true
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      always_send_full_costmap: False

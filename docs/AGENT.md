@@ -12,16 +12,16 @@ GitHub: `https://github.com/LemperorD/guganav`
 
 ## 开发环境
 
-| 项目 | 值 |
-|------|-----|
-| ROS2 发行版 | Humble (`/opt/ros/humble`) |
-| C++ 标准 | C++17 (`CMAKE_CXX_STANDARD 17`) |
-| 构建工具 | colcon (`scripts/colconBuild.sh`) |
-| 代码格式化 | clang-format (基于 Google 风格, 列宽 80, 缩进 2) |
-| CI | GitHub Actions (`ros:humble-ros-base` 容器) |
-| Pre-commit | clang-format + 核心包测试 |
-| 仿真器 | Gazebo / Ignition (rmoss 框架) |
-| 本地依赖 | `/home/ld/3rdparty/` (Pangolin 0.9.4, OpenCV, Ceres, g2o, Sophus, Livox-SDK) |
+| 项目        | 值                                                                           |
+| ----------- | ---------------------------------------------------------------------------- |
+| ROS2 发行版 | Humble (`/opt/ros/humble`)                                                   |
+| C++ 标准    | C++17 (`CMAKE_CXX_STANDARD 17`)                                              |
+| 构建工具    | colcon (`scripts/colconBuild.sh`)                                            |
+| 代码格式化  | clang-format (基于 Google 风格, 列宽 80, 缩进 2)                             |
+| CI          | GitHub Actions (`ros:humble-ros-base` 容器)                                  |
+| Pre-commit  | clang-format + 核心包测试                                                    |
+| 仿真器      | Gazebo / Ignition (rmoss 框架)                                               |
+| 本地依赖    | `/home/ld/3rdparty/` (Pangolin 0.9.4, OpenCV, Ceres, g2o, Sophus, Livox-SDK) |
 
 ---
 
@@ -50,13 +50,10 @@ guganav/
 │   ├── colconBuild.sh         # 构建（检测 Hik MVS，缺 SDK 则跳过该包）
 │   ├── reality.sh             # 实车启动与进程管理
 │   ├── simulation.sh          # 仿真启动（含 gazebo 模式）
-│   ├── nav_decision.sh        # 导航 + 决策一键启动
-│   ├── map.sh / save_map.sh   # 地图操作
-│   ├── gitFetch.sh / gitPush.sh / deepseek.sh / tune_controller.sh
-│   ├── create_udev_rules.sh   # 串口 udev 规则
+│   ├── gitFetch.sh / gitPush.sh / deepseek.sh
 │   ├── ci/                    # 依赖安装与 MPC 代码生成
 │   ├── fake_serial_driver/    # 虚拟串口假下位机（无车调试用）
-│   ├── params_list/           # 各控制器参数对照表
+│   ├── paramview/             # 动态调参 Web UI（params_list/ 内含各控制器参数对照表）
 │   ├── pl_cmp/                # Point-LIO 版本对比工具（合成 bag 回放）
 │   ├── pre-commit/            # pre-commit 各包测试入口
 │   └── test/                  # 覆盖率与冒烟测试脚本
@@ -248,7 +245,8 @@ bash scripts/simulation.sh
 ### 仅决策+导航
 
 ```bash
-bash scripts/nav_decision.sh
+# 基于统一实车 launch 启动导航决策测试（开启 RViz 与通信，关闭 robot state publisher）
+bash scripts/reality.sh nav use_decision:=true
 ```
 
 ### UI (独立启动)
@@ -262,19 +260,19 @@ ros2 run guga_ui_pangolin guga_ui
 
 ## 命名规范速查
 
-| 元素 | 约定 | 示例 |
-|------|------|------|
-| class/struct | PascalCase | `SerialDriverMain` |
-| 函数/方法 | camelCase | `sendDataFrame()` |
-| 变量 (局部/参数) | snake_case | `baud_rate_`, `frame_len` |
-| 私有成员 | 尾随 `_` | `fd_`, `config_` |
-| 编译期常量 | UPPER_CASE | `FRAME_MIN_SIZE`, `CRC8_INIT` |
-| enum class 值 | UPPER_CASE | `CHASSIS_FOLLOWED`, `RUNNING` |
-| bool | `is_`/`has_`/`should_`/`can_` 前缀 | `is_hp_deduced` |
-| 坐标/距离/阈值 | `double` (不用 float) |
-| 数组索引 | `size_t` |
-| 网格坐标 | `int` |
-| 枚举底层类型 | `uint8_t` |
+| 元素             | 约定                               | 示例                          |
+| ---------------- | ---------------------------------- | ----------------------------- |
+| class/struct     | PascalCase                         | `SerialDriverMain`            |
+| 函数/方法        | camelCase                          | `sendDataFrame()`             |
+| 变量 (局部/参数) | snake_case                         | `baud_rate_`, `frame_len`     |
+| 私有成员         | 尾随 `_`                           | `fd_`, `config_`              |
+| 编译期常量       | UPPER_CASE                         | `FRAME_MIN_SIZE`, `CRC8_INIT` |
+| enum class 值    | UPPER_CASE                         | `CHASSIS_FOLLOWED`, `RUNNING` |
+| bool             | `is_`/`has_`/`should_`/`can_` 前缀 | `is_hp_deduced`               |
+| 坐标/距离/阈值   | `double` (不用 float)              |
+| 数组索引         | `size_t`                           |
+| 网格坐标         | `int`                              |
+| 枚举底层类型     | `uint8_t`                          |
 
 **统一初始化**: 成员变量一律用 `{}`，禁止 `= 0` / `= false`。  
 **返回标记**: 查询方法标记 `[[nodiscard]]`。  
@@ -313,8 +311,8 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 ```
 
 **调转速的位置**（两处通常同步改）：
-- 决策层转速：`src/guga_decision/simple_decision/config/simple_decision.yaml` → `spin_speed`（默认 6.28 rad/s）
-- 启动兜底转速：`src/guga_bringup/launch/core/navigation_launch.py` → `init_spin_speed`（由 `controller` 推断：mppi/mpc=6.28，pid=0.0）
+- 决策层转速：`src/guga_decision/simple_decision/config/simple_decision.yaml` → `spin_speed`（默认 3.14 rad/s）
+- 启动兜底转速：`src/guga_bringup/config/<mode>/controller/<profile>.yaml` → `init_spin_speed`（mppi/mpc=1.0，pid=0.0）
 
 **参数分层机制**（`simulation.sh` + `simulation_launch.py` + `navigation_launch.py`）：
 - **9 种 planner/controller 组合**（`planner:=jps|smac2d|smachybrid` × `controller:=pid|mppi|mpc`），参数由三份 yaml 在 launch 侧按 base → controller → planner 顺序叶子级覆盖合并（不再在 shell 里生成合并文件）：
@@ -327,20 +325,20 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 **关键约定**：
 - **ChassisMode 枚举统一 0/1/2**（`simple_decision` 为源头）：0=CHASSIS_FOLLOWED、1=LITTLE_TES、2=GO_HOME；消费者 `nonrotating_vel_transform`、`pb_omni_pid_pursuit_controller` 已对齐，改枚举要三方同步
 - **spin 外推**：`nonrotating_vel_transform::estimateRobotBaseAngle()` 用 `spin_speed` 外推底盘 yaw，弥补 odometry（~10Hz）低频导致的旋转补偿跳变（解决小陀螺下 cmd_vel 持续飘）
-- **MPPI `model_dt` 必须 = 1/`controller_frequency`**（检查容差 1e-6，否则 configure 抛异常）；当前 30Hz → `model_dt: 0.033333333`，改频率必须同步改
+- **MPPI `model_dt` 必须 = 1/`controller_frequency`**（检查容差 1e-6，否则 configure 抛异常）；仿真与实车的 mppi profile 现均为 30 Hz → `model_dt: 0.033333333`，改频率必须同步改
 
 ### 近期完成（已提交到 main）
 
-| 事项 | 说明 |
-|------|------|
-| 启动即小陀螺 | nonrotating_vel_transform `initial_chassis_mode`/`init_spin_speed` 默认 littleTES；simple_decision `always_tes` + `cmd_spin` 发布 |
-| ChassisMode 对齐 | 决策层 0/1/2 与两个消费者统一 |
-| simulation.sh 修复 | `planner/controller` → `navigation_profile` 映射；nav-only 二次调用不再丢参数 |
-| liblayers.so 冲突 | pb_nav2_plugins 库改名 `pb_nav2_layers`（与系统同名库冲突导致 costmap 加载失败）；**重建该包注意清 `build/install` 残留旧 `liblayers.so`** |
-| MPPI 测试入 CI | `scripts/pre-commit/run_mppi_tests.sh`（12 个 gtest 套件）；`--allow-overriding` 条件化兼容旧 colcon |
-| 参数调整 | `robot_radius` 0.25/0.35（缩小 footprint）；全局重规划 1→2Hz（BT `RateController`） |
-| PCD/栅格地图对齐工具 | `scripts/align_pcd_gridmap.py`（FFT 互相关 + IOU 精修，输出推荐 origin；**IOU>0.5 才可信**——当前 rmuc_2025 两张图内容不匹配，建议 `simulation.sh map` 重新建图） |
-| 参数分层重构 | 仿真参数拆为 `base.yaml` + `controller/<c>.yaml` + `planner/<p>.yaml` 三层，launch 侧叶子级合并，支持 9 种 planner/controller 组合；`navigation_profile` 删除，底盘模式由 `controller` 推断；esdf_layer 跟随 jps（顺带修复 jps+mppi 缺 esdf_layer 隐患） |
+| 事项                 | 说明                                                                                                                                                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 启动即小陀螺         | nonrotating_vel_transform `initial_chassis_mode`/`init_spin_speed` 默认 littleTES；simple_decision `always_tes` + `cmd_spin` 发布                                                                                                                        |
+| ChassisMode 对齐     | 决策层 0/1/2 与两个消费者统一                                                                                                                                                                                                                            |
+| simulation.sh 修复   | `planner/controller` → `navigation_profile` 映射；nav-only 二次调用不再丢参数                                                                                                                                                                            |
+| liblayers.so 冲突    | pb_nav2_plugins 库改名 `pb_nav2_layers`（与系统同名库冲突导致 costmap 加载失败）；**重建该包注意清 `build/install` 残留旧 `liblayers.so`**                                                                                                               |
+| MPPI 测试入 CI       | `scripts/pre-commit/run_mppi_tests.sh`（12 个 gtest 套件）；`--allow-overriding` 条件化兼容旧 colcon                                                                                                                                                     |
+| 参数调整             | `robot_radius` 0.25/0.35（缩小 footprint）；全局重规划 1→2Hz（BT `RateController`）                                                                                                                                                                      |
+| PCD/栅格地图对齐工具 | `scripts/align_pcd_gridmap.py`（FFT 互相关 + IOU 精修，输出推荐 origin；**IOU>0.5 才可信**——当前 rmuc_2025 两张图内容不匹配，建议 `simulation.sh map` 重新建图）                                                                                         |
+| 参数分层重构         | 仿真参数拆为 `base.yaml` + `controller/<c>.yaml` + `planner/<p>.yaml` 三层，launch 侧叶子级合并，支持 9 种 planner/controller 组合；`navigation_profile` 删除，底盘模式由 `controller` 推断；esdf_layer 跟随 jps（顺带修复 jps+mppi 缺 esdf_layer 隐患） |
 
 ### 待办 / 已知隐患
 
@@ -353,18 +351,18 @@ nonrotating_vel_transform（默认 littleTES + init_spin_speed，启动即转）
 
 ## 关键文件索引
 
-| 文件 | 说明 |
-|------|------|
-| `docs/编码规范.md` | 完整编码规范 |
-| `src/guga_perception/terrain_analysis/` | 模式 A 范例代码 |
-| `src/guga_decision/simple_decision/` | 模式 B 范例代码 |
-| `src/guga_bringup/launch/reality_launch.py` | 实车启动入口 |
-| `src/guga_bringup/launch/simulation_launch.py` | 仿真启动入口 |
-| `src/guga_bringup/config/` | Nav2 参数 (reality/simulation) |
-| `src/guga_driver/serial_driver/include/serial_driver/serial_driver_main.hpp` | 串口协议底层 API |
-| `src/guga_controller/nonrotating_vel_transform/` | TES 速度变换（旋转补偿 + 自旋叠加 + spin 外推） |
-| `scripts/pre-commit/run_mppi_tests.sh` | MPPI 控制器测试入口（12 个 gtest 套件） |
-| `scripts/align_pcd_gridmap.py` | PCD 与栅格地图对齐工具（估算 origin 修正量） |
-| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/ui_types.hpp` | UI 共享内存数据结构 |
-| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_writer.hpp` | 共享内存写入端 |
-| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_reader.hpp` | 共享内存读取端 |
+| 文件                                                                         | 说明                                            |
+| ---------------------------------------------------------------------------- | ----------------------------------------------- |
+| `docs/编码规范.md`                                                           | 完整编码规范                                    |
+| `src/guga_perception/terrain_analysis/`                                      | 模式 A 范例代码                                 |
+| `src/guga_decision/simple_decision/`                                         | 模式 B 范例代码                                 |
+| `src/guga_bringup/launch/reality_launch.py`                                  | 实车启动入口                                    |
+| `src/guga_bringup/launch/simulation_launch.py`                               | 仿真启动入口                                    |
+| `src/guga_bringup/config/`                                                   | Nav2 参数 (reality/simulation)                  |
+| `src/guga_driver/serial_driver/include/serial_driver/serial_driver_main.hpp` | 串口协议底层 API                                |
+| `src/guga_controller/nonrotating_vel_transform/`                             | TES 速度变换（旋转补偿 + 自旋叠加 + spin 外推） |
+| `scripts/pre-commit/run_mppi_tests.sh`                                       | MPPI 控制器测试入口（12 个 gtest 套件）         |
+| `scripts/align_pcd_gridmap.py`                                               | PCD 与栅格地图对齐工具（估算 origin 修正量）    |
+| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/ui_types.hpp`         | UI 共享内存数据结构                             |
+| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_writer.hpp`       | 共享内存写入端                                  |
+| `src/guga_ui_old/guga_ui_common/include/guga_ui_common/shm_reader.hpp`       | 共享内存读取端                                  |

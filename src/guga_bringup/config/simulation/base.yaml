@@ -93,6 +93,7 @@ scan_to_sensor_frame:
     min_odometry_dt: 0.001
     max_linear_velocity: 10.0
     max_angular_velocity: 20.0
+    zero_base_z: True # 临时平地模式: 锁 odom->base_footprint 的 z=0, 屏蔽 point_lio 的 z 漂移; 测完关掉
 
 terrain_analysis:
   ros__parameters:
@@ -115,11 +116,19 @@ terrain_analysis:
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: True
-    num_threads: 4
+    num_threads: 16
     num_neighbors: 20
     global_leaf_size: 0.1
     registered_leaf_size: 0.05
-    max_dist_sq: 3.0
+    max_dist_sq: 6.0
+    max_iterations: 100
+    max_roll_pitch_step: 0.002 # 单次迭代 roll/pitch 增量的模长上限(rad)，0 关闭
+    max_tz_step: 0.001 # 单次迭代 tz 增量的大小上限(m)，0 关闭
+    map_boundary_margin: 0.5 # 位姿超出先验地图外接框的允许余量(m)，超出则回退到基准 tf
+    error_max: 1.0 # 迭代脉冲触发上界: 上一帧 RMSE 超过该值(或内点率低于 good_inlier_ratio)时本次迭代上限用 max_iterations, 两者都达标才用 10
+    baseline_translation_tolerance: 6.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
+    good_error_max: 0.4 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
+    good_inlier_ratio: 0.99 # 内点率下限，只有 RMSE 达标且内点率高于该值、且未越界的结果才能成为基准 tf，需按日志标定
     map_frame: "map"
     odom_frame: "odom"
     base_frame: "base_footprint"
@@ -303,6 +312,55 @@ waypoint_follower:
       enabled: True
       waypoint_pause_duration: 200
 
+# ── 自旋速度变换（TES 速度补偿 + 伪坐标系）──
+# 参数含义见 src/guga_transform/nonrotating_vel_transform/README.md。
+# 与控制器无关的键放在 base 层；initial_chassis_mode / init_spin_speed 依赖
+# 控制器（pid 不能自旋），放在 config/simulation/controller/<profile>.yaml。
+nonrotating_vel_transform:
+  ros__parameters:
+    use_sim_time: True
+
+    # 坐标系与话题：与 velocity_smoother -> cmd_vel -> 串口驱动这条链路对齐
+    robot_base_frame: base_footprint
+    nonrotating_robot_base_frame: base_footprint_nonrotating
+    chassis_frame: chassis
+    odom_topic: odometry
+    local_plan_topic: local_plan
+    cmd_spin_topic: cmd_spin
+    chassis_mode_topic: chassis_mode
+    input_cmd_vel_topic: cmd_vel_smoothed
+    output_cmd_vel_topic: cmd_vel
+
+    # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
+    # False = 不叠加自旋（无小陀螺试验），angular.z 只来自控制器（MPPI 的 wz，
+    # 受 wz_max 限制）。运行时仍可动态切回：
+    #   ros2 param set /nonrotating_vel_transform enable_spin true
+    enable_spin: False
+
+    # 60 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样按更高频率送到
+    # MCU，不做再滤波/再限速，保证 MPPI 的预测与实际执行一致；旋转补偿也随之从
+    # ~10 Hz（odom 同步）提升到 60 Hz。运行时可直接调（会重建定时器，立即生效）：
+    #   ros2 param set /nonrotating_vel_transform publish_frequency 60.0
+    publish_frequency: 60.0
+
+    # 超过该时长没有新指令就把线性速度归零（角速度按 chassis_mode 保留：
+    # littleTES 下继续自旋）。
+    cmd_vel_timeout: 0.5
+
+    # spin 外推修正系数：odom 约 10 Hz，两次更新之间用 spin_speed * dt 外推底盘
+    # yaw；实车按旋转补偿是滞后还是超前微调（1.0 = 完全按标称自旋速度外推）。
+    correct_ratio: 1.2
+
+    # cmd_vel 可视化（RViz Marker）。enable_vis: False 时节点不发布 Marker，
+    # 只影响 RViz 显示，不影响送仿真的 cmd_vel；运行时也可动态切换：
+    #   ros2 param set /red_standard_robot1/nonrotating_vel_transform enable_vis false
+    enable_vis: True
+    vis_cmd_vel_topic: cmd_vel_marker
+    vis_scale: 1.0
+
+    # 输出是否直接变换到 chassis_frame（默认 False，输出到 robot_base_frame）
+    output_in_chassis_frame: False
+
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -373,9 +431,13 @@ behavior_server:
     rotational_acc_lim: 3.2
     # params for pb_nav2_behaviors/BackUpFreeSpace
 
-    service_name: "global_costmap/get_costmap"
+    # 方向判定与位姿都取局部代价地图：它才是决定控制器能否接手的图，
+    # 且与执行中的 footprint 碰撞检查同图（碰撞检查由 behavior_server 用 local_costmap 建立）。
+    service_name: "local_costmap/get_costmap"
 
-    max_radius: 2.0
+    costmap_frame: odom
+
+    max_radius: 3.0
 
     visualize: false
 
@@ -418,7 +480,7 @@ global_costmap:
 
       global_frame: map
 
-      robot_radius: 0.35
+      robot_radius: 0.367
 
       resolution: 0.05
 

@@ -550,3 +550,84 @@ TEST_F(TestNode, testDynParamsSetStatic)
   costmap->on_cleanup(rclcpp_lifecycle::State());
   costmap->on_shutdown(rclcpp_lifecycle::State());
 }
+
+/**
+ * Test global frame (map->odom) jump detection thresholds
+ */
+TEST_F(TestNode, testTfJumpThresholds)
+{
+  using pb_nav2_costmap_2d::ObstacleLayerLocal;
+  const double kTrans = 0.05;
+  const double kYaw = 0.05;
+
+  // 小幅修正：不判为跳变
+  EXPECT_FALSE(ObstacleLayerLocal::tfJumpExceedsThresholds(0.01, -0.01, 0.01, kTrans, kYaw));
+
+  // 平移或偏航任一超过阈值：判为跳变
+  EXPECT_TRUE(ObstacleLayerLocal::tfJumpExceedsThresholds(0.10, 0.0, 0.0, kTrans, kYaw));
+  EXPECT_TRUE(ObstacleLayerLocal::tfJumpExceedsThresholds(0.0, -0.10, 0.0, kTrans, kYaw));
+  EXPECT_TRUE(ObstacleLayerLocal::tfJumpExceedsThresholds(0.0, 0.0, 0.10, kTrans, kYaw));
+
+  // 偏航在 ±π 附近修正：原始差值接近 2π，归一后是小量，不应判为跳变
+  EXPECT_FALSE(
+    ObstacleLayerLocal::tfJumpExceedsThresholds(0.0, 0.0, 2.0 * M_PI - 0.02, kTrans, kYaw));
+  EXPECT_FALSE(ObstacleLayerLocal::tfJumpExceedsThresholds(0.0, 0.0, 3.13 - (-3.13), kTrans, kYaw));
+
+  // 同样是 ±π 附近，但差值归一后仍超过阈值
+  EXPECT_TRUE(ObstacleLayerLocal::tfJumpExceedsThresholds(0.0, 0.0, 3.0 - (-3.0), kTrans, kYaw));
+}
+
+/**
+ * Test that a map->odom jump drops the marks accumulated by the obstacle layer
+ */
+TEST_F(TestNode, testTfJumpResetsAccumulatedMarks)
+{
+  node_->declare_parameter("obstacles.tf_jump_reset_enabled", rclcpp::ParameterValue(true));
+  node_->declare_parameter(
+    "obstacles.tf_jump_child_frame", rclcpp::ParameterValue(std::string("odom")));
+  node_->declare_parameter("obstacles.tf_jump_translation_threshold", rclcpp::ParameterValue(0.05));
+  node_->declare_parameter("obstacles.tf_jump_yaw_threshold", rclcpp::ParameterValue(0.05));
+  node_->declare_parameter("obstacles.tf_jump_min_interval", rclcpp::ParameterValue(0.0));
+  node_->declare_parameter("obstacles.tf_jump_full_window", rclcpp::ParameterValue(true));
+  node_->declare_parameter("obstacles.tf_jump_skip_marking_cycles", rclcpp::ParameterValue(1));
+
+  tf2_ros::Buffer tf(node_->get_clock());
+
+  geometry_msgs::msg::TransformStamped tf_msg;
+  tf_msg.header.frame_id = "map";
+  tf_msg.child_frame_id = "odom";
+  tf_msg.header.stamp = node_->now();
+  tf_msg.transform.rotation.w = 1.0;
+  tf.setTransform(tf_msg, "test", true);
+
+  nav2_costmap_2d::LayeredCostmap layers("map", false, false);
+  layers.resizeMap(10, 10, 1, 0, 0);
+
+  std::shared_ptr<pb_nav2_costmap_2d::ObstacleLayerLocal> olayer = nullptr;
+  addObstacleLayer(layers, tf, node_, olayer);
+
+  // 在 (0,0) 造一个致命格（静态观测，绕开话题订阅）
+  addObservation(olayer, 0.0, 0.0, MAX_Z / 2, 0.0, 0.0, MAX_Z / 2, true, false);
+
+  // 第一轮：标记进入主代价地图
+  layers.updateMap(0.0, 0.0, 0.0);
+  ASSERT_EQ(countValues(*(layers.getCostmap()), nav2_costmap_2d::LETHAL_OBSTACLE), 1u);
+
+  // 阈值以内的小幅修正：不应清空
+  tf_msg.transform.translation.x = 0.01;
+  tf_msg.header.stamp = node_->now();
+  tf.setTransform(tf_msg, "test", true);
+  layers.updateMap(0.0, 0.0, 0.0);
+  ASSERT_EQ(countValues(*(layers.getCostmap()), nav2_costmap_2d::LETHAL_OBSTACLE), 1u);
+
+  // map->odom 跳变 0.5 m：本层标记被清空，且这一轮不使用缓冲里的旧观测
+  tf_msg.transform.translation.x = 0.5;
+  tf_msg.header.stamp = node_->now();
+  tf.setTransform(tf_msg, "test", true);
+  layers.updateMap(0.0, 0.0, 0.0);
+  ASSERT_EQ(countValues(*(layers.getCostmap()), nav2_costmap_2d::LETHAL_OBSTACLE), 0u);
+
+  // 下一轮恢复：观测重新被采纳
+  layers.updateMap(0.0, 0.0, 0.0);
+  ASSERT_EQ(countValues(*(layers.getCostmap()), nav2_costmap_2d::LETHAL_OBSTACLE), 1u);
+}

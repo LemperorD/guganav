@@ -3,6 +3,9 @@
 
 build/
 
+# doxygen 生成物（各包 doxygen/html/）
+**/doxygen/html/
+
 install/
 rmul_2026.yaml
 log/
@@ -25,6 +28,6 @@ rosbag/
 .agents
 .mcp.json
 *.pdf
-
+settings.json
 # 嵌入式 git 仓库（ros2 tracing 上游 clone），不作为本仓库内容
 src/ros2_tracing/
