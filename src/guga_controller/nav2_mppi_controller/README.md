@@ -1,6 +1,6 @@
 # nav2_mppi_controller
 
-> **调参入口**：`scripts/paramview.sh` 打开 Web 界面，可动态改参数、与合并后的配置基线对比、可直接保存。`scripts/params_list/mppi_para.txt` 处可添加动态修改参数。
+> **调参入口**：`scripts/paramview.sh` 打开 Web 界面，可动态改参数、与合并后的配置基线对比、可直接保存。`scripts/paramview/params_list/mppi_para.txt` 处可添加动态修改参数。
 
 基于采样的局部轨迹控制器：从高斯分布采样控制序列、按插件化评价器（critic）打分并 softmax 加权，
 输出最优速度指令。本包是 Nav2 官方 MPPI 控制器的本地 fork，插件名改为

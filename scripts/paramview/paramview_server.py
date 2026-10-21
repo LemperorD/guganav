@@ -13,7 +13,7 @@
 
 用法：
     scripts/paramview/paramview_server.py                        # 默认 controller_server:FollowPath
-    scripts/paramview/paramview_server.py --list scripts/params_list/pid_para.txt \\
+    scripts/paramview/paramview_server.py --list scripts/paramview/params_list/pid_para.txt \\
         --target controller_server:FollowPath --port 8090
     scripts/paramview/paramview_server.py --target global_costmap/global_costmap:inflation_layer \\
         --target planner_server:GridBased
@@ -64,14 +64,14 @@ def parse_param_lists(patterns):
 
 
 def load_baseline(mode, controller, planner):
-    """用 scripts/param_merge.py 的合并结果作为"配置值"基线。
+    """用 scripts/paramview/param_merge.py 的合并结果作为"配置值"基线。
 
     返回 {节点路径: {参数名: 值}}，节点路径形如 controller_server、
     global_costmap/global_costmap —— 后者的 yaml 是两层同名嵌套，这里拍平。
     """
     if not (mode and controller and planner):
         return {}
-    script = os.path.join(WS_ROOT, "scripts", "param_merge.py")
+    script = os.path.join(WS_ROOT, "scripts", "paramview", "param_merge.py")
     if not os.path.exists(script):
         return {}
     proc = subprocess.run(
@@ -127,7 +127,7 @@ _KEY_RE = re.compile(r"^(?P<indent> *)(?P<key>[^:#\n]+?):(?P<rest>.*)$")
 
 
 def config_layers(mode, controller, planner):
-    """三层参数文件，顺序与 scripts/param_merge.py 的合并顺序一致。"""
+    """三层参数文件，顺序与 scripts/paramview/param_merge.py 的合并顺序一致。"""
     if not (mode and controller and planner):
         return []
     return [
@@ -790,7 +790,7 @@ def main():
         "--list",
         action="append",
         default=None,
-        help="参数说明文件（params_list/*.txt 格式），可重复。默认按 profile 推断",
+        help="参数说明文件（paramview/params_list/*.txt 格式），可重复。默认按 profile 推断",
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8090)
@@ -814,7 +814,7 @@ def main():
     if not args.target:
         args.target = ["controller_server:FollowPath"]
     if not args.list:
-        args.list = [os.path.join(WS_ROOT, "scripts/params_list/mppi_para.txt")]
+        args.list = [os.path.join(WS_ROOT, "scripts/paramview/params_list/mppi_para.txt")]
 
     application, node = make_app(args)
     print(f"打开浏览器访问: http://{args.host}:{args.port}", flush=True)
