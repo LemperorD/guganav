@@ -209,7 +209,6 @@ if is_true "$slam" && is_true "$show_prior_pcd"; then
   show_prior_pcd=False
 fi
 
-prior_pcd_publisher_pid=""
 if is_true "$show_prior_pcd"; then
   prior_pcd_file=$(resolve_reality_prior_pcd "$world" "$prior_pcd_arg")
   if [ ! -f "$prior_pcd_file" ]; then
@@ -218,12 +217,6 @@ if is_true "$show_prior_pcd"; then
   fi
   echo "Prior PCD visualization enabled: $prior_pcd_file"
   echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
-  ros2 run pcl_ros pcd_to_pointcloud --ros-args \
-    -r __node:=prior_pcd_publisher \
-    -p file_name:="$prior_pcd_file" \
-    -p tf_frame:=map \
-    -p publishing_period_ms:=1000 &
-  prior_pcd_publisher_pid=$!
 fi
 
 install_reality_cleanup_traps
@@ -231,12 +224,9 @@ set +e
 ros2 launch guga_bringup reality_launch.py \
   world:="$world" \
   slam:="$slam" \
+  show_prior_pcd:="$show_prior_pcd" \
   "${launch_args[@]}" | grep RMSE
 launch_status=$?
 set -e
-
-if [ -n "$prior_pcd_publisher_pid" ] && kill -0 "$prior_pcd_publisher_pid" 2>/dev/null; then
-  kill "$prior_pcd_publisher_pid" 2>/dev/null || true
-fi
 
 exit_with_launch_status "$launch_status"

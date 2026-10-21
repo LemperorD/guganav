@@ -65,6 +65,13 @@
             scan_bodyframe_pub_en: False                    # True: output the point cloud scans in IMU-body-frame
             tf_send_en: True                                # True: send transform from 'camera_init' to 'aft_mapped'
 
+        output_frame:
+            enable: True
+            z_filter:
+                enable: True
+                min_z: -0.2                                 # registered_scan 在 odom 系中的最低 Z
+                max_z: 1.0                                  # registered_scan 在 odom 系中的最高 Z
+
         pcd_save:
             pcd_save_en: False
             interval: -1                                    # how many LiDAR frames saved in each pcd file;

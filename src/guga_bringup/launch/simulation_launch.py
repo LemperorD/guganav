@@ -28,6 +28,7 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
     use_ui = LaunchConfiguration("use_ui")
+    show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
     # 显式 params_file:= 时退化为单文件（三份都指向它）
     planner = LaunchConfiguration("planner")
@@ -208,6 +209,12 @@ def generate_launch_description():
         description="Whether to start the guga_ui_pangolin process",
     )
 
+    declare_show_prior_pcd_cmd = DeclareLaunchArgument(
+        "show_prior_pcd",
+        default_value="False",
+        description="Publish the prior PCD on /cloud_pcd; ignored in mapping mode",
+    )
+
     start_velodyne_convert_tool = Node(
         package="ign_sim_pointcloud_tool",
         executable="ign_sim_pointcloud_tool_node",
@@ -227,6 +234,28 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "rviz_config": rviz_config_file,
         }.items(),
+    )
+
+    prior_pcd_publisher_cmd = Node(
+        package="pcl_ros",
+        executable="pcd_to_pointcloud",
+        name="prior_pcd_publisher",
+        output="screen",
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'", show_prior_pcd, "'.lower() == 'true' and '",
+                    slam, "'.lower() != 'true'",
+                ]
+            )
+        ),
+        parameters=[
+            {
+                "file_name": prior_pcd_file,
+                "tf_frame": "map",
+                "publishing_period_ms": 1000,
+            }
+        ],
     )
 
     bringup_cmd = IncludeLaunchDescription(
@@ -276,11 +305,13 @@ def generate_launch_description():
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_ui_cmd)
+    ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     ld.add_action(start_velodyne_convert_tool)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
+    ld.add_action(prior_pcd_publisher_cmd)
     ld.add_action(guga_ui_cmd)
 
     return ld

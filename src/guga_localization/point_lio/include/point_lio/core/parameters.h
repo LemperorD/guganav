@@ -113,6 +113,18 @@ struct LidarParams {
 };
 
 /**
+ * @brief odom 系 registered_scan 的 Z 向带通滤波参数
+ *
+ * 阈值使用 odom 坐标, 不是雷达局部坐标。仅过滤项目约定的 registered_scan,
+ * 不影响 Point-LIO 的原始点云和内部建图。
+ */
+struct ScanZFilterParams {
+  bool enabled{false};
+  double min_z{-0.2};
+  double max_z{1.0};
+};
+
+/**
  * @brief 项目约定输出 (原 loam_interface 承担的职责)
  *
  * Point-LIO 自身输出在雷达里程计系 (camera_init, 初始 IMU 姿态) 下, 而项目其他
@@ -126,6 +138,7 @@ struct OutputFrameParams {
   std::string base_frame{"base_footprint"};
   std::string registered_scan_topic{"registered_scan"};
   std::string lidar_odometry_topic{"lidar_odometry"};
+  ScanZFilterParams z_filter;
   /// 非零表示由参数显式给出安装变换; 否则启动时从 TF 查 base_frame <-
   /// lidar_frame
   bool extrinsic_from_params{false};

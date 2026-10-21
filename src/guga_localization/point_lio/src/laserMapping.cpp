@@ -93,15 +93,20 @@ void LaserMappingNode::initializeRos2Interfaces() {
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   // 项目约定输出 (原 loam_interface 的职责): 同一个 odom 系下的点云与里程计
+  const bool filter_pcd = config_.publish.scan_enabled
+                          && config_.publish.pcd_save_enabled
+                          && config_.output_frame.z_filter.enabled;
+  if (config_.output_frame.enabled || filter_pcd) {
+    if (!config_.output_frame.extrinsic_from_params) {
+      tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+      tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    }
+  }
   if (config_.output_frame.enabled) {
     pub_registered_scan_ = create_publisher<sensor_msgs::msg::PointCloud2>(
         config_.output_frame.registered_scan_topic, 5);
     pub_lidar_odometry_ = create_publisher<nav_msgs::msg::Odometry>(
         config_.output_frame.lidar_odometry_topic, 5);
-    if (!config_.output_frame.extrinsic_from_params) {
-      tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
-      tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-    }
   }
   createSensorSubscriptions();
 }
@@ -215,6 +220,16 @@ bool LaserMappingNode::resolveOdomExtrinsic() {
   return true;
 }
 
+bool LaserMappingNode::pointPassesOdomZFilter(
+    const Eigen::Vector3d& point_world) const {
+  const auto& z_filter = config_.output_frame.z_filter;
+  if (!z_filter.enabled) {
+    return true;
+  }
+  const double z_odom = (odom_rotation_ * point_world + odom_translation_).z();
+  return z_odom >= z_filter.min_z && z_odom <= z_filter.max_z;
+}
+
 void LaserMappingNode::publishProjectOutputs() {
   if (!pub_registered_scan_ && !pub_lidar_odometry_) {
     return;
@@ -231,6 +246,9 @@ void LaserMappingNode::publishProjectOutputs() {
     cloud_odom->reserve(lidar_.workspace().feats_down_world->size());
     for (const auto& p : lidar_.workspace().feats_down_world->points) {
       const Eigen::Vector3d pw(p.x, p.y, p.z);
+      if (!pointPassesOdomZFilter(pw)) {
+        continue;
+      }
       const Eigen::Vector3d po = odom_rotation_ * pw + odom_translation_;
       PointType q = p;
       q.x = static_cast<float>(po.x());
@@ -292,7 +310,20 @@ void LaserMappingNode::publishFrameWorld() {
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
 
     if (config_.publish.pcd_save_enabled) {
-      *state_.pcl_wait_save += *lidar_.workspace().feats_down_world;
+      const auto& z_filter = config_.output_frame.z_filter;
+      if (z_filter.enabled) {
+        if (!resolveOdomExtrinsic()) {
+          return;
+        }
+        for (const auto& point : lidar_.workspace().feats_down_world->points) {
+          const Eigen::Vector3d point_world(point.x, point.y, point.z);
+          if (pointPassesOdomZFilter(point_world)) {
+            state_.pcl_wait_save->push_back(point);
+          }
+        }
+      } else {
+        *state_.pcl_wait_save += *lidar_.workspace().feats_down_world;
+      }
 
       pcd_scan_count_++;
       if (!state_.pcl_wait_save->empty()

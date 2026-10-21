@@ -108,6 +108,10 @@ private:
    */
   bool resolveOdomExtrinsic();
 
+  /** @brief 按 odom 系 Z 阈值判断世界系点是否保留 */
+  [[nodiscard]] bool pointPassesOdomZFilter(
+      const Eigen::Vector3d& point_world) const;
+
   /** @brief 发布 odom 系下的点云与雷达里程计 (原 loam_interface 的输出) */
   void publishProjectOutputs();
 

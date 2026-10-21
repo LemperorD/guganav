@@ -32,6 +32,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
     use_decision = LaunchConfiguration("use_decision")
+    show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
@@ -175,6 +176,12 @@ def generate_launch_description():
         description="Whether to start simple_decision",
     )
 
+    declare_show_prior_pcd_cmd = DeclareLaunchArgument(
+        "show_prior_pcd",
+        default_value="False",
+        description="Publish the prior PCD on /cloud_pcd; ignored in mapping mode",
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     # livox 节点参数直接指向 base.yaml 的绝对路径,不经过 PythonExpression
@@ -234,6 +241,28 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "rviz_config": rviz_config_file,
         }.items(),
+    )
+
+    prior_pcd_publisher_cmd = Node(
+        package="pcl_ros",
+        executable="pcd_to_pointcloud",
+        name="prior_pcd_publisher",
+        output="screen",
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'", show_prior_pcd, "'.lower() == 'true' and '",
+                    slam, "'.lower() != 'true'",
+                ]
+            )
+        ),
+        parameters=[
+            {
+                "file_name": prior_pcd_file,
+                "tf_frame": "map",
+                "publishing_period_ms": 1000,
+            }
+        ],
     )
 
     bringup_cmd = IncludeLaunchDescription(
@@ -303,6 +332,7 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
     ld.add_action(declare_use_decision_cmd)
+    ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     # Add the actions to launch all of the navigation nodes
@@ -311,6 +341,7 @@ def generate_launch_description():
     ld.add_action(start_livox_ros_driver2_node)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
+    ld.add_action(prior_pcd_publisher_cmd)
     ld.add_action(communication_cmd)
     ld.add_action(decision_cmd)
 

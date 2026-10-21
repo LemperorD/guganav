@@ -51,11 +51,21 @@ output_frame:
   base_frame: "base_footprint"
   registered_scan_topic: "registered_scan"
   lidar_odometry_topic: "lidar_odometry"
+  z_filter:
+    enable: true                       # 过滤 registered_scan 和 pcd_save
+    min_z: -0.2                        # 保留 min_z <= z <= max_z
+    max_z: 1.0                         # 边界使用 odom 系的绝对 Z
   # 安装变换 (TF 的 base_frame <- lidar_frame)。留空表示启动阶段查一次 TF；
   # 给出则直接用参数值, 不依赖 TF 是否就绪。
   lidar_to_base_t: []                # [x, y, z]
   lidar_to_base_r: []                # 行主序 3x3
 ```
+
+`z_filter` 在点云换算到 `odom` 后执行，因此阈值以机器人 `odom` 系为基准，
+不是雷达局部坐标。滤波作用于 `registered_scan` 和 `pcd_save` 累积的离线 PCD；
+`cloud_registered` 与 `Laser_map` 仍保留 Point-LIO 原始输出。保存的 PCD 点坐标
+仍位于 Point-LIO 雷达里程计系，只使用 odom 系 Z 值决定是否保留。参数阈值需按
+实际地面高度和需要保留的障碍高度调整。
 
 留空时若查不到 TF，节点会按 2 秒节流打印警告，并且**暂不发布**这两个话题，而不是用
 未初始化的变换发布错误结果。当前实车与仿真的安装变换都在 TF 里给出，因此配置中

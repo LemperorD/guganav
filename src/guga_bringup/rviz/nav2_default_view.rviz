@@ -352,7 +352,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: true
       Max Color: 255; 255; 255
       Max Intensity: 0.20000000298023224
@@ -373,7 +373,7 @@ Visualization Manager:
         Value: terrain_map
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 0.8
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:

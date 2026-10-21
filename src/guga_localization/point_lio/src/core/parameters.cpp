@@ -166,6 +166,21 @@ PointLioParams readParameters(rclcpp::Node* nh) {
     params.output_frame.lidar_odometry_topic =
         nh->declare_parameter<std::string>("output_frame.lidar_odometry_topic",
                                            "lidar_odometry");
+    params.output_frame.z_filter.enabled = nh->declare_parameter<bool>(
+        "output_frame.z_filter.enable", false);
+    params.output_frame.z_filter.min_z = nh->declare_parameter<double>(
+        "output_frame.z_filter.min_z", -0.2);
+    params.output_frame.z_filter.max_z = nh->declare_parameter<double>(
+        "output_frame.z_filter.max_z", 1.0);
+    if (params.output_frame.z_filter.min_z
+        > params.output_frame.z_filter.max_z) {
+      RCLCPP_ERROR(nh->get_logger(),
+                   "output_frame.z_filter 无效: min_z(%.3f) > max_z(%.3f), "
+                   "已禁用 Z 滤波",
+                   params.output_frame.z_filter.min_z,
+                   params.output_frame.z_filter.max_z);
+      params.output_frame.z_filter.enabled = false;
+    }
     params.output_frame.lidar_to_base_t =
         nh->declare_parameter<std::vector<double>>(
             "output_frame.lidar_to_base_t", std::vector<double>());

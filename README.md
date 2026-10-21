@@ -324,6 +324,10 @@ ros2 launch point_lio point_lio.launch.py \
 内部流程和已知问题见
 [`src/guga_localization/point_lio/ARCHITECTURE.md`](src/guga_localization/point_lio/ARCHITECTURE.md)。
 
+`registered_scan` 带有可配置的 odom 系 Z 向滤波
+（`output_frame.z_filter.{enable,min_z,max_z}`）；该滤波只作用于供感知和定位使用的
+项目约定点云，不改变 Point-LIO 原始 `cloud_registered`。
+
 常用 launch 参数：
 
 | 参数 | 说明 |
