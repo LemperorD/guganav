@@ -51,6 +51,13 @@ public:
     EXPECT_FALSE(isHolonomic());
   }
 
+  /// 测试里直接改 settings（controller_period/constraints）后，
+  /// 需要走与 setOffset()/reset() 相同的路径重算每步加速度增量。
+  void recomputeAccelDeltas()
+  {
+    updateAccelDeltas();
+  }
+
   void testSetOmniModel()
   {
     EXPECT_EQ(motion_model_.get(), nullptr);
@@ -766,6 +773,7 @@ TEST(OptimizerTests, InterIterationAccelConstraintsTests)
   // 非前移模式（控制器 40 Hz）：第 0 项按 controller_period 夹到一步可达范围
   settings.shift_control_sequence = false;
   settings.controller_period = 0.025f;
+  optimizer_tester.recomputeAccelDeltas();
   state.speed.linear.x = 0.0;
   state.speed.linear.y = 0.0;
   state.speed.angular.z = 0.0;
