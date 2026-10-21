@@ -170,9 +170,10 @@ protected:
    * @brief 对控制序列应用底盘硬约束（速度上限 + 加速度可行性）
    *
    * 加速度约束的起点是**上一周期下发的指令**（`last_command_vel_`），不是
-   * `state_.speed`。`state_.speed` 来自 odom，实车约 10 Hz、比 30 Hz 控制周期
-   * 慢 3 拍；若命令也从它起夹，减速命令会被"钉"在陈旧速度上（|ax_min| 越小越
-   * 明显），表现为到点停不住/过冲。预测初值仍用 `state_.speed`，两者解耦。
+   * `state_.speed`。`state_.speed` 来自 odom（实车约 50 Hz、仿真约 10 Hz），
+   * 相对 30 Hz 控制周期仍有半拍到数拍的延迟；若命令也从它起夹，减速命令会被
+   * "钉"在陈旧速度上（|ax_min| 越小越明显），表现为到点停不住/过冲。
+   * 预测初值仍用 `state_.speed`，两者解耦。
    */
   void applyControlSequenceConstraints();
 
@@ -181,6 +182,14 @@ protected:
    * @return 返回值: 任一加速度上限非零时为 true；全零表示保持移植前行为
    */
   bool accelConstraintsEnabled() const;
+
+  /**
+   * @brief 按当前约束与控制周期重算每步允许的速度增量（`AccelDeltas`）
+   *
+   * 只在参数或控制周期变化时调用；`applyControlSequenceInterIterationConstraints()`
+   * 与 `applyControlSequenceConstraints()` 直接读缓存，避免每轮优化重复换算。
+   */
+  void updateAccelDeltas();
 
   /**
    * @brief 更新状态张量内每个时间步的预测速度

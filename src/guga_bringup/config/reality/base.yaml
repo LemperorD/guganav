@@ -50,7 +50,7 @@ point_lio:
       imu_en: True
       extrinsic_est_en: False # for aggressive motion, set this variable False
       imu_time_inte: 0.005 # = 1 / frequency of IMU
-      lidar_time_inte: 0.1
+      lidar_time_inte: 0.02 # = 1 / lidar frame rate（驱动 publish_freq=50 Hz）
       satu_acc: 4.0 # the saturation value of IMU's acceleration. not related to the units
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
       acc_norm: 1.0 # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
@@ -339,7 +339,8 @@ nonrotating_vel_transform:
 
     # 60 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样按更高频率送到
     # MCU，不做再滤波/再限速，保证 MPPI 的预测与实际执行一致；旋转补偿也随之从
-    # ~10 Hz（odom 同步）提升到 60 Hz。运行时可直接调（会重建定时器，立即生效）：
+    # odom 同步频率（实车约 50 Hz）提升到 60 Hz。运行时可直接调（会重建定时器，
+    # 立即生效）：
     #   ros2 param set /nonrotating_vel_transform publish_frequency 60.0
     publish_frequency: 60.0
 
@@ -347,13 +348,16 @@ nonrotating_vel_transform:
     # littleTES 下继续自旋）。
     cmd_vel_timeout: 0.5
 
-    # spin 外推修正系数：odom 约 10 Hz，两次更新之间用 spin_speed * dt 外推底盘
-    # yaw；实车按旋转补偿是滞后还是超前微调（1.0 = 完全按标称自旋速度外推）。
+    # spin 外推修正系数：odom 与点云同频（实车约 50 Hz），两次更新之间仍用
+    # spin_speed * dt 外推底盘 yaw；实车按旋转补偿是滞后还是超前微调
+    # （1.0 = 完全按标称自旋速度外推）。
     correct_ratio: 1.0
 
-    # cmd_vel 可视化（RViz Marker）
+    # cmd_vel 可视化（RViz Marker）。enable_vis: False 时节点不发布 Marker，
+    # 只影响 RViz 显示，不影响送 MCU 的 cmd_vel；运行时也可动态切换：
+    #   ros2 param set /red_standard_robot1/nonrotating_vel_transform enable_vis false
+    enable_vis: True
     vis_cmd_vel_topic: cmd_vel_marker
-    vis_frame_id: base_footprint
     vis_scale: 1.0
 
     # 输出是否直接变换到 chassis_frame（默认 False，输出到 robot_base_frame）

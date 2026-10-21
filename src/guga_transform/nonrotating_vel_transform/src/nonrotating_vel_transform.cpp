@@ -29,8 +29,7 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
 : Node("nonrotating_vel_transform", options)
 {
   RCLCPP_INFO(get_logger(), "Start Nonrotating Vel Transform!");
-
-  onConfigure(); // 配置参数
+  onConfigure();  // 配置参数
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -64,8 +63,9 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
   // Therefore, we use ApproximateTime policy to synchronize `cmd_vel` and `odometry`.
   sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(100), odom_sub_filter_, local_plan_sub_filter_);
-  sync_->registerCallback(std::bind(
-    &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
+  sync_->registerCallback(
+    std::bind(
+      &NonrotatingVelTransform::syncCallback, this, std::placeholders::_1, std::placeholders::_2));
 
   tf_sub_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50), std::bind(&NonrotatingVelTransform::updateGimbalYaw, this));
@@ -75,11 +75,11 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
     std::chrono::milliseconds(20), std::bind(&NonrotatingVelTransform::publishTransform, this));
 
   // 定时重发速度指令（默认 50 Hz）：控制器只在 30 Hz 更新指令，而本节点此前只在
-  // odom+local_plan 同步时（约 10 Hz）发布，等于把 3 个控制周期压成一个阶跃。
+  // odom+local_plan 同步时（实车约 50 Hz、仿真约 10 Hz）发布，同步率低时等于把
+  // 多个控制周期压成一个阶跃。
   // 这里按固定频率把最新指令 + 当前角度补偿重发出去，只做无损传输。
   cmd_vel_pub_timer_ = this->create_wall_timer(
-    commandPeriod(publish_frequency_),
-    std::bind(&NonrotatingVelTransform::publishCommand, this));
+    commandPeriod(publish_frequency_), std::bind(&NonrotatingVelTransform::publishCommand, this));
 }
 
 void NonrotatingVelTransform::chassisModeCallback(const std_msgs::msg::UInt8::SharedPtr msg)
@@ -111,8 +111,8 @@ void NonrotatingVelTransform::odometryCallback(const nav_msgs::msg::Odometry::Co
 double NonrotatingVelTransform::estimateRobotBaseAngle() const
 {
   // littleTES/goHome：底盘 yaw 变化率 ≈ spin_speed_（路径 wz 远小于自旋）。
-  // odometry 话题受点云频率限制（约 10Hz），两次更新间用最后 yaw + spin*dt
-  // 线性外推，旋转补偿与 tf 连续不跳变（否则 cmd_vel 会飘）。
+  // odometry 与点云同频（实车约 50 Hz、仿真约 10 Hz），两次更新间用最后 yaw +
+  // spin*dt 线性外推，旋转补偿与 tf 连续不跳变（否则 cmd_vel 会飘）。
   if (chassis_mode_ == chassisFollowed) {
     return current_robot_base_angle_;
   }
@@ -156,21 +156,20 @@ void NonrotatingVelTransform::publishCommand()
     auto zero = std::make_shared<geometry_msgs::msg::Twist>();
     auto aft_tf_vel = transformVelocity(zero, yaw_diff);
     cmd_vel_chassis_pub_->publish(aft_tf_vel);
-    if (++vis_pub_counter_ % 3 == 0) {
+    if (++vis_pub_counter_ % 3 == 0 && enable_vis_) {
       visualizeVelocity(aft_tf_vel);
     }
     RCLCPP_WARN_THROTTLE(
       get_logger(), *get_clock(), 2000,
-      "%.2f s 未收到速度指令（> cmd_vel_timeout %.2f s），线性已归零、角速度按模式保留"
-      "（littleTES 保持自旋 %.2f rad/s）", since_last, cmd_vel_timeout_,
-      static_cast<double>(spin_speed_));
+      "%.2f s 未收到速度指令（> cmd_vel_timeout %.2f s），线速度归零。", since_last,
+      cmd_vel_timeout_);
     return;
   }
 
   auto aft_tf_vel = transformVelocity(latest_cmd_vel_, yaw_diff);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
   // 可视化约 1/3 频率（60 Hz 下 ~20 Hz），避免 RViz 被 marker 刷屏
-  if (++vis_pub_counter_ % 3 == 0) {
+  if (++vis_pub_counter_ % 3 == 0 && enable_vis_) {
     visualizeVelocity(aft_tf_vel);
   }
 }
@@ -344,8 +343,10 @@ void NonrotatingVelTransform::onConfigure()
   this->declare_parameter<std::string>("input_cmd_vel_topic", "");
   this->declare_parameter<std::string>("output_cmd_vel_topic", "");
   this->declare_parameter<std::string>("vis_cmd_vel_topic", "cmd_vel_marker");
-  this->declare_parameter<std::string>("vis_frame_id", "base_footprint");
   this->declare_parameter<double>("vis_scale", 1.0);
+  // 是否发布 cmd_vel 可视化 Marker（RViz 箭头）。false = 不构造 Marker 消息，
+  // 只保留速度指令链路；可运行时 ros2 param set 切换，便于关掉 RViz 负载/减少刷屏。
+  this->declare_parameter<bool>("enable_vis", true);
   this->declare_parameter<std::string>("chassis_mode_topic", "chassis_mode");
   // 启动时的底盘模式：默认 1=littleTES（导航启动即小陀螺），
   // 之后由 chassis_mode 话题（如 simple_decision）覆盖
@@ -360,7 +361,7 @@ void NonrotatingVelTransform::onConfigure()
   // 是否允许本节点改写输出角速度（叠加自旋）。false = angular.z 原样透传，
   // 只做坐标/旋转补偿；可运行时 ros2 param set 切换，便于台架 A/B。
   this->declare_parameter<bool>("enable_spin", true);
-  this->declare_parameter<double>("correct_ratio",1.2);
+  this->declare_parameter<double>("correct_ratio", 1.2);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("nonrotating_robot_base_frame", nonrotating_robot_base_frame_);
@@ -372,6 +373,7 @@ void NonrotatingVelTransform::onConfigure()
   this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
   this->get_parameter("vis_cmd_vel_topic", vis_cmd_vel_topic_);
   this->get_parameter("vis_scale", vis_scale_);
+  this->get_parameter("enable_vis", enable_vis_);
   this->get_parameter("chassis_mode_topic", chassis_mode_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
   this->get_parameter("output_in_chassis_frame", output_in_chassis_frame_);
@@ -388,13 +390,15 @@ void NonrotatingVelTransform::onConfigure()
     cmd_vel_timeout_ = 0.05;
   }
   RCLCPP_INFO(
-    get_logger(), "速度指令重发 %.1f Hz（无损传输），超时 %.2f s 线性归零；"
-    "enable_spin=%s（false 时 angular.z 原样透传）",
-    publish_frequency_, cmd_vel_timeout_, enable_spin_ ? "true" : "false");
+    get_logger(),
+    "速度指令重发 %.1f Hz（无损传输），超时 %.2f s 线性归零；"
+    "enable_spin=%s（false 时 angular.z 原样透传），enable_vis=%s（false 时不发布 Marker）",
+    publish_frequency_, cmd_vel_timeout_, enable_spin_ ? "true" : "false",
+    enable_vis_ ? "true" : "false");
 
-  // 允许运行时切换 enable_spin / publish_frequency（台架 A/B 不用重启）
-  param_cb_handle_ = this->add_on_set_parameters_callback(
-    [this](const std::vector<rclcpp::Parameter> & params) {
+  // 允许运行时切换 enable_spin / enable_vis / publish_frequency（台架 A/B 不用重启）
+  param_cb_handle_ =
+    this->add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter> & params) {
       rcl_interfaces::msg::SetParametersResult result;
       result.successful = true;
       for (const auto & p : params) {
@@ -404,6 +408,14 @@ void NonrotatingVelTransform::onConfigure()
           RCLCPP_INFO(
             get_logger(), "enable_spin -> %s（%s）", enable_spin_ ? "true" : "false",
             enable_spin_ ? "叠加底盘自旋" : "angular.z 原样透传");
+          continue;
+        }
+        if (p.get_name() == "enable_vis") {
+          std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+          enable_vis_ = p.as_bool();
+          RCLCPP_INFO(
+            get_logger(), "enable_vis -> %s（%s）", enable_vis_ ? "true" : "false",
+            enable_vis_ ? "发布 cmd_vel Marker" : "停止发布 Marker，0.5 s 后 RViz 自动消失");
           continue;
         }
         if (p.get_name() == "publish_frequency") {

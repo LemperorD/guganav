@@ -4,8 +4,12 @@ repos:
       - id: clang-format
         name: clang-format
         entry: clang-format -i
-        language: system
-        files: ^(src/guga_perception/terrain_analysis|src/guga_controller/pb_omni_pid_pursuit_controller|src/guga_decision/simple_decision|src/guga_planner/jps_planner)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
+        # 用 PyPI 的 clang-format 轮子（不是系统 /usr/bin/clang-format 14），
+        # 版本固定为 22.1.0，与 VS Code clangd 22.1.0 内置的 clang-format 对齐，
+        # 避免编辑器保存后的格式被钩子再改一遍；CI 与其他机器同样可复现。
+        language: python
+        additional_dependencies: ["clang-format==22.1.0"]
+        files: ^(src/guga_perception/terrain_analysis|src/guga_controller/pb_omni_pid_pursuit_controller|src/guga_decision/simple_decision|src/guga_planner/jps_planner|src/guga_transform/nonrotating_vel_transform)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
 
       - id: test-terrain-analysis
         name: test terrain_analysis
@@ -41,3 +45,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/guga_controller/nav2_mppi_controller/.*|scripts/pre-commit/run_mppi_tests\.sh)$
+
+      - id: test-nonrotating-vel-transform
+        name: test nonrotating_vel_transform
+        entry: scripts/pre-commit/run_nonrotating_tests.sh
+        language: system
+        pass_filenames: false
+        files: ^(src/guga_transform/nonrotating_vel_transform/.*|scripts/pre-commit/run_nonrotating_tests\.sh)$
