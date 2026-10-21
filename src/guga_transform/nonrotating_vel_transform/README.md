@@ -80,7 +80,7 @@ tf 发布规则：`base_footprint → base_footprint_nonrotating` 的旋转角�
 
 高频重发补的是“角度”，不是速度值：控制器在 `base_footprint_nonrotating` 系下发的速度（大小/方向）原样保留，
 `publishCommand()` 每个 tick 调用 `estimateRobotBaseAngle()` 取当前 yaw，再用 `rotateVelocity()` 把同一条速度
-转到 `base_footprint`/`chassis` 系。littleTES/goHome 下 yaw 在 odom（约 10 Hz）之间按
+转到 `base_footprint`/`chassis` 系。littleTES/goHome 下 yaw 在 odom 两次更新之间（实车约 50 Hz、仿真约 10 Hz）按
 `spin_speed * dt * correct_ratio` 线性外推，因此 60 Hz 的每一帧在底盘系里都是新角度；nonrotating 系内的控制
 指令与控制器预测都不受影响。
 

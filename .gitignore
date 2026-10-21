@@ -3,6 +3,9 @@
 
 build/
 
+# doxygen 生成物（各包 doxygen/html/）
+**/doxygen/html/
+
 install/
 
 log/

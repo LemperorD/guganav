@@ -1008,10 +1008,10 @@ TEST(OptimizerTests, AccelLimitsSymmetricInBothDirections)
 }
 
 // 命令侧加速度钳制必须以**上一周期下发的指令**为起点，而不是滞后的 state_.speed。
-// 回归：实车 odom 约 10 Hz、控制 30 Hz，减速时 state_.speed 被 prepare() 夹在陈旧的
-// 高速度上；旧实现从它起夹，命令每拍只能降一个加速度步，下一拍又被抬回去，于是命令
-// 被"钉"在旧速度上（|ax_min| 越小越明显），表现为到点停不住/过冲。新实现从命令链
-// 起夹，命令可以正常以 ax 为斜率下降。
+// 回归：odom 存在延迟（实车约 50 Hz、仿真约 10 Hz），减速时 state_.speed 被
+// prepare() 夹在陈旧的高速度上；旧实现从它起夹，命令每拍只能降一个加速度步，
+// 下一拍又被抬回去，于是命令被"钉"在旧速度上（|ax_min| 越小越明显），表现为
+// 到点停不住/过冲。新实现从命令链起夹，命令可以正常以 ax 为斜率下降。
 TEST(OptimizerTests, AccelCommandClampUsesLastCommandNotStaleState)
 {
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("accel_cmd_base_node");

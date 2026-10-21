@@ -28,5 +28,23 @@
         "/opt/ros/humble/lib/python3.10/site-packages",
         "/opt/ros/humble/local/lib/python3.10/dist-packages"
     ],
-    "cmake.sourceDirectory": "/home/sentry-nav/guganav/src/guga_bringup"
+    "cmake.sourceDirectory": "/home/sentry-nav/guganav/src/guga_bringup",
+
+    // 保存时用 clang-format 格式化 C/C++，样式读取仓库根目录 .clang-format
+    // （BasedOnStyle: Google）。
+    //
+    // 格式化器必须用 clangd：用户级 settings 设置了
+    // "C_Cpp.intelliSenseEngine": "disabled"，此时 C/C++ 扩展开启语言服务被跳过，
+    // 它不会注册格式化程序（C/C++ 输出面板会打印
+    // "Language service is disabled. Provider will not be registered."），
+    // 把 defaultFormatter 设成 ms-vscode.cpptools 会导致保存时格式化静默失效。
+    // clangd 内置 clang-format 引擎，同样读取这份 .clang-format。
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "[c]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    }
 }

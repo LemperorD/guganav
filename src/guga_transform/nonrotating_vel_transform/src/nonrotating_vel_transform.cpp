@@ -75,7 +75,8 @@ NonrotatingVelTransform::NonrotatingVelTransform(const rclcpp::NodeOptions & opt
     std::chrono::milliseconds(20), std::bind(&NonrotatingVelTransform::publishTransform, this));
 
   // 定时重发速度指令（默认 50 Hz）：控制器只在 30 Hz 更新指令，而本节点此前只在
-  // odom+local_plan 同步时（约 10 Hz）发布，等于把 3 个控制周期压成一个阶跃。
+  // odom+local_plan 同步时（实车约 50 Hz、仿真约 10 Hz）发布，同步率低时等于把
+  // 多个控制周期压成一个阶跃。
   // 这里按固定频率把最新指令 + 当前角度补偿重发出去，只做无损传输。
   cmd_vel_pub_timer_ = this->create_wall_timer(
     commandPeriod(publish_frequency_), std::bind(&NonrotatingVelTransform::publishCommand, this));
@@ -110,8 +111,8 @@ void NonrotatingVelTransform::odometryCallback(const nav_msgs::msg::Odometry::Co
 double NonrotatingVelTransform::estimateRobotBaseAngle() const
 {
   // littleTES/goHome：底盘 yaw 变化率 ≈ spin_speed_（路径 wz 远小于自旋）。
-  // odometry 话题受点云频率限制（约 10Hz），两次更新间用最后 yaw + spin*dt
-  // 线性外推，旋转补偿与 tf 连续不跳变（否则 cmd_vel 会飘）。
+  // odometry 与点云同频（实车约 50 Hz、仿真约 10 Hz），两次更新间用最后 yaw +
+  // spin*dt 线性外推，旋转补偿与 tf 连续不跳变（否则 cmd_vel 会飘）。
   if (chassis_mode_ == chassisFollowed) {
     return current_robot_base_angle_;
   }
