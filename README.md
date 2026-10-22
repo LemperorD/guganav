@@ -65,7 +65,7 @@ guganav/
 │   ├── guga_decision/       # 决策节点和行为树相关代码
 │   ├── guga_sim/            # Gazebo/RMOSS 仿真资源与工具
 │   └── guga_ui*/            # UI 模块和历史 UI 代码
-├── scripts/                 # 构建、仿真、建图、测试、提交辅助脚本
+├── scripts/                 # 构建、仿真、实车启动、调参、测试、提交辅助脚本
 ├── docs/                    # 编码规范、测试诊断、性能测试、重构验证
 ├── autostart/               # 自启动相关配置
 ├── rosbag/                  # 本地 rosbag 数据目录
@@ -264,8 +264,10 @@ scripts/simulation.sh map rmul_2025
 
 ```bash
 cd ~/guganav
-source install/setup.bash
-ros2 launch guga_bringup reality_launch.py
+scripts/reality.sh nav
+# 等价的原始入口
+# source install/setup.bash
+# ros2 launch guga_bringup reality_launch.py
 ```
 
 实车导航模式同样默认显示先验点云：
@@ -281,22 +283,33 @@ scripts/reality.sh nav floor2
 
 ```bash
 cd ~/guganav
-scripts/map.sh
+scripts/reality.sh map
 ```
 
 ### 导航与决策联调
 
 ```bash
 cd ~/guganav
-scripts/nav_decision.sh
+scripts/reality.sh nav use_decision:=true
 ```
 
 ### 保存地图
 
+建图结束后用 `map_saver` 保存到 `src/guga_bringup/map/reality/`：
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f src/guga_bringup/map/reality/<world>
+```
+
+### 在线调参
+
 ```bash
 cd ~/guganav
-scripts/save_map.sh
+scripts/paramview.sh            # 默认 controller_server 的 FollowPath（mppi 参数表）
+scripts/paramview.sh --profile pid --mode simulation
 ```
+
+参数表在 `scripts/paramview/params_list/`，保存时写回 `src/guga_bringup/config/` 的三层 yaml。
 
 ## Point-LIO
 
@@ -350,6 +363,7 @@ scripts/pre-commit/run_pid_tests.sh
 scripts/pre-commit/run_simple_decision_tests.sh
 scripts/pre-commit/run_jps_tests.sh
 scripts/pre-commit/run_mppi_tests.sh
+scripts/pre-commit/run_nonrotating_tests.sh
 ```
 
 手动运行 colcon 测试：

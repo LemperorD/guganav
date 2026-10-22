@@ -14,8 +14,22 @@ Modes:
   nav | n   定位/导航模式 (slam:=False)
   map | m   建图模式     (slam:=True)
 
+Planner (planner:=):
+  planner:=jps         JPS global planner
+  planner:=smac2d      SmacPlanner2D global planner
+
+Controller (controller:=):
+  controller:=pid      omni PID controller
+  controller:=mppi     MPPI controller
+
+Parameters are merged at launch time from config/reality/{base,controller,planner}
+layered yaml files. nav 模式未显式给出 planner:=/controller:= 时，会先弹出与
+simulation.sh 相同的编号菜单（先 planner 后 controller）；没有可读终端时取默认值
+planner:=smac2d controller:=mppi。
+
 Examples:
   scripts/reality.sh n
+  scripts/reality.sh n floor2 planner:=smac2d controller:=mppi
   scripts/reality.sh map reserve
   scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
   scripts/reality.sh nav floor2 show_prior_pcd:=True
@@ -73,7 +87,7 @@ cleanup_reality_processes() {
       fi
     done < <(pgrep -f "$pattern" 2>/dev/null || true)
   done
-  mapfile -t all_mppis < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
+  mapfile -t all_pids < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
 
   if [ "${#all_pids[@]}" -gt 0 ]; then
     printf '%s\n' "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
@@ -160,7 +174,13 @@ fi
 
 while true ;do
 case "$mode" in
-  n|nav|navigation) launch_mode=nav; slam_value=False; break ;;
+  n|nav|navigation)
+    launch_mode=nav
+    slam_value=False
+    build_nav_args "$@" || exit 2
+    set -- "${nav_args[@]}"
+    break
+    ;;
   m|map|mapping|slam) launch_mode=map; slam_value=True; break ;;
   -h|--help|help) usage; exit 0 ;;
   *) echo "Unknown reality mode: $mode" >&2; usage >&2; read -r mode; continue ;;

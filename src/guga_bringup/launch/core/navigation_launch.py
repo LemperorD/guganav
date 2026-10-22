@@ -108,7 +108,10 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Full path to a single params file override (disables 1.0le merge)",
+        description=(
+            "Full path to a single params file override (disables 3-file merge); "
+            "该文件需自带 nonrotating_vel_transform 段，否则该节点拿不到话题名"
+        ),
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -266,32 +269,10 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[
-                    {
-                        "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
-                        "chassis_frame": "chassis",
-                        "odom_topic": "odometry",
-                        "local_plan_topic": "local_plan",
-                        "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
-                        "cmd_spin_topic": "cmd_spin",
-                        "chassis_mode_topic": "chassis_mode",
-                        # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
-                        # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
-                        "initial_chassis_mode": PythonExpression(
-                            [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
-                            ]
-                        ),
-                        "init_spin_speed": PythonExpression(
-                            [
-                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
-                            ]
-                        ),
-                    }
-                ],
+                # 参数在 config/{reality,simulation}/base.yaml 的
+                # nonrotating_vel_transform 段；initial_chassis_mode / init_spin_speed
+                # 按控制器差异在 controller/<profile>.yaml 里。
+                parameters=configured_params,
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -381,32 +362,10 @@ def generate_launch_description():
                 package="nonrotating_vel_transform",
                 plugin="nonrotating_vel_transform::NonrotatingVelTransform",
                 name="nonrotating_vel_transform",
-                parameters=[
-                    {
-                        "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
-                        "chassis_frame": "chassis",
-                        "odom_topic": "odometry",
-                        "local_plan_topic": "local_plan",
-                        "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
-                        "cmd_spin_topic": "cmd_spin",
-                        "chassis_mode_topic": "chassis_mode",
-                        # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
-                        # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
-                        "initial_chassis_mode": PythonExpression(
-                            [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
-                            ]
-                        ),
-                        "init_spin_speed": PythonExpression(
-                            [
-                                "1.0 if '", controller, "' in ('mppi', 'mpc') else 0.0",
-                            ]
-                        ),
-                    }
-                ],
+                # 参数在 config/{reality,simulation}/base.yaml 的
+                # nonrotating_vel_transform 段；initial_chassis_mode / init_spin_speed
+                # 按控制器差异在 controller/<profile>.yaml 里。
+                parameters=configured_params,
             ),
             ComposableNode(
                 package="nav2_lifecycle_manager",

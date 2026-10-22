@@ -112,31 +112,47 @@ namespace serial_driver {
     this->declare_parameter<std::string>("port_name", "/dev/ttyACM0");
     this->declare_parameter<int>("baud_rate", 115200);
     this->declare_parameter<double>("vel_trans_scale", 40.0);
+    // 速度指令滑动窗口帧数；1 = 关闭滤波。窗口按"帧"而不是时间定义，
+    // 所以它等效的滞后随 /cmd_vel 的发布频率变化（10 Hz 时 10 帧 ≈ 1 s）。
+    this->declare_parameter<int>("filter_window_size", 10);
 
     this->get_parameter("port_name", port_name_);
     this->get_parameter("baud_rate", baud_rate_);
     this->get_parameter("vel_trans_scale", vel_trans_scale_);
+    int window = 10;
+    this->get_parameter("filter_window_size", window);
+    if (window < 1) {
+      RCLCPP_WARN(
+        logger_, "filter_window_size=%d 无效（<1），按 1 处理（等价于关闭滤波）", window);
+      window = 1;
+    }
+    filter_window_size_ = static_cast<size_t>(window);
+    RCLCPP_INFO(logger_, "速度指令滑动窗口 = %zu 帧（1 = 关闭）", filter_window_size_);
   }
 
   MotionPayload SerialDriverNode::encodeTwist(
       const geometry_msgs::msg::Twist& msg) {
-    geometry_msgs::msg::Twist msg_1;
-    msg_1 = transformVelocityToChassis(msg, yaw_diff_);
+    // 滤波放在**旋转变换之前**：transformVelocityToChassis() 会按 MCU 回传的
+    // 云台-底盘相对角旋转指令，若在变换之后对分量求平均，等于在随相对角旋转的
+    // 坐标系里做平均，自旋快时幅值与方向都会失真。旋转是纯线性变换，先乘
+    // vel_trans_scale_ 再旋转与先旋转再缩放等价。
+    geometry_msgs::msg::Twist filtered;
+    filtered.linear.x = slidingWindowFilter(
+      static_cast<float>(vel_trans_scale_ * msg.linear.x), vx_buffer_, filter_window_size_);
+    filtered.linear.y = slidingWindowFilter(
+      static_cast<float>(vel_trans_scale_ * msg.linear.y), vy_buffer_, filter_window_size_);
+    // wz 不滤波（与改动前一致）：自旋由 MCU 闭环，滤波只会引入相位滞后。
+    filtered.angular.z = msg.angular.z;
 
-    const auto vx = static_cast<float>(vel_trans_scale_ * msg_1.linear.x);
-    const auto vy = static_cast<float>(vel_trans_scale_ * msg_1.linear.y);
-    const auto wz = static_cast<float>(msg_1.angular.z);
-
-    auto vx_smoothed = slidingWindowFilter(vx, vx_buffer_, filter_window_size_);
-    auto vy_smoothed = slidingWindowFilter(vy, vy_buffer_, filter_window_size_);
+    const geometry_msgs::msg::Twist msg_1 = transformVelocityToChassis(filtered, yaw_diff_);
 
     MotionPayload payload{};
     payload.fill(0);  // 全部初始化为 0
 
     // 按头文件定义写入三个速度字段（VX=0, VY=4, WZ_NEG=8）
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], vx_smoothed);
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], vy_smoothed);
-    SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], wz);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], msg_1.linear.x);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], msg_1.linear.y);
+    SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], msg_1.angular.z);
 
     return payload;
   }

@@ -44,7 +44,7 @@ auto && softmaxes = xt::eval(exponents / xt::sum(exponents, immediate));
 
 ### 1.3 本项目特有的两处约定
 
-- **底盘常转（小陀螺）**：MPPI 输出的速度表达在 `base_footprint_nonrotating` 系，yaw 不参与控制。`controller:=mppi` 启动时 `init_spin_speed=6.28`（`launch/core/navigation_launch.py`）。这解释了两份配置里 `GoalAngleCritic` 关闭、`reality` 中 `wz_max: 0.0` 的原因。
+- **底盘常转（小陀螺）**：MPPI 输出的速度表达在 `base_footprint_nonrotating` 系，yaw 不参与控制。`controller:=mppi` 启动时 `init_spin_speed=1.0`（`config/reality/controller/mppi.yaml`、`config/simulation/controller/mppi.yaml`）。这解释了两份配置里 `GoalAngleCritic` 关闭、`reality` 中 `wz_max: 0.0` 的原因。
 - **速度最终由 velocity_smoother 限幅**：`velocity_smoother` 的 `max_velocity: [2.5, 2.5, 3.0]`（`config/simulation/base.yaml`）、`max_accel: [2.0, 2.0, 2.5]`、`max_decel: [-3.0, -3.0, -4.0]`。MPPI 输出的速度指令会再经过这一层加速度整形，因此"起步慢""加速慢"一类现象未必是 MPPI 的问题。
 
 ---
@@ -312,12 +312,12 @@ switch (static_cast<unsigned char>(cost)) {
 ## 7. 调试与操作手段
 
 
-- **在线改参数**：`scripts/tune_controller.sh` 按 `scripts/params_list/mppi_para.txt` 生成菜单，通过 `ros2 param set` 即时生效（参数由 `ParametersHandler::dynamicParamsCallback` 接收）。注意该回调对未声明的参数会打印 "Parameter not found" 告警，可借此快速判定某个参数在当前版本是否存在（例如 `ax_max`）。
+- **在线改参数**：`scripts/paramview.sh` 按 `scripts/paramview/params_list/mppi_para.txt` 生成 Web 界面，通过 `ros2 param set` 即时生效（参数由 `ParametersHandler::dynamicParamsCallback` 接收）。注意该回调对未声明的参数会打印 "Parameter not found" 告警，可借此快速判定某个参数在当前版本是否存在（例如 `ax_max`）。
   每次参数变更后 `ParametersHandler` 会执行 post 回调，`Optimizer` 随之 `reset()`（`optimizer.cpp` 中注册的 `addPostCallback`），控制序列与代价状态清零，因此在线改参后会有一次短暂的行为跳变，比较两次试验时应把这段排除在外。`controller_frequency` 是静态参数，改动需要重启节点。
 - **候选轨迹可视化**：把 `FollowPath.visualize` 临时设为 `true`，配合 `TrajectoryVisualizer.trajectory_step`/`time_step` 降采样。官方明确说明它显著拖慢控制器，只用于调试，`batch_size` 与 `time_steps` 越大越明显。
 - **只看优化后的轨迹**：本版本（1.1.20）发布 `trajectories` 与 `transformed_global_plan` 两个话题；新版才有的 `publish_optimal_trajectory`、`publish_critics_stats` 在本版本不可用。
 - **改完源码后的验证**：`scripts/pre-commit/run_mppi_tests.sh` 会编译 `nav2_mppi_controller` 并跑 12 个 gtest 套件。
-- **单变量对比**：一次只改一个二级或三级参数，改前用 `tune_controller.sh dump` 记录当前值，改后跑同一条路径对比。
+- **单变量对比**：一次只改一个二级或三级参数，改前用 `ros2 param dump` 或 paramview 界面记录当前值，改后跑同一条路径对比。
 
 ### 7.1 仿真上跑一轮调参的具体步骤
 
@@ -325,23 +325,23 @@ switch (static_cast<unsigned char>(cost)) {
 # 1. 启动（本手册涉及的是 MPPI，因此 controller 固定为 mppi）
 scripts/simulation.sh nav rmuc_2025 planner:=smac2d controller:=mppi use_rviz:=True
 
-# 2. 记录基线参数（另存一份，便于对比与回退）
-scripts/tune_controller.sh save /tmp/mppi_baseline.yaml
-scripts/tune_controller.sh show
+# 2. 记录基线参数（另存一份，便于对比与回退；也可直接用 scripts/paramview.sh 查看）
+ros2 param dump /controller_server > /tmp/mppi_baseline.yaml
+ros2 param get /controller_server FollowPath.batch_size
 
 # 3. 在线试参（改完立即生效，不需要重启；重启后回到 yaml 取值）
-scripts/tune_controller.sh set CostCritic.cost_weight 6.0
+ros2 param set /controller_server FollowPath.CostCritic.cost_weight 6.0
 #    未声明的参数会打印 "Parameter not found"，可用来确认版本是否支持
 
 # 4. 需要看候选轨迹时（会显著拖慢控制器，看完记得关掉）
-scripts/tune_controller.sh set visualize true
+ros2 param set /controller_server FollowPath.visualize true
 
 # 5. 复现失败场景时录制数据
 ros2 bag record /local_costmap/costmap_raw /trajectories \
   /transformed_global_plan /odom /cmd_vel /terrain_map
 ```
 
-对应本项目的参数名对照见 `scripts/params_list/mppi_para.txt`（同目录下还有 MPC 与 PID 的对照表）。
+对应本项目的参数名对照见 `scripts/paramview/params_list/mppi_para.txt`（同目录下还有 MPC 与 PID 的对照表）。
 
 ### 7.2 仿真侧已确认需要修的项（与手感无关，属配置错误）
 

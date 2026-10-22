@@ -221,3 +221,10 @@ global_costmap:
         cost_scaling_factor: 4.0
         inflation_radius: 0.7
         num_threads: 4
+
+# ── 底盘模式：pid 的 costmap 仍用旋转的 base_footprint，不能自旋 ──
+# 跟随模式下本节点不叠加自旋（enable_spin 开关在 base.yaml 里，另行控制）。
+nonrotating_vel_transform:
+  ros__parameters:
+    initial_chassis_mode: 0 # 0 = chassisFollowed
+    init_spin_speed: 0.0

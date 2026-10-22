@@ -18,11 +18,11 @@ point_lio:
     prop_at_freq_of_imu: True
     check_satu: True
     init_map_size: 10
-    point_filter_num: 8 # Options: 4, 3
+    point_filter_num: 4 # Options: 8, 3
     space_down_sample: True
-    filter_size_surf: 0.2 # Options: 0.5, 0.3, 0.2, 0.15, 0.1
-    filter_size_map: 0.2 # Options: 0.5, 0.3, 0.15, 0.1
-    ivox_nearby_type: 18 # Options: 0, 6, 18, 26
+    filter_size_surf: 0.5 # Options: 0.5, 0.3, 0.2, 0.15, 0.1
+    filter_size_map: 0.5 # Options: 0.5, 0.3, 0.15, 0.1
+    ivox_nearby_type: 6 # Options: 0, 6, 18, 26
     runtime_pos_log_enable: False # Option: True
 
     common:
@@ -50,7 +50,7 @@ point_lio:
       imu_en: True
       extrinsic_est_en: False # for aggressive motion, set this variable False
       imu_time_inte: 0.005 # = 1 / frequency of IMU
-      lidar_time_inte: 0.1
+      lidar_time_inte: 0.02 # = 1 / lidar frame rate（驱动 publish_freq=50 Hz）
       satu_acc: 4.0 # the saturation value of IMU's acceleration. not related to the units
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
       acc_norm: 1.0 # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
@@ -65,7 +65,7 @@ point_lio:
       acc_cov_input: 0.1 # for IMU as input model
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
-      ivox_grid_resolution: 0.5
+      ivox_grid_resolution: 2.0
       gravity: [0.0, 0.18700098991394043, -0.9550490379333496] # gravity to be aligned
       gravity_init: [0.0, 0.18700098991394043, -0.9550490379333496] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [-0.011, -0.02329, 0.04412]
@@ -331,6 +331,57 @@ waypoint_follower:
       enabled: True
       waypoint_pause_duration: 200
 
+# ── 自旋速度变换（TES 速度补偿 + 伪坐标系）──
+# 参数含义见 src/guga_transform/nonrotating_vel_transform/README.md。
+# 与控制器无关的键放在 base 层；initial_chassis_mode / init_spin_speed 依赖
+# 控制器（pid 不能自旋），放在 config/reality/controller/<profile>.yaml。
+nonrotating_vel_transform:
+  ros__parameters:
+    use_sim_time: False
+
+    # 坐标系与话题：与 velocity_smoother -> cmd_vel -> 串口驱动这条链路对齐
+    robot_base_frame: base_footprint
+    nonrotating_robot_base_frame: base_footprint_nonrotating
+    chassis_frame: chassis
+    odom_topic: odometry
+    local_plan_topic: local_plan
+    cmd_spin_topic: cmd_spin
+    chassis_mode_topic: chassis_mode
+    input_cmd_vel_topic: cmd_vel_smoothed
+    output_cmd_vel_topic: cmd_vel
+
+    # 是否允许本节点改写输出角速度（叠加 cmd_spin 的自旋）。
+    # False = 不叠加自旋（无小陀螺试验），angular.z 只来自控制器（MPPI 的 wz，
+    # 受 wz_max 限制）。运行时仍可动态切回：
+    #   ros2 param set /nonrotating_vel_transform enable_spin true
+    enable_spin: true
+
+    # 60 Hz 定时重发：把控制器（30 Hz、且已受加速度约束）的指令原样按更高频率送到
+    # MCU，不做再滤波/再限速，保证 MPPI 的预测与实际执行一致；旋转补偿也随之从
+    # odom 同步频率（实车约 50 Hz）提升到 60 Hz。运行时可直接调（会重建定时器，
+    # 立即生效）：
+    #   ros2 param set /nonrotating_vel_transform publish_frequency 60.0
+    publish_frequency: 60.0
+
+    # 超过该时长没有新指令就把线性速度归零（角速度按 chassis_mode 保留：
+    # littleTES 下继续自旋）。
+    cmd_vel_timeout: 0.5
+
+    # spin 外推修正系数：odom 与点云同频（实车约 50 Hz），两次更新之间仍用
+    # spin_speed * dt 外推底盘 yaw；实车按旋转补偿是滞后还是超前微调
+    # （1.0 = 完全按标称自旋速度外推）。
+    correct_ratio: 1.0
+
+    # cmd_vel 可视化（RViz Marker）。enable_vis: False 时节点不发布 Marker，
+    # 只影响 RViz 显示，不影响送 MCU 的 cmd_vel；运行时也可动态切换：
+    #   ros2 param set /red_standard_robot1/nonrotating_vel_transform enable_vis false
+    enable_vis: True
+    vis_cmd_vel_topic: cmd_vel_marker
+    vis_scale: 1.0
+
+    # 输出是否直接变换到 chassis_frame（默认 False，输出到 robot_base_frame）
+    output_in_chassis_frame: False
+
 # ── 代价地图节点级参数 ──
 # 与 simulation/base.yaml 采用同一层次划分：坐标系、尺寸、频率、robot_radius、
 # static_layer 这些与控制器 profile 无关的键放在 base 层；controller/<profile>.yaml
@@ -354,7 +405,17 @@ local_costmap:
 
       resolution: 0.05
 
-      robot_radius: 0.369 # 略大于车体：实测车体半径 364mm + 约 5mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
+      # 用 robot_radius 而不是显式 16 边形：两者几何完全一致（makeFootprintFromRadius(0.367)
+      # 就是取 16 等分点），但只有 radius 形态下 use_radius_ == true，可以与
+      # CostCritic.consider_footprint: false 自洽（controller/mppi.yaml），不会打
+      # "Inconsistent configuration in collision checking" 的 WARN。
+      # consider_footprint: false 的语义 = 中心点不得进入内切环（253 视为碰撞），
+      # 已按仿真验证过的那套对齐：仿真里几乎不会卡在内切区域。
+      # footprint_padding 0.03 是给实车定位误差留的余量，会把硬边界从 0.367 推到
+      # ≈0.397（内切/外接同值，圆在任意 yaw 下都成立，mppi 启动即小陀螺也没问题）。
+      footprint_padding: 0.03
+
+      robot_radius: 0.365 # 实测车体半径 364mm + 约 3mm 裕量（未含上面的 padding）
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -375,7 +436,11 @@ global_costmap:
 
       resolution: 0.05
 
-      robot_radius: 0.369 # 略大于车体：实测车体半径 364mm + 约 5mm 裕量。此为硬碰撞边界(inscribed)，膨胀由 inflation_radius(0.5~0.7) 承担，二者不可混用
+      # 与 local 保持一致：同样的 robot_radius + 同样的 footprint_padding，否则全局
+      # 规划器以为车更小而给出贴障碍的路径，局部却按 0.397 禁入内切环 → 两侧打架。
+      robot_radius: 0.367 # 实测车体半径 364mm + 约 3mm 裕量（未含下面的 padding）
+
+      footprint_padding: 0.03 # 与 local 相同，给定位误差留余量（硬边界 → ≈0.397）
 
       track_unknown_space: true
 

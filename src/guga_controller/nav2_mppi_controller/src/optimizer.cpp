@@ -1,4 +1,5 @@
-// Copyright (c) 2022 Samsung Research America, @artofnothingness Alexey Budyakov
+// Copyright (c) 2022 Samsung Research America, @artofnothingness Alexey
+// Budyakov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,429 +27,711 @@
 
 #include "nav2_costmap_2d/costmap_filters/filter_values.hpp"
 
-namespace mppi
-{
+namespace mppi {
 
-using namespace xt::placeholders;  // NOLINT
-using xt::evaluation_strategy::immediate;
-
-void Optimizer::initialize(
-  rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string & name,
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
-  ParametersHandler * param_handler)
-{
-  parent_ = parent;
-  name_ = name;
-  costmap_ros_ = costmap_ros;
-  costmap_ = costmap_ros_->getCostmap();
-  parameters_handler_ = param_handler;
-
-  auto node = parent_.lock();
-  logger_ = node->get_logger();
-
-  getParams();
-
-  critic_manager_.on_configure(parent_, name_, costmap_ros_, parameters_handler_);
-  noise_generator_.initialize(settings_, isHolonomic(), name_, parameters_handler_);
-
-  reset();
-}
-
-void Optimizer::shutdown()
-{
-  noise_generator_.shutdown();
-}
-
-void Optimizer::getParams()
-{
-  std::string motion_model_name;
-
-  auto & s = settings_;
-  auto getParam = parameters_handler_->getParamGetter(name_);
-  auto getParentParam = parameters_handler_->getParamGetter("");
-  getParam(s.model_dt, "model_dt", 0.05f);
-  getParam(s.time_steps, "time_steps", 56);
-  getParam(s.batch_size, "batch_size", 1000);
-  getParam(s.iteration_count, "iteration_count", 1);
-  getParam(s.temperature, "temperature", 0.3f);
-  getParam(s.gamma, "gamma", 0.015f);
-  getParam(s.base_constraints.vx_max, "vx_max", 0.5);
-  getParam(s.base_constraints.vx_min, "vx_min", -0.35);
-  getParam(s.base_constraints.vy, "vy_max", 0.5);
-  getParam(s.base_constraints.wz, "wz_max", 1.9);
-  getParam(s.sampling_std.vx, "vx_std", 0.2);
-  getParam(s.sampling_std.vy, "vy_std", 0.2);
-  getParam(s.sampling_std.wz, "wz_std", 0.4);
-  getParam(s.retry_attempt_limit, "retry_attempt_limit", 1);
-
-  getParam(motion_model_name, "motion_model", std::string("DiffDrive"));
-
-  s.constraints = s.base_constraints;
-  setMotionModel(motion_model_name);
-  parameters_handler_->addPostCallback([this]() {reset();});
-
-  double controller_frequency;
-  getParentParam(controller_frequency, "controller_frequency", 0.0, ParameterType::Static);
-  setOffset(controller_frequency);
-}
-
-void Optimizer::setOffset(double controller_frequency)
-{
-  const double controller_period = 1.0 / controller_frequency;
-  constexpr double eps = 1e-6;
-
-  if ((controller_period + eps) < settings_.model_dt) {
-    RCLCPP_WARN(
-      logger_,
-      "Controller period is less then model dt, consider setting it equal");
-  } else if (abs(controller_period - settings_.model_dt) < eps) {
-    RCLCPP_INFO(
-      logger_,
-      "Controller period is equal to model dt. Control sequence "
-      "shifting is ON");
-    settings_.shift_control_sequence = true;
-  } else {
-    throw std::runtime_error(
-            "Controller period more then model dt, set it equal to model dt");
-  }
-}
-
-void Optimizer::reset()
-{
-  state_.reset(settings_.batch_size, settings_.time_steps);
-  control_sequence_.reset(settings_.time_steps);
-  control_history_[0] = {0.0, 0.0, 0.0};
-  control_history_[1] = {0.0, 0.0, 0.0};
-  control_history_[2] = {0.0, 0.0, 0.0};
-  control_history_[3] = {0.0, 0.0, 0.0};
-
-  settings_.constraints = settings_.base_constraints;
-
-  costs_ = xt::zeros<float>({settings_.batch_size});
-  generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
-
-  noise_generator_.reset(settings_, isHolonomic());
-  RCLCPP_INFO(logger_, "Optimizer reset");
-}
-
-geometry_msgs::msg::TwistStamped Optimizer::evalControl(
-  const geometry_msgs::msg::PoseStamped & robot_pose,
-  const geometry_msgs::msg::Twist & robot_speed,
-  const nav_msgs::msg::Path & plan, nav2_core::GoalChecker * goal_checker)
-{
-  prepare(robot_pose, robot_speed, plan, goal_checker);
-
-  do {
-    optimize();
-  } while (fallback(critics_data_.fail_flag));
-
-  utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
-  auto control = getControlFromSequenceAsTwist(plan.header.stamp);
-
-  if (settings_.shift_control_sequence) {
-    shiftControlSequence();
-  }
-
-  return control;
-}
-
-void Optimizer::optimize()
-{
-  for (size_t i = 0; i < settings_.iteration_count; ++i) {
-    generateNoisedTrajectories();
-    critic_manager_.evalTrajectoriesScores(critics_data_);
-    updateControlSequence();
-  }
-}
-
-bool Optimizer::fallback(bool fail)
-{
-  static size_t counter = 0;
-
-  if (!fail) {
-    counter = 0;
-    return false;
-  }
-
-  reset();
-
-  if (++counter > settings_.retry_attempt_limit) {
-    counter = 0;
-    throw std::runtime_error("Optimizer fail to compute path");
-  }
-
-  return true;
-}
-
-void Optimizer::prepare(
-  const geometry_msgs::msg::PoseStamped & robot_pose,
-  const geometry_msgs::msg::Twist & robot_speed,
-  const nav_msgs::msg::Path & plan, nav2_core::GoalChecker * goal_checker)
-{
-  state_.pose = robot_pose;
-  state_.speed = robot_speed;
-  path_ = utils::toTensor(plan);
-  costs_.fill(0);
-
-  critics_data_.fail_flag = false;
-  critics_data_.goal_checker = goal_checker;
-  critics_data_.motion_model = motion_model_;
-  critics_data_.furthest_reached_path_point.reset();
-  critics_data_.path_pts_valid.reset();
-}
-
-void Optimizer::shiftControlSequence()
-{
   using namespace xt::placeholders;  // NOLINT
-  control_sequence_.vx = xt::roll(control_sequence_.vx, -1);
-  control_sequence_.wz = xt::roll(control_sequence_.wz, -1);
+  using xt::evaluation_strategy::immediate;
 
+  void Optimizer::initialize(
+      rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string& name,
+      std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
+      ParametersHandler* param_handler) {
+    parent_ = parent;
+    name_ = name;
+    costmap_ros_ = costmap_ros;
+    costmap_ = costmap_ros_->getCostmap();
+    parameters_handler_ = param_handler;
 
-  xt::view(control_sequence_.vx, -1) =
-    xt::view(control_sequence_.vx, -2);
+    auto node = parent_.lock();
+    logger_ = node->get_logger();
 
-  xt::view(control_sequence_.wz, -1) =
-    xt::view(control_sequence_.wz, -2);
+    getParams();
 
+    critic_manager_.on_configure(parent_, name_, costmap_ros_,
+                                 parameters_handler_);
+    noise_generator_.initialize(settings_, isHolonomic(), name_,
+                                parameters_handler_);
 
-  if (isHolonomic()) {
-    control_sequence_.vy = xt::roll(control_sequence_.vy, -1);
-    xt::view(control_sequence_.vy, -1) =
-      xt::view(control_sequence_.vy, -2);
-  }
-}
-
-void Optimizer::generateNoisedTrajectories()
-{
-  noise_generator_.setNoisedControls(state_, control_sequence_);
-  noise_generator_.generateNextNoises();
-  updateStateVelocities(state_);
-  integrateStateVelocities(generated_trajectories_, state_);
-}
-
-bool Optimizer::isHolonomic() const {return motion_model_->isHolonomic();}
-
-void Optimizer::applyControlSequenceConstraints()
-{
-  auto & s = settings_;
-
-  if (isHolonomic()) {
-    control_sequence_.vy = xt::clip(control_sequence_.vy, -s.constraints.vy, s.constraints.vy);
+    reset();
   }
 
-  control_sequence_.vx = xt::clip(control_sequence_.vx, s.constraints.vx_min, s.constraints.vx_max);
-  control_sequence_.wz = xt::clip(control_sequence_.wz, -s.constraints.wz, s.constraints.wz);
-
-  motion_model_->applyConstraints(control_sequence_);
-}
-
-void Optimizer::updateStateVelocities(
-  models::State & state) const
-{
-  updateInitialStateVelocities(state);
-  propagateStateVelocitiesFromInitials(state);
-}
-
-void Optimizer::updateInitialStateVelocities(
-  models::State & state) const
-{
-  xt::noalias(xt::view(state.vx, xt::all(), 0)) = state.speed.linear.x;
-  xt::noalias(xt::view(state.wz, xt::all(), 0)) = state.speed.angular.z;
-
-  if (isHolonomic()) {
-    xt::noalias(xt::view(state.vy, xt::all(), 0)) = state.speed.linear.y;
-  }
-}
-
-void Optimizer::propagateStateVelocitiesFromInitials(
-  models::State & state) const
-{
-  motion_model_->predict(state);
-}
-
-void Optimizer::integrateStateVelocities(
-  xt::xtensor<float, 2> & trajectory,
-  const xt::xtensor<float, 2> & sequence) const
-{
-  float initial_yaw = tf2::getYaw(state_.pose.pose.orientation);
-
-  const auto vx = xt::view(sequence, xt::all(), 0);
-  const auto vy = xt::view(sequence, xt::all(), 2);
-  const auto wz = xt::view(sequence, xt::all(), 1);
-
-  auto traj_x = xt::view(trajectory, xt::all(), 0);
-  auto traj_y = xt::view(trajectory, xt::all(), 1);
-  auto traj_yaws = xt::view(trajectory, xt::all(), 2);
-
-  xt::noalias(traj_yaws) = cumsum_1d(wz * settings_.model_dt) + initial_yaw;
-
-  auto && yaw_cos = xt::xtensor<float, 1>::from_shape(traj_yaws.shape());
-  auto && yaw_sin = xt::xtensor<float, 1>::from_shape(traj_yaws.shape());
-
-  const auto yaw_offseted = xt::view(traj_yaws, xt::range(1, _));
-
-  xt::noalias(xt::view(yaw_cos, 0)) = cosf(initial_yaw);
-  xt::noalias(xt::view(yaw_sin, 0)) = sinf(initial_yaw);
-  xt::noalias(xt::view(yaw_cos, xt::range(1, _))) = xt::cos(yaw_offseted);
-  xt::noalias(xt::view(yaw_sin, xt::range(1, _))) = xt::sin(yaw_offseted);
-
-  auto && dx = xt::eval(vx * yaw_cos);
-  auto && dy = xt::eval(vx * yaw_sin);
-
-  if (isHolonomic()) {
-    dx = dx - vy * yaw_sin;
-    dy = dy + vy * yaw_cos;
+  void Optimizer::shutdown() {
+    noise_generator_.shutdown();
   }
 
-  xt::noalias(traj_x) = state_.pose.pose.position.x + cumsum_1d(dx * settings_.model_dt);
-  xt::noalias(traj_y) = state_.pose.pose.position.y + cumsum_1d(dy * settings_.model_dt);
-}
+  void Optimizer::getParams() {
+    std::string motion_model_name;
 
-void Optimizer::integrateStateVelocities(
-  models::Trajectories & trajectories,
-  const models::State & state) const
-{
-  const float initial_yaw = tf2::getYaw(state.pose.pose.orientation);
+    auto& s = settings_;
+    auto getParam = parameters_handler_->getParamGetter(name_);
+    auto getParentParam = parameters_handler_->getParamGetter("");
+    getParam(s.model_dt, "model_dt", 0.05f);
+    getParam(s.time_steps, "time_steps", 56);
+    getParam(s.batch_size, "batch_size", 1000);
+    getParam(s.iteration_count, "iteration_count", 1);
+    getParam(s.temperature, "temperature", 0.3f);
+    getParam(s.gamma, "gamma", 0.015f);
+    getParam(s.base_constraints.vx_max, "vx_max", 0.5);
+    getParam(s.base_constraints.vx_min, "vx_min", -0.35);
+    getParam(s.base_constraints.vy, "vy_max", 0.5);
+    getParam(s.base_constraints.wz, "wz_max", 1.9);
+    getParam(s.sampling_std.vx, "vx_std", 0.2);
+    getParam(s.sampling_std.vy, "vy_std", 0.2);
+    getParam(s.sampling_std.wz, "wz_std", 0.4);
+    getParam(s.retry_attempt_limit, "retry_attempt_limit", 1);
+    // 加速度约束（移植自上游 nav2 PR #4352 + #5266 + #6072 的语义）。
+    // 默认全部为 0 = 不启用，行为与移植前逐位一致；要启用就在 yaml
+    // 里显式给实测值。
+    getParam(s.base_constraints.ax_max, "ax_max", 0.0F);
+    getParam(s.base_constraints.ax_min, "ax_min", 0.0F);
+    getParam(s.base_constraints.ay_max, "ay_max", 0.0F);
+    getParam(s.base_constraints.ay_min, "ay_min", 0.0F);
+    getParam(s.base_constraints.az_max, "az_max", 0.0F);
+    // 耗时归因开关：打开后每 2 s 打印一行单周期拆解（prepare/optimize/平滑）
+    getParam(debug_timing_, "debug_timing", false);
+    // 平滑阶数：1 = 9 点滑动均值（更平滑），2 = 二次九点
+    // Savitzky-Golay（默认）。
+    getParam(s.sgf_order, "sgf_order", 2);
+    if (s.sgf_order < 1 || s.sgf_order > 2) {
+      RCLCPP_WARN(logger_, "sgf_order 只能取 1 或 2，回退为 2");
+      s.sgf_order = 2;
+    }
 
-  xt::noalias(trajectories.yaws) =
-    cumsum_2d(state.wz * settings_.model_dt, 1) + initial_yaw;
+    // 符号保护：加速上限取正、减速下限取负，写反时自动纠正并告警。
+    s.base_constraints.ax_max = std::fabs(s.base_constraints.ax_max);
+    if (s.base_constraints.ax_min > 0.0F) {
+      s.base_constraints.ax_min = -1.0F * s.base_constraints.ax_min;
+      RCLCPP_WARN(logger_, "ax_min 应为负值，已按 %f 处理",
+                  s.base_constraints.ax_min);
+    }
+    s.base_constraints.ay_max = std::fabs(s.base_constraints.ay_max);
+    if (s.base_constraints.ay_min > 0.0F) {
+      s.base_constraints.ay_min = -1.0F * s.base_constraints.ay_min;
+      RCLCPP_WARN(logger_, "ay_min 应为负值，已按 %f 处理",
+                  s.base_constraints.ay_min);
+    }
+    s.base_constraints.az_max = std::fabs(s.base_constraints.az_max);
 
-  const auto yaws_cutted = xt::view(trajectories.yaws, xt::all(), xt::range(0, -1));
+    // 注意：单边留 0
+    // 是**有意**配置（例如"只限加速、减速自由"），另一侧按不限制处理，
+    // 不是"不允许变化"（见 utils::maxAccelDelta/minAccelDelta 与
+    // constraints.hpp）。 这里不再用 WARN 打扰，实际生效值由下面的汇总行给出。
 
-  auto && yaw_cos = xt::xtensor<float, 2>::from_shape(trajectories.yaws.shape());
-  auto && yaw_sin = xt::xtensor<float, 2>::from_shape(trajectories.yaws.shape());
-  xt::noalias(xt::view(yaw_cos, xt::all(), 0)) = cosf(initial_yaw);
-  xt::noalias(xt::view(yaw_sin, xt::all(), 0)) = sinf(initial_yaw);
-  xt::noalias(xt::view(yaw_cos, xt::all(), xt::range(1, _))) = xt::cos(yaws_cutted);
-  xt::noalias(xt::view(yaw_sin, xt::all(), xt::range(1, _))) = xt::sin(yaws_cutted);
+    getParam(motion_model_name, "motion_model", std::string("DiffDrive"));
 
-  auto && dx = xt::eval(state.vx * yaw_cos);
-  auto && dy = xt::eval(state.vx * yaw_sin);
+    s.constraints = s.base_constraints;
+    setMotionModel(motion_model_name);
+    parameters_handler_->addPostCallback([this]() { reset(); });
 
-  if (isHolonomic()) {
-    dx = dx - state.vy * yaw_sin;
-    dy = dy + state.vy * yaw_cos;
+    double controller_frequency;
+    getParentParam(controller_frequency, "controller_frequency", 0.0,
+                   ParameterType::Static);
+    setOffset(controller_frequency);
+
+    // 把生效的约束打到日志里：现场判断"加速度限制到底开没开"只看这一行。
+    RCLCPP_INFO(logger_,
+                "加速度约束 ax=[%.3f, %.3f] ay=[%.3f, %.3f] az=%.3f（某侧为 0 "
+                "表示该方向不限制）；"
+                "controller_period=%.4f sgf_order=%u",
+                s.base_constraints.ax_min, s.base_constraints.ax_max,
+                s.base_constraints.ay_min, s.base_constraints.ay_max,
+                s.base_constraints.az_max, settings_.controller_period,
+                s.sgf_order);
   }
 
-  xt::noalias(trajectories.x) = state.pose.pose.position.x +
-    cumsum_2d(dx * settings_.model_dt, 1);
-  xt::noalias(trajectories.y) = state.pose.pose.position.y +
-    cumsum_2d(dy * settings_.model_dt, 1);
-}
+  void Optimizer::setOffset(double controller_frequency) {
+    const double controller_period = 1.0 / controller_frequency;
+    constexpr double eps = 1e-6;
 
-xt::xtensor<float, 2> Optimizer::getOptimizedTrajectory()
-{
-  auto && sequence =
-    xt::xtensor<float, 2>::from_shape({settings_.time_steps, isHolonomic() ? 3u : 2u});
-  auto && trajectories = xt::xtensor<float, 2>::from_shape({settings_.time_steps, 3});
+    // t=0 那一步的加速度可行性要用真实控制周期，而不是预测步长（上游 PR
+    // #6072）。
+    settings_.controller_period = static_cast<float>(controller_period);
 
-  xt::noalias(xt::view(sequence, xt::all(), 0)) = control_sequence_.vx;
-  xt::noalias(xt::view(sequence, xt::all(), 1)) = control_sequence_.wz;
-
-  if (isHolonomic()) {
-    xt::noalias(xt::view(sequence, xt::all(), 2)) = control_sequence_.vy;
-  }
-
-  integrateStateVelocities(trajectories, sequence);
-  return std::move(trajectories);
-}
-
-void Optimizer::updateControlSequence()
-{
-  auto & s = settings_;
-  auto bounded_noises_vx = state_.cvx - control_sequence_.vx;
-  auto bounded_noises_wz = state_.cwz - control_sequence_.wz;
-  xt::noalias(costs_) +=
-    s.gamma / powf(s.sampling_std.vx, 2) * xt::sum(
-    xt::view(control_sequence_.vx, xt::newaxis(), xt::all()) * bounded_noises_vx, 1, immediate);
-  xt::noalias(costs_) +=
-    s.gamma / powf(s.sampling_std.wz, 2) * xt::sum(
-    xt::view(control_sequence_.wz, xt::newaxis(), xt::all()) * bounded_noises_wz, 1, immediate);
-
-  if (isHolonomic()) {
-    auto bounded_noises_vy = state_.cvy - control_sequence_.vy;
-    xt::noalias(costs_) +=
-      s.gamma / powf(s.sampling_std.vy, 2) * xt::sum(
-      xt::view(control_sequence_.vy, xt::newaxis(), xt::all()) * bounded_noises_vy,
-      1, immediate);
-  }
-
-  auto && costs_normalized = costs_ - xt::amin(costs_, immediate);
-  auto && exponents = xt::eval(xt::exp(-1 / settings_.temperature * costs_normalized));
-  auto && softmaxes = xt::eval(exponents / xt::sum(exponents, immediate));
-  auto && softmaxes_extened = xt::eval(xt::view(softmaxes, xt::all(), xt::newaxis()));
-
-  xt::noalias(control_sequence_.vx) = xt::sum(state_.cvx * softmaxes_extened, 0, immediate);
-  xt::noalias(control_sequence_.wz) = xt::sum(state_.cwz * softmaxes_extened, 0, immediate);
-  if (isHolonomic()) {
-    xt::noalias(control_sequence_.vy) = xt::sum(state_.cvy * softmaxes_extened, 0, immediate);
-  }
-
-  applyControlSequenceConstraints();
-}
-
-geometry_msgs::msg::TwistStamped Optimizer::getControlFromSequenceAsTwist(
-  const builtin_interfaces::msg::Time & stamp)
-{
-  unsigned int offset = settings_.shift_control_sequence ? 1 : 0;
-
-  auto vx = control_sequence_.vx(offset);
-  auto wz = control_sequence_.wz(offset);
-
-  if (isHolonomic()) {
-    auto vy = control_sequence_.vy(offset);
-    return utils::toTwistStamped(vx, vy, wz, stamp, costmap_ros_->getBaseFrameID());
-  }
-
-  return utils::toTwistStamped(vx, wz, stamp, costmap_ros_->getBaseFrameID());
-}
-
-void Optimizer::setMotionModel(const std::string & model)
-{
-  if (model == "DiffDrive") {
-    motion_model_ = std::make_shared<DiffDriveMotionModel>();
-  } else if (model == "Omni") {
-    motion_model_ = std::make_shared<OmniMotionModel>();
-  } else if (model == "Ackermann") {
-    motion_model_ = std::make_shared<AckermannMotionModel>(parameters_handler_, name_);
-  } else {
-    throw std::runtime_error(
-            std::string(
-              "Model " + model + " is not valid! Valid options are DiffDrive, Omni, "
-              "or Ackermann"));
-  }
-}
-
-void Optimizer::setSpeedLimit(double speed_limit, bool percentage)
-{
-  auto & s = settings_;
-  if (speed_limit == nav2_costmap_2d::NO_SPEED_LIMIT) {
-    s.constraints.vx_max = s.base_constraints.vx_max;
-    s.constraints.vx_min = s.base_constraints.vx_min;
-    s.constraints.vy = s.base_constraints.vy;
-    s.constraints.wz = s.base_constraints.wz;
-  } else {
-    if (percentage) {
-      // 速度限制表示为机器人最大速度的百分比。
-      double ratio = speed_limit / 100.0;
-      s.constraints.vx_max = s.base_constraints.vx_max * ratio;
-      s.constraints.vx_min = s.base_constraints.vx_min * ratio;
-      s.constraints.vy = s.base_constraints.vy * ratio;
-      s.constraints.wz = s.base_constraints.wz * ratio;
+    if ((controller_period + eps) < settings_.model_dt) {
+      RCLCPP_WARN(
+          logger_,
+          "Controller period is less then model dt, consider setting it equal");
+    } else if (abs(controller_period - settings_.model_dt) < eps) {
+      RCLCPP_INFO(logger_,
+                  "Controller period is equal to model dt. Control sequence "
+                  "shifting is ON");
+      settings_.shift_control_sequence = true;
     } else {
-      // 速度限制表示为绝对值。
-      double ratio = speed_limit / s.base_constraints.vx_max;
-      s.constraints.vx_max = s.base_constraints.vx_max * ratio;
-      s.constraints.vx_min = s.base_constraints.vx_min * ratio;
-      s.constraints.vy = s.base_constraints.vy * ratio;
-      s.constraints.wz = s.base_constraints.wz * ratio;
+      throw std::runtime_error(
+          "Controller period more then model dt, set it equal to model dt");
+    }
+
+    updateAccelDeltas();
+  }
+
+  void Optimizer::reset() {
+    state_.reset(settings_.batch_size, settings_.time_steps);
+    control_sequence_.reset(settings_.time_steps);
+    control_history_[0] = {0.0, 0.0, 0.0};
+    control_history_[1] = {0.0, 0.0, 0.0};
+    control_history_[2] = {0.0, 0.0, 0.0};
+    control_history_[3] = {0.0, 0.0, 0.0};
+
+    settings_.constraints = settings_.base_constraints;
+    motion_model_->setConstraints(settings_.constraints, settings_.model_dt);
+    updateAccelDeltas();
+    // 复位后没有"上一帧指令"，测量滞后补偿从实测速度重新起步。
+    last_command_vel_ = geometry_msgs::msg::Twist();
+    has_last_command_ = false;
+
+    costs_ = xt::zeros<float>({settings_.batch_size});
+    generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
+
+    noise_generator_.reset(settings_, isHolonomic());
+    RCLCPP_INFO(logger_, "Optimizer reset");
+  }
+
+  geometry_msgs::msg::TwistStamped Optimizer::evalControl(
+      const geometry_msgs::msg::PoseStamped& robot_pose,
+      const geometry_msgs::msg::Twist& robot_speed,
+      const nav_msgs::msg::Path& plan, nav2_core::GoalChecker* goal_checker) {
+    const auto t_start = std::chrono::steady_clock::now();
+    // 复位/首拍没有上一帧指令：用实测速度初始化，避免速度重置为零造成速度跳跃。
+    // 之后 last_command_vel_ 在本函数末尾更新。
+    if (!has_last_command_) {
+      last_command_vel_ = robot_speed;
+      has_last_command_ = true;
+    }
+    prepare(robot_pose, robot_speed, plan, goal_checker);
+    const auto t_prepared = std::chrono::steady_clock::now();
+
+    do {
+      optimize();
+    } while (fallback(critics_data_.fail_flag));
+    const auto t_optimized = std::chrono::steady_clock::now();
+
+    utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
+    // SGF 在本函数的约束**之后**执行（上游是在每次 updateControlSequence
+    // 里先平滑
+    // 再约束），其边界项可能把命令重新推出加速度包络。下发前再限制一次，保证实际
+    // 指令与模型假设一致；平滑值本来大多就在包络内，这一步过滤掉越界部分。
+    applyControlSequenceConstraints();
+    auto control = getControlFromSequenceAsTwist(plan.header.stamp);
+    const auto t_done = std::chrono::steady_clock::now();
+
+    if (debug_timing_) {
+      static rclcpp::Clock timing_clock(RCL_SYSTEM_TIME);
+      const double prepare_ms = std::chrono::duration<double, std::milli>(
+                                    t_prepared - t_start)
+                                    .count();
+      const double optimize_ms = std::chrono::duration<double, std::milli>(
+                                     t_optimized - t_prepared)
+                                     .count();
+      const double finish_ms = std::chrono::duration<double, std::milli>(
+                                   t_done - t_optimized)
+                                   .count();
+      const double total_ms =
+          std::chrono::duration<double, std::milli>(t_done - t_start).count();
+      RCLCPP_INFO_THROTTLE(logger_, timing_clock, 2000,
+                           "MPPI 周期 %.1f ms（prepare %.1f / optimize %.1f / "
+                           "平滑+取命令 %.1f），预算 %.1f ms",
+                           total_ms, prepare_ms, optimize_ms, finish_ms,
+                           1000.0
+                               / (settings_.controller_period > 0.0F
+                                      ? 1.0 / settings_.controller_period
+                                      : 30.0));
+    }
+
+    last_command_vel_ = control.twist;
+
+    if (settings_.shift_control_sequence) {
+      shiftControlSequence();
+    }
+
+    return control;
+  }
+
+  void Optimizer::optimize() {
+    for (size_t i = 0; i < settings_.iteration_count; ++i) {
+      generateNoisedTrajectories();
+      critic_manager_.evalTrajectoriesScores(critics_data_);
+      updateControlSequence();
     }
   }
-}
 
-models::Trajectories & Optimizer::getGeneratedTrajectories()
-{
-  return generated_trajectories_;
-}
+  bool Optimizer::fallback(bool fail) {
+    static size_t counter = 0;
+
+    if (!fail) {
+      counter = 0;
+      return false;
+    }
+
+    reset();
+
+    if (++counter > settings_.retry_attempt_limit) {
+      counter = 0;
+      throw std::runtime_error("Optimizer fail to compute path");
+    }
+
+    return true;
+  }
+
+  void Optimizer::prepare(const geometry_msgs::msg::PoseStamped& robot_pose,
+                          const geometry_msgs::msg::Twist& robot_speed,
+                          const nav_msgs::msg::Path& plan,
+                          nav2_core::GoalChecker* goal_checker) {
+    state_.pose = robot_pose;
+    state_.speed = robot_speed;
+
+    // 测量滞后补偿（上游 PR #6072，仅在启用加速度约束时生效）：
+    // odom 与点云同频（实车约 50 Hz、仿真约 10 Hz），相对 30 Hz 控制周期仍有
+    // 半拍到数拍的延迟，直接用实测速度当初始状态会让"一步可达"的判断基于过期
+    // 数据。这里用上一帧下发指令把状态速度往前推一个控制周期，并夹在加速度上限
+    // 允许的范围内——预测永远不超过物理可达域。
+    if (accelConstraintsEnabled() && settings_.controller_period > 0.0F) {
+      const auto& c = settings_.constraints;
+      const float dt = settings_.controller_period;
+      if (c.ax_max > 0.0F || c.ax_min < 0.0F) {
+        state_.speed.linear.x = utils::clampVelocityByAccel(
+            robot_speed.linear.x, last_command_vel_.linear.x, dt * c.ax_min,
+            dt * c.ax_max);
+      }
+      if (isHolonomic() && (c.ay_max > 0.0F || c.ay_min < 0.0F)) {
+        state_.speed.linear.y = utils::clampVelocityByAccel(
+            robot_speed.linear.y, last_command_vel_.linear.y, dt * c.ay_min,
+            dt * c.ay_max);
+      }
+      if (c.az_max > 0.0F) {
+        state_.speed.angular.z = utils::clampVelocityByAccel(
+            robot_speed.angular.z, last_command_vel_.angular.z, -dt * c.az_max,
+            dt * c.az_max);
+      }
+    }
+
+    path_ = utils::toTensor(plan);
+    costs_.fill(0);
+
+    critics_data_.fail_flag = false;
+    critics_data_.goal_checker = goal_checker;
+    critics_data_.motion_model = motion_model_;
+    critics_data_.furthest_reached_path_point.reset();
+    critics_data_.path_pts_valid.reset();
+  }
+
+  void Optimizer::shiftControlSequence() {
+    using namespace xt::placeholders;  // NOLINT
+    control_sequence_.vx = xt::roll(control_sequence_.vx, -1);
+    control_sequence_.wz = xt::roll(control_sequence_.wz, -1);
+
+    xt::view(control_sequence_.vx, -1) = xt::view(control_sequence_.vx, -2);
+
+    xt::view(control_sequence_.wz, -1) = xt::view(control_sequence_.wz, -2);
+
+    if (isHolonomic()) {
+      control_sequence_.vy = xt::roll(control_sequence_.vy, -1);
+      xt::view(control_sequence_.vy, -1) = xt::view(control_sequence_.vy, -2);
+    }
+  }
+
+  void Optimizer::generateNoisedTrajectories() {
+    applyControlSequenceInterIterationConstraints();
+    noise_generator_.setNoisedControls(state_, control_sequence_);
+    noise_generator_.generateNextNoises();
+    updateStateVelocities(state_);
+    integrateStateVelocities(generated_trajectories_, state_);
+  }
+
+  bool Optimizer::isHolonomic() const {
+    return motion_model_->isHolonomic();
+  }
+
+  bool Optimizer::accelConstraintsEnabled() const {
+    const auto& constraints = settings_.constraints;
+    return constraints.ax_max > 0.0F || constraints.ax_min < 0.0F
+           || constraints.ay_max > 0.0F || constraints.ay_min < 0.0F
+           || constraints.az_max > 0.0F;
+  }
+
+  void Optimizer::updateAccelDeltas() {
+    auto& s = settings_;
+    const auto& c = s.constraints;
+    const float first_dt = s.controller_period > 0.0F ? s.controller_period
+                                                      : s.model_dt;
+    auto& d = s.accel_deltas;
+    d.vx_max_first = utils::maxAccelDelta(c.ax_max, first_dt);
+    d.vx_min_first = utils::minAccelDelta(c.ax_min, first_dt);
+    d.vy_max_first = utils::maxAccelDelta(c.ay_max, first_dt);
+    d.vy_min_first = utils::minAccelDelta(c.ay_min, first_dt);
+    d.wz_max_first = utils::maxAccelDelta(c.az_max, first_dt);
+    d.vx_max_model = utils::maxAccelDelta(c.ax_max, s.model_dt);
+    d.vx_min_model = utils::minAccelDelta(c.ax_min, s.model_dt);
+    d.vy_max_model = utils::maxAccelDelta(c.ay_max, s.model_dt);
+    d.vy_min_model = utils::minAccelDelta(c.ay_min, s.model_dt);
+    d.wz_max_model = utils::maxAccelDelta(c.az_max, s.model_dt);
+  }
+
+  void Optimizer::applyControlSequenceInterIterationConstraints() {
+    const auto& constraints = settings_.constraints;
+    // 某轴上下限均留 0 表示该轴不做加速度限制。
+    const bool limit_vx = constraints.ax_max > 0.0F
+                          || constraints.ax_min < 0.0F;
+    const bool limit_vy = constraints.ay_max > 0.0F
+                          || constraints.ay_min < 0.0F;
+    const bool limit_wz = constraints.az_max > 0.0F;
+    if (!limit_vx && !limit_vy && !limit_wz) {
+      return;
+    }
+
+    auto& settings = settings_;
+    // 每步允许的速度增量在参数/控制周期变化时已算好（updateAccelDeltas()）。
+    const auto& deltas = settings.accel_deltas;
+    const float max_delta_vx = deltas.vx_max_first;
+    const float min_delta_vx = deltas.vx_min_first;
+    const float max_delta_vy = deltas.vy_max_first;
+    const float min_delta_vy = deltas.vy_min_first;
+    const float max_delta_wz = deltas.wz_max_first;
+
+    const float speed_vx = static_cast<float>(state_.speed.linear.x);
+    const float speed_vy = static_cast<float>(state_.speed.linear.y);
+    const float speed_wz = static_cast<float>(state_.speed.angular.z);
+
+    if (settings.shift_control_sequence) {
+      // 序列前移模式下 vx(0) 代表"现在"、不会被下发；把它钉在当前速度上，
+      // 真正下发的 vx(1) 才只能离当前速度一步（否则前移逻辑白送一个时间步）。
+      if (limit_vx) {
+        control_sequence_.vx(0) = speed_vx;
+      }
+      if (limit_wz) {
+        control_sequence_.wz(0) = speed_wz;
+      }
+      if (limit_vy && isHolonomic()) {
+        control_sequence_.vy(0) = speed_vy;
+      }
+      return;
+    }
+
+    // 非前移模式下 vx(0) 就是下发值，直接夹到"从当前速度出发一步可达"的范围内。
+    if (limit_vx) {
+      control_sequence_.vx(0) = utils::clampVelocityByAccel(
+          speed_vx, control_sequence_.vx(0), min_delta_vx, max_delta_vx);
+    }
+    if (limit_wz) {
+      control_sequence_.wz(0) = utils::clampVelocityByAccel(
+          speed_wz, control_sequence_.wz(0), -max_delta_wz, max_delta_wz);
+    }
+    if (limit_vy && isHolonomic()) {
+      control_sequence_.vy(0) = utils::clampVelocityByAccel(
+          speed_vy, control_sequence_.vy(0), min_delta_vy, max_delta_vy);
+    }
+  }
+
+  void Optimizer::applyControlSequenceConstraints() {
+    auto& s = settings_;
+
+    // 先让运动模型施加自身硬约束（如阿克曼最小转弯半径）。
+    motion_model_->applyConstraints(control_sequence_);
+
+    if (isHolonomic()) {
+      control_sequence_.vy = xt::clip(control_sequence_.vy, -s.constraints.vy,
+                                      s.constraints.vy);
+    }
+
+    control_sequence_.vx = xt::clip(control_sequence_.vx, s.constraints.vx_min,
+                                    s.constraints.vx_max);
+    control_sequence_.wz = xt::clip(control_sequence_.wz, -s.constraints.wz,
+                                    s.constraints.wz);
+
+    if (!accelConstraintsEnabled()) {
+      return;
+    }
+
+    // 加速度可行性：第 0 步用真实控制周期，第 1
+    // 步起用预测步长。逐轴独立：上限留 0 的轴不做加速度限制，
+    // 保持速度 clip 后的值。
+
+    const auto& constraints = s.constraints;
+    const bool limit_vx = constraints.ax_max > 0.0F
+                          || constraints.ax_min < 0.0F;
+    const bool limit_vy = constraints.ay_max > 0.0F
+                          || constraints.ay_min < 0.0F;
+    const bool limit_wz = constraints.az_max > 0.0F;
+
+    const auto& deltas = s.accel_deltas;
+    float max_delta_vx = deltas.vx_max_first;
+    float min_delta_vx = deltas.vx_min_first;
+    float max_delta_vy = deltas.vy_max_first;
+    float min_delta_vy = deltas.vy_min_first;
+    float max_delta_wz = deltas.wz_max_first;
+
+    const bool is_holo = isHolonomic();
+    float vx_last = static_cast<float>(last_command_vel_.linear.x);
+    float vy_last = static_cast<float>(last_command_vel_.linear.y);
+    float wz_last = static_cast<float>(last_command_vel_.angular.z);
+
+    size_t first_vel = 0;
+    if (s.shift_control_sequence) {
+      // 前移模式下 vx(0) 是"现在"、不会下发：只用于预测，钉在 state 上。
+      // 真正下发的 vx(1) 从上一条指令起算（见上）。
+      if (limit_vx) {
+        control_sequence_.vx(0) = static_cast<float>(state_.speed.linear.x);
+      }
+      if (limit_wz) {
+        control_sequence_.wz(0) = static_cast<float>(state_.speed.angular.z);
+      }
+      if (limit_vy && is_holo) {
+        control_sequence_.vy(0) = static_cast<float>(state_.speed.linear.y);
+      }
+      first_vel = 1;
+    }
+
+    const size_t steps = control_sequence_.vx.size();
+    for (size_t i = first_vel; i < steps; ++i) {
+      if (i == 1) {
+        // 第 1 步之后切换到预测步长（缓存里的 *_model 组）。
+        max_delta_vx = deltas.vx_max_model;
+        min_delta_vx = deltas.vx_min_model;
+        max_delta_vy = deltas.vy_max_model;
+        min_delta_vy = deltas.vy_min_model;
+        max_delta_wz = deltas.wz_max_model;
+      }
+
+      if (limit_vx) {
+        vx_last = utils::clampVelocityByAccel(vx_last, control_sequence_.vx(i),
+                                              min_delta_vx, max_delta_vx);
+        control_sequence_.vx(i) = vx_last;
+      }
+
+      if (limit_wz) {
+        wz_last = utils::clampVelocityByAccel(wz_last, control_sequence_.wz(i),
+                                              -max_delta_wz, max_delta_wz);
+        control_sequence_.wz(i) = wz_last;
+      }
+
+      if (limit_vy && is_holo) {
+        vy_last = utils::clampVelocityByAccel(vy_last, control_sequence_.vy(i),
+                                              min_delta_vy, max_delta_vy);
+        control_sequence_.vy(i) = vy_last;
+      }
+    }
+
+    // 再施加一次运动模型约束：确保加速度修正没有破坏它的专属限制。
+    motion_model_->applyConstraints(control_sequence_);
+  }
+
+  void Optimizer::updateStateVelocities(models::State& state) const {
+    updateInitialStateVelocities(state);
+    propagateStateVelocitiesFromInitials(state);
+  }
+
+  void Optimizer::updateInitialStateVelocities(models::State& state) const {
+    xt::noalias(xt::view(state.vx, xt::all(), 0)) = state.speed.linear.x;
+    xt::noalias(xt::view(state.wz, xt::all(), 0)) = state.speed.angular.z;
+
+    if (isHolonomic()) {
+      xt::noalias(xt::view(state.vy, xt::all(), 0)) = state.speed.linear.y;
+    }
+  }
+
+  void Optimizer::propagateStateVelocitiesFromInitials(
+      models::State& state) const {
+    motion_model_->predict(state);
+  }
+
+  // 速度积分为位姿
+  void Optimizer::integrateStateVelocities(
+      xt::xtensor<float, 2>& trajectory,
+      const xt::xtensor<float, 2>& sequence) const {
+    float initial_yaw = tf2::getYaw(state_.pose.pose.orientation);
+
+    const auto vx = xt::view(sequence, xt::all(), 0);
+    const auto vy = xt::view(sequence, xt::all(), 2);
+    const auto wz = xt::view(sequence, xt::all(), 1);
+
+    auto traj_x = xt::view(trajectory, xt::all(), 0);
+    auto traj_y = xt::view(trajectory, xt::all(), 1);
+    auto traj_yaws = xt::view(trajectory, xt::all(), 2);
+
+    xt::noalias(traj_yaws) = cumsum_1d(wz * settings_.model_dt) + initial_yaw;
+
+    auto&& yaw_cos = xt::xtensor<float, 1>::from_shape(traj_yaws.shape());
+    auto&& yaw_sin = xt::xtensor<float, 1>::from_shape(traj_yaws.shape());
+
+    const auto yaw_offseted = xt::view(traj_yaws, xt::range(1, _));
+
+    xt::noalias(xt::view(yaw_cos, 0)) = cosf(initial_yaw);
+    xt::noalias(xt::view(yaw_sin, 0)) = sinf(initial_yaw);
+    xt::noalias(xt::view(yaw_cos, xt::range(1, _))) = xt::cos(yaw_offseted);
+    xt::noalias(xt::view(yaw_sin, xt::range(1, _))) = xt::sin(yaw_offseted);
+
+    auto&& dx = xt::eval(vx * yaw_cos);
+    auto&& dy = xt::eval(vx * yaw_sin);
+
+    if (isHolonomic()) {
+      dx = dx - vy * yaw_sin;
+      dy = dy + vy * yaw_cos;
+    }
+
+    xt::noalias(traj_x) = state_.pose.pose.position.x
+                          + cumsum_1d(dx * settings_.model_dt);
+    xt::noalias(traj_y) = state_.pose.pose.position.y
+                          + cumsum_1d(dy * settings_.model_dt);
+  }
+
+  void Optimizer::integrateStateVelocities(models::Trajectories& trajectories,
+                                           const models::State& state) const {
+    const float initial_yaw = tf2::getYaw(state.pose.pose.orientation);
+
+    xt::noalias(trajectories.yaws) = cumsum_2d(state.wz * settings_.model_dt, 1)
+                                     + initial_yaw;
+
+    const auto yaws_cutted = xt::view(trajectories.yaws, xt::all(),
+                                      xt::range(0, -1));
+
+    auto&& yaw_cos = xt::xtensor<float, 2>::from_shape(
+        trajectories.yaws.shape());
+    auto&& yaw_sin = xt::xtensor<float, 2>::from_shape(
+        trajectories.yaws.shape());
+    xt::noalias(xt::view(yaw_cos, xt::all(), 0)) = cosf(initial_yaw);
+    xt::noalias(xt::view(yaw_sin, xt::all(), 0)) = sinf(initial_yaw);
+    xt::noalias(xt::view(yaw_cos, xt::all(), xt::range(1, _))) = xt::cos(
+        yaws_cutted);
+    xt::noalias(xt::view(yaw_sin, xt::all(), xt::range(1, _))) = xt::sin(
+        yaws_cutted);
+
+    auto&& dx = xt::eval(state.vx * yaw_cos);
+    auto&& dy = xt::eval(state.vx * yaw_sin);
+
+    if (isHolonomic()) {
+      dx = dx - state.vy * yaw_sin;
+      dy = dy + state.vy * yaw_cos;
+    }
+
+    xt::noalias(trajectories.x) = state.pose.pose.position.x
+                                  + cumsum_2d(dx * settings_.model_dt, 1);
+    xt::noalias(trajectories.y) = state.pose.pose.position.y
+                                  + cumsum_2d(dy * settings_.model_dt, 1);
+  }
+
+  xt::xtensor<float, 2> Optimizer::getOptimizedTrajectory() {
+    auto&& sequence = xt::xtensor<float, 2>::from_shape(
+        {settings_.time_steps, isHolonomic() ? 3u : 2u});
+    auto&& trajectories = xt::xtensor<float, 2>::from_shape(
+        {settings_.time_steps, 3});
+
+    xt::noalias(xt::view(sequence, xt::all(), 0)) = control_sequence_.vx;
+    xt::noalias(xt::view(sequence, xt::all(), 1)) = control_sequence_.wz;
+
+    if (isHolonomic()) {
+      xt::noalias(xt::view(sequence, xt::all(), 2)) = control_sequence_.vy;
+    }
+
+    integrateStateVelocities(trajectories, sequence);
+    return std::move(trajectories);
+  }
+
+  void Optimizer::updateControlSequence() {
+    auto& s = settings_;
+    auto bounded_noises_vx = state_.cvx - control_sequence_.vx;
+    auto bounded_noises_wz = state_.cwz - control_sequence_.wz;
+    xt::noalias(costs_) +=
+        s.gamma / powf(s.sampling_std.vx, 2)
+        * xt::sum(xt::view(control_sequence_.vx, xt::newaxis(), xt::all())
+                      * bounded_noises_vx,
+                  1, immediate);
+    xt::noalias(costs_) +=
+        s.gamma / powf(s.sampling_std.wz, 2)
+        * xt::sum(xt::view(control_sequence_.wz, xt::newaxis(), xt::all())
+                      * bounded_noises_wz,
+                  1, immediate);
+
+    if (isHolonomic()) {
+      auto bounded_noises_vy = state_.cvy - control_sequence_.vy;
+      xt::noalias(costs_) +=
+          s.gamma / powf(s.sampling_std.vy, 2)
+          * xt::sum(xt::view(control_sequence_.vy, xt::newaxis(), xt::all())
+                        * bounded_noises_vy,
+                    1, immediate);
+    }
+
+    auto&& costs_normalized = costs_ - xt::amin(costs_, immediate);
+    auto&& exponents = xt::eval(
+        xt::exp(-1 / settings_.temperature * costs_normalized));
+    auto&& softmaxes = xt::eval(exponents / xt::sum(exponents, immediate));
+    auto&& softmaxes_extened = xt::eval(
+        xt::view(softmaxes, xt::all(), xt::newaxis()));
+
+    xt::noalias(control_sequence_.vx) = xt::sum(state_.cvx * softmaxes_extened,
+                                                0, immediate);
+    xt::noalias(control_sequence_.wz) = xt::sum(state_.cwz * softmaxes_extened,
+                                                0, immediate);
+    if (isHolonomic()) {
+      xt::noalias(control_sequence_.vy) = xt::sum(
+          state_.cvy * softmaxes_extened, 0, immediate);
+    }
+
+    applyControlSequenceConstraints();
+  }
+
+  geometry_msgs::msg::TwistStamped Optimizer::getControlFromSequenceAsTwist(
+      const builtin_interfaces::msg::Time& stamp) {
+    unsigned int offset = settings_.shift_control_sequence ? 1 : 0;
+
+    auto vx = control_sequence_.vx(offset);
+    auto wz = control_sequence_.wz(offset);
+
+    if (isHolonomic()) {
+      auto vy = control_sequence_.vy(offset);
+      return utils::toTwistStamped(vx, vy, wz, stamp,
+                                   costmap_ros_->getBaseFrameID());
+    }
+
+    return utils::toTwistStamped(vx, wz, stamp, costmap_ros_->getBaseFrameID());
+  }
+
+  void Optimizer::setMotionModel(const std::string& model) {
+    if (model == "DiffDrive") {
+      motion_model_ = std::make_shared<DiffDriveMotionModel>();
+    } else if (model == "Omni") {
+      motion_model_ = std::make_shared<OmniMotionModel>();
+    } else if (model == "Ackermann") {
+      motion_model_ = std::make_shared<AckermannMotionModel>(
+          parameters_handler_, name_);
+    } else {
+      throw std::runtime_error(
+          std::string("Model " + model
+                      + " is not valid! Valid options are DiffDrive, Omni, "
+                        "or Ackermann"));
+    }
+    // 运动模型需要约束集与步长才能在 predict() 里做加速度夹紧。
+    motion_model_->setConstraints(settings_.constraints, settings_.model_dt);
+  }
+
+  void Optimizer::setSpeedLimit(double speed_limit, bool percentage) {
+    auto& s = settings_;
+    if (speed_limit == nav2_costmap_2d::NO_SPEED_LIMIT) {
+      s.constraints.vx_max = s.base_constraints.vx_max;
+      s.constraints.vx_min = s.base_constraints.vx_min;
+      s.constraints.vy = s.base_constraints.vy;
+      s.constraints.wz = s.base_constraints.wz;
+    } else {
+      if (percentage) {
+        // 速度限制表示为机器人最大速度的百分比。
+        double ratio = speed_limit / 100.0;
+        s.constraints.vx_max = s.base_constraints.vx_max * ratio;
+        s.constraints.vx_min = s.base_constraints.vx_min * ratio;
+        s.constraints.vy = s.base_constraints.vy * ratio;
+        s.constraints.wz = s.base_constraints.wz * ratio;
+      } else {
+        // 速度限制表示为绝对值。
+        double ratio = speed_limit / s.base_constraints.vx_max;
+        s.constraints.vx_max = s.base_constraints.vx_max * ratio;
+        s.constraints.vx_min = s.base_constraints.vx_min * ratio;
+        s.constraints.vy = s.base_constraints.vy * ratio;
+        s.constraints.wz = s.base_constraints.wz * ratio;
+      }
+    }
+    // 约束集变了（限速），运动模型持有的副本也要同步。
+    motion_model_->setConstraints(s.constraints, s.model_dt);
+  }
+
+  models::Trajectories& Optimizer::getGeneratedTrajectories() {
+    return generated_trajectories_;
+  }
 
 }  // namespace mppi

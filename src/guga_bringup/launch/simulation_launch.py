@@ -126,7 +126,10 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Single params file override (disables 3-file merge)",
+        description=(
+            "Single params file override (disables 3-file merge); "
+            "该文件需自带 nonrotating_vel_transform 段，否则该节点拿不到话题名"
+        ),
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",

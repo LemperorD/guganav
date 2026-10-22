@@ -6,13 +6,13 @@
 替换与 use_sim_time 重写，因为两侧处理方式相同。
 
 用法：
-    python3 scripts/param_merge.py reality mppi jps            # 读工作区文件
-    python3 scripts/param_merge.py reality mppi jps --rev HEAD  # 读某个 git 版本
-    python3 scripts/param_merge.py reality mppi jps --node global_costmap
+    python3 scripts/paramview/param_merge.py reality mppi jps            # 读工作区文件
+    python3 scripts/paramview/param_merge.py reality mppi jps --rev HEAD  # 读某个 git 版本
+    python3 scripts/paramview/param_merge.py reality mppi jps --node global_costmap
 
     # 等价性比较
-    python3 scripts/param_merge.py reality mppi jps > /tmp/a.json
-    python3 scripts/param_merge.py reality mppi jps --rev HEAD > /tmp/b.json
+    python3 scripts/paramview/param_merge.py reality mppi jps > /tmp/a.json
+    python3 scripts/paramview/param_merge.py reality mppi jps --rev HEAD > /tmp/b.json
     diff /tmp/a.json /tmp/b.json
 """
 
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CONFIG_ROOT = "src/guga_bringup/config"
 
 
