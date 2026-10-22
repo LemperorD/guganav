@@ -35,14 +35,20 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 |-----------|------|------|------|
 | `registered_scan` | `sensor_msgs/PointCloud2` | 订阅 | Point-LIO 输出的 `odom` 系注册点云，累积后作为 GICP 源点云 |
 | `initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | 订阅 | RViz 手动初始位姿，仅在自动重定位失败或需要人工干预时使用 |
-| TF `base_frame <- lidar_frame` | `tf2` | 启动时查询一次 | 把雷达里程计系的先验地图换算到 `odom` 系；查不到时每秒重试 |
+| `/cloud_pcd` | `sensor_msgs/PointCloud2` | 发布 | 转换到 `odom` 的完整先验地图，仅用于导航可视化 |
+| `body_to_base_t/_r` | 参数 | 启动时读取一次 | 把 Point-LIO IMU body 系的先验地图换算到 `odom` 系 |
+| TF `base_frame <- lidar_frame` | `tf2` | 未配置上述参数时回退 | 兼容旧配置；查不到时每秒重试 |
 | TF `odom_frame <- base_frame` | `tf2` | 每轮查询 | 越界检查时计算机器人在地图中的水平位置 |
 | TF `robot_base_frame <- current_scan_frame_id` | `tf2` | 收到 `initialpose` 时 | 把 RViz 给的机器人位姿换算成 `map -> odom` |
 | TF `map -> odom` | `tf2` | 发布（20 Hz） | 唯一的输出，即定位修正量 |
 
-先验 PCD 由 Point-LIO 一类算法在雷达里程计系下建图得到，节点在初始化阶段用
-`base_frame <- lidar_frame` 的安装变换把它换算到 `odom` 系，因此项目其余节点看到的
-始终是与底盘对齐的 `odom` 系。
+先验 PCD 的 `camera_init` 原点是 Point-LIO IMU body，而不是 lidar 原点。节点优先用
+`body_to_base_t/_r` 把它换算到 `odom`；未配置时才查询 `base_frame <- lidar_frame`
+作为兼容回退。
+
+`/cloud_pcd` 发布的是完成上述转换后的 `global_map_`，消息帧为 `odom`；不再由
+`pcd_to_pointcloud` 直接发布原始 PCD，避免坐标系标错。导航模式下由
+`show_prior_pcd` 控制是否发布，建图模式不会启动本节点。
 
 ### 参数
 

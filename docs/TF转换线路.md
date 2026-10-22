@@ -85,15 +85,31 @@ lidar_odometry: pose 转到 odom，child = front_mid360
 odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 ```
 
-Point-LIO 自身的位姿在雷达里程计系 (初始 IMU 姿态, `camera_init`) 下, 而项目其余节点
-统一使用与底盘对齐的 `odom` 系。两者的差异就是雷达的安装变换, 因此 `point_lio` 在
-`publishFrameOutputs()` 中左乘该变换后另行发布 `registered_scan` 与 `lidar_odometry`
-(见 `laserMapping.cpp` 的 `publishProjectOutputs()`); 该变换默认在启动阶段从 TF 查一次
-`base_frame <- lidar_frame`, 也可用 `output_frame.lidar_to_base_t/_r` 参数显式给出。
+Point-LIO 自身的位姿在 IMU body 世界系 (初始 IMU 姿态, `camera_init`) 下, 而项目其余
+节点统一使用与底盘对齐的 `odom` 系。两者的差异是 IMU body 到 base 的变换, 因此
+`point_lio` 在 `publishFrameOutputs()` 中左乘 `base <- body` 后发布
+`registered_scan` 与 `lidar_odometry`。该变换优先使用
+`output_frame.body_to_base_t/_r`；未配置时查询 `base_frame <- lidar_frame`，再与
+LiDAR→IMU 外参合成。
 
 这部分职责原先由独立节点 `loam_interface` 承担, 现已并入 `point_lio`, 原因是从
 `camera_init` 到 `odom` 的换算只需要安装变换, 而安装变换是静态的, 不必为此多一个节点
 和一次话题转发。
+
+仿真与实车统一加载 `buaa2026_sentry_robot.sdf.xmacro`。Point-LIO 的点云和状态位于
+IMU body 系，因此项目输出与先验 PCD 使用由
+`base_footprint <- front_mid360` 和 LiDAR→IMU 外参合成的 `base_footprint <- body`：
+
+```text
+t = [0.240274815, -0.011, 0.182506016]
+R = [ 0.0,          0.984807753,  0.173648178,
+     -1.0,          0.0,          0.0,
+      0.0,         -0.173648178,  0.984807753]
+```
+
+Point-LIO 使用这组参数生成 `registered_scan` 和 `lidar_odometry`；
+small_gicp 使用同一组参数把先验 PCD 换算到 `odom`。`scan_to_sensor_frame` 处理的是
+真正的 LiDAR 位姿，仍使用 `base_footprint <- front_mid360`（平移 `[0.225, 0, 0.230]`）。
 
 ## 4. `nonrotating_vel_transform` 的转换
 

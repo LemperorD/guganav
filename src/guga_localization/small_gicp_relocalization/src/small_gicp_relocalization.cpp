@@ -51,7 +51,16 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("base_frame", "");
   this->declare_parameter("robot_base_frame", "");
   this->declare_parameter("lidar_frame", "");
+  this->declare_parameter<std::vector<double>>(
+    "body_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "body_to_base_r", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_r", std::vector<double>{});
   this->declare_parameter("prior_pcd_file", "");
+  this->declare_parameter("publish_prior_pcd", true);
   this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
 
   this->get_parameter("num_threads", num_threads_);
@@ -72,7 +81,12 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("base_frame", base_frame_);
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("lidar_frame", lidar_frame_);
+  this->get_parameter("body_to_base_t", body_to_base_t_);
+  this->get_parameter("body_to_base_r", body_to_base_r_);
+  this->get_parameter("lidar_to_base_t", lidar_to_base_t_);
+  this->get_parameter("lidar_to_base_r", lidar_to_base_r_);
   this->get_parameter("prior_pcd_file", prior_pcd_file_);
+  this->get_parameter("publish_prior_pcd", publish_prior_pcd_);
   this->get_parameter("init_pose", init_pose_);
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
@@ -120,6 +134,13 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   // including the Nav2 servers that own the costmaps.
   map_initialization_timer_ = this->create_wall_timer(
     std::chrono::seconds(1), [this] (){initializeGlobalMap();});
+
+  if (publish_prior_pcd_) {
+    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/cloud_pcd", 1);
+    prior_pcd_timer_ = this->create_wall_timer(
+      std::chrono::seconds(1), [this] () {publishPriorPcd();});
+  }
 }
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
@@ -139,15 +160,38 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
     return;
   }
 
-  // NOTE: Transform global pcd_map (based on `lidar_odom` frame) to the `odom` frame
   Eigen::Affine3d odom_to_lidar_odom;
-  try {
-    const auto tf_stamped =
-      tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
-    odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-  } catch (const tf2::TransformException & ex) {
-    RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
-    return;
+  const bool has_body_transform =
+    body_to_base_t_.size() == 3 && body_to_base_r_.size() == 9;
+  const bool has_lidar_transform =
+    lidar_to_base_t_.size() == 3 && lidar_to_base_r_.size() == 9;
+  if (has_body_transform || has_lidar_transform) {
+    const auto & translation =
+      has_body_transform ? body_to_base_t_ : lidar_to_base_t_;
+    const auto & rotation_values =
+      has_body_transform ? body_to_base_r_ : lidar_to_base_r_;
+    Eigen::Matrix3d rotation;
+    rotation << rotation_values[0], rotation_values[1], rotation_values[2],
+      rotation_values[3], rotation_values[4], rotation_values[5],
+      rotation_values[6], rotation_values[7], rotation_values[8];
+    odom_to_lidar_odom = Eigen::Affine3d::Identity();
+    odom_to_lidar_odom.linear() = rotation;
+    odom_to_lidar_odom.translation() << translation[0],
+      translation[1], translation[2];
+    RCLCPP_INFO(
+      this->get_logger(),
+      has_body_transform
+        ? "Using explicit body_to_base transform for prior PCD"
+        : "Using explicit lidar_to_base transform for prior PCD");
+  } else {
+    try {
+      const auto tf_stamped =
+        tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
+      odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
+      return;
+    }
   }
 
   RCLCPP_INFO_STREAM(
@@ -182,6 +226,19 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   global_map_ready_ = true;
   map_initialization_timer_->cancel();
   RCLCPP_INFO(this->get_logger(), "Global map registration target is ready");
+}
+
+void SmallGicpRelocalizationNode::publishPriorPcd()
+{
+  if (!global_map_ready_ || global_map_->empty() || !prior_pcd_pub_) {
+    return;
+  }
+
+  sensor_msgs::msg::PointCloud2 message;
+  pcl::toROSMsg(*global_map_, message);
+  message.header.stamp = this->get_clock()->now();
+  message.header.frame_id = odom_frame_;
+  prior_pcd_pub_->publish(message);
 }
 
 void SmallGicpRelocalizationNode::registeredPcdCallback(

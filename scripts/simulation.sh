@@ -27,9 +27,10 @@ Examples:
   scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
   scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
 
-Prior PCD visualization (disabled by default):
-  show_prior_pcd:=True
-      Publish the selected prior PCD as /cloud_pcd for RViz.
+Prior PCD visualization:
+  Enabled by default in navigation and forced off in mapping.
+  show_prior_pcd:=False
+      Disable publication in navigation mode.
 
 Planner (planner:=):
   planner:=jps         JPS global planner
@@ -552,7 +553,7 @@ if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
 fi
 
 launch_args=()
-show_prior_pcd=False
+show_prior_pcd=""
 for arg in "$@"; do
   case "$arg" in
     world:=*)
@@ -569,6 +570,14 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [ -z "$show_prior_pcd" ]; then
+  if is_true "$slam"; then
+    show_prior_pcd=False
+  else
+    show_prior_pcd=True
+  fi
+fi
 
 prior_pcd_arg=""
 if [ "$slam" = "False" ]; then

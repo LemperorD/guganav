@@ -20,9 +20,10 @@ Examples:
   scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
   scripts/reality.sh nav floor2 show_prior_pcd:=True
 
-Prior PCD visualization (disabled by default):
-  show_prior_pcd:=True
-      Publish the selected prior PCD as /cloud_pcd for RViz.
+Prior PCD visualization:
+  Enabled by default in navigation and forced off in mapping.
+  show_prior_pcd:=False
+      Disable publication in navigation mode.
 EOF
 }
 
@@ -171,7 +172,7 @@ slam=$slam_value
 launch_args=()
 map_arg=""
 prior_pcd_arg=""
-show_prior_pcd=False
+show_prior_pcd=""
 
 if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
   world=$1
@@ -188,6 +189,14 @@ for arg in "$@"; do
     *) launch_args+=("$arg") ;;
   esac
 done
+
+if [ -z "$show_prior_pcd" ]; then
+  if is_true "$slam"; then
+    show_prior_pcd=False
+  else
+    show_prior_pcd=True
+  fi
+fi
 
 if [ "$launch_mode" = nav ] && ! is_true "$slam"; then
   ensure_reality_map_and_pcd "$world" "$map_arg" "$prior_pcd_arg"

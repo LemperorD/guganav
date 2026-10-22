@@ -127,9 +127,8 @@ struct ScanZFilterParams {
 /**
  * @brief 项目约定输出 (原 loam_interface 承担的职责)
  *
- * Point-LIO 自身输出在雷达里程计系 (camera_init, 初始 IMU 姿态) 下, 而项目其他
- * 节点统一使用与底盘对齐的 odom 系。这个结构描述把输出换算过去所需的安装变换
- * (即 TF 中 base_frame <- lidar_frame) 与输出话题名。
+ * Point-LIO 自身输出在 camera_init (初始 IMU body 姿态) 下, 而项目其他节点
+ * 统一使用与底盘对齐的 odom 系。这个结构描述 body/安装变换与输出话题名。
  */
 struct OutputFrameParams {
   bool enabled{true};
@@ -139,6 +138,10 @@ struct OutputFrameParams {
   std::string registered_scan_topic{"registered_scan"};
   std::string lidar_odometry_topic{"lidar_odometry"};
   ScanZFilterParams z_filter;
+  /// Point-LIO 的 camera_init/body 到 base 的显式变换。
+  bool body_to_base_from_params{false};
+  std::vector<double> body_to_base_t;
+  std::vector<double> body_to_base_r;
   /// 非零表示由参数显式给出安装变换; 否则启动时从 TF 查 base_frame <-
   /// lidar_frame
   bool extrinsic_from_params{false};

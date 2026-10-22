@@ -17,6 +17,7 @@ from launch_ros.actions import LifecycleNode, LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
+from launch_ros.parameter_descriptions import ParameterValue
 from lifecycle_msgs.msg import Transition
 from nav2_common.launch import RewrittenYaml
 
@@ -30,6 +31,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
+    show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     params_file = LaunchConfiguration("params_file")
     base_params_file = LaunchConfiguration("base_params_file"),
     use_composition = LaunchConfiguration("use_composition")
@@ -77,6 +79,12 @@ def generate_launch_description():
         "prior_pcd_file",
         default_value="",
         description="Full path to prior PCD file to load",
+    )
+
+    declare_show_prior_pcd_cmd = DeclareLaunchArgument(
+        "show_prior_pcd",
+        default_value="True",
+        description="Publish the transformed prior PCD on /cloud_pcd",
     )
 
     declare_params_file_cmd = DeclareLaunchArgument(
@@ -188,7 +196,15 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[
+                    configured_params,
+                    {
+                        "prior_pcd_file": prior_pcd_file,
+                        "publish_prior_pcd": ParameterValue(
+                            show_prior_pcd, value_type=bool
+                        ),
+                    },
+                ],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -220,7 +236,15 @@ def generate_launch_description():
                 package="small_gicp_relocalization",
                 plugin="small_gicp_relocalization::SmallGicpRelocalizationNode",
                 name="small_gicp_relocalization",
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[
+                    configured_params,
+                    {
+                        "prior_pcd_file": prior_pcd_file,
+                        "publish_prior_pcd": ParameterValue(
+                            show_prior_pcd, value_type=bool
+                        ),
+                    },
+                ],
                 extra_arguments=[{'use_intra_process_comms': True}],
             ),
             ComposableNode(
@@ -250,6 +274,7 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
+    ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

@@ -243,14 +243,15 @@ scripts/simulation.sh nav rmul_2025
 scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 ```
 
-需要在 RViz 中查看当前场景的先验 PCD 时，显式打开点云发布：
+导航模式默认在 RViz 中显示当前场景的先验 PCD：
 
 ```bash
-scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
+scripts/simulation.sh nav rmul_2025
 ```
 
-该选项默认关闭，建图模式下会被强制关闭。打开发布后，在 RViz 中勾选
-`Prior PCD` 显示项即可查看 `/cloud_pcd`；坐标系为 `map`。
+导航时可通过 `show_prior_pcd:=False` 关闭；建图模式始终强制关闭。开启时
+`small_gicp_relocalization` 会把已经转换到 `odom` 的先验地图发布为 `/cloud_pcd`，
+RViz 再通过 `map -> odom` 显示，避免把雷达里程计坐标误标成 `map`。
 
 ### 仿真建图
 
@@ -267,14 +268,13 @@ source install/setup.bash
 ros2 launch guga_bringup reality_launch.py
 ```
 
-实车导航脚本同样支持按需查看先验点云：
+实车导航模式同样默认显示先验点云：
 
 ```bash
-scripts/reality.sh nav floor2 show_prior_pcd:=True
+scripts/reality.sh nav floor2
 ```
 
-该选项默认关闭，建图模式下会被强制关闭。打开发布后，在 RViz 中勾选
-`Prior PCD` 显示项即可查看 `/cloud_pcd`。也可通过
+导航时可通过 `show_prior_pcd:=False` 关闭；建图模式始终强制关闭。也可通过
 `prior_pcd_file:=/path/to/map.pcd` 指定其他 PCD。
 
 ### 实车建图
@@ -326,7 +326,8 @@ ros2 launch point_lio point_lio.launch.py \
 
 `registered_scan` 带有可配置的 odom 系 Z 向滤波
 （`output_frame.z_filter.{enable,min_z,max_z}`）；该滤波只作用于供感知和定位使用的
-项目约定点云，不改变 Point-LIO 原始 `cloud_registered`。
+项目约定点云，不改变 Point-LIO 原始 `cloud_registered`。PCD 保存也会使用同一组
+odom 高度阈值筛选点，但保存的 PCD 坐标仍保持在 Point-LIO 的 IMU body 世界系。
 
 常用 launch 参数：
 

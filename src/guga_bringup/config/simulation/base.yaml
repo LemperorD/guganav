@@ -81,6 +81,12 @@ point_lio:
       tf_send_en: False # True: send transform from 'camera_init' to 'aft_mapped'
 
     output_frame:
+      # Point-LIO camera_init 是 IMU body 系；该变换由模型 base<-lidar 与
+      # Point-LIO 的 LiDAR->IMU 外参合成，不能直接使用 base<-lidar。
+      body_to_base_t: [0.240274815, -0.011, 0.182506016]
+      body_to_base_r: [0.0, 0.984807753, 0.173648178,
+                       -1.0, 0.0, 0.0,
+                       0.0, -0.173648178, 0.984807753]
       z_filter:
         enable: True
         min_z: -0.2 # registered_scan 在 odom 系中的最低 Z
@@ -97,6 +103,10 @@ scan_to_sensor_frame:
     use_sim_time: True
     lidar_frame: "front_mid360"
     base_frame: "base_footprint"
+    lidar_to_base_t: [0.225, 0.0, 0.230]
+    lidar_to_base_r: [0.0, 0.984807753, 0.173648178,
+                      -1.0, 0.0, 0.0,
+                      0.0, -0.173648178, 0.984807753]
     # robot_base_frame: "base_footprint"
     robot_base_frame: "gimbal_yaw"
     min_odometry_dt: 0.001
@@ -143,6 +153,10 @@ small_gicp_relocalization:
     base_frame: "base_footprint"
     robot_base_frame: "gimbal_yaw"
     lidar_frame: "front_mid360"
+    body_to_base_t: [0.240274815, -0.011, 0.182506016]
+    body_to_base_r: [0.0, 0.984807753, 0.173648178,
+                      -1.0, 0.0, 0.0,
+                      0.0, -0.173648178, 0.984807753]
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # [x, y, z, roll, pitch, yaw]
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""

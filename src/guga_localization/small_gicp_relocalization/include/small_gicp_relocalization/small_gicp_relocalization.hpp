@@ -45,6 +45,7 @@ private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void loadGlobalMap(const std::string & file_name);
   void initializeGlobalMap();
+  void publishPriorPcd();
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
@@ -60,6 +61,7 @@ private:
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_pcd_pub_;
 
   bool registration_initial_=false;
   bool accumulation_reset_=false;
@@ -90,6 +92,10 @@ private:
   std::string base_frame_;
   std::string robot_base_frame_;
   std::string lidar_frame_;
+  std::vector<double> body_to_base_t_;
+  std::vector<double> body_to_base_r_;
+  std::vector<double> lidar_to_base_t_;
+  std::vector<double> lidar_to_base_r_;
   std::string current_scan_frame_id_;
   rclcpp::Time last_scan_time_;
   Eigen::Isometry3d result_t_;
@@ -100,6 +106,7 @@ private:
   Eigen::Isometry3d baseline_tf_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
+  bool publish_prior_pcd_{true};
   /// @brief 当前基准是否来自手动定位(未过质量门)。为真时跳过惯性漂移检查,
   ///        因为手动基准本身就是"待修正"的, 一旦 GICP 收敛出合格结果就会被替换掉。
   bool baseline_is_manual_{false};
@@ -122,6 +129,7 @@ private:
   rclcpp::TimerBase::SharedPtr transform_timer_;
   rclcpp::TimerBase::SharedPtr register_timer_;
   rclcpp::TimerBase::SharedPtr map_initialization_timer_;
+  rclcpp::TimerBase::SharedPtr prior_pcd_timer_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
