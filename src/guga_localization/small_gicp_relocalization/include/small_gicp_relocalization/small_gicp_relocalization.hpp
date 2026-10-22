@@ -59,16 +59,6 @@ private:
   bool applyInertialConstraint(const Eigen::Isometry3d & candidate, bool good);
   /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
-  void regulateRegistration(Eigen::Isometry3d & result_t);
-  /// @brief 惯性约束: 候选 tf 相对基准 tf 的平移偏差过大时, 舍弃本次变换并回到基准;
-  ///        good 为真(配准质量达标)的一次重定位则被采纳为新的基准 tf。
-  ///        基准若来自手动定位(baseline_is_manual_), 则不设漂移上限, 允许注册把它修正回来。
-  ///        会直接更新 result_t_ / previous_result_t_。
-  /// @param good 配准质量是否达标(RMSE + 内点率 + 未越界, 由调用方判定)
-  /// @return true 表示采纳本次结果, false 表示已回退到基准
-  bool applyInertialConstraint(const Eigen::Isometry3d & candidate, bool good);
-  /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
-  bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_pcd_pub_;
@@ -78,14 +68,10 @@ private:
   /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
   ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
   bool pending_initial_pose_{false};
-  bool registration_initial_ = false;
-  bool accumulation_reset_ = false;
   /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
   ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
-  bool pending_initial_pose_{false};
   int num_threads_;
   int num_neighbors_;
-  int max_iterations_;
   int max_iterations_;
   float global_leaf_size_;
   float registered_leaf_size_;
@@ -96,16 +82,8 @@ private:
   double good_error_max_;
   double good_inlier_ratio_;
   double baseline_translation_tolerance_;
-  double map_boundary_margin_;
-  double previous_rmse_{0.0};  ///< 上一次注册的 RMSE (sqrt(error / num_inliers))
-  /// @brief 上一次注册的内点率 (num_inliers / 源点数); 与 previous_rmse_ 一起决定迭代脉冲是否拉满
-  double previous_inlier_ratio_{0.0};
-  double max_roll_pitch_step_;
-  double max_tz_step_;
-  double error_max_;
-  double good_error_max_;
-  double good_inlier_ratio_;
-  double baseline_translation_tolerance_;
+  double baseline_update_translation_threshold_;
+  double baseline_update_yaw_threshold_;
   double map_boundary_margin_;
   double previous_rmse_{0.0};  ///< 上一次注册的 RMSE (sqrt(error / num_inliers))
   /// @brief 上一次注册的内点率 (num_inliers / 源点数); 与 previous_rmse_ 一起决定迭代脉冲是否拉满
@@ -126,14 +104,12 @@ private:
   rclcpp::Time last_scan_time_;
   Eigen::Isometry3d result_t_;
   Eigen::Isometry3d initial_result_t_;
-  Eigen::Isometry3d initial_result_t_;
   Eigen::Isometry3d previous_result_t_;
   /// @brief 唯一的基准 tf: 最近一次"残差很小且未越界"的重定位结果,
   ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
   Eigen::Isometry3d baseline_tf_;
   /// @brief 唯一的基准 tf: 最近一次"残差很小且未越界"的重定位结果,
   ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
-  Eigen::Isometry3d baseline_tf_;
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
   bool publish_prior_pcd_{true};
@@ -154,10 +130,7 @@ private:
   std::shared_ptr<small_gicp::Registration<
     small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
     small_gicp::DistanceRejector, StepLimitOptimizer>>
-    std::shared_ptr<small_gicp::Registration<
-      small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
-      small_gicp::DistanceRejector, StepLimitOptimizer>>
-      register_;
+    register_;
 
   rclcpp::TimerBase::SharedPtr transform_timer_;
   rclcpp::TimerBase::SharedPtr register_timer_;

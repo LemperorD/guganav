@@ -45,6 +45,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("good_error_max", 0.5);
   this->declare_parameter("good_inlier_ratio", 0.5);
   this->declare_parameter("baseline_translation_tolerance", 1.0);
+  this->declare_parameter("baseline_update_translation_threshold", 0.01);
+  this->declare_parameter("baseline_update_yaw_threshold", 0.01);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
@@ -75,6 +77,9 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("good_error_max", good_error_max_);
   this->get_parameter("good_inlier_ratio", good_inlier_ratio_);
   this->get_parameter("baseline_translation_tolerance", baseline_translation_tolerance_);
+  this->get_parameter(
+    "baseline_update_translation_threshold", baseline_update_translation_threshold_);
+  this->get_parameter("baseline_update_yaw_threshold", baseline_update_yaw_threshold_);
   this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
@@ -441,6 +446,20 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   // 只有"效果好"(RMSE 小且内点率高, 未越界)的一次重定位, 才被采纳为新的基准 tf;
   // 基准是越界/惯性回退的目标, 必须保证它本身是可信的。
   if (good) {
+    if (!baseline_is_manual_) {
+      const Eigen::Isometry3d delta = baseline_tf_.inverse() * candidate;
+      const double translation_delta = delta.translation().head<2>().norm();
+      const double rotation_delta = std::abs(std::remainder(
+        std::atan2(delta.linear()(1, 0), delta.linear()(0, 0)), 2.0 * M_PI));
+      if (translation_delta <= baseline_update_translation_threshold_
+          && rotation_delta <= baseline_update_yaw_threshold_) {
+        RCLCPP_DEBUG_THROTTLE(
+          this->get_logger(), *this->get_clock(), 2000,
+          "Holding map->odom baseline: micro correction dt=%.4f m, dr=%.4f rad",
+          translation_delta, rotation_delta);
+        return true;
+      }
+    }
     baseline_tf_ = candidate;
     baseline_is_manual_ = false;
   }

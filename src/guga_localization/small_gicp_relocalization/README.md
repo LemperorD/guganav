@@ -72,6 +72,8 @@ small_gicp_relocalization:
     good_error_max: 0.4               # 可升级为基准 tf 的 RMSE 上限
     good_inlier_ratio: 0.99           # 可升级为基准 tf 的内点率下限
     baseline_translation_tolerance: 4.0  # 惯性约束: 候选相对基准 tf 的平移偏差上限 (m)
+    baseline_update_translation_threshold: 0.01  # 小于该水平变化时冻结 map->odom (m)
+    baseline_update_yaw_threshold: 0.01          # 小于该 yaw 变化时冻结 map->odom (rad)
     map_boundary_margin: 1.0          # 位姿超出先验地图外接框的允许余量 (m)
     # 坐标系
     map_frame: "map"
@@ -101,6 +103,9 @@ small_gicp_relocalization:
   （`map_boundary_margin`）的结果，才能升级为新的基准 tf。
 - 惯性约束：候选相对当前基准 tf 的平移偏差超过 `baseline_translation_tolerance` 时
   直接丢弃并回到基准，保证只在基准附近做平移搜索；只有通过质量门的候选才刷新基准。
+- 抖动抑制：已定准后，候选相对基准的水平变化小于
+  `baseline_update_translation_threshold` 且 yaw 变化小于
+  `baseline_update_yaw_threshold` 时保持原 `map -> odom`；超过死区才更新基准。
 - 迭代脉冲：上一帧 RMSE ≤ `error_max` 且内点率达标时，本次只迭代 10 次（快路径）；
   任一不达标就把迭代上限拉满到 `max_iterations` 重新收敛。
 - 手动定位：还没有基准时，RViz 的 `initialpose` 直接作为基准（绕过质量门）；已有基准

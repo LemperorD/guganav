@@ -391,7 +391,6 @@ run_complete_simulation() {
 
   if [ "$run_mode" = nav ] && ! is_true "$slam_arg"; then
     ensure_simulation_prior_pcd "$world_arg" "$prior_pcd_arg"
-    ensure_simulation_map "$world_arg" "$map_arg"
   fi
 
   if run_in_terminal "guganav gazebo" "$WS/scripts/simulation.sh" __gazebo world:="$world_arg"; then
@@ -526,7 +525,6 @@ if [ "$slam" = "False" ]; then
     fi
   done
   ensure_simulation_prior_pcd "$world" "$prior_pcd_arg"
-  ensure_simulation_map "$world" "$map_arg"
 fi
 
 require_workspace_setup
