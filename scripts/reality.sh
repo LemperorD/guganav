@@ -14,15 +14,30 @@ Modes:
   nav | n   定位/导航模式 (slam:=False)
   map | m   建图模式     (slam:=True)
 
+Planner (planner:=):
+  planner:=jps         JPS global planner
+  planner:=smac2d      SmacPlanner2D global planner
+
+Controller (controller:=):
+  controller:=pid      omni PID controller
+  controller:=mppi     MPPI controller
+
+Parameters are merged at launch time from config/reality/{base,controller,planner}
+layered yaml files. nav 模式未显式给出 planner:=/controller:= 时，会先弹出与
+simulation.sh 相同的编号菜单（先 planner 后 controller）；没有可读终端时取默认值
+planner:=smac2d controller:=mppi。
+
 Examples:
   scripts/reality.sh n
+  scripts/reality.sh n floor2 planner:=smac2d controller:=mppi
   scripts/reality.sh map reserve
-  scripts/reality.sh nav room_207 use_rviz:=True use_decision:=True
-  scripts/reality.sh nav room_207 show_prior_pcd:=True
+  scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
+  scripts/reality.sh nav floor2 show_prior_pcd:=True
 
-Prior PCD visualization (enabled by default in navigation mode):
-  show_prior_pcd:=True
-      Publish the selected prior PCD as /cloud_pcd for RViz.
+Prior PCD visualization:
+  Enabled by default in navigation and forced off in mapping.
+  show_prior_pcd:=False
+      Disable publication in navigation mode.
 EOF
 }
 
@@ -72,7 +87,7 @@ cleanup_reality_processes() {
       fi
     done < <(pgrep -f "$pattern" 2>/dev/null || true)
   done
-  mapfile -t all_mppis < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
+  mapfile -t all_pids < <(printf '%s\n' "${all_pids[@]}" | sort -u | grep -v '^$')
 
   if [ "${#all_pids[@]}" -gt 0 ]; then
     printf '%s\n' "${all_pids[@]}" | xargs -r kill -TERM -- 2>/dev/null || true
@@ -159,19 +174,25 @@ fi
 
 while true ;do
 case "$mode" in
-  n|nav|navigation) launch_mode=nav; slam_value=False; break ;;
+  n|nav|navigation)
+    launch_mode=nav
+    slam_value=False
+    build_nav_args "$@" || exit 2
+    set -- "${nav_args[@]}"
+    break
+    ;;
   m|map|mapping|slam) launch_mode=map; slam_value=True; break ;;
   -h|--help|help) usage; exit 0 ;;
   *) echo "Unknown reality mode: $mode" >&2; usage >&2; read -r mode; continue ;;
 esac
 done
 
-world=room_207
+world=floor2
 slam=$slam_value
 launch_args=()
 map_arg=""
 prior_pcd_arg=""
-show_prior_pcd=True
+show_prior_pcd=""
 
 if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
   world=$1
@@ -188,6 +209,14 @@ for arg in "$@"; do
     *) launch_args+=("$arg") ;;
   esac
 done
+
+if [ -z "$show_prior_pcd" ]; then
+  if is_true "$slam"; then
+    show_prior_pcd=False
+  else
+    show_prior_pcd=True
+  fi
+fi
 
 if [ "$launch_mode" = nav ] && ! is_true "$slam"; then
   ensure_reality_map_and_pcd "$world" "$map_arg" "$prior_pcd_arg"

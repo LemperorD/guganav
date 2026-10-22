@@ -19,6 +19,10 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
   this->declare_parameter<double>("max_linear_velocity", 10.0);
   this->declare_parameter<double>("max_angular_velocity", 20.0);
   this->declare_parameter<bool>("zero_base_z", false);
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_r", std::vector<double>{});
 
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("base_frame", base_frame_);
@@ -27,6 +31,8 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
   this->get_parameter("max_linear_velocity", max_linear_velocity_);
   this->get_parameter("max_angular_velocity", max_angular_velocity_);
   this->get_parameter("zero_base_z", zero_base_z_);
+  this->get_parameter("lidar_to_base_t", lidar_to_base_t_);
+  this->get_parameter("lidar_to_base_r", lidar_to_base_r_);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -93,7 +99,18 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
 
   tf2::fromMsg(odometry_msg->pose.pose, tf_odom_to_lidar_);
   tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, last_pcd_stamp_);
-  tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
+  if (lidar_to_base_t_.size() == 3 && lidar_to_base_r_.size() == 9) {
+    const tf2::Matrix3x3 rotation(
+      lidar_to_base_r_[0], lidar_to_base_r_[1], lidar_to_base_r_[2],
+      lidar_to_base_r_[3], lidar_to_base_r_[4], lidar_to_base_r_[5],
+      lidar_to_base_r_[6], lidar_to_base_r_[7], lidar_to_base_r_[8]);
+    const tf2::Vector3 translation(
+      lidar_to_base_t_[0], lidar_to_base_t_[1], lidar_to_base_t_[2]);
+    tf_lidar_to_chassis =
+      tf2::Transform(rotation, translation).inverse();
+  } else {
+    tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
+  }
 
   tf2::Transform tf_odom_to_chassis = tf_odom_to_lidar_ * tf_lidar_to_chassis;
   if (zero_base_z_) {

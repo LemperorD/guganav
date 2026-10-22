@@ -15,7 +15,7 @@ controller_server:
       stateful: true
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 6.28
+      yaw_goal_tolerance: 0.5
     failure_tolerance: 0.3
     odom_topic: odometry
     # 三个速度阈值（min_x/min_y/min_theta_velocity_threshold）在此故意不写：
@@ -31,29 +31,60 @@ controller_server:
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
       # 以下采样与速度参数与仿真 profile（config/simulation/controller/mppi.yaml）保持一致。
-      time_steps: 56
+      time_steps: 48
       # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
       #   - period < model_dt → 仅告警，控制序列移位关闭
       #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.033333333
-      batch_size: 1800
-      vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 1.0
-      vx_max: 2.5
-      vx_min: -2.5
-      # ax_max / ay_max 已删除：Humble 的 nav2_mppi_controller 1.1.20 不声明这两个参数
-      # （加速度限幅是 Rolling 之后才加入的），写在这里既不生效，也会让人误以为限幅已配置。
-      # 实车的加速度约束由 velocity_smoother 的 max_accel / max_decel 承担。
-      vy_max: 2.5
-      # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
-      wz_max: 0.0
+      model_dt: 0.03333333333
+      batch_size: 1400
+      # 耗时归因：true 时每 2 s 打印一行单周期拆解（prepare/optimize/平滑）以及每个
+      # critic 的耗时（critic_manager.cpp / optimizer.cpp）。定位"算不过来"时打开
+      debug_timing: false
+      vx_std: 0.3
+      vy_std: 0.3
+      wz_std: 0.01
+      vx_max: 3.0
+      vx_min: -3.0
+      # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072）。
+      # **减速侧必须与执行端一致**：ax_min/ay_min = -4.5 = velocity_smoother.max_decel。
+      # 这是"滞后"与"过冲"这对症状的平衡点，别再只动一边：
+      #   - 减速侧设成 0（不限制）：模型允许瞬间刹停，执行端只有 4.5 m/s² → 预测乐观、
+      #     欠刹车 → **过冲**。0 只是"该方向不限制"（minAccelDelta 返回 -inf），不是
+      #     "不允许变化"；它能把下面那条 odom 滞后 bug 掩盖掉，但不是正确配置
+      #   - 减速侧设成 -3.0（比执行端 -4.5 更紧）：命令只能以 3 m/s² 下降，比执行端
+      #     的 4.5 慢 → 刹车偏慢、整机"非常大的滞后"（停不住/过冲）
+      #   - 设成 -4.5（= 执行端）：命令斜率与执行一致，既不乐观也不过保守
+      # 命令侧的加速度钳制**以上一周期下发的指令为起点**（不是 state_.speed）：
+      # odom 与点云同频（实车约 50 Hz、仿真约 10 Hz），相对 30 Hz 控制周期仍有
+      # 半拍到数拍的延迟，prepare() 的滞后补偿会把 state_.speed 夹在陈旧实测值
+      # 附近；若命令也从它起夹，减速命令会被钉在旧速度上，
+      # |ax_min| 越小越明显——这正是"ax_min 不设 0 就过冲"的根因。现在 state_.speed
+      # 只作预测初值，命令链独立按 ax 变化，odom 再慢也不会把刹车命令抬回去。
+      # 想更快刹车：把 velocity_smoother.max_decel 与这里的 ax_min/ay_min **一起**放到
+      # 台架实测值（如 -8），只改一边必然又回到"要么过冲、要么变慢"。
+      # 若 -4.5 下仍过冲，残差来自执行/反馈滞后（串口滑动均值窗口、odom 延迟），
+      # 按收益顺序调：serial filter_window_size 10→3、用 `ros2 topic delay /odometry`
+      # 量反馈滞后（smoothing_frequency 已与控制器对齐到 30 Hz）。
+      #   - 约束作用在预测轨迹的状态速度上、采样控制量保持原始；命令序列本身按
+      #     上一周期指令逐步钳制。第 0 步用真实控制周期、之后用 model_dt
+      #   - 加速侧必须**不宽于**下游 max_accel（4.5）：2.0 < 4.5 ✓（偏保守，只影响起步）
+      #   - 逐轴独立；az 保持 0，因为 z 通道是底盘自旋（由 nonrotating_vel_transform
+      #     叠加 cmd_spin），与整车轨迹无关
+      #   - 单位：ax/ay = m/s²，az = rad/s²；ay 受麦克纳姆轮横向摩擦限制
+      ax_max: 2.0
+      ax_min: -4.5
+      ay_max: 3.0
+      ay_min: -4.5
+      az_max: 0.0
+      vy_max: 3.0
+      vy_min: -4.0 # wz_max 保持 0，不照搬仿真的 3.0：实车的 yaw 由小陀螺与决策控制，MPPI 不输出转向速度。
+      wz_max: 1.0
 
-      iteration_count: 1
-      temperature: 0.3
+      iteration_count: 2
+      temperature: 0.2
       gamma: 0.012
       motion_model: "Omni"
       visualize: false
@@ -67,31 +98,42 @@ controller_server:
           "ConstraintCritic",
           "CostCritic",
           "GoalCritic",
+          "GoalAngleCritic",
+          "TwirlingCritic",
           "PathAlignCritic",
           "PathFollowCritic",
+          "PreferForwardCritic",
+          "PathAngleCritic",
         ]
       ConstraintCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 4.0
+        cost_weight: 5.0
       GoalCritic:
         enabled: true
         cost_power: 1
         cost_weight: 5.0
-        threshold_to_consider: 2.0
+        threshold_to_consider: 1.4
+      # 到点摆正车头：离目标 threshold_to_consider 以内时，按"轨迹末端朝向 vs 路径末端朝向"
+      # 计代价。无小陀螺后车头只能靠控制器转，这个权重太小就摆不正（3.0 → 5.0）。
+      # symmetric_yaw_tolerance=true 时反向对齐也算过（车头/车尾不分），按需打开。
       GoalAngleCritic:
-        enabled: false
+        enabled: False
         cost_power: 1
-        cost_weight: 3.0
+        cost_weight: 5.0
         threshold_to_consider: 0.5
       PreferForwardCritic:
-        enabled: false
-        cost_power: 1
+        enabled: False
+        cost_power: 2
         cost_weight: 5.0
         threshold_to_consider: 0.5
       # 注意：本块未列入上面的 critics 列表，当前不参与计算；取值与仿真 profile 对齐。
       # 若要启用，需先把 inflation_radius / cost_scaling_factor 改成与 local costmap
-      # 膨胀层完全一致（local 当前是 0.364 / 4.0，否则距离反算本身就是错的）。
+      # 膨胀层完全一致（local 当前是 0.60 / 4.0，否则距离反算本身就是错的）。
+      # consider_footprint 保持 false：它的 distanceToObstacle() 在 footprint 模式下
+      # 从 253 反算出的距离恒为内切半径（Humble 已知缺陷，issue #4057），这里要的是
+      # 中心点代价那套公式。costmap 改成 footprint 后启用它会多一条
+      # "Inconsistent configuration in collision checking" 的 WARN，属预期，不抛异常。
       ObstaclesCritic:
         enabled: true
         cost_power: 1
@@ -101,17 +143,22 @@ controller_server:
         collision_cost: 10000.0
         collision_margin_distance: 0.15
         near_goal_distance: 0.5
-        inflation_radius: 0.369 # (only in Humble)
+        inflation_radius: 0.367 # (only in Humble)
         cost_scaling_factor: 10.0 # (only in Humble)
       CostCritic:
         enabled: true
-        # 与仿真一致（原为 cost_power 10 / cost_weight 14）。照搬后实车避障的保守程度
-        # 与仿真相同，而仿真这套参数的已知表现是偶发擦碰障碍，实车验证时重点看这一项。
+        # 对齐仿真（已验证的那套）：cost_weight 4.0、consider_footprint false。
+        # consider_footprint: false 的语义：inCollision() 把 253(INSCRIBED) 也判为碰撞
+        # （cost_critic.cpp:187-211），即"车中心不得进入内切环"，与仿真行为一致
+        # （仿真实测几乎不会卡在内切区域）。代价是若中心真的落在环内，所有候选轨迹
+        # 判碰撞 → fallback 重试 → 超限抛异常停车；用 base.yaml 的 footprint_padding
+        # 0.03 + 全局膨胀余量把这种情形挡住。
+        # 之前用 true 的理由（只写 robot_radius 时 initialize() 会抛 PlannerException）
+        # 已随 base.yaml 回到 robot_radius 形态消失：use_radius_==true 与
+        # consider_footprint_==false 自洽，不会再有 "Inconsistent configuration" WARN。
         cost_power: 1
-        cost_weight: 6.0
+        cost_weight: 4.0
         critical_cost: 300.0
-        # base.yaml 使用 robot_radius 圆形模型，碰撞检查通过膨胀层的内切代价判断。
-        # 开启多边形 footprint 检查会因未配置 footprint 导致控制器 configure 失败。
         consider_footprint: false
         collision_cost: 1000000.0
         near_goal_distance: 1.0
@@ -119,20 +166,20 @@ controller_server:
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 4.0
+        cost_weight: 5.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
-        threshold_to_consider: 0.2
+        threshold_to_consider: 0.5
         offset_from_furthest: 10
         use_path_orientations: false
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 6.0
-        offset_from_furthest: 5
-        threshold_to_consider: 1.4
+        cost_weight: 7.0
+        offset_from_furthest: 6
+        threshold_to_consider: 0.8
       PathAngleCritic:
-        enabled: false
+        enabled: False
         cost_power: 1
         cost_weight: 2.0
         offset_from_furthest: 4
@@ -144,10 +191,15 @@ controller_server:
       #   cost_power: 1
       #   cost_weight: 35.0
       #   deadband_velocities: [0.05, 0.05, 0.05]
+      # 抑制"不必要的转向"。注意本 fork 的实现是**对整条轨迹的 mean|wz| 无条件计代价**
+      # （twirling_critic.cpp:40-41），不是只在原地打转时生效 —— 所以它本质是"少转"的旋钮：
+      # 车头老被甩/来回摆时调大，转不动/摆不正时调小或关掉。
+      # 参数名坑：本 fork 读的是 cost_power / cost_weight；yaml 里原来的
+      # twirling_cost_power / twirling_cost_weight **不会被读取**（默认 10.0 生效过）。
       TwirlingCritic:
-        enabled: false
-        twirling_cost_power: 1
-        twirling_cost_weight: 10.0
+        enabled: False
+        cost_power: 1
+        cost_weight: 3.0
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -197,16 +249,18 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 4.0
-        # 原为 0.364，小于 robot_radius(0.369) 即 inscribed 半径：膨胀区里全部是 253
-        # （INSCRIBED），而 CostCritic 与 ObstaclesCritic 都把 253 直接判为碰撞，于是
-        # 机器人一进膨胀区，每条候选轨迹的首点就落在 253 上，全部轨迹作废、fail_flag
-        # 置位，优化器 reset 一次后抛 "Optimizer fail to compute path"，控制器停住。
-        # 取 0.60 之后，0.369～0.60 之间是有梯度的软代价区
-        # （253 × exp(-4.0 × (d - 0.369))：0.45 m 处约 183，0.60 m 处约 100），
-        # 机器人可以进入这一带而不再被判碰撞；253 区仍等于车体接触区。
-        # 硬碰撞边界由 robot_radius 决定，调大本条不压缩可通行的窄道宽度。
-        inflation_radius: 0.60
+        # 对齐仿真（8.0）：膨胀代价 252·exp(-scale·(d - inscribed))，scale 越大带外掉得越快，
+        # 才有"离障碍远一点更便宜"的梯度。原先 4.0 时整圈 0.4~0.6 m 都还在 100~250，
+        # 几乎是个平台 → 车贴着 253 边界走也不吃亏（实测确实会进内切带）。
+        # 现在 inscribed = robot_radius 0.367 + footprint_padding 0.03 ≈ 0.397：
+        #   d = 0.42 m 处 ≈ 252·exp(-8×0.023) ≈ 210
+        #   d = 0.50 m 处 ≈ 252·exp(-8×0.103) ≈ 111
+        #   d = 0.60 m 处 ≈ 252·exp(-8×0.203) ≈ 50
+        # 0.397 以内是 253（INSCRIBED），而 CostCritic.consider_footprint: false 把它判为
+        # 碰撞 → 车中心不得进入；再往外才是软代价梯度。调大本条不压缩可通行的窄道宽度，
+        # 硬边界只由 robot_radius + padding 决定。
+        cost_scaling_factor: 8.0
+        inflation_radius: 0.50
 
 global_costmap:
   global_costmap:
@@ -267,8 +321,14 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 4.0
-        inflation_radius: 0.366
+        # 对齐仿真（10.0 / 0.55）。原为 0.366，小于内切半径（0.367 + padding 0.03 =
+        # 0.397），nav2 会一直报 "inflation radius smaller than the computed inscribed
+        # radius"，而且全局路径的安全距离等于局部内切半径 → 全局路径本身就贴着相切带走，
+        # 局部 MPPI 只能跟着。0.55 > 0.397 之后膨胀带才有意义。
+        # 注意别再往上提到 0.9：膨胀代价按面积走（∝r²），而 global costmap 的
+        # inflation 跑在控制器同一个容器里，会抢 CPU。
+        cost_scaling_factor: 10.0
+        inflation_radius: 0.50
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
 # If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
@@ -348,7 +408,10 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: False
 
-    smoothing_frequency: 20.0
+    # 与 controller_server.controller_frequency（30 Hz）对齐：此参数同时是 smoother
+    # 的发布频率，设成 20 会先把控制器的 30 Hz 抽成 20 Hz，再交给 nonrotating 补到
+    # 60 Hz——补出来的大部分是重复值。保持 30，让每一条控制指令都进入下游。
+    smoothing_frequency: 30.0
 
     scale_velocities: False
 
@@ -369,3 +432,11 @@ velocity_smoother:
     deadband_velocity: [0.0, 0.0, 0.0]
 
     velocity_timeout: 1.0
+
+# ── 启动即小陀螺（导航启动时的底盘模式与自旋速度）──
+# mppi 的 costmap 走 base_footprint_nonrotating，可以自旋；pid 的 costmap 仍用
+# 旋转的 base_footprint，不能自旋，见 controller/pid.yaml。
+nonrotating_vel_transform:
+  ros__parameters:
+    initial_chassis_mode: 1 # 1 = littleTES，启动即自旋
+    init_spin_speed: 1.0 # 未收到 cmd_spin 前的固定自旋角速度 (rad/s)

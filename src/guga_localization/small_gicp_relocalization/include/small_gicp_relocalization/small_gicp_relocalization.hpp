@@ -45,10 +45,11 @@ private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void loadGlobalMap(const std::string & file_name);
   void initializeGlobalMap();
+  void publishPriorPcd();
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
-  void regulateRegistration(Eigen::Isometry3d& result_t);
+  void regulateRegistration(Eigen::Isometry3d & result_t);
   /// @brief 惯性约束: 候选 tf 相对基准 tf 的平移偏差过大时, 舍弃本次变换并回到基准;
   ///        good 为真(配准质量达标)的一次重定位则被采纳为新的基准 tf。
   ///        基准若来自手动定位(baseline_is_manual_), 则不设漂移上限, 允许注册把它修正回来。
@@ -60,12 +61,15 @@ private:
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_pcd_pub_;
 
-  bool registration_initial_=false;
-  bool accumulation_reset_=false;
+  bool registration_initial_ = false;
+  bool accumulation_reset_ = false;
   /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
   ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
   bool pending_initial_pose_{false};
+  /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
+  ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
   int num_threads_;
   int num_neighbors_;
   int max_iterations_;
@@ -78,6 +82,8 @@ private:
   double good_error_max_;
   double good_inlier_ratio_;
   double baseline_translation_tolerance_;
+  double baseline_update_translation_threshold_;
+  double baseline_update_yaw_threshold_;
   double map_boundary_margin_;
   double previous_rmse_{0.0};  ///< 上一次注册的 RMSE (sqrt(error / num_inliers))
   /// @brief 上一次注册的内点率 (num_inliers / 源点数); 与 previous_rmse_ 一起决定迭代脉冲是否拉满
@@ -90,6 +96,10 @@ private:
   std::string base_frame_;
   std::string robot_base_frame_;
   std::string lidar_frame_;
+  std::vector<double> body_to_base_t_;
+  std::vector<double> body_to_base_r_;
+  std::vector<double> lidar_to_base_t_;
+  std::vector<double> lidar_to_base_r_;
   std::string current_scan_frame_id_;
   rclcpp::Time last_scan_time_;
   Eigen::Isometry3d result_t_;
@@ -98,9 +108,11 @@ private:
   /// @brief 唯一的基准 tf: 最近一次"残差很小且未越界"的重定位结果,
   ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
   Eigen::Isometry3d baseline_tf_;
+  /// @brief 唯一的基准 tf: 最近一次"残差很小且未越界"的重定位结果,
+  ///        既是惯性约束的比较对象, 也是越界/惯性回退的目标
   bool global_map_ready_{false};
-  bool prior_map_in_map_frame_{false};
   bool has_map_bounds_{false};
+  bool publish_prior_pcd_{true};
   /// @brief 当前基准是否来自手动定位(未过质量门)。为真时跳过惯性漂移检查,
   ///        因为手动基准本身就是"待修正"的, 一旦 GICP 收敛出合格结果就会被替换掉。
   bool baseline_is_manual_{false};
@@ -123,6 +135,7 @@ private:
   rclcpp::TimerBase::SharedPtr transform_timer_;
   rclcpp::TimerBase::SharedPtr register_timer_;
   rclcpp::TimerBase::SharedPtr map_initialization_timer_;
+  rclcpp::TimerBase::SharedPtr prior_pcd_timer_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;

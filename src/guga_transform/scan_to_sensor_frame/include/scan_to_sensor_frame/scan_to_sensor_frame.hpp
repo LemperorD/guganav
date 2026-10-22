@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <chrono>
+#include <vector>
 
 #include "message_filters/subscriber.h"
 #include "message_filters/sync_policies/approximate_time.h"
@@ -96,6 +97,9 @@ private:
   double min_odometry_dt_{1e-3};
   double max_linear_velocity_{10.0};
   double max_angular_velocity_{20.0};
+  /// base_footprint <- front_mid360 显式安装变换；为空时回退到 TF。
+  std::vector<double> lidar_to_base_t_;
+  std::vector<double> lidar_to_base_r_;
   /// @brief 临时平地模式: 为真时把 odom->base_footprint 的 z 强制为 0, 屏蔽 point_lio 的 z 漂移
   bool zero_base_z_{false};
 

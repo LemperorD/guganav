@@ -12,8 +12,8 @@ set -euo pipefail
 #   scripts/paramview.sh --port 8091 --no-browser
 #   scripts/paramview.sh --read-only                      # 只调不存，禁止写回配置文件
 #
-# 参数表取自 scripts/params_list/<profile>_para.txt（名称|说明）；基线取自
-# scripts/param_merge.py 合并后的 yaml，用来在界面上标出"当前值已经偏离配置值"。
+# 参数表取自 scripts/paramview/params_list/<profile>_para.txt（名称|说明）；基线取自
+# scripts/paramview/param_merge.py 合并后的 yaml，用来在界面上标出"当前值已经偏离配置值"。
 #
 # 界面上的"保存到配置"把当前与配置不同的参数写回三层 yaml 里最后出现该参数的
 # 那个文件（base → controller → planner，与 param_merge.py 的合并顺序一致），
@@ -55,10 +55,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-LIST_FILE="$WS/scripts/params_list/${PROFILE}_para.txt"
+LIST_FILE="$WS/scripts/paramview/params_list/${PROFILE}_para.txt"
 if [ ! -f "$LIST_FILE" ]; then
   echo "缺少参数表：$LIST_FILE" >&2
-  echo "可用的 profile：$(ls "$WS/scripts/params_list" | sed 's/_para.txt//' | tr '\n' ' ')" >&2
+  echo "可用的 profile：$(ls "$WS/scripts/paramview/params_list" | sed 's/_para.txt//' | tr '\n' ' ')" >&2
   exit 1
 fi
 

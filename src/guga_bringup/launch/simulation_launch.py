@@ -126,7 +126,10 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Single params file override (disables 3-file merge)",
+        description=(
+            "Single params file override (disables 3-file merge); "
+            "该文件需自带 nonrotating_vel_transform 段，否则该节点拿不到话题名"
+        ),
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -212,7 +215,7 @@ def generate_launch_description():
     declare_show_prior_pcd_cmd = DeclareLaunchArgument(
         "show_prior_pcd",
         default_value="True",
-        description="Publish the prior PCD on /cloud_pcd; ignored in mapping mode",
+        description="Publish the prior PCD in navigation; forced off in mapping mode",
     )
 
     start_velodyne_convert_tool = Node(
@@ -236,28 +239,6 @@ def generate_launch_description():
         }.items(),
     )
 
-    prior_pcd_publisher_cmd = Node(
-        package="pcl_ros",
-        executable="pcd_to_pointcloud",
-        name="prior_pcd_publisher",
-        output="screen",
-        condition=IfCondition(
-            PythonExpression(
-                [
-                    "'", show_prior_pcd, "'.lower() == 'true' and '",
-                    slam, "'.lower() != 'true'",
-                ]
-            )
-        ),
-        parameters=[
-            {
-                "file_name": prior_pcd_file,
-                "tf_frame": "map",
-                "publishing_period_ms": 1000,
-            }
-        ],
-    )
-
     bringup_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, "core", "bringup_launch.py")
@@ -267,6 +248,7 @@ def generate_launch_description():
             "slam": slam,
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
+            "show_prior_pcd": show_prior_pcd,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
             "base_params_file": base_params_file,
@@ -311,7 +293,6 @@ def generate_launch_description():
     ld.add_action(start_velodyne_convert_tool)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
-    ld.add_action(prior_pcd_publisher_cmd)
     ld.add_action(guga_ui_cmd)
 
     return ld

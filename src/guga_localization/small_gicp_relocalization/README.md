@@ -35,15 +35,20 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 |-----------|------|------|------|
 | `registered_scan` | `sensor_msgs/PointCloud2` | 订阅 | Point-LIO 输出的 `odom` 系注册点云，累积后作为 GICP 源点云 |
 | `initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | 订阅 | RViz 手动初始位姿，仅在自动重定位失败或需要人工干预时使用 |
-| TF `base_frame <- lidar_frame` | `tf2` | 旧格式地图初始化时查询 | 转换无坐标标记的旧 PCD；查不到时每秒重试。map 格式无需此转换 |
+| `/cloud_pcd` | `sensor_msgs/PointCloud2` | 发布 | 转换到 `odom` 的完整先验地图，仅用于导航可视化 |
+| `body_to_base_t/_r` | 参数 | 启动时读取一次 | 把 Point-LIO IMU body 系的先验地图换算到 `odom` 系 |
+| TF `base_frame <- lidar_frame` | `tf2` | 未配置上述参数时回退 | 兼容旧配置；查不到时每秒重试 |
 | TF `odom_frame <- base_frame` | `tf2` | 每轮查询 | 越界检查时计算机器人在地图中的水平位置 |
 | TF `robot_base_frame <- current_scan_frame_id` | `tf2` | 收到 `initialpose` 时 | 把 RViz 给的机器人位姿换算成 `map -> odom` |
 | TF `map -> odom` | `tf2` | 发布（20 Hz） | 唯一的输出，即定位修正量 |
 
-新 Point-LIO 保存的 PCD 含 `# guganav_frame: map` 文件头标记，坐标已在建图时
-转换到 map 系，加载时直接使用，不再依赖定位机器的安装外参。
-无标记的旧 PCD 仍按雷达里程计系处理，初始化时使用
-`base_frame <- lidar_frame` 的安装变换换算，兼容已有地图。
+先验 PCD 的 `camera_init` 原点是 Point-LIO IMU body，而不是 lidar 原点。节点优先用
+`body_to_base_t/_r` 把它换算到 `odom`；未配置时才查询 `base_frame <- lidar_frame`
+作为兼容回退。
+
+`/cloud_pcd` 发布的是完成上述转换后的 `global_map_`，消息帧为 `odom`；不再由
+`pcd_to_pointcloud` 直接发布原始 PCD，避免坐标系标错。导航模式下由
+`show_prior_pcd` 控制是否发布，建图模式不会启动本节点。
 
 ### 参数
 
@@ -67,6 +72,8 @@ small_gicp_relocalization:
     good_error_max: 0.4               # 可升级为基准 tf 的 RMSE 上限
     good_inlier_ratio: 0.99           # 可升级为基准 tf 的内点率下限
     baseline_translation_tolerance: 4.0  # 惯性约束: 候选相对基准 tf 的平移偏差上限 (m)
+    baseline_update_translation_threshold: 0.01  # 小于该水平变化时冻结 map->odom (m)
+    baseline_update_yaw_threshold: 0.01          # 小于该 yaw 变化时冻结 map->odom (rad)
     map_boundary_margin: 1.0          # 位姿超出先验地图外接框的允许余量 (m)
     # 坐标系
     map_frame: "map"
@@ -85,8 +92,8 @@ small_gicp_relocalization:
 
 ### 重定位逻辑
 
-- 启动阶段加载 `prior_pcd_file`；有 map 标记则直接使用，否则用
-  `base_frame <- lidar_frame` 转换旧格式先验地图。之后计算地图外接框；随后按 `global_leaf_size` 降采样、估计协方差、建 KD 树。
+- 启动阶段加载 `prior_pcd_file`，用 `base_frame <- lidar_frame` 把先验地图换算到
+  `odom` 系并计算地图外接框；随后按 `global_leaf_size` 降采样、估计协方差、建 KD 树。
   TF 没就绪时每秒重试一次，不阻塞地图就绪之后的流程。
 - 2 Hz（500 ms）把累积的 `registered_scan` 作为源点云，按 `registered_leaf_size`
   降采样后做 GICP。`StepLimitOptimizer` 限制每次迭代的 roll/pitch 增量
@@ -96,6 +103,9 @@ small_gicp_relocalization:
   （`map_boundary_margin`）的结果，才能升级为新的基准 tf。
 - 惯性约束：候选相对当前基准 tf 的平移偏差超过 `baseline_translation_tolerance` 时
   直接丢弃并回到基准，保证只在基准附近做平移搜索；只有通过质量门的候选才刷新基准。
+- 抖动抑制：已定准后，候选相对基准的水平变化小于
+  `baseline_update_translation_threshold` 且 yaw 变化小于
+  `baseline_update_yaw_threshold` 时保持原 `map -> odom`；超过死区才更新基准。
 - 迭代脉冲：上一帧 RMSE ≤ `error_max` 且内点率达标时，本次只迭代 10 次（快路径）；
   任一不达标就把迭代上限拉满到 `max_iterations` 重新收敛。
 - 手动定位：还没有基准时，RViz 的 `initialpose` 直接作为基准（绕过质量门）；已有基准

@@ -65,7 +65,7 @@ guganav/
 │   ├── guga_decision/       # 决策节点和行为树相关代码
 │   ├── guga_sim/            # Gazebo/RMOSS 仿真资源与工具
 │   └── guga_ui*/            # UI 模块和历史 UI 代码
-├── scripts/                 # 构建、仿真、建图、测试、提交辅助脚本
+├── scripts/                 # 构建、仿真、实车启动、调参、测试、提交辅助脚本
 ├── docs/                    # 编码规范、测试诊断、性能测试、重构验证
 ├── autostart/               # 自启动相关配置
 ├── rosbag/                  # 本地 rosbag 数据目录
@@ -243,14 +243,15 @@ scripts/simulation.sh nav rmul_2025
 scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 ```
 
-需要在 RViz 中查看当前场景的先验 PCD 时，显式打开点云发布：
+导航模式默认在 RViz 中显示当前场景的先验 PCD：
 
 ```bash
-scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
+scripts/simulation.sh nav rmul_2025
 ```
 
-该选项默认关闭，建图模式下会被强制关闭。打开发布后，在 RViz 中勾选
-`Prior PCD` 显示项即可查看 `/cloud_pcd`；坐标系为 `map`。
+导航时可通过 `show_prior_pcd:=False` 关闭；建图模式始终强制关闭。开启时
+`small_gicp_relocalization` 会把已经转换到 `odom` 的先验地图发布为 `/cloud_pcd`，
+RViz 再通过 `map -> odom` 显示，避免把雷达里程计坐标误标成 `map`。
 
 ### 仿真建图
 
@@ -263,40 +264,52 @@ scripts/simulation.sh map rmul_2025
 
 ```bash
 cd ~/guganav
-source install/setup.bash
-ros2 launch guga_bringup reality_launch.py
+scripts/reality.sh nav
+# 等价的原始入口
+# source install/setup.bash
+# ros2 launch guga_bringup reality_launch.py
 ```
 
-实车导航脚本同样支持按需查看先验点云：
+实车导航模式同样默认显示先验点云：
 
 ```bash
-scripts/reality.sh nav floor2 show_prior_pcd:=True
+scripts/reality.sh nav floor2
 ```
 
-该选项默认关闭，建图模式下会被强制关闭。打开发布后，在 RViz 中勾选
-`Prior PCD` 显示项即可查看 `/cloud_pcd`。也可通过
+导航时可通过 `show_prior_pcd:=False` 关闭；建图模式始终强制关闭。也可通过
 `prior_pcd_file:=/path/to/map.pcd` 指定其他 PCD。
 
 ### 实车建图
 
 ```bash
 cd ~/guganav
-scripts/map.sh
+scripts/reality.sh map
 ```
 
 ### 导航与决策联调
 
 ```bash
 cd ~/guganav
-scripts/nav_decision.sh
+scripts/reality.sh nav use_decision:=true
 ```
 
 ### 保存地图
 
+建图结束后用 `map_saver` 保存到 `src/guga_bringup/map/reality/`：
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f src/guga_bringup/map/reality/<world>
+```
+
+### 在线调参
+
 ```bash
 cd ~/guganav
-scripts/save_map.sh
+scripts/paramview.sh            # 默认 controller_server 的 FollowPath（mppi 参数表）
+scripts/paramview.sh --profile pid --mode simulation
 ```
+
+参数表在 `scripts/paramview/params_list/`，保存时写回 `src/guga_bringup/config/` 的三层 yaml。
 
 ## Point-LIO
 
@@ -326,7 +339,8 @@ ros2 launch point_lio point_lio.launch.py \
 
 `registered_scan` 带有可配置的 odom 系 Z 向滤波
 （`output_frame.z_filter.{enable,min_z,max_z}`）；该滤波只作用于供感知和定位使用的
-项目约定点云，不改变 Point-LIO 原始 `cloud_registered`。
+项目约定点云，不改变 Point-LIO 原始 `cloud_registered`。PCD 保存也会使用同一组
+odom 高度阈值筛选点，但保存的 PCD 坐标仍保持在 Point-LIO 的 IMU body 世界系。
 
 常用 launch 参数：
 
@@ -349,6 +363,7 @@ scripts/pre-commit/run_pid_tests.sh
 scripts/pre-commit/run_simple_decision_tests.sh
 scripts/pre-commit/run_jps_tests.sh
 scripts/pre-commit/run_mppi_tests.sh
+scripts/pre-commit/run_nonrotating_tests.sh
 ```
 
 手动运行 colcon 测试：

@@ -26,10 +26,6 @@
  *   角速度和加速度本身被估计, 每帧同时做激光量测和 IMU 量测更新
  */
 
-#include <filesystem>
-#include <fstream>
-#include <pcl/common/transforms.h>
-
 #include "point_lio/laserMapping.h"
 #include "point_lio/core/FrameProcessor.h"
 
@@ -101,7 +97,8 @@ void LaserMappingNode::initializeRos2Interfaces() {
                           && config_.publish.pcd_save_enabled
                           && config_.output_frame.z_filter.enabled;
   if (config_.output_frame.enabled || filter_pcd) {
-    if (!config_.output_frame.extrinsic_from_params) {
+    if (!config_.output_frame.body_to_base_from_params
+        && !config_.output_frame.extrinsic_from_params) {
       tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
       tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     }
@@ -186,41 +183,66 @@ bool LaserMappingNode::resolveOdomExtrinsic() {
     return true;
   }
   const auto& out = config_.output_frame;
+  if (out.body_to_base_from_params) {
+    odom_rotation_ << out.body_to_base_r[0], out.body_to_base_r[1],
+        out.body_to_base_r[2], out.body_to_base_r[3], out.body_to_base_r[4],
+        out.body_to_base_r[5], out.body_to_base_r[6], out.body_to_base_r[7],
+        out.body_to_base_r[8];
+    odom_translation_ << out.body_to_base_t[0], out.body_to_base_t[1],
+        out.body_to_base_t[2];
+    odom_extrinsic_ready_ = true;
+    RCLCPP_INFO(get_logger(), "odom 输出使用显式参数 %s <- body",
+                out.base_frame.c_str());
+    return true;
+  }
+
+  Eigen::Matrix3d base_lidar_rotation;
+  Eigen::Vector3d base_lidar_translation;
   if (out.extrinsic_from_params) {
-    odom_rotation_ << out.lidar_to_base_r[0], out.lidar_to_base_r[1],
+    base_lidar_rotation << out.lidar_to_base_r[0], out.lidar_to_base_r[1],
         out.lidar_to_base_r[2], out.lidar_to_base_r[3], out.lidar_to_base_r[4],
         out.lidar_to_base_r[5], out.lidar_to_base_r[6], out.lidar_to_base_r[7],
         out.lidar_to_base_r[8];
-    odom_translation_ << out.lidar_to_base_t[0], out.lidar_to_base_t[1],
+    base_lidar_translation << out.lidar_to_base_t[0], out.lidar_to_base_t[1],
         out.lidar_to_base_t[2];
-    odom_extrinsic_ready_ = true;
-    RCLCPP_INFO(get_logger(), "odom 输出使用的安装变换来自参数 %s <- %s",
-                out.base_frame.c_str(), out.lidar_frame.c_str());
-    return true;
+  } else {
+    if (!tf_buffer_) {
+      return false;
+    }
+    try {
+      // 静态变换, 用 TimePointZero 取最新可用值, 不依赖雷达时间戳
+      const auto tf_stamped = tf_buffer_->lookupTransform(
+          out.base_frame, out.lidar_frame, tf2::TimePointZero);
+      const auto& q = tf_stamped.transform.rotation;
+      const Eigen::Quaterniond quat(q.w, q.x, q.y, q.z);
+      base_lidar_rotation = quat.toRotationMatrix();
+      const auto& t = tf_stamped.transform.translation;
+      base_lidar_translation << t.x, t.y, t.z;
+    } catch (const tf2::TransformException& ex) {
+      RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "查不到安装变换 %s <- %s: %s, 暂不发布 %s/%s 或保存 PCD",
+          out.base_frame.c_str(), out.lidar_frame.c_str(), ex.what(),
+          out.registered_scan_topic.c_str(), out.lidar_odometry_topic.c_str());
+      return false;
+    }
   }
-  if (!tf_buffer_) {
-    return false;
-  }
-  try {
-    // 静态变换, 用 TimePointZero 取最新可用值, 不依赖雷达时间戳
-    const auto tf_stamped = tf_buffer_->lookupTransform(
-        out.base_frame, out.lidar_frame, tf2::TimePointZero);
-    const auto& q = tf_stamped.transform.rotation;
-    const Eigen::Quaterniond quat(q.w, q.x, q.y, q.z);
-    odom_rotation_ = quat.toRotationMatrix();
-    const auto& t = tf_stamped.transform.translation;
-    odom_translation_ << t.x, t.y, t.z;
-    odom_extrinsic_ready_ = true;
-    RCLCPP_INFO(get_logger(), "已从 TF 取得安装变换 %s <- %s",
-                out.base_frame.c_str(), out.lidar_frame.c_str());
-  } catch (const tf2::TransformException& ex) {
-    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                         "查不到安装变换 %s <- %s: %s, 暂不发布 %s/%s",
-                         out.base_frame.c_str(), out.lidar_frame.c_str(),
-                         ex.what(), out.registered_scan_topic.c_str(),
-                         out.lidar_odometry_topic.c_str());
-    return false;
-  }
+
+  const Eigen::Matrix3d lidar_imu_rotation =
+      to_mat3d(config_.sensor.extrinsic_r);
+  const Eigen::Vector3d lidar_imu_translation =
+      to_vec3d(config_.sensor.extrinsic_t);
+  const Eigen::Matrix3d imu_lidar_rotation =
+      lidar_imu_rotation.transpose();
+  const Eigen::Vector3d imu_lidar_translation =
+      -imu_lidar_rotation * lidar_imu_translation;
+  odom_rotation_ = base_lidar_rotation * imu_lidar_rotation;
+  odom_translation_ = base_lidar_rotation * imu_lidar_translation
+                      + base_lidar_translation;
+  odom_extrinsic_ready_ = true;
+  RCLCPP_INFO(get_logger(),
+              "odom 输出使用 %s <- body（由 base<-lidar 与 lidar->imu 合成）",
+              out.base_frame.c_str());
   return true;
 }
 
@@ -336,8 +358,9 @@ void LaserMappingNode::publishFrameWorld() {
         pcd_index_++;
         string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_")
                               + to_string(pcd_index_) + string(".pcd"));
+        pcl::PCDWriter pcd_writer;
         std::cout << "current scan saved to /PCD/" << all_points_dir << '\n';
-        saveMapCloud(all_points_dir);
+        pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
         state_.pcl_wait_save->clear();
         pcd_scan_count_ = 0;
       }
@@ -385,44 +408,6 @@ void LaserMappingNode::savePcd() {
 
   string file_name = string("scans_" + str_time + ".pcd");
   string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
-  saveMapCloud(all_points_dir);
-}
-
-// New maps are stored in the mapping session's base-aligned odom/map frame.
-// Keep the frame marker inside the PCD so copying the file preserves its meaning.
-void LaserMappingNode::saveMapCloud(const std::string& path) {
-  if (!resolveOdomExtrinsic()) {
-    throw std::runtime_error("Cannot save map without lidar-to-base transform");
-  }
-  Eigen::Matrix4d transform = Eigen::Matrix4d::Identity();
-  transform.block<3, 3>(0, 0) = odom_rotation_;
-  transform.block<3, 1>(0, 3) = odom_translation_;
-  PointCloudXYZI cloud;
-  pcl::transformPointCloud(*state_.pcl_wait_save, cloud, transform);
-  const auto raw_path = path + ".raw.tmp";
-  const auto marked_path = path + ".tmp";
-  try {
-    pcl::PCDWriter writer;
-    if (writer.writeBinary(raw_path, cloud) != 0) {
-      throw std::runtime_error("Failed to write PCD: " + raw_path);
-    }
-    std::ifstream input(raw_path, std::ios::binary);
-    std::ofstream output(marked_path, std::ios::binary);
-    if (!input || !output) {
-      throw std::runtime_error("Failed to open PCD temporary file");
-    }
-    output << "# guganav_frame: map\n" << input.rdbuf();
-    output.close();
-    if (!output) {
-      throw std::runtime_error("Failed to write map-frame PCD");
-    }
-    std::filesystem::rename(marked_path, path);
-    std::filesystem::remove(raw_path);
-    RCLCPP_INFO(get_logger(), "Saved map-frame PCD: %s", path.c_str());
-  } catch (...) {
-    std::error_code error;
-    std::filesystem::remove(raw_path, error);
-    std::filesystem::remove(marked_path, error);
-    throw;
-  }
+  pcl::PCDWriter pcd_writer;
+  pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
 }

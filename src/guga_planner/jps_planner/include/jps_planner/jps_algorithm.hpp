@@ -55,7 +55,7 @@ namespace jps_planner {
 
   private:
     // ── Costmap 常量 ──
-    static constexpr unsigned char UNKNOWN_COST = 255;  // 未知空间
+    static constexpr unsigned char UNKNOWN_COST = 255;    // 未知空间
     static constexpr unsigned char INSCRIBED_COST = 253;  // 膨胀后的内切障碍物
     static constexpr unsigned char MAX_NON_OBSTACLE =
         252;  // 最高非障碍物代价值

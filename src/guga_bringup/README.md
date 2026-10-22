@@ -17,10 +17,17 @@ bringup模块，存放launch、参数、rviz等文件
 （odom 对齐）的坐标系，作为 Nav2 的 `robot_base_frame`，支持底盘自旋
 （TES）。`jps_pid` 使用 `base_footprint`，不走该参考系。
 
-**导航启动即小陀螺**：`nonrotating_vel_transform` 启动时默认 `littleTES`
-（`initial_chassis_mode=1`）+ `init_spin_speed=6.28`，所以 `2d_mppi`/`jps_mpc`
-导航栈一启动底盘即自旋，不依赖决策节点；`jps_pid` 在 launch 中显式设为
-跟随模式（`initial_chassis_mode=0`），不自旋。
+**导航启动即小陀螺**：`nonrotating_vel_transform` 的无控制器差异参数在
+`config/<mode>/base.yaml` 的 `nonrotating_vel_transform:` 段；启动模式与自旋速度
+写在 `config/<mode>/controller/<profile>.yaml`：`mppi`/`mpc` 为
+`initial_chassis_mode=1`（littleTES）+ `init_spin_speed=1.0`，所以
+`2d_mppi`/`jps_mpc` 导航栈一启动底盘即自旋，不依赖决策节点；`pid` 为
+`initial_chassis_mode=0`（跟随模式）+ `init_spin_speed=0.0`，不自旋。
+
+`nonrotating_vel_transform` 的其余参数（话题、坐标系、`publish_frequency`、
+`enable_spin`、`correct_ratio` 等）在 `config/<mode>/base.yaml` 的
+`nonrotating_vel_transform:` 段；用单文件 `params_file:=` 调试时，该文件需自带
+这一段（分层文件不再补齐）。
 
 TES 自旋接管：`simple_decision`（`always_tes` 默认 true）运行后持续发布
 `chassis_mode=LITTLE_TES` 与 `cmd_spin`，`nonrotating_vel_transform` 将

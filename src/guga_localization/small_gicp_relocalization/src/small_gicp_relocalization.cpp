@@ -15,7 +15,6 @@
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
 #include <cmath>
-#include <fstream>
 #include <limits>
 
 #include "pcl/common/common.h"
@@ -46,13 +45,24 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("good_error_max", 0.5);
   this->declare_parameter("good_inlier_ratio", 0.5);
   this->declare_parameter("baseline_translation_tolerance", 1.0);
+  this->declare_parameter("baseline_update_translation_threshold", 0.01);
+  this->declare_parameter("baseline_update_yaw_threshold", 0.01);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
   this->declare_parameter("base_frame", "");
   this->declare_parameter("robot_base_frame", "");
   this->declare_parameter("lidar_frame", "");
+  this->declare_parameter<std::vector<double>>(
+    "body_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "body_to_base_r", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_r", std::vector<double>{});
   this->declare_parameter("prior_pcd_file", "");
+  this->declare_parameter("publish_prior_pcd", true);
   this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
 
   this->get_parameter("num_threads", num_threads_);
@@ -67,13 +77,21 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("good_error_max", good_error_max_);
   this->get_parameter("good_inlier_ratio", good_inlier_ratio_);
   this->get_parameter("baseline_translation_tolerance", baseline_translation_tolerance_);
+  this->get_parameter(
+    "baseline_update_translation_threshold", baseline_update_translation_threshold_);
+  this->get_parameter("baseline_update_yaw_threshold", baseline_update_yaw_threshold_);
   this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
   this->get_parameter("base_frame", base_frame_);
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("lidar_frame", lidar_frame_);
+  this->get_parameter("body_to_base_t", body_to_base_t_);
+  this->get_parameter("body_to_base_r", body_to_base_r_);
+  this->get_parameter("lidar_to_base_t", lidar_to_base_t_);
+  this->get_parameter("lidar_to_base_r", lidar_to_base_r_);
   this->get_parameter("prior_pcd_file", prior_pcd_file_);
+  this->get_parameter("publish_prior_pcd", publish_prior_pcd_);
   this->get_parameter("init_pose", init_pose_);
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
@@ -121,6 +139,13 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   // including the Nav2 servers that own the costmaps.
   map_initialization_timer_ = this->create_wall_timer(
     std::chrono::seconds(1), [this] (){initializeGlobalMap();});
+
+  if (publish_prior_pcd_) {
+    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/cloud_pcd", 1);
+    prior_pcd_timer_ = this->create_wall_timer(
+      std::chrono::seconds(1), [this] () {publishPriorPcd();});
+  }
 }
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
@@ -129,18 +154,6 @@ void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
     RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", file_name.c_str());
     return;
   }
-  std::ifstream input(file_name, std::ios::binary);
-  std::string line;
-  while (std::getline(input, line)) {
-    if (line == "# guganav_frame: map") {
-      prior_map_in_map_frame_ = true;
-    }
-    if (line.rfind("DATA ", 0) == 0) {
-      break;
-    }
-  }
-  RCLCPP_INFO(this->get_logger(), "Prior PCD frame: %s",
-    prior_map_in_map_frame_ ? "map" : "legacy lidar odometry");
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
 }
 
@@ -152,10 +165,30 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
     return;
   }
 
-  // Legacy maps use lidar odometry coordinates. New marked maps were already
-  // transformed at save time and must not use this robot's mounting transform.
-  Eigen::Affine3d odom_to_lidar_odom = Eigen::Affine3d::Identity();
-  if (!prior_map_in_map_frame_) {
+  Eigen::Affine3d odom_to_lidar_odom;
+  const bool has_body_transform =
+    body_to_base_t_.size() == 3 && body_to_base_r_.size() == 9;
+  const bool has_lidar_transform =
+    lidar_to_base_t_.size() == 3 && lidar_to_base_r_.size() == 9;
+  if (has_body_transform || has_lidar_transform) {
+    const auto & translation =
+      has_body_transform ? body_to_base_t_ : lidar_to_base_t_;
+    const auto & rotation_values =
+      has_body_transform ? body_to_base_r_ : lidar_to_base_r_;
+    Eigen::Matrix3d rotation;
+    rotation << rotation_values[0], rotation_values[1], rotation_values[2],
+      rotation_values[3], rotation_values[4], rotation_values[5],
+      rotation_values[6], rotation_values[7], rotation_values[8];
+    odom_to_lidar_odom = Eigen::Affine3d::Identity();
+    odom_to_lidar_odom.linear() = rotation;
+    odom_to_lidar_odom.translation() << translation[0],
+      translation[1], translation[2];
+    RCLCPP_INFO(
+      this->get_logger(),
+      has_body_transform
+        ? "Using explicit body_to_base transform for prior PCD"
+        : "Using explicit lidar_to_base transform for prior PCD");
+  } else {
     try {
       const auto tf_stamped =
         tf_buffer_->lookupTransform(base_frame_, lidar_frame_, tf2::TimePointZero);
@@ -198,6 +231,19 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   global_map_ready_ = true;
   map_initialization_timer_->cancel();
   RCLCPP_INFO(this->get_logger(), "Global map registration target is ready");
+}
+
+void SmallGicpRelocalizationNode::publishPriorPcd()
+{
+  if (!global_map_ready_ || global_map_->empty() || !prior_pcd_pub_) {
+    return;
+  }
+
+  sensor_msgs::msg::PointCloud2 message;
+  pcl::toROSMsg(*global_map_, message);
+  message.header.stamp = this->get_clock()->now();
+  message.header.frame_id = odom_frame_;
+  prior_pcd_pub_->publish(message);
 }
 
 void SmallGicpRelocalizationNode::registeredPcdCallback(
@@ -400,6 +446,20 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   // 只有"效果好"(RMSE 小且内点率高, 未越界)的一次重定位, 才被采纳为新的基准 tf;
   // 基准是越界/惯性回退的目标, 必须保证它本身是可信的。
   if (good) {
+    if (!baseline_is_manual_) {
+      const Eigen::Isometry3d delta = baseline_tf_.inverse() * candidate;
+      const double translation_delta = delta.translation().head<2>().norm();
+      const double rotation_delta = std::abs(std::remainder(
+        std::atan2(delta.linear()(1, 0), delta.linear()(0, 0)), 2.0 * M_PI));
+      if (translation_delta <= baseline_update_translation_threshold_
+          && rotation_delta <= baseline_update_yaw_threshold_) {
+        RCLCPP_DEBUG_THROTTLE(
+          this->get_logger(), *this->get_clock(), 2000,
+          "Holding map->odom baseline: micro correction dt=%.4f m, dr=%.4f rad",
+          translation_delta, rotation_delta);
+        return true;
+      }
+    }
     baseline_tf_ = candidate;
     baseline_is_manual_ = false;
   }

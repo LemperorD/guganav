@@ -85,15 +85,31 @@ lidar_odometry: pose 转到 odom，child = front_mid360
 odometry: pose 转到 base_footprint，并发布 odom -> base_footprint
 ```
 
-Point-LIO 自身的位姿在雷达里程计系 (初始 IMU 姿态, `camera_init`) 下, 而项目其余节点
-统一使用与底盘对齐的 `odom` 系。两者的差异就是雷达的安装变换, 因此 `point_lio` 在
-`publishFrameOutputs()` 中左乘该变换后另行发布 `registered_scan` 与 `lidar_odometry`
-(见 `laserMapping.cpp` 的 `publishProjectOutputs()`); 该变换默认在启动阶段从 TF 查一次
-`base_frame <- lidar_frame`, 也可用 `output_frame.lidar_to_base_t/_r` 参数显式给出。
+Point-LIO 自身的位姿在 IMU body 世界系 (初始 IMU 姿态, `camera_init`) 下, 而项目其余
+节点统一使用与底盘对齐的 `odom` 系。两者的差异是 IMU body 到 base 的变换, 因此
+`point_lio` 在 `publishFrameOutputs()` 中左乘 `base <- body` 后发布
+`registered_scan` 与 `lidar_odometry`。该变换优先使用
+`output_frame.body_to_base_t/_r`；未配置时查询 `base_frame <- lidar_frame`，再与
+LiDAR→IMU 外参合成。
 
 这部分职责原先由独立节点 `loam_interface` 承担, 现已并入 `point_lio`, 原因是从
 `camera_init` 到 `odom` 的换算只需要安装变换, 而安装变换是静态的, 不必为此多一个节点
 和一次话题转发。
+
+仿真与实车统一加载 `buaa2026_sentry_robot.sdf.xmacro`。Point-LIO 的点云和状态位于
+IMU body 系，因此项目输出与先验 PCD 使用由
+`base_footprint <- front_mid360` 和 LiDAR→IMU 外参合成的 `base_footprint <- body`：
+
+```text
+t = [0.240274815, -0.011, 0.182506016]
+R = [ 0.0,          0.984807753,  0.173648178,
+     -1.0,          0.0,          0.0,
+      0.0,         -0.173648178,  0.984807753]
+```
+
+Point-LIO 使用这组参数生成 `registered_scan` 和 `lidar_odometry`；
+small_gicp 使用同一组参数把先验 PCD 换算到 `odom`。`scan_to_sensor_frame` 处理的是
+真正的 LiDAR 位姿，仍使用 `base_footprint <- front_mid360`（平移 `[0.225, 0, 0.230]`）。
 
 ## 4. `nonrotating_vel_transform` 的转换
 
@@ -122,14 +138,40 @@ odom 系的 yaw，使 Nav2 看到的机器人朝向恒为 odom 对齐（`yaw = 0
 速度链为：
 
 ```text
-controller_server
+controller_server（MPPI，30 Hz，加速度约束在控制器内部）
     -> cmd_vel_controller
-velocity_smoother
+velocity_smoother（nav2 官方，控制器输出侧）
     -> cmd_vel_smoothed
-nonrotating_vel_transform（旋转补偿 + 叠加自旋）
+nonrotating_vel_transform（旋转补偿 + 叠加自旋，60 Hz 定时重发）
     -> cmd_vel
-串口驱动 -> MCU
+串口驱动（可选滑动窗口均值 filter_window_size，默认 10；MCU 相对角旋转）
+    -> MCU
 ```
+
+**设计约束（重要）：控制器之后不允许再"整形"指令。** MPPI 用 odom 实测速度做初值、
+用自己那份 `control_sequence_` 积分预测；控制器之后的任何改写（再加一级限速、
+滑动窗口均值、或在末端再挂一个 `velocity_smoother`）都会让"实际执行"偏离"预测"，
+闭环里多出一个控制器不知道的环节，表现为抖/飘。整形必须放在 MPPI 内部——本仓库
+已移植的加速度约束正是打在**预测状态速度**上，规划出的轨迹本身物理可达。
+
+因此：
+
+- `nonrotating_vel_transform` 按 `publish_frequency`（实车/仿真配置 **60 Hz**，代码默认
+  50 Hz；运行时 `ros2 param set` 改频率会重建定时器并立即生效）定时重发
+  **最新一条**指令并用当前角度估计重新做旋转补偿，只做无损传输、不再限速。
+  这样控制器 30 Hz 的加速可行指令原样到达 MCU（此前只在 odom 同步时发布，约
+  10 Hz，等于把 3 个控制周期压成一个 0.45 m/s 的阶跃，等效 13.5 m/s²，本来就已经
+  在执行 MPPI 没规划过的轨迹）；旋转补偿也从 ~10 Hz 提到 60 Hz。
+  这里补的是**旋转补偿角**（`estimateRobotBaseAngle()` 每个 tick 重算），不是速度值：
+  `base_footprint_nonrotating` 系内的控制指令原样保留，控制器预测不受影响。
+- 上游停止发布超过 `cmd_vel_timeout`（默认 **0.5 s**）时，节点把**线性速度归零**，
+  不再继续重发最后一条非零指令（旧实现在这种场景下会让机器人带着旧指令继续跑）；
+  但**角速度不清** —— 自旋是底盘级行为（由 `cmd_spin` / `chassis_mode` 决定，与整车
+  轨迹无关），到达目标后应当继续小陀螺：littleTES 下仍按 `spin_speed_` 输出，
+  chassisFollowed 下本就无自旋，等价于完全停下。
+- 串口侧的 `filter_window_size` 是历史遗留的补丁，已参数化
+  （`serial_driver/config/serial_driver.yaml`，1 = 关闭），滤波也移到了 MCU 相对角
+  旋转**之前**（避免在随相对角旋转的坐标系里求平均）。整链修好后建议设 1。
 
 `simple_decision` 发布 `chassis_mode` 与 `cmd_spin`：决策层进入 `LITTLE_TES`
 模式时，`nonrotating_vel_transform` 将 `spin_speed_`（来自 `cmd_spin` 话题）

@@ -31,6 +31,7 @@ def generate_launch_description():
     slam = LaunchConfiguration("slam")
     map_yaml_file = LaunchConfiguration("map")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
+    show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
     autostart = LaunchConfiguration("autostart")
@@ -153,6 +154,12 @@ def generate_launch_description():
         "prior_pcd_file", description="Full path to prior PCD file to load"
     )
 
+    declare_show_prior_pcd_cmd = DeclareLaunchArgument(
+        "show_prior_pcd",
+        default_value="True",
+        description="Publish the transformed prior PCD in navigation mode",
+    )
+
     declare_use_sim_time_cmd = DeclareLaunchArgument(
         "use_sim_time",
         default_value="false",
@@ -229,6 +236,7 @@ def generate_launch_description():
                     "params_file": params_file,
                     "base_params_file": base_params_file,
                     "prior_pcd_file": prior_pcd_file,
+                    "show_prior_pcd": show_prior_pcd,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
@@ -273,6 +281,7 @@ def generate_launch_description():
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
+    ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

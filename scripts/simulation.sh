@@ -27,9 +27,10 @@ Examples:
   scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
   scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
 
-Prior PCD visualization (enabled by default in navigation mode):
-  show_prior_pcd:=True
-      Publish the selected prior PCD as /cloud_pcd for RViz.
+Prior PCD visualization:
+  Enabled by default in navigation and forced off in mapping.
+  show_prior_pcd:=False
+      Disable publication in navigation mode.
 
 Planner (planner:=):
   planner:=jps         JPS global planner
@@ -67,87 +68,19 @@ SIMULATION_PARAMS_DIR="$WS/src/guga_bringup/config/simulation"
 
 
 select_planner() {
-  local selection
-
-  # stdout is captured by the caller, so use /dev/tty to detect and read an
-  # actual interactive terminal instead of checking stdout's terminal state.
-  if [ ! -r /dev/tty ]; then
-    printf 'jps'
-    return 0
-  fi
-
-  cat >&2 <<'EOF'
-
-Select global planner:
-  1) JPS (jps)
-  2) SmacPlanner2D (smac2d)
-  3) SmacPlannerHybrid (smachybrid)
-EOF
-  while true; do
-    printf 'Planner [1]: ' >&2
-    if ! read -r selection < /dev/tty; then
-      selection=1
-    fi
-    case "${selection:-1}" in
-      1)
-        printf 'jps'
-        return 0
-        ;;
-      2)
-        printf 'smac2d'
-        return 0
-        ;;
-      3)
-        printf 'smachybrid'
-        return 0
-        ;;
-      *)
-        echo "Please select 1, 2, or 3." >&2
-        ;;
-    esac
-  done
+  # 交互实现与 reality.sh 共用（scripts/lib/common.sh 的 select_profile）：
+  # 无可用终端时返回默认值，stdout 只输出结果，菜单走 stderr。
+  select_profile "Select global planner:" "Planner" "jps" \
+    "jps|JPS (jps)" \
+    "smac2d|SmacPlanner2D (smac2d)" \
+    "smachybrid|SmacPlannerHybrid (smachybrid)"
 }
 
 select_controller() {
-  local selection
-
-  # stdout is captured by the caller, so use /dev/tty to detect and read an
-  # actual interactive terminal instead of checking stdout's terminal state.
-  if [ ! -r /dev/tty ]; then
-    printf 'pid'
-    return 0
-  fi
-
-  cat >&2 <<'EOF'
-
-Select controller:
-  1) omni PID (pid)
-  2) MPPI (mppi)
-  3) MPC (mpc)
-EOF
-  while true; do
-    printf 'Controller [1]: ' >&2
-    if ! read -r selection < /dev/tty; then
-      selection=1
-    fi
-    case "${selection:-1}" in
-      1)
-        printf 'pid'
-        return 0
-        ;;
-      2)
-        printf 'mppi'
-        return 0
-        ;;
-      3)
-        printf 'mpc'
-        return 0
-        ;;
-      *)
-        echo "Please select 1, 2, or 3." >&2
-        ;;
-    esac
-  done
+  select_profile "Select controller:" "Controller" "pid" \
+    "pid|omni PID (pid)" \
+    "mppi|MPPI (mppi)" \
+    "mpc|MPC (mpc)"
 }
 
 # ────────────────────────────────────────────────────────────────
@@ -433,6 +366,7 @@ run_complete_simulation() {
   local world_arg=rmul_2025
   local slam_arg=False
   local prior_pcd_arg=""
+  local map_arg=""
 
   if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
     world_arg=$1
@@ -448,6 +382,9 @@ run_complete_simulation() {
         ;;
       prior_pcd_file:=*)
         prior_pcd_arg=${arg#prior_pcd_file:=}
+        ;;
+      map:=*)
+        map_arg=${arg#map:=}
         ;;
     esac
   done
@@ -552,7 +489,7 @@ if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
 fi
 
 launch_args=()
-show_prior_pcd=True
+show_prior_pcd=""
 for arg in "$@"; do
   case "$arg" in
     world:=*)
@@ -570,15 +507,24 @@ for arg in "$@"; do
   esac
 done
 
+if [ -z "$show_prior_pcd" ]; then
+  if is_true "$slam"; then
+    show_prior_pcd=False
+  else
+    show_prior_pcd=True
+  fi
+fi
+
 prior_pcd_arg=""
-if ! is_true "$slam"; then
+if [ "$slam" = "False" ]; then
   for arg in "${launch_args[@]}"; do
     if [[ "$arg" == prior_pcd_file:=* ]]; then
       prior_pcd_arg=${arg#prior_pcd_file:=}
+    elif [[ "$arg" == map:=* ]]; then
+      map_arg=${arg#map:=}
     fi
   done
-  prior_pcd_arg=$(resolve_simulation_prior_pcd "$world" "$prior_pcd_arg")
-  launch_args+=("prior_pcd_file:=$prior_pcd_arg")
+  ensure_simulation_prior_pcd "$world" "$prior_pcd_arg"
 fi
 
 require_workspace_setup

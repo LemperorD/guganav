@@ -8,7 +8,7 @@ local_costmap:
 
       height: 10
 
-      robot_radius: 0.369
+      robot_radius: 0.367
 
       obstacle_layer:
         plugin: "pb_nav2_costmap_2d::ObstacleLayerLocal"
@@ -57,10 +57,10 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
         cost_scaling_factor: 8.0
-        # 原为 0.40，只比 inscribed 半径(0.369) 大 3 cm，带内代价高达 197～253：
+        # 原为 0.40，只比 inscribed 半径(0.367) 大 3 cm，带内代价高达 197～253：
         # 机器人一进膨胀区就等同于被判碰撞，没有可行轨迹可用而停住。取 0.60 后，
-        # 0.369～0.60 之间是有梯度的软代价区
-        # （253 × exp(-8.0 × (d - 0.369))：0.45 m 处约 132，0.60 m 处约 40）。
+        # 0.367～0.60 之间是有梯度的软代价区
+        # （253 × exp(-8.0 × (d - 0.367))：0.45 m 处约 132，0.60 m 处约 40）。
         inflation_radius: 0.60
         num_threads: 4
 
@@ -131,6 +131,7 @@ controller_server:
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
       time_steps: 56
+      debug_timing: false
       # model_dt 必须与控制周期 1/controller_frequency 对齐（检查容差 1e-6）：
       #   - period < model_dt → 仅告警，控制序列移位关闭
       #   - |period - model_dt| < 1e-6 → 正常，控制序列移位开启（推荐）
@@ -146,8 +147,6 @@ controller_server:
       vx_min: -2.5
       vy_max: 2.5
       wz_max: 3.0
-     # 加速度约束：本仓库 fork 的 MPPI 已移植上游 nav2 的这套（PR #4352 + #5266 + #6072），
-      # 全部默认 0 = 关闭。开启后约束作用在预测轨迹的**状态速度**上，采样控制量保持原始；
       # 第 0 步用真实控制周期、之后用 model_dt（见 optimizer.cpp 的
       # applyControlSequenceInterIterationConstraints / applyControlSequenceConstraints）。
       # 起始值建议先与 velocity_smoother 的 max_accel/max_decel 对齐（当前 4.5 / -4.5），
@@ -155,12 +154,10 @@ controller_server:
       # 注意单位：ax/ay 是 m/s²，az 是 rad/s²（实车 wz_max=0，az 暂时用不到）。
       # 采样标准差建议同步按 a_max·model_dt 收缩（4.5 × 1/30 ≈ 0.15），
       # 否则 vx_std=0.2 会在采样物理不可达的状态，表现为抖动。
-      ax_max: 0.1
-      ax_min: -0.1
-      ay_max: 0.1
-      ay_min: -0.1
-      az_max: 0.0
-      
+      ax_max: 3.0
+      ax_min: -3.0
+      ay_max: 3.0
+      ay_min: -3.0
       iteration_count: 1
       temperature: 0.3
       gamma: 0.015
@@ -328,3 +325,11 @@ global_costmap:
         cost_scaling_factor: 10.0
         inflation_radius: 0.55
         num_threads: 4
+
+# ── 启动即小陀螺（导航启动时的底盘模式与自旋速度）──
+# mppi 的 costmap 走 base_footprint_nonrotating，可以自旋；pid 的 costmap 仍用
+# 旋转的 base_footprint，不能自旋，见 controller/pid.yaml。
+nonrotating_vel_transform:
+  ros__parameters:
+    initial_chassis_mode: 1 # 1 = littleTES，启动即自旋
+    init_spin_speed: 1.0 # 未收到 cmd_spin 前的固定自旋角速度 (rad/s)

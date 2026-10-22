@@ -187,6 +187,15 @@ PointLioParams readParameters(rclcpp::Node* nh) {
     params.output_frame.lidar_to_base_r =
         nh->declare_parameter<std::vector<double>>(
             "output_frame.lidar_to_base_r", std::vector<double>());
+    params.output_frame.body_to_base_t =
+        nh->declare_parameter<std::vector<double>>(
+            "output_frame.body_to_base_t", std::vector<double>());
+    params.output_frame.body_to_base_r =
+        nh->declare_parameter<std::vector<double>>(
+            "output_frame.body_to_base_r", std::vector<double>());
+    params.output_frame.body_to_base_from_params =
+        params.output_frame.body_to_base_t.size() == 3
+        && params.output_frame.body_to_base_r.size() == 9;
     params.output_frame.extrinsic_from_params =
         params.output_frame.lidar_to_base_t.size() == 3
         && params.output_frame.lidar_to_base_r.size() == 9;

@@ -55,6 +55,11 @@ output_frame:
     enable: true                       # 过滤 registered_scan 和 pcd_save
     min_z: -0.2                        # 保留 min_z <= z <= max_z
     max_z: 1.0                         # 边界使用 odom 系的绝对 Z
+  # camera_init 原点是 IMU body，不是 lidar 原点。
+  body_to_base_t: [0.240274815, -0.011, 0.182506016]
+  body_to_base_r: [0.0, 0.984807753, 0.173648178,
+                   -1.0, 0.0, 0.0,
+                   0.0, -0.173648178, 0.984807753]
   # 安装变换 (TF 的 base_frame <- lidar_frame)。留空表示启动阶段查一次 TF；
   # 给出则直接用参数值, 不依赖 TF 是否就绪。
   lidar_to_base_t: []                # [x, y, z]
@@ -63,10 +68,13 @@ output_frame:
 
 `z_filter` 在点云换算到 `odom` 后执行，因此阈值以机器人 `odom` 系为基准，
 不是雷达局部坐标。滤波作用于 `registered_scan` 和 `pcd_save` 累积的离线 PCD；
-`cloud_registered` 与 `Laser_map` 仍保留 Point-LIO 原始输出。新保存的 PCD 点坐标
-在写盘时转换到建图会话的底盘对齐 map 系（建图时 map 与 odom 重合），文件头包含
-`# guganav_frame: map`。该标记与点云一起复制，定位加载时不会重复乘安装变换。参数阈值需按
-实际地面高度和需要保留的障碍高度调整。
+`cloud_registered` 与 `Laser_map` 仍保留 Point-LIO 原始输出。保存 PCD 时只使用
+odom 系 Z 值决定点是否保留，PCD 点坐标仍保持在 Point-LIO 的 IMU body 世界系。参数阈值
+需按实际地面高度和需要保留的障碍高度调整。
+
+`body_to_base_*` 由模型中的 `base_footprint <- front_mid360` 与 Point-LIO
+LiDAR→IMU 外参合成。不能直接把世界系点云乘以 `base_footprint <- front_mid360`，
+否则会漏掉 LiDAR→IMU 平移，导致先验地图相对机器人产生固定水平偏移。
 
 留空时若查不到 TF，节点会按 2 秒节流打印警告，并且**暂不发布**这两个话题，而不是用
 未初始化的变换发布错误结果。当前实车与仿真的安装变换都在 TF 里给出，因此配置中
@@ -311,14 +319,3 @@ PULSAR is a self-rotating UAV actuated by only one motor, [PULSAR](https://githu
 ## 7. Contact us
 
 If you have any questions about this work, please feel free to contact me <hdj65822ATconnect.hku.hk> and Dr. Fu Zhang <fuzhangAThku.hk> via email.
-
-### 仿真地图用于实车定位
-
-新版本建图生成的 PCD 可以直接作为实车 `prior_pcd_file`，无需手工旋转点云。
-同时复制同一建图会话生成的栅格地图及 YAML，以保持两种地图的原点一致。
-实车在地图中的起点由 RViz 的初始位姿设置；地图可复用不代表两次启动的动态
-`odom -> lidar` 必须相同，实物场景也必须与仿真地图匹配。
-
-旧 PCD 没有坐标标记，仍按雷达里程计系加载；不能只添加标记冒充新地图。
-建议重新建图。外部点云编辑器若移除注释，需在确认坐标未变的前提下保留该标记。
-新格式用于 small_gicp 定位，`prior_pcd.enable`（Point-LIO 内部地图预加载）仍应保持 False。
