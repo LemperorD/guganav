@@ -25,19 +25,13 @@ Controller (controller:=):
 Parameters are merged at launch time from config/reality/{base,controller,planner}
 layered yaml files. nav 模式未显式给出 planner:=/controller:= 时，会先弹出与
 simulation.sh 相同的编号菜单（先 planner 后 controller）；没有可读终端时取默认值
-planner:=smac2d controller:=mppi。
+planner:=jps controller:=mppi。
 
 Examples:
   scripts/reality.sh n
   scripts/reality.sh n floor2 planner:=smac2d controller:=mppi
   scripts/reality.sh map reserve
   scripts/reality.sh nav floor2 use_rviz:=True use_decision:=True
-  scripts/reality.sh nav floor2 show_prior_pcd:=True
-
-Prior PCD visualization:
-  Enabled by default in navigation and forced off in mapping.
-  show_prior_pcd:=False
-      Disable publication in navigation mode.
 EOF
 }
 
@@ -62,7 +56,6 @@ cleanup_reality_processes() {
     "component_container"
     "point_lio"
     "small_gicp"
-    "pcd_to_pointcloud"
     "scan_to_sensor_frame"
     "terrain_analysis"
     "controller_server"
@@ -147,15 +140,89 @@ EOF
   printf 'Using map=%s\nUsing prior_pcd=%s\n' "$map_arg" "$prior_pcd_arg"
 }
 
-resolve_reality_prior_pcd() {
-  local world_arg=$1
-  local prior_pcd_arg=${2:-}
-  local prior_pcd="$WS/src/guga_bringup/pcd/reality/${world_arg}.pcd"
+# ────────────────────────────────────────────────────────────────
+# planner/controller 选择（与 simulation.sh 同一套交互）
+# ────────────────────────────────────────────────────────────────
+# 候选值取自 config/reality/ 下实际存在的 profile 文件：
+#   planner/    jps.yaml、smac2d.yaml
+#   controller/ pid.yaml、mppi.yaml
+# 以后新增 profile（例如 mpc、smachybrid）时，把名字同时加进下面的
+# choice 列表与对应菜单即可。
+PLANNER_CHOICES="jps smac2d"
+CONTROLLER_CHOICES="pid mppi"
+DEFAULT_PLANNER="jps"
+DEFAULT_CONTROLLER="mppi"
 
-  if [ -n "$prior_pcd_arg" ]; then
-    printf '%s\n' "$prior_pcd_arg"
-  else
-    printf '%s\n' "$prior_pcd"
+select_planner() {
+  select_profile "Select global planner:" "Planner" "$DEFAULT_PLANNER" \
+    "jps|JPS (jps)" \
+    "smac2d|SmacPlanner2D (smac2d)"
+}
+
+select_controller() {
+  select_profile "Select controller:" "Controller" "$DEFAULT_CONTROLLER" \
+    "pid|omni PID (pid)" \
+    "mppi|MPPI (mppi)"
+}
+
+# 把用户输入整理成透传给 reality_launch.py 的参数：
+#   - planner:=/controller:= 原样透传并校验取值；
+#   - legacy navigation_profile:= 映射为对应组合
+#     （jps_pid → jps+pid、2d_mppi → smac2d+mppi）；
+#   - 都没给且终端可交互时弹菜单，非交互取默认值。
+# 注意：params_file:= 只原样透传，不算"已选择"——reality_launch 目前把
+# params_file 强制置空（三文件合并），单文件覆盖未启用。
+build_nav_args() {
+  nav_args=()
+  local arg
+  local explicit_spec=""
+  local chosen_planner=""
+  local chosen_controller=""
+
+  for arg in "$@"; do
+    case "$arg" in
+      navigation_profile:=*)
+        case "${arg#navigation_profile:=}" in
+          jps_pid)
+            nav_args+=(planner:=jps controller:=pid)
+            ;;
+          2d_mppi)
+            nav_args+=(planner:=smac2d controller:=mppi)
+            ;;
+          *)
+            echo "Invalid navigation_profile: ${arg#navigation_profile:=}（reality 支持 jps_pid、2d_mppi）" >&2
+            return 1
+            ;;
+        esac
+        explicit_spec=1
+        ;;
+      planner:=*)
+        chosen_planner=${arg#planner:=}
+        nav_args+=("$arg")
+        explicit_spec=1
+        ;;
+      controller:=*)
+        chosen_controller=${arg#controller:=}
+        nav_args+=("$arg")
+        explicit_spec=1
+        ;;
+      *)
+        nav_args+=("$arg")
+        ;;
+    esac
+  done
+
+  if [ -z "$explicit_spec" ]; then
+    chosen_planner=$(select_planner) || return 1
+    chosen_controller=$(select_controller) || return 1
+    nav_args+=(planner:="$chosen_planner" controller:="$chosen_controller")
+  fi
+
+  if [ -n "$chosen_planner" ]; then
+    validate_choice planner "$chosen_planner" "$PLANNER_CHOICES" || return 1
+  fi
+  if [ -n "$chosen_controller" ]; then
+    validate_choice controller "$chosen_controller" "$CONTROLLER_CHOICES" || return 1
   fi
 }
 
@@ -187,13 +254,15 @@ case "$mode" in
 esac
 done
 
-world=floor2
+world=room_207
 slam=$slam_value
 launch_args=()
 map_arg=""
 prior_pcd_arg=""
-show_prior_pcd=""
 
+# 位置参数 world（如 `reality.sh n floor2`）：与 simulation.sh 一样在这里消费掉。
+# 不消费的话它会被下面的 *) 分支塞进 launch_args，launch 会多收到一个裸参数，
+# 而且 map 模式下 world 会一直停在默认值。
 if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
   world=$1
   shift
@@ -205,57 +274,21 @@ for arg in "$@"; do
     slam:=*) slam=${arg#slam:=} ;;
     map:=*) map_arg=${arg#map:=}; launch_args+=("$arg") ;;
     prior_pcd_file:=*) prior_pcd_arg=${arg#prior_pcd_file:=}; launch_args+=("$arg") ;;
-    show_prior_pcd:=*) show_prior_pcd=${arg#show_prior_pcd:=} ;;
     *) launch_args+=("$arg") ;;
   esac
 done
-
-if [ -z "$show_prior_pcd" ]; then
-  if is_true "$slam"; then
-    show_prior_pcd=False
-  else
-    show_prior_pcd=True
-  fi
-fi
 
 if [ "$launch_mode" = nav ] && ! is_true "$slam"; then
   ensure_reality_map_and_pcd "$world" "$map_arg" "$prior_pcd_arg"
 fi
 
 require_workspace_setup
-
-case "${show_prior_pcd,,}" in
-  true | 1 | yes | on | false | 0 | no | off)
-    ;;
-  *)
-    echo "Invalid show_prior_pcd: '$show_prior_pcd'. Use True or False." >&2
-    exit 2
-    ;;
-esac
-
-if is_true "$slam" && is_true "$show_prior_pcd"; then
-  echo "Ignoring show_prior_pcd in mapping mode."
-  show_prior_pcd=False
-fi
-
-if is_true "$show_prior_pcd"; then
-  prior_pcd_file=$(resolve_reality_prior_pcd "$world" "$prior_pcd_arg")
-  if [ ! -f "$prior_pcd_file" ]; then
-    echo "Missing prior PCD file: $prior_pcd_file" >&2
-    exit 1
-  fi
-  echo "Prior PCD visualization enabled: $prior_pcd_file"
-  echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
-fi
-
 install_reality_cleanup_traps
 set +e
 ros2 launch guga_bringup reality_launch.py \
   world:="$world" \
   slam:="$slam" \
-  show_prior_pcd:="$show_prior_pcd" \
-  "${launch_args[@]}" | grep RMSE
+  "${launch_args[@]}"
 launch_status=$?
 set -e
-
 exit_with_launch_status "$launch_status"
