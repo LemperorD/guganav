@@ -1,0 +1,1 @@
+enum class State { INITIAL, FINE, SUSPECT, LOST };

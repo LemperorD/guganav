@@ -50,6 +50,67 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 `pcd_to_pointcloud` 直接发布原始 PCD，避免坐标系标错。导航模式下由
 `show_prior_pcd` 控制是否发布，建图模式不会启动本节点。
 
+### 重定位状态机
+
+当前枚举定义在 `include/small_gicp_relocalization/FSM.hpp`：
+
+```cpp
+enum class State { INITIAL, FINE, SUSPECT, LOST };
+```
+
+各状态的职责和当前代码中的实际行为如下：
+
+| 状态 | 设计职责 | 进入条件 | 当前实际行为 | 对外 TF |
+|------|----------|----------|--------------|---------|
+| `INITIAL` | 等待首轮可信定位或手动初始位姿 | 节点构造时 | 合格候选进入 `FINE` 并建立基准；不合格候选回退到 `baseline_tf_`，且不会保留本轮候选作为下轮种子 | 发布 `result_t_`，初始值为 `init_pose` |
+| `FINE` | 已获得可信基准，正常跟踪并抑制小抖动 | `INITIAL` 下首次 GICP 质量合格 | 合格结果按更新死区刷新或保持 `baseline_tf_`；`rmse > error_max` 时进入 `SUSPECT` | 发布 `baseline_tf_` |
+| `SUSPECT` | 基准可信度下降，等待重新确认 | `FINE` 状态下 `rmse > error_max` | GICP 合格时重新建立基准并回到 `FINE`；不合格时保留候选作为下轮种子 | 回调结束后发布 `baseline_tf_` |
+| `LOST` | 连续失败后进入丢失状态，清空历史扫描并等待全局重定位 | 当前代码没有进入路径 | 不可达；对应的累积点云清空逻辑不会执行 | 不可达 |
+
+当前实际迁移可以概括为：
+
+```text
+INITIAL --GICP 合格--> FINE
+INITIAL --GICP 不合格--> INITIAL
+FINE --GICP 合格--> FINE
+FINE --rmse > error_max--> SUSPECT
+SUSPECT --GICP 合格--> FINE
+SUSPECT --GICP 不合格--> SUSPECT
+LOST: 没有任何赋值点
+```
+
+### 与旧实现的差异
+
+- 旧实现使用 `registration_initial_`、`baseline_is_manual_` 和
+  `pending_initial_pose_` 三个布尔量表达状态；新版改为单一 `State` 枚举，状态入口更集中。
+- 旧实现中，没有基准时的第一轮合格 GICP 会被直接接收为基准；新版将其显式建模为
+  `INITIAL -> FINE`，首次基准建立路径更清晰。
+- 旧实现中，基准来自手动 `initialpose` 时允许 GICP 跨越基准漂移上限进行修正；新版删除了
+  `baseline_is_manual_` 的实际赋值，该行为不再生效。
+- 旧实现中，`rmse > error_max` 会作废基准并重新进入初始化；新版先进入 `SUSPECT`，
+  等下一轮 GICP 合格后再回到 `FINE`。
+- 旧实现通过 `pending_initial_pose_` 区分“新手动位姿等待质量验证”；新版成员仍保留，但
+  已无任何读取或赋值路径。
+
+### 当前潜在问题
+
+1. **`INITIAL` 失败会丢弃当前搜索种子。** GICP 不合格或未收敛时把
+   `result_t_`/`previous_result_t_` 重置到 `initial_result_t_`，不会保留本轮候选继续收敛。
+2. **`initial_result_t_` 是最近可信基准。** 所有基准更新点都会同步更新它；非 `INITIAL`
+   状态通过它保持最近一次可信的发布值。
+3. **不合格不等于离开 `FINE`。** 只有 `rmse > error_max` 才进入 `SUSPECT`；未收敛、
+   内点率低或越界但 RMSE 未超限时，状态仍保持 `FINE`。
+4. **非收敛没有统一处理。** `result.converged` 没有进入 `good` 条件；只有 `INITIAL`
+   会显式处理不收敛，其他状态仍可能把未收敛候选送入质量和基准更新流程。
+5. **手动定位的状态迁移不完整。** `initialpose` 在 `SUSPECT`/`LOST` 下写入基准但不切换状态，
+   需要等下一次合格 GICP 才回到 `FINE`；在 `INITIAL` 下只修改注册种子。
+6. **`applyInertialConstraint()` 的 `INITIAL` 分支不可达。** 该函数只从 `FINE` 分支调用，
+   因此其中“手动基准跳过漂移限制”的处理不会执行。
+7. **状态进入没有连续确认。** 单次 GICP 合格即可进入或恢复 `FINE`，没有连续成功次数或
+   滞回；一次偶然匹配就能改变状态。
+8. **遗留状态变量容易误导。** `registration_initial_`、`baseline_is_manual_` 和
+   `pending_initial_pose_` 已基本脱离状态机；后续维护者可能误以为旧逻辑仍生效。
+
 ### 参数
 
 参数在两个 `guga_bringup` 配置文件中分别标定，下面是实车 `config/reality/base.yaml`
@@ -74,6 +135,8 @@ small_gicp_relocalization:
     baseline_translation_tolerance: 4.0  # 惯性约束: 候选相对基准 tf 的平移偏差上限 (m)
     baseline_update_translation_threshold: 0.01  # 小于该水平变化时冻结 map->odom (m)
     baseline_update_yaw_threshold: 0.01          # 小于该 yaw 变化时冻结 map->odom (rad)
+    initial_state_timeout_sec: 10.0     # INITIAL 持续超时后进入 SUSPECT (s)
+    suspect_state_timeout_sec: 5.0      # SUSPECT 持续超时后进入 LOST (s)
     map_boundary_margin: 1.0          # 位姿超出先验地图外接框的允许余量 (m)
     # 坐标系
     map_frame: "map"
