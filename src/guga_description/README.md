@@ -14,12 +14,11 @@ SMBU PolarBear Team robot description package for RoboMaster 2025.
 
 当前机器人描述文件基于 [rmua19_standard_robot](https://github.com/robomaster-oss/rmoss_gz_resources/tree/humble/resource/models/rmua19_standard_robot) 进行二次编辑，加入了工业相机和激光雷达等传感器。
 
-- [buaa2026_sentry_robot](./resource/xmacro/buaa2026_sentry_robot.sdf.xmacro)
+- [simulation_robot](./resource/xmacro/simulation_robot.sdf.xmacro)
 
-    仿真与实车统一加载这一份机器人描述，搭载云台相机 industrial_camera 和 Livox mid360，
-    其中相机与 gimbal_pitch 轴固连，mid360 倾斜侧放与 chassis 固连。双方使用同一组
-    `base_footprint -> chassis -> front_mid360` TF，避免仿真和实车 lidar→odom
-    安装关系各自维护后失配。
+    仿真继续加载自己的机器人描述，保持现有模型和关节关系不变。模型中的
+    `front_mid360` 安装值与实车一致；Point-LIO、`scan_to_sensor_frame` 和
+    small_gicp 通过显式外参统一坐标系，不再通过替换仿真模型来对齐 TF。
 
     仿真安装尺寸以 `buaa2026_sentry_robot` 为准：`base_footprint -> chassis`
     高度为 0.123 m；`chassis -> front_mid360` 的 xyz 为 `[0.225, 0, 0.107]` m，

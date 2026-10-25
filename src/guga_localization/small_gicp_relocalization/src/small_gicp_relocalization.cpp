@@ -41,7 +41,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("max_iterations", 100);
   this->declare_parameter("max_roll_pitch_step", 0.05);
   this->declare_parameter("max_tz_step", 0.02);
-  this->declare_parameter("error_max",10.0);
+  this->declare_parameter("error_max", 10.0);
   this->declare_parameter("good_error_max", 0.5);
   this->declare_parameter("good_inlier_ratio", 0.5);
   this->declare_parameter("baseline_translation_tolerance", 1.0);
@@ -53,14 +53,10 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("base_frame", "");
   this->declare_parameter("robot_base_frame", "");
   this->declare_parameter("lidar_frame", "");
-  this->declare_parameter<std::vector<double>>(
-    "body_to_base_t", std::vector<double>{});
-  this->declare_parameter<std::vector<double>>(
-    "body_to_base_r", std::vector<double>{});
-  this->declare_parameter<std::vector<double>>(
-    "lidar_to_base_t", std::vector<double>{});
-  this->declare_parameter<std::vector<double>>(
-    "lidar_to_base_r", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>("body_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>("body_to_base_r", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>("lidar_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>("lidar_to_base_r", std::vector<double>{});
   this->declare_parameter("prior_pcd_file", "");
   this->declare_parameter("publish_prior_pcd", true);
   this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
@@ -73,7 +69,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_iterations", max_iterations_);
   this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
   this->get_parameter("max_tz_step", max_tz_step_);
-  this->get_parameter("error_max",error_max_);
+  this->get_parameter("error_max", error_max_);
   this->get_parameter("good_error_max", good_error_max_);
   this->get_parameter("good_inlier_ratio", good_inlier_ratio_);
   this->get_parameter("baseline_translation_tolerance", baseline_translation_tolerance_);
@@ -103,8 +99,9 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
       Eigen::AngleAxisd(init_pose_[3], Eigen::Vector3d::UnitX()).toRotationMatrix();
   }
   initial_result_t_ = result_t_;
-  RCLCPP_INFO(this->get_logger(), "initial_tf:%f %f %f",init_pose_[0], init_pose_[1], init_pose_[2]);
   previous_result_t_ = result_t_;
+  RCLCPP_INFO(
+    this->get_logger(), "initial_tf:%f %f %f", init_pose_[0], init_pose_[1], init_pose_[2]);
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -120,37 +117,37 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     "registered_scan", 10,
-    [this] (const sensor_msgs::msg::PointCloud2::SharedPtr msg){registeredPcdCallback(msg);});
+    [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) { registeredPcdCallback(msg); });
 
   initial_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-    "initialpose", 10,
-    [this] (const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg){initialPoseCallback(msg);});
+    "initialpose", 10, [this](const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+      initialPoseCallback(msg);
+    });
 
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
-    [this] () {performRegistration();});
+    [this]() { performRegistration(); });
 
   transform_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50),  // 20 Hz
-    [this] (){publishTransform();});
+    [this]() { publishTransform(); });
 
   // A component constructor runs inside the container's load_node service.
   // Waiting for TF here blocks every component queued behind this node,
   // including the Nav2 servers that own the costmaps.
-  map_initialization_timer_ = this->create_wall_timer(
-    std::chrono::seconds(1), [this] (){initializeGlobalMap();});
+  map_initialization_timer_ =
+    this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
 
   if (publish_prior_pcd_) {
-    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-      "/cloud_pcd", 1);
-    prior_pcd_timer_ = this->create_wall_timer(
-      std::chrono::seconds(1), [this] () {publishPriorPcd();});
+    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", 1);
+    prior_pcd_timer_ =
+      this->create_wall_timer(std::chrono::seconds(1), [this]() { publishPriorPcd(); });
   }
 }
 
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
 {
-  if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {//语义不明确
+  if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {  //语义不明确
     RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", file_name.c_str());
     return;
   }
@@ -166,28 +163,22 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   }
 
   Eigen::Affine3d odom_to_lidar_odom;
-  const bool has_body_transform =
-    body_to_base_t_.size() == 3 && body_to_base_r_.size() == 9;
-  const bool has_lidar_transform =
-    lidar_to_base_t_.size() == 3 && lidar_to_base_r_.size() == 9;
+  const bool has_body_transform = body_to_base_t_.size() == 3 && body_to_base_r_.size() == 9;
+  const bool has_lidar_transform = lidar_to_base_t_.size() == 3 && lidar_to_base_r_.size() == 9;
   if (has_body_transform || has_lidar_transform) {
-    const auto & translation =
-      has_body_transform ? body_to_base_t_ : lidar_to_base_t_;
-    const auto & rotation_values =
-      has_body_transform ? body_to_base_r_ : lidar_to_base_r_;
+    const auto & translation = has_body_transform ? body_to_base_t_ : lidar_to_base_t_;
+    const auto & rotation_values = has_body_transform ? body_to_base_r_ : lidar_to_base_r_;
     Eigen::Matrix3d rotation;
-    rotation << rotation_values[0], rotation_values[1], rotation_values[2],
-      rotation_values[3], rotation_values[4], rotation_values[5],
-      rotation_values[6], rotation_values[7], rotation_values[8];
+    rotation << rotation_values[0], rotation_values[1], rotation_values[2], rotation_values[3],
+      rotation_values[4], rotation_values[5], rotation_values[6], rotation_values[7],
+      rotation_values[8];
     odom_to_lidar_odom = Eigen::Affine3d::Identity();
     odom_to_lidar_odom.linear() = rotation;
-    odom_to_lidar_odom.translation() << translation[0],
-      translation[1], translation[2];
+    odom_to_lidar_odom.translation() << translation[0], translation[1], translation[2];
     RCLCPP_INFO(
-      this->get_logger(),
-      has_body_transform
-        ? "Using explicit body_to_base transform for prior PCD"
-        : "Using explicit lidar_to_base transform for prior PCD");
+      this->get_logger(), has_body_transform
+                            ? "Using explicit body_to_base transform for prior PCD"
+                            : "Using explicit lidar_to_base transform for prior PCD");
   } else {
     try {
       const auto tf_stamped =
@@ -210,7 +201,7 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   pcl::PointXYZ max_bound;
   pcl::getMinMax3D(*global_map_, min_bound, max_bound);
   map_min_bound_ = min_bound.getVector3fMap().cast<double>();
-  map_max_bound_ = max_bound.getVector3fMap().cast<double>();//能否一步到位
+  map_max_bound_ = max_bound.getVector3fMap().cast<double>();  //能否一步到位
   has_map_bounds_ = true;
   RCLCPP_INFO_STREAM(
     this->get_logger(),
@@ -254,10 +245,10 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr scan(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::fromROSMsg(*msg, *scan);
-  if(!registration_initial_&&accumulation_reset_){
-    accumulated_cloud_ ->clear();
-    accumulation_reset_=true;
-  }//如果配准初始化没有成功找到基准tf,意味着机器人发生大幅漂移，需要重置历史点云
+  if (global_state_ == State::LOST && accumulation_reset_) {
+    accumulated_cloud_->clear();
+    accumulation_reset_ = true;
+  }  //如果配准初始化没有成功找到基准tf,意味着机器人发生大幅漂移，需要重置历史点云
   *accumulated_cloud_ += *scan;
 }
 
@@ -276,7 +267,7 @@ void SmallGicpRelocalizationNode::performRegistration()
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
     *accumulated_cloud_, registered_leaf_size_);
 
-  small_gicp::estimate_covariances_omp(*source_, num_neighbors_, num_threads_);//考虑突变后reset
+  small_gicp::estimate_covariances_omp(*source_, num_neighbors_, num_threads_);  //考虑突变后reset
 
   source_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
     source_, small_gicp::KdTreeBuilderOMP(num_threads_));
@@ -299,31 +290,39 @@ void SmallGicpRelocalizationNode::performRegistration()
   // RMSE = sqrt(总误差 / 内点数); error 是各内点 error 之和(每个已是平方量), 开方后与内点数无关,
   // 便于跨帧/跨块比较, 也便于按"残差多大"直观设阈值
   const double rmse = result.num_inliers > 0
-    ? std::sqrt(result.error / static_cast<double>(result.num_inliers))
-    : std::numeric_limits<double>::infinity();
+                        ? std::sqrt(result.error / static_cast<double>(result.num_inliers))
+                        : std::numeric_limits<double>::infinity();
   // 内点率 = 有有效对应的源点数 / 源点总数; 只靠 RMSE 容易被"只匹配上少数点"的退化解骗过
-  const double inlier_ratio = source_->empty()
-    ? 0.0
-    : static_cast<double>(result.num_inliers) / static_cast<double>(source_->size());
+  const double inlier_ratio = source_->empty() ? 0.0
+                                               : static_cast<double>(result.num_inliers) /
+                                                   static_cast<double>(source_->size());
   previous_rmse_ = rmse;
   previous_inlier_ratio_ = inlier_ratio;
+  auto to_string = [this]() {
+    if (global_state_ == State::INITIAL) {
+      return "INITIAL";
+    }
+    if (global_state_ == State::FINE) {
+      return "FINE";
+    }
+    if (global_state_ == State::SUSPECT) {
+      return "SUSPECT";
+    }
+    return "LOST";
+  };
   RCLCPP_INFO_THROTTLE(
     this->get_logger(), *this->get_clock(), 2000,
-    "GICP RMSE: %.4f, inlier ratio: %.2f (inliers: %zu, converged: %d)",
-    rmse, inlier_ratio, result.num_inliers, static_cast<int>(result.converged));
+    "GICP RMSE: %.4f, inlier ratio: %.2f (inliers: %zu, converged: %d),GICP STATE: %s ", rmse,
+    inlier_ratio, result.num_inliers, static_cast<int>(result.converged), to_string());
 
-  if (!result.converged&&baseline_is_manual_) {
-    RCLCPP_DEBUG(this->get_logger(), "GICP did not converge.");
-    if (pending_initial_pose_) {
-      // 手动给的种子连收敛都做不到, 就必然过不了 good 这道质量门, 直接丢弃:
-      // 清掉 pending 并把种子复位到基准, 免得每一轮都从同一个错误位姿重新迭代。
-      // (走到这里必然已有基准: 没有基准的手动位姿在 initialPoseCallback 里就直接生效了。)
-      pending_initial_pose_ = false;
-      result_t_ = previous_result_t_ = baseline_tf_;
-      RCLCPP_WARN(
-        this->get_logger(),
-        "Initial pose rejected: GICP did not converge, falling back to the previous tf");
-    }
+  if (!result.converged && global_state_ == State::INITIAL) {
+    // 手动给的种子连收敛都做不到, 就必然过不了 good 这道质量门, 直接丢弃:
+    // 清掉 pending 并把种子复位到基准, 免得每一轮都从同一个错误位姿重新迭代。
+    // (走到这里必然已有基准: 没有基准的手动位姿在 initialPoseCallback 里就直接生效了。)
+    result_t_ = previous_result_t_ = initial_result_t_;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Initial pose rejected: GICP did not converge, falling back to the previous tf");
     accumulated_cloud_->clear();
     return;
   }
@@ -333,78 +332,58 @@ void SmallGicpRelocalizationNode::performRegistration()
   // 配准质量 = RMSE 足够小 + 内点率足够高 + 未越界
   const bool out_of_map = isOutOfMap(candidate, robot_in_map);
   const bool good = rmse < good_error_max_ && inlier_ratio > good_inlier_ratio_ && !out_of_map;
-  const bool baseline_unset = !registration_initial_;
-
   // 还没有基准时, 不合格的候选既不能冻结成基准, 也不往外发布;
   // 只要没越界就留作下一轮 GICP 的种子, 让配准继续向地图收敛,
   // 否则每轮都从旧种子重算, 永远得不到更优的结果。
-  auto hold_candidate_until_good =
-    [this, &rmse, &inlier_ratio, out_of_map](
-      const Eigen::Isometry3d & candidate, const char * source) {
-      if (!out_of_map) {
-        previous_result_t_ = candidate;
-      }
-      RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 2000,
-        "%s rejected by baseline check (RMSE %.4f, inlier ratio %.2f), "
-        "holding the seed and retrying until a qualified baseline is found",
-        source, rmse, inlier_ratio);
-    };
+  auto hold_candidate_until_good = [this, &rmse, &inlier_ratio, out_of_map](
+                                     const Eigen::Isometry3d & candidate, const char * source) {
+    if (!out_of_map) {
+      previous_result_t_ = candidate;
+    }
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "%s rejected by baseline check (RMSE %.4f, inlier ratio %.2f), "
+      "holding the seed and retrying until a qualified baseline is found",
+      source, rmse, inlier_ratio);
+  };
 
-  if (pending_initial_pose_) 
-{
+  if (global_state_ == State::INITIAL) {
     // RViz 手动给的初始位姿: 跳过惯性漂移检查(否则会被判成大幅跳变直接丢弃),
     // 但仍然要过基准残差检查 —— 只有 RMSE+内点率达标且未越界, 才升级为新的基准 tf。
     // 走到这里必然已经有基准: 没有基准的手动位姿在 initialPoseCallback 里就直接生效了。
-    pending_initial_pose_ = false;
-    if (good) 
-    {
+    if (good) {
+      global_state_ = State::FINE;
       initial_result_t_ = baseline_tf_ = candidate;
       result_t_ = previous_result_t_ = candidate;
-      registration_initial_ = true;
-      baseline_is_manual_ = false;
       RCLCPP_INFO(this->get_logger(), "Initial pose accepted as the new baseline tf");
-    } 
-    else
-    {
+    } else {
+      global_state_ = State::SUSPECT;
       RCLCPP_WARN(
         this->get_logger(),
         "Initial pose rejected by baseline check (RMSE %.4f, inlier ratio %.2f), "
         "keeping the previous baseline",
         rmse, inlier_ratio);
-      result_t_ = previous_result_t_ = baseline_tf_;
+      result_t_ = previous_result_t_ = initial_result_t_;
     }
-} 
-  else if (baseline_unset) 
-  {
+  } else if (global_state_ != State::FINE) {
     // 首次基准初始化同样要过质量门: init_pose 只是种子, 可能离真值很远,
     // 只有 RMSE+内点率达标且未越界的第一次重定位才冻结为基准 tf;
     // 不合格的候选不发布也不冻结, 先留着收敛, 等出现合格结果再更新基准。
-    if (good) 
-    {
+    if (good) {
+      global_state_ = State::FINE;
       baseline_tf_ = initial_result_t_ = candidate;
-      registration_initial_ = true;
-      baseline_is_manual_ = false;
       result_t_ = previous_result_t_ = candidate;
       RCLCPP_INFO(this->get_logger(), "First registration accepted as the new baseline tf");
-    } 
-    else 
-    {
+    } else {
       hold_candidate_until_good(candidate, "First registration");
     }
-  } 
-  else 
-  {
     applyInertialConstraint(candidate, good);
   }
-
   // 基准误差过大 -> 不再信任它: 作废, 回到"无基准"状态, 等下一次合格结果或手动位姿重建。
   // 期间对外继续发布最后这个基准(冻结), 不会把发散的候选漏出去。
-  if (registration_initial_ && rmse > error_max_) 
-  {
-    registration_initial_ = false;
-    baseline_is_manual_ = false;
-    accumulation_reset_=false;
+  if (global_state_ == State::FINE && !good) {
+    global_state_ = State::SUSPECT;
+    accumulation_reset_ = false;
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
       "Baseline error too large (RMSE %.4f > %.2f), dropping the baseline", rmse, error_max_);
@@ -412,9 +391,8 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   // 对外发布的一直是基准 tf, 候选(哪怕被采纳)只用于刷新基准, 绝不直接发布;
   // 否则每轮 GICP 候选都会把 map->odom 抖一次。没有基准时保持上一次发布值不变。
-  if (registration_initial_)
-  {
-    result_t_ = baseline_tf_;
+  if (global_state_ != State::INITIAL) {
+    result_t_ = initial_result_t_;
   }
 
   accumulated_cloud_->clear();
@@ -424,15 +402,7 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
   const Eigen::Isometry3d & candidate, bool good)
 {
   const double drift = (candidate.translation() - baseline_tf_.translation()).norm();
-  if (baseline_is_manual_) {
-    // 基准是手动定位给的, 本身就是"待修正"的: 不能再用漂移上限把它锁死,
-    // 否则 GICP 收敛到真值也会被判超限而回退, 系统就永远停在手动位姿上。
-    RCLCPP_INFO_THROTTLE(
-      this->get_logger(), *this->get_clock(), 5000,
-      "Inertial constraint skipped: baseline came from manual localization (drift %.2f m); "
-      "letting registration correct it",
-      drift);
-  } else if (drift > baseline_translation_tolerance_) {
+  if (drift > baseline_translation_tolerance_) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
       "Inertial constraint: candidate map->odom drifts %.2f m from the baseline (limit %.2f m), "
@@ -442,47 +412,44 @@ bool SmallGicpRelocalizationNode::applyInertialConstraint(
     return false;
   }
 
-  result_t_ = previous_result_t_ = candidate;
+  previous_result_t_ = candidate;
   // 只有"效果好"(RMSE 小且内点率高, 未越界)的一次重定位, 才被采纳为新的基准 tf;
   // 基准是越界/惯性回退的目标, 必须保证它本身是可信的。
   if (good) {
-    if (!baseline_is_manual_) {
+    if (global_state_ != State::INITIAL) {
       const Eigen::Isometry3d delta = baseline_tf_.inverse() * candidate;
       const double translation_delta = delta.translation().head<2>().norm();
-      const double rotation_delta = std::abs(std::remainder(
-        std::atan2(delta.linear()(1, 0), delta.linear()(0, 0)), 2.0 * M_PI));
-      if (translation_delta <= baseline_update_translation_threshold_
-          && rotation_delta <= baseline_update_yaw_threshold_) {
+      const double rotation_delta = std::abs(
+        std::remainder(std::atan2(delta.linear()(1, 0), delta.linear()(0, 0)), 2.0 * M_PI));
+      if (
+        translation_delta <= baseline_update_translation_threshold_ &&
+        rotation_delta <= baseline_update_yaw_threshold_) {
         RCLCPP_DEBUG_THROTTLE(
           this->get_logger(), *this->get_clock(), 2000,
-          "Holding map->odom baseline: micro correction dt=%.4f m, dr=%.4f rad",
-          translation_delta, rotation_delta);
+          "Holding map->odom baseline: micro correction dt=%.4f m, dr=%.4f rad", translation_delta,
+          rotation_delta);
         return true;
       }
     }
-    baseline_tf_ = candidate;
-    baseline_is_manual_ = false;
+    baseline_tf_ = initial_result_t_ = candidate;
   }
+  result_t_ = baseline_tf_;
   return true;
 }
 
 // NOTE: 发布路径改成"只发基准 tf"之后不再需要每帧重写位姿;
 // 而且这个函数把 eulerAngles(0,1,2)(= R = Rx*Ry*Rz)的角拿去按 Rz*Ry*Rx 重组,
 // 只要 roll/pitch 非零, 每次调用都会把旋转改坏一点。要重新启用必须先统一两侧约定。
-void SmallGicpRelocalizationNode::regulateRegistration(Eigen::Isometry3d& T)
+void SmallGicpRelocalizationNode::regulateRegistration(Eigen::Isometry3d & T)
 {
   // 保留当前旋转中的 yaw
-  const double yaw = std::atan2(
-    T.linear()(1, 0),
-    T.linear()(0, 0));
+  const double yaw = std::atan2(T.linear()(1, 0), T.linear()(0, 0));
 
   // z 位置置零
   T.translation().z() = 0.0;
 
   // 只保留 yaw，roll = pitch = 0
-  T.linear() =
-    Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ())
-    .toRotationMatrix();
+  T.linear() = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix();
 }
 
 bool SmallGicpRelocalizationNode::isOutOfMap(
@@ -516,13 +483,12 @@ void SmallGicpRelocalizationNode::publishTransform()
   // 只决定"发什么": 有基准就发基准, 还没定位出基准时才退回 result_t_(init_pose)。
   // 不回写 result_t_ / previous_result_t_ —— previous_result_t_ 是 2Hz 注册的迭代种子,
   // 让 20Hz 的发布循环去改它会和注册互相抢状态。
-  Eigen::Isometry3d to_publish = registration_initial_ ? baseline_tf_ : result_t_;
+  Eigen::Isometry3d to_publish = global_state_ == State::FINE ? baseline_tf_ : result_t_;
 
   regulateRegistration(to_publish);
   if (to_publish.matrix().isZero()) {
     return;
   }
-  
 
   geometry_msgs::msg::TransformStamped transform_stamped;
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615
@@ -564,14 +530,11 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
-    if (!registration_initial_) {
+    if (global_state_ == State::SUSPECT || global_state_ == State::LOST) {
       // 还没有基准, 说明自动重定位没能初始化出可信的 tf。实车手动定位时这段位姿
       // 就是唯一可靠来源, 所以直接采信操作员给的 tf 作为基准, 不经过质量门, 也不等注册。
       // 之后正常注册出合格结果时会自动把它升级掉。
       baseline_tf_ = initial_result_t_ = result_t_ = previous_result_t_ = map_to_odom;
-      registration_initial_ = true;
-      baseline_is_manual_ = true;
-      pending_initial_pose_ = false;
       RCLCPP_WARN(
         this->get_logger(),
         "No baseline yet; accepting the manual pose as the baseline tf (manual localization, "
@@ -584,7 +547,6 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     // 直接赋值会把这段没经过任何配准检查的位姿当成 map->odom 发出去,
     // 且当本轮 GICP 不收敛(performRegistration 提前 return)时它不会被改回去,
     // 于是"给了错误 2D pose"永远不会触发回退。
-    pending_initial_pose_ = true;
     previous_result_t_ = map_to_odom;
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(

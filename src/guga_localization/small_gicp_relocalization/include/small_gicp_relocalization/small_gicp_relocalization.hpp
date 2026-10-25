@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "FSM.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "pcl/io/pcd_io.h"
 #include "rclcpp/rclcpp.hpp"
@@ -32,7 +33,6 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
-
 namespace small_gicp_relocalization
 {
 
@@ -63,11 +63,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_pcd_pub_;
 
-  bool registration_initial_ = false;
   bool accumulation_reset_ = false;
-  /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
-  ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
-  bool pending_initial_pose_{false};
   /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;
   ///        连收敛都做不到时直接丢弃并回退, 不参与每轮重试
   int num_threads_;
@@ -113,9 +109,6 @@ private:
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
   bool publish_prior_pcd_{true};
-  /// @brief 当前基准是否来自手动定位(未过质量门)。为真时跳过惯性漂移检查,
-  ///        因为手动基准本身就是"待修正"的, 一旦 GICP 收敛出合格结果就会被替换掉。
-  bool baseline_is_manual_{false};
   Eigen::Vector3d map_min_bound_;
   Eigen::Vector3d map_max_bound_;
 
@@ -140,6 +133,7 @@ private:
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  State global_state_ = State::INITIAL;
 };
 
 }  // namespace small_gicp_relocalization

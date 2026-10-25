@@ -23,8 +23,8 @@ point_lio:
     runtime_pos_log_enable: False # Option: True
 
     common:
-      lid_topic: "velodyne_points"
       imu_topic: "livox/imu"
+      lid_topic: "velodyne_points"
       con_frame: False # True: if you need to combine several LiDAR frames into one
       con_frame_num: 1 # the number of frames combined
       cut_frame: False # True: if you need to cut one LiDAR frame into several subframes
@@ -88,7 +88,7 @@ point_lio:
                        -1.0, 0.0, 0.0,
                        0.0, -0.173648178, 0.984807753]
       z_filter:
-        enable: True
+        enable: Fasle
         min_z: -0.2 # registered_scan 在 odom 系中的最低 Z
         max_z: 0.6 # registered_scan 在 odom 系中的最高 Z
 
@@ -146,7 +146,7 @@ small_gicp_relocalization:
     map_boundary_margin: 0.5 # 位姿超出先验地图外接框的允许余量(m)，超出则回退到基准 tf
     error_max: 1.0 # 迭代脉冲触发上界: 上一帧 RMSE 超过该值(或内点率低于 good_inlier_ratio)时本次迭代上限用 max_iterations, 两者都达标才用 10
     baseline_translation_tolerance: 6.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
-    baseline_update_translation_threshold: 0.1 # 小于该平移变化时保持 map->odom，抑制毫米级抖动
+    baseline_update_translation_threshold: 0.01 # 小于该平移变化时保持 map->odom，抑制毫米级抖动
     baseline_update_yaw_threshold: 0.01 # 小于该旋转变化(rad)时保持 map->odom
     good_error_max: 0.4 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
     good_inlier_ratio: 0.1 # 内点率下限，只有 RMSE 达标且内点率高于该值、且未越界的结果才能成为基准 tf，需按日志标定
