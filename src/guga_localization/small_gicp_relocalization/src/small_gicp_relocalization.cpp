@@ -14,6 +14,7 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <limits>
 
@@ -47,6 +48,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("baseline_translation_tolerance", 1.0);
   this->declare_parameter("baseline_update_translation_threshold", 0.01);
   this->declare_parameter("baseline_update_yaw_threshold", 0.01);
+  this->declare_parameter("initial_state_timeout_sec", 10.0);
+  this->declare_parameter("suspect_state_timeout_sec", 5.0);
   this->declare_parameter("map_boundary_margin", 1.0);
   this->declare_parameter("map_frame", "map");
   this->declare_parameter("odom_frame", "odom");
@@ -76,6 +79,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter(
     "baseline_update_translation_threshold", baseline_update_translation_threshold_);
   this->get_parameter("baseline_update_yaw_threshold", baseline_update_yaw_threshold_);
+  this->get_parameter("initial_state_timeout_sec", initial_state_timeout_sec_);
+  this->get_parameter("suspect_state_timeout_sec", suspect_state_timeout_sec_);
   this->get_parameter("map_boundary_margin", map_boundary_margin_);
   this->get_parameter("map_frame", map_frame_);
   this->get_parameter("odom_frame", odom_frame_);
@@ -132,6 +137,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
     std::chrono::milliseconds(50),  // 20 Hz
     [this]() { publishTransform(); });
 
+  state_check_timer_ =
+    this->create_wall_timer(std::chrono::milliseconds(1000), [this]() { checkStateTime(); });
   // A component constructor runs inside the container's load_node service.
   // Waiting for TF here blocks every component queued behind this node,
   // including the Nav2 servers that own the costmaps.
@@ -552,6 +559,35 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",
       robot_base_frame_.c_str(), current_scan_frame_id_.c_str(), ex.what());
+  }
+}
+
+void SmallGicpRelocalizationNode::checkStateTime()
+{
+  const rclcpp::Time now = this->now();
+  if (global_state_ == State::INITIAL) {
+    if (!initial_timer_started_) {
+      initial_start_time_ = now;
+      initial_timer_started_ = true;
+    } else if ((now - initial_start_time_).seconds() > initial_state_timeout_sec_) {
+      global_state_ = State::SUSPECT;
+      initial_timer_started_ = false;
+      suspect_timer_started_ = false;
+    }
+  } else {
+    initial_timer_started_ = false;
+  }
+
+  if (global_state_ == State::SUSPECT) {
+    if (!suspect_timer_started_) {
+      suspect_start_time_ = now;
+      suspect_timer_started_ = true;
+    } else if ((now - suspect_start_time_).seconds() > suspect_state_timeout_sec_) {
+      global_state_ = State::LOST;
+      suspect_timer_started_ = false;
+    }
+  } else {
+    suspect_timer_started_ = false;
   }
 }
 

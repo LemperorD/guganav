@@ -135,6 +135,8 @@ small_gicp_relocalization:
     baseline_translation_tolerance: 4.0  # 惯性约束: 候选相对基准 tf 的平移偏差上限 (m)
     baseline_update_translation_threshold: 0.01  # 小于该水平变化时冻结 map->odom (m)
     baseline_update_yaw_threshold: 0.01          # 小于该 yaw 变化时冻结 map->odom (rad)
+    initial_state_timeout_sec: 10.0     # INITIAL 持续超时后进入 SUSPECT (s)
+    suspect_state_timeout_sec: 5.0      # SUSPECT 持续超时后进入 LOST (s)
     map_boundary_margin: 1.0          # 位姿超出先验地图外接框的允许余量 (m)
     # 坐标系
     map_frame: "map"

@@ -59,6 +59,7 @@ private:
   bool applyInertialConstraint(const Eigen::Isometry3d & candidate, bool good);
   /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
+  void checkStateTime();
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_pcd_pub_;
@@ -80,6 +81,8 @@ private:
   double baseline_translation_tolerance_;
   double baseline_update_translation_threshold_;
   double baseline_update_yaw_threshold_;
+  double initial_state_timeout_sec_;
+  double suspect_state_timeout_sec_;
   double map_boundary_margin_;
   double previous_rmse_{0.0};  ///< 上一次注册的 RMSE (sqrt(error / num_inliers))
   /// @brief 上一次注册的内点率 (num_inliers / 源点数); 与 previous_rmse_ 一起决定迭代脉冲是否拉满
@@ -109,6 +112,10 @@ private:
   bool global_map_ready_{false};
   bool has_map_bounds_{false};
   bool publish_prior_pcd_{true};
+  bool initial_timer_started_{false};
+  bool suspect_timer_started_{false};
+  rclcpp::Time initial_start_time_;
+  rclcpp::Time suspect_start_time_;
   Eigen::Vector3d map_min_bound_;
   Eigen::Vector3d map_max_bound_;
 
@@ -127,6 +134,7 @@ private:
 
   rclcpp::TimerBase::SharedPtr transform_timer_;
   rclcpp::TimerBase::SharedPtr register_timer_;
+  rclcpp::TimerBase::SharedPtr state_check_timer_;
   rclcpp::TimerBase::SharedPtr map_initialization_timer_;
   rclcpp::TimerBase::SharedPtr prior_pcd_timer_;
 
