@@ -19,6 +19,14 @@ scripts/simulation.sh map rmul_2025
 scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 ```
 
+## 捕获 Nav2 崩溃
+
+正常启动导航后，在另一个终端执行 `scripts/nav2_gdb.sh`，然后在 RViz
+复现问题。脚本自动附加唯一的 `nav2_container`，在 SIGSEGV/SIGABRT
+发生时保存所有线程的完整调用栈到 `/tmp/nav2_gdb_*.txt`，并保留暂停现场。
+多个容器时用 `scripts/nav2_gdb.sh PID` 指定。需要 GDB 和 sudo 权限。
+实车调试请架空轮子。输入 `quit` 退出 GDB 并脱离进程。
+
 ## 调参（在线改参）
 
 | 文件 | 用途 |

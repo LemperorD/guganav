@@ -108,7 +108,12 @@ private:  // 优化: 使用单独的四个线程执行本功能包的四个并�
   tf2::Transform tf_odom_to_lidar_;
   tf2::Transform tf_odom_to_robot_base_;
   tf2::Transform tf_odom_to_chassis_;
+  std_msgs::msg::Header chassis_header_;
+  std_msgs::msg::Header chassis_tf_header_;
+  std_msgs::msg::Header robot_base_header_;
   sensor_msgs::msg::PointCloud2 in_;
+  // Protected with in_ by sensor_scan_mutex_: pose for this exact scan.
+  tf2::Transform sensor_scan_odom_to_lidar_;
   sensor_msgs::msg::PointCloud2 out_;
 
   // 线程对象

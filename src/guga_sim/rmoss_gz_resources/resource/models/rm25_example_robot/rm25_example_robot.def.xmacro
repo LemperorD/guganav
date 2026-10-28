@@ -110,7 +110,14 @@
                 <xmacro_block name="inertia_cylinder" m="1.0" r="0.05" l="0.17"/>
             </inertial>
             <visual name="visual">
-                <xmacro_block name="geometry_mesh" uri="model://rmua19_standard_robot/meshes/gimbal_yaw.dae"/>
+                <!-- The stock support is sized for a 0.16 m pitch-axis height.
+                     Stretch only its visual; joint poses and TF stay unchanged. -->
+                <geometry>
+                    <mesh>
+                        <uri>model://rmua19_standard_robot/meshes/gimbal_yaw.dae</uri>
+                        <scale>1 1 ${gimbal_pitch_height / 0.16}</scale>
+                    </mesh>
+                </geometry>
             </visual>
             <collision name="collision">
                 <pose>0 0 0.0885 0 0 0</pose>
