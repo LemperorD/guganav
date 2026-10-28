@@ -32,6 +32,8 @@ def generate_launch_description():
     autostart = LaunchConfiguration("autostart")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
+    pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_path = LaunchConfiguration("pcd_save_path")
     params_file = LaunchConfiguration("params_file")
     base_params_file = LaunchConfiguration("base_params_file"),
     use_composition = LaunchConfiguration("use_composition")
@@ -85,6 +87,21 @@ def generate_launch_description():
         "show_prior_pcd",
         default_value="True",
         description="Publish the transformed prior PCD on /cloud_pcd",
+    )
+
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown in navigation mode",
+    )
+
+    declare_pcd_save_path_cmd = DeclareLaunchArgument(
+        "pcd_save_path",
+        default_value="",
+        description=(
+            "Full PCD output path; empty keeps the timestamped "
+            "point_lio/PCD default"
+        ),
     )
 
     declare_params_file_cmd = DeclareLaunchArgument(
@@ -143,6 +160,8 @@ def generate_launch_description():
         parameters=[
             configured_params,
             {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
+            {"pcd_save.pcd_save_en": ParameterValue(pcd_save, value_type=bool)},
+            {"pcd_save.path": pcd_save_path},
         ],
         arguments=["--ros-args", "--log-level", log_level],
     )
@@ -275,6 +294,8 @@ def generate_launch_description():
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
+    ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_path_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

@@ -33,6 +33,8 @@ def generate_launch_description():
     use_communication = LaunchConfiguration("use_communication")
     use_decision = LaunchConfiguration("use_decision")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
+    pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_path = LaunchConfiguration("pcd_save_path")
     # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
@@ -194,6 +196,25 @@ def generate_launch_description():
         description="Publish the prior PCD in navigation; forced off in mapping mode",
     )
 
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown in both modes",
+    )
+
+    declare_pcd_save_path_cmd = DeclareLaunchArgument(
+        "pcd_save_path",
+        default_value=[
+            TextSubstitution(text=os.path.join(bringup_dir, "pcd", "reality", "")),
+            world,
+            TextSubstitution(text=".pcd"),
+        ],
+        description=(
+            "Navigation-mode PCD output path; defaults to the prior map path "
+            "pcd/reality/<world>.pcd and overwrites it on shutdown"
+        ),
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     # livox 节点参数直接指向 base.yaml 的绝对路径,不经过 PythonExpression
@@ -265,6 +286,8 @@ def generate_launch_description():
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
             "show_prior_pcd": show_prior_pcd,
+            "pcd_save": pcd_save,
+            "pcd_save_path": pcd_save_path,
             "use_sim_time": use_sim_time,
             "controller": controller,
             "planner": planner,
@@ -324,6 +347,8 @@ def generate_launch_description():
     ld.add_action(declare_use_communication_cmd)
     ld.add_action(declare_use_decision_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
+    ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_path_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     # Add the actions to launch all of the navigation nodes

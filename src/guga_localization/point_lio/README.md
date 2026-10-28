@@ -282,7 +282,13 @@ Step C: Run LiDAR's ros driver or play rosbag.
 
 ### 5.4 PCD file save
 
-Set ` pcd_save_enable ` in launch file to ` 1 `. All the scans (in global frame) will be accumulated and saved to the file ` Point-LIO/PCD/scans.pcd ` after the Point-LIO is terminated. `pcl_viewer scans.pcd` can visualize the point clouds.
+Set `pcd_save.pcd_save_en` to `true` (the bringup launches default to `pcd_save:=True`).
+All the scans (in global frame) are accumulated and saved when the node is terminated.
+By default the file is timestamped under `Point-LIO/PCD/`
+(`scans_<YYYY_MM_DD-HH_MM_SS>.pcd`). Set `pcd_save.path` to an absolute path to
+override it; the reality navigation launch uses this to write
+`guga_bringup/pcd/reality/<world>.pcd`.
+`pcl_viewer <file>.pcd` can visualize the point clouds.
 
 *Tips for pcl_viewer:*
 

@@ -26,6 +26,12 @@
  *   角速度和加速度本身被估计, 每帧同时做激光量测和 IMU 量测更新
  */
 
+#include <chrono>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 #include "point_lio/laserMapping.h"
 #include "point_lio/core/FrameProcessor.h"
 
@@ -93,8 +99,8 @@ void LaserMappingNode::initializeRos2Interfaces() {
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   // 项目约定输出 (原 loam_interface 的职责): 同一个 odom 系下的点云与里程计
-  const bool filter_pcd = config_.publish.scan_enabled
-                          && config_.publish.pcd_save_enabled
+  // PCD 保存也依赖 odom 系 Z 滤波, 因此 scan 未发布时也可能需要 TF。
+  const bool filter_pcd = config_.publish.pcd_save_enabled
                           && config_.output_frame.z_filter.enabled;
   if (config_.output_frame.enabled || filter_pcd) {
     if (!config_.output_frame.body_to_base_from_params
@@ -334,37 +340,39 @@ void LaserMappingNode::publishFrameWorld() {
     laser_cloud_msg.header.stamp = get_ros_time(processor_.lidarEndTime());
     laser_cloud_msg.header.frame_id = "camera_init";
     pub_laser_cloud_full_res_->publish(laser_cloud_msg);
+  }
 
-    if (config_.publish.pcd_save_enabled) {
-      const auto& z_filter = config_.output_frame.z_filter;
-      if (z_filter.enabled) {
-        if (!resolveOdomExtrinsic()) {
-          return;
-        }
-        for (const auto& point : lidar_.workspace().feats_down_world->points) {
-          const Eigen::Vector3d point_world(point.x, point.y, point.z);
-          if (pointPassesOdomZFilter(point_world)) {
-            state_.pcl_wait_save->push_back(point);
-          }
-        }
-      } else {
-        *state_.pcl_wait_save += *lidar_.workspace().feats_down_world;
-      }
+  // PCD 保存与 scan 发布相互独立: 导航模式可能关闭 scan_publish_en 以省 CPU,
+  // 但仍需要累积点云。
+  if (!config_.publish.pcd_save_enabled) {
+    return;
+  }
 
-      pcd_scan_count_++;
-      if (!state_.pcl_wait_save->empty()
-          && config_.publish.pcd_save_interval > 0
-          && pcd_scan_count_ >= config_.publish.pcd_save_interval) {
-        pcd_index_++;
-        string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_")
-                              + to_string(pcd_index_) + string(".pcd"));
-        pcl::PCDWriter pcd_writer;
-        std::cout << "current scan saved to /PCD/" << all_points_dir << '\n';
-        pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
-        state_.pcl_wait_save->clear();
-        pcd_scan_count_ = 0;
+  const auto& z_filter = config_.output_frame.z_filter;
+  if (z_filter.enabled) {
+    if (!resolveOdomExtrinsic()) {
+      return;
+    }
+    for (const auto& point : lidar_.workspace().feats_down_world->points) {
+      const Eigen::Vector3d point_world(point.x, point.y, point.z);
+      if (pointPassesOdomZFilter(point_world)) {
+        state_.pcl_wait_save->push_back(point);
       }
     }
+  } else {
+    *state_.pcl_wait_save += *lidar_.workspace().feats_down_world;
+  }
+
+  pcd_scan_count_++;
+  if (!state_.pcl_wait_save->empty() && config_.publish.pcd_save_interval > 0
+      && pcd_scan_count_ >= config_.publish.pcd_save_interval) {
+    pcd_index_++;
+    const std::string path = pcdOutputPath(pcd_index_);
+    if (writePcd(path, *state_.pcl_wait_save)) {
+      std::cout << "current scan saved to " << path << '\n';
+    }
+    state_.pcl_wait_save->clear();
+    pcd_scan_count_ = 0;
   }
 }
 void LaserMappingNode::publishFrameBody() {
@@ -397,17 +405,77 @@ void LaserMappingNode::savePendingPcd() {
   state_.pcl_wait_save->clear();
   pcd_scan_count_ = 0;
 }
-void LaserMappingNode::savePcd() {
+std::string LaserMappingNode::pcdOutputPath(int index) const {
+  const std::string& configured = config_.publish.pcd_save_path;
+  if (!configured.empty()) {
+    if (index <= 0) {
+      return configured;
+    }
+    const std::filesystem::path path(configured);
+    return (path.parent_path()
+            / (path.stem().string() + "_" + std::to_string(index)
+               + path.extension().string()))
+        .string();
+  }
+
+  if (index > 0) {
+    return std::string(ROOT_DIR) + "PCD/scans_" + std::to_string(index)
+           + ".pcd";
+  }
+
   auto t = std::chrono::system_clock::to_time_t(
       std::chrono::system_clock::now());
   std::tm tm{};
   localtime_r(&t, &tm);
   std::stringstream ss;
   ss << std::put_time(&tm, "%Y_%m_%d-%H_%M_%S");
-  std::string str_time = ss.str();
+  return std::string(ROOT_DIR) + "PCD/scans_" + ss.str() + ".pcd";
+}
+bool LaserMappingNode::writePcd(const std::string& path,
+                                const PointCloudXYZI& cloud) {
+  // 先解析软链接: install 目录中的 PCD 通常是指向源码的符号链接,
+  // 直接 rename 会把符号链接本身替换掉。
+  std::error_code ec;
+  std::filesystem::path target(path);
+  const auto resolved = std::filesystem::weakly_canonical(target, ec);
+  if (!ec) {
+    target = resolved;
+  } else {
+    ec.clear();
+  }
 
-  string file_name = string("scans_" + str_time + ".pcd");
-  string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
-  pcl::PCDWriter pcd_writer;
-  pcd_writer.writeBinary(all_points_dir, *state_.pcl_wait_save);
+  if (target.has_parent_path()) {
+    std::filesystem::create_directories(target.parent_path(), ec);
+    if (ec) {
+      RCLCPP_ERROR(get_logger(), "无法创建 PCD 目录 %s: %s",
+                   target.parent_path().c_str(), ec.message().c_str());
+      return false;
+    }
+  }
+
+  // 先写临时文件再原子替换, 避免中途失败留下半个 PCD, 也能覆盖只读的
+  // 先验地图文件 (目录可写即可)。
+  const std::string tmp_path = target.string() + ".tmp";
+  pcl::PCDWriter writer;
+  if (writer.writeBinary(tmp_path, cloud) != 0) {
+    RCLCPP_ERROR(get_logger(), "写入 PCD 临时文件失败: %s", tmp_path.c_str());
+    return false;
+  }
+  std::filesystem::rename(tmp_path, target, ec);
+  if (ec) {
+    RCLCPP_ERROR(get_logger(), "替换 PCD 文件 %s 失败: %s", target.c_str(),
+                 ec.message().c_str());
+    std::error_code remove_ec;
+    std::filesystem::remove(tmp_path, remove_ec);
+    return false;
+  }
+  return true;
+}
+void LaserMappingNode::savePcd() {
+  const std::string path = pcdOutputPath(0);
+  if (writePcd(path, *state_.pcl_wait_save)) {
+    RCLCPP_INFO(get_logger(), "PCD 已保存到 %s", path.c_str());
+  } else {
+    RCLCPP_ERROR(get_logger(), "保存 PCD 失败: %s", path.c_str());
+  }
 }

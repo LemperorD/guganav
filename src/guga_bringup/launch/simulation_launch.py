@@ -29,6 +29,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_ui = LaunchConfiguration("use_ui")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
+    pcd_save = LaunchConfiguration("pcd_save")
     # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
     # 显式 params_file:= 时退化为单文件（三份都指向它）
     planner = LaunchConfiguration("planner")
@@ -218,6 +219,12 @@ def generate_launch_description():
         description="Publish the prior PCD in navigation; forced off in mapping mode",
     )
 
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown in both modes",
+    )
+
     start_velodyne_convert_tool = Node(
         package="ign_sim_pointcloud_tool",
         executable="ign_sim_pointcloud_tool_node",
@@ -249,6 +256,7 @@ def generate_launch_description():
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
             "show_prior_pcd": show_prior_pcd,
+            "pcd_save": pcd_save,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
             "base_params_file": base_params_file,
@@ -288,6 +296,7 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
+    ld.add_action(declare_pcd_save_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     ld.add_action(start_velodyne_convert_tool)

@@ -102,6 +102,8 @@ point_lio:
         max_z: 1.0 # registered_scan 在 odom 系中的最高 Z
 
     pcd_save:
+      # launch 默认用 pcd_save:=True 覆盖此项（导航/建图均保存）；
+      # 仅在绕过 bringup 直接运行 point_lio 时使用这里的值。
       pcd_save_en: False
       interval:
         -1 # how many LiDAR frames saved in each pcd file;

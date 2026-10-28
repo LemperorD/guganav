@@ -45,6 +45,17 @@ scripts/simulation.sh nav rmul_2025 navigation_profile:=jps_mpc   # = smachybrid
 自定义实验时可传入 `params_file:=/absolute/path/to/params.yaml` 退化为单文件模式
 （三份都指向该文件），显式指定优先于分层默认值。
 
+## PCD 保存
+
+`reality_launch.py` 与 `simulation_launch.py` 默认在导航和建图两种模式下都保存
+Point-LIO 累积点云，退出时写入 PCD。实车导航默认写到
+`guga_bringup/pcd/reality/<world>.pcd`，与先验地图同名并会覆盖它；实车导航可用
+`pcd_save_path:=/path/to/xxx.pcd` 改路径。实车建图与仿真模式仍写入
+`src/guga_localization/point_lio/PCD/scans_<时间戳>.pcd`。
+
+不需要保存时传入 `pcd_save:=False`。PCD 累积与 `publish.scan_publish_en` 相互独立，
+关闭 scan 发布后仍会继续保存。
+
 ## 核心层
 
 `core/` 只放 Nav2 主栈组合与 lifecycle 相关 launch：

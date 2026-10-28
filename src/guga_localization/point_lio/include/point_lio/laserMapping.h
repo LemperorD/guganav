@@ -117,4 +117,10 @@ private:
 
   void savePendingPcd();
   void savePcd();
+
+  /** @brief 计算 PCD 输出路径; index > 0 时用于按 interval 分段保存 */
+  [[nodiscard]] std::string pcdOutputPath(int index) const;
+
+  /** @brief 原子写入 PCD, 可覆盖只读的先验地图文件 */
+  bool writePcd(const std::string& path, const PointCloudXYZI& cloud);
 };

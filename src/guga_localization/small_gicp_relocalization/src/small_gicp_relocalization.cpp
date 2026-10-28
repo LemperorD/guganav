@@ -315,6 +315,7 @@ void SmallGicpRelocalizationNode::performRegistration()
     if (global_state_ == State::SUSPECT) {
       return "SUSPECT";
     }
+    pub_state->publish(global_state_);
     return "LOST";
   };
   RCLCPP_INFO_THROTTLE(

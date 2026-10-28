@@ -84,6 +84,8 @@ struct PublishParams {
   bool tf_enabled{true};
   bool pcd_save_enabled{false};
   int pcd_save_interval{-1};
+  /// 非空时保存到该绝对路径；为空时沿用 PCD/scans_<时间戳>.pcd
+  std::string pcd_save_path;
 };
 
 struct SensorParams {

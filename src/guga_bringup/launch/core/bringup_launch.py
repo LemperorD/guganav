@@ -32,6 +32,8 @@ def generate_launch_description():
     map_yaml_file = LaunchConfiguration("map")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
+    pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_path = LaunchConfiguration("pcd_save_path")
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
     autostart = LaunchConfiguration("autostart")
@@ -160,6 +162,21 @@ def generate_launch_description():
         description="Publish the transformed prior PCD in navigation mode",
     )
 
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown",
+    )
+
+    declare_pcd_save_path_cmd = DeclareLaunchArgument(
+        "pcd_save_path",
+        default_value="",
+        description=(
+            "Full PCD output path for navigation mode; empty keeps the "
+            "timestamped point_lio/PCD default"
+        ),
+    )
+
     declare_use_sim_time_cmd = DeclareLaunchArgument(
         "use_sim_time",
         default_value="false",
@@ -221,6 +238,7 @@ def generate_launch_description():
                     "use_respawn": use_respawn,
                     "params_file": params_file,
                     "base_params_file": base_params_file,
+                    "pcd_save": pcd_save,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -237,6 +255,8 @@ def generate_launch_description():
                     "base_params_file": base_params_file,
                     "prior_pcd_file": prior_pcd_file,
                     "show_prior_pcd": show_prior_pcd,
+                    "pcd_save": pcd_save,
+                    "pcd_save_path": pcd_save_path,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
@@ -282,6 +302,8 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
+    ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_path_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

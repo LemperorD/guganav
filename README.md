@@ -301,6 +301,21 @@ scripts/reality.sh nav use_decision:=true
 ros2 run nav2_map_server map_saver_cli -f src/guga_bringup/map/reality/<world>
 ```
 
+Point-LIO 的点云会在 `Ctrl-C` 正常退出时自动保存，导航模式默认开启：
+
+- 实车导航：保存到 `src/guga_bringup/pcd/reality/<world>.pcd`，与启动时加载的
+  先验地图同名，**会覆盖该先验地图**；首次使用前建议先备份。
+- 实车建图、仿真导航/建图：保存到
+  `src/guga_localization/point_lio/PCD/scans_<时间戳>.pcd`。
+
+可通过 `pcd_save:=False` 关闭（例如长时间运行、不想占用内存时），实车导航也可用
+`pcd_save_path:=/path/to/xxx.pcd` 自定义输出路径：
+
+```bash
+scripts/reality.sh nav floor2 pcd_save:=False
+scripts/simulation.sh nav rmul_2025 pcd_save:=False
+```
+
 ### 在线调参
 
 ```bash
@@ -352,6 +367,8 @@ odom 高度阈值筛选点，但保存的 PCD 坐标仍保持在 Point-LIO 的 I
 | `use_communication:=True|False` | 是否启动串口通信 |
 | `use_ui:=True|False` | 是否启动 UI |
 | `use_robot_state_pub:=True|False` | 是否启动 robot_state_publisher |
+| `pcd_save:=True|False` | 是否在导航/建图退出时保存累积 PCD（默认 True） |
+| `pcd_save_path:=/path/x.pcd` | 实车导航 PCD 输出路径（默认 `pcd/reality/<world>.pcd`） |
 
 ## 测试与检查
 
