@@ -10,6 +10,7 @@
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Filter.h"
@@ -30,6 +31,8 @@ private:
   PointLioStage stage_{PointLioStage::WAITINGFORDATA};
   int pcd_index_{0};
   int pcd_scan_count_{0};
+  /// @brief 导航模式下收到 GICP LOST 信号后才开始累积/保存 PCD
+  bool pcd_save_armed_{false};
   MainLoopState state_;  ///< 主循环状态
   FrameProcessor processor_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -38,6 +41,8 @@ private:
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr
       sub_pcl_livox_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
+  /// @brief GICP LOST 触发信号 (std_msgs/Bool)
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_pcd_save_trigger_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
@@ -117,6 +122,9 @@ private:
 
   void savePendingPcd();
   void savePcd();
+
+  /** @brief PCD 保存是否已启用 (导航模式还需等待 LOST 触发) */
+  [[nodiscard]] bool isPcdSaveActive() const;
 
   /** @brief 计算 PCD 输出路径; index > 0 时用于按 interval 分段保存 */
   [[nodiscard]] std::string pcdOutputPath(int index) const;

@@ -35,6 +35,8 @@ def generate_launch_description():
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     pcd_save = LaunchConfiguration("pcd_save")
     pcd_save_path = LaunchConfiguration("pcd_save_path")
+    pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
+    pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
@@ -215,6 +217,24 @@ def generate_launch_description():
         ),
     )
 
+    declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
+        "pcd_save_trigger_topic",
+        default_value="gicp_lost",
+        description=(
+            "Bool topic used when pcd_save_require_lost is True; saving starts "
+            "after it receives true"
+        ),
+    )
+
+    declare_pcd_save_require_lost_cmd = DeclareLaunchArgument(
+        "pcd_save_require_lost",
+        default_value="True",
+        description=(
+            "Wait for the GICP LOST trigger before saving navigation PCD; "
+            "False saves from startup"
+        ),
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     # livox 节点参数直接指向 base.yaml 的绝对路径,不经过 PythonExpression
@@ -288,6 +308,8 @@ def generate_launch_description():
             "show_prior_pcd": show_prior_pcd,
             "pcd_save": pcd_save,
             "pcd_save_path": pcd_save_path,
+            "pcd_save_require_lost": pcd_save_require_lost,
+            "pcd_save_trigger_topic": pcd_save_trigger_topic,
             "use_sim_time": use_sim_time,
             "controller": controller,
             "planner": planner,
@@ -349,6 +371,8 @@ def generate_launch_description():
     ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_pcd_save_cmd)
     ld.add_action(declare_pcd_save_path_cmd)
+    ld.add_action(declare_pcd_save_trigger_topic_cmd)
+    ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     # Add the actions to launch all of the navigation nodes

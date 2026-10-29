@@ -86,6 +86,9 @@ struct PublishParams {
   int pcd_save_interval{-1};
   /// 非空时保存到该绝对路径；为空时沿用 PCD/scans_<时间戳>.pcd
   std::string pcd_save_path;
+  /// 为 true 时只有 trigger_topic 收到 true 后才开始保存 (导航模式配 GICP LOST)
+  bool pcd_save_require_lost{false};
+  std::string pcd_save_trigger_topic;
 };
 
 struct SensorParams {

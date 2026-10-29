@@ -287,7 +287,9 @@ All the scans (in global frame) are accumulated and saved when the node is termi
 By default the file is timestamped under `Point-LIO/PCD/`
 (`scans_<YYYY_MM_DD-HH_MM_SS>.pcd`). Set `pcd_save.path` to an absolute path to
 override it; the reality navigation launch uses this to write
-`guga_bringup/pcd/reality/<world>.pcd`.
+`guga_bringup/pcd/reality/<world>.pcd`. Set `pcd_save.require_lost` to `true`
+and `pcd_save.trigger_topic` to a `std_msgs/Bool` topic (the navigation launch
+uses `gicp_lost`) to defer saving until that topic receives `true`.
 `pcl_viewer <file>.pcd` can visualize the point clouds.
 
 *Tips for pcl_viewer:*

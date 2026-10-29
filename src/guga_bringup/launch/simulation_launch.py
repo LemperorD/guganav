@@ -30,6 +30,8 @@ def generate_launch_description():
     use_ui = LaunchConfiguration("use_ui")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
+    pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
     # 显式 params_file:= 时退化为单文件（三份都指向它）
     planner = LaunchConfiguration("planner")
@@ -225,6 +227,24 @@ def generate_launch_description():
         description="Save accumulated scans to point_lio/PCD on shutdown in both modes",
     )
 
+    declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
+        "pcd_save_trigger_topic",
+        default_value="gicp_lost",
+        description=(
+            "Bool topic used when pcd_save_require_lost is True; saving starts "
+            "after it receives true"
+        ),
+    )
+
+    declare_pcd_save_require_lost_cmd = DeclareLaunchArgument(
+        "pcd_save_require_lost",
+        default_value="True",
+        description=(
+            "Wait for the GICP LOST trigger before saving navigation PCD; "
+            "False saves from startup"
+        ),
+    )
+
     start_velodyne_convert_tool = Node(
         package="ign_sim_pointcloud_tool",
         executable="ign_sim_pointcloud_tool_node",
@@ -257,6 +277,8 @@ def generate_launch_description():
             "prior_pcd_file": prior_pcd_file,
             "show_prior_pcd": show_prior_pcd,
             "pcd_save": pcd_save,
+            "pcd_save_require_lost": pcd_save_require_lost,
+            "pcd_save_trigger_topic": pcd_save_trigger_topic,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
             "base_params_file": base_params_file,
@@ -297,6 +319,8 @@ def generate_launch_description():
     ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_trigger_topic_cmd)
+    ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     ld.add_action(start_velodyne_convert_tool)

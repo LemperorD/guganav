@@ -34,6 +34,8 @@ def generate_launch_description():
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     pcd_save = LaunchConfiguration("pcd_save")
     pcd_save_path = LaunchConfiguration("pcd_save_path")
+    pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
+    pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     params_file = LaunchConfiguration("params_file")
     base_params_file = LaunchConfiguration("base_params_file"),
     use_composition = LaunchConfiguration("use_composition")
@@ -104,6 +106,24 @@ def generate_launch_description():
         ),
     )
 
+    declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
+        "pcd_save_trigger_topic",
+        default_value="gicp_lost",
+        description=(
+            "Bool topic used when pcd_save_require_lost is True; saving starts "
+            "after it receives true"
+        ),
+    )
+
+    declare_pcd_save_require_lost_cmd = DeclareLaunchArgument(
+        "pcd_save_require_lost",
+        default_value="True",
+        description=(
+            "Wait for the GICP LOST trigger before saving PCD; False saves "
+            "from startup"
+        ),
+    )
+
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value=os.path.join(bringup_dir, "params", "nav2_params.yaml"),
@@ -162,6 +182,8 @@ def generate_launch_description():
             {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
             {"pcd_save.pcd_save_en": ParameterValue(pcd_save, value_type=bool)},
             {"pcd_save.path": pcd_save_path},
+            {"pcd_save.require_lost": ParameterValue(pcd_save_require_lost, value_type=bool)},
+            {"pcd_save.trigger_topic": pcd_save_trigger_topic},
         ],
         arguments=["--ros-args", "--log-level", log_level],
     )
@@ -296,6 +318,8 @@ def generate_launch_description():
     ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_pcd_save_cmd)
     ld.add_action(declare_pcd_save_path_cmd)
+    ld.add_action(declare_pcd_save_trigger_topic_cmd)
+    ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

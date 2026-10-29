@@ -301,19 +301,25 @@ scripts/reality.sh nav use_decision:=true
 ros2 run nav2_map_server map_saver_cli -f src/guga_bringup/map/reality/<world>
 ```
 
-Point-LIO 的点云会在 `Ctrl-C` 正常退出时自动保存，导航模式默认开启：
+Point-LIO 的点云会在 `Ctrl-C` 正常退出时自动保存。导航模式默认**只有在 GICP 进入
+LOST 后才开始累积**：`small_gicp_relocalization` 以 1 Hz 在 `gicp_lost`
+（`std_msgs/Bool`，`true` 表示 LOST）发布状态，Point-LIO 收到 `true` 后才会开启保存。
 
 - 实车导航：保存到 `src/guga_bringup/pcd/reality/<world>.pcd`，与启动时加载的
-  先验地图同名，**会覆盖该先验地图**；首次使用前建议先备份。
+  先验地图同名，**会覆盖该先验地图**；首次使用前建议先备份。正常定位、从未 LOST
+  时不会覆盖。
 - 实车建图、仿真导航/建图：保存到
-  `src/guga_localization/point_lio/PCD/scans_<时间戳>.pcd`。
+  `src/guga_localization/point_lio/PCD/scans_<时间戳>.pcd`；其中导航模式同样需要
+  LOST 触发，建图模式从启动即保存。
 
 可通过 `pcd_save:=False` 关闭（例如长时间运行、不想占用内存时），实车导航也可用
-`pcd_save_path:=/path/to/xxx.pcd` 自定义输出路径：
+`pcd_save_path:=/path/to/xxx.pcd` 自定义输出路径。传入
+`pcd_save_require_lost:=False` 可恢复“启动即保存”的旧行为：
 
 ```bash
 scripts/reality.sh nav floor2 pcd_save:=False
 scripts/simulation.sh nav rmul_2025 pcd_save:=False
+scripts/reality.sh nav floor2 pcd_save_require_lost:=False
 ```
 
 ### 在线调参
@@ -369,6 +375,8 @@ odom 高度阈值筛选点，但保存的 PCD 坐标仍保持在 Point-LIO 的 I
 | `use_robot_state_pub:=True|False` | 是否启动 robot_state_publisher |
 | `pcd_save:=True|False` | 是否在导航/建图退出时保存累积 PCD（默认 True） |
 | `pcd_save_path:=/path/x.pcd` | 实车导航 PCD 输出路径（默认 `pcd/reality/<world>.pcd`） |
+| `pcd_save_trigger_topic:=gicp_lost` | 导航 PCD 保存的 LOST 触发话题 |
+| `pcd_save_require_lost:=True|False` | 是否等待 LOST 后再保存（默认 True；False 启动即保存） |
 
 ## 测试与检查
 

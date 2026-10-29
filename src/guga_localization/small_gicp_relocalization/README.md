@@ -36,6 +36,7 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 | `registered_scan` | `sensor_msgs/PointCloud2` | 订阅 | Point-LIO 输出的 `odom` 系注册点云，累积后作为 GICP 源点云 |
 | `initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | 订阅 | RViz 手动初始位姿，仅在自动重定位失败或需要人工干预时使用 |
 | `/cloud_pcd` | `sensor_msgs/PointCloud2` | 发布 | 转换到 `odom` 的完整先验地图，仅用于导航可视化 |
+| `gicp_lost` | `std_msgs/Bool` | 发布（1 Hz） | `true` 表示当前处于 LOST；Point-LIO 导航模式据此开启 PCD 保存 |
 | `body_to_base_t/_r` | 参数 | 启动时读取一次 | 把 Point-LIO IMU body 系的先验地图换算到 `odom` 系 |
 | TF `base_frame <- lidar_frame` | `tf2` | 未配置上述参数时回退 | 兼容旧配置；查不到时每秒重试 |
 | TF `odom_frame <- base_frame` | `tf2` | 每轮查询 | 越界检查时计算机器人在地图中的水平位置 |
@@ -65,7 +66,7 @@ enum class State { INITIAL, FINE, SUSPECT, LOST };
 | `INITIAL` | 等待首轮可信定位或手动初始位姿 | 节点构造时 | 合格候选进入 `FINE` 并建立基准；不合格候选回退到 `baseline_tf_`，且不会保留本轮候选作为下轮种子 | 发布 `result_t_`，初始值为 `init_pose` |
 | `FINE` | 已获得可信基准，正常跟踪并抑制小抖动 | `INITIAL` 下首次 GICP 质量合格 | 合格结果按更新死区刷新或保持 `baseline_tf_`；`rmse > error_max` 时进入 `SUSPECT` | 发布 `baseline_tf_` |
 | `SUSPECT` | 基准可信度下降，等待重新确认 | `FINE` 状态下 `rmse > error_max` | GICP 合格时重新建立基准并回到 `FINE`；不合格时保留候选作为下轮种子 | 回调结束后发布 `baseline_tf_` |
-| `LOST` | 连续失败后进入丢失状态，清空历史扫描并等待全局重定位 | 当前代码没有进入路径 | 不可达；对应的累积点云清空逻辑不会执行 | 不可达 |
+| `LOST` | 连续失败后进入丢失状态，等待重新定位 | `SUSPECT` 持续超过 `suspect_state_timeout_sec` | 保持最后一次基准 TF 不变；`gicp_lost` 发布 `true`；后续 GICP 合格时可回到 `FINE` | 保持上一次发布值 |
 
 当前实际迁移可以概括为：
 
@@ -76,7 +77,8 @@ FINE --GICP 合格--> FINE
 FINE --rmse > error_max--> SUSPECT
 SUSPECT --GICP 合格--> FINE
 SUSPECT --GICP 不合格--> SUSPECT
-LOST: 没有任何赋值点
+SUSPECT --超时--> LOST
+LOST --GICP 合格--> FINE
 ```
 
 ### 与旧实现的差异

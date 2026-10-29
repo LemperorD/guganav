@@ -34,6 +34,8 @@ def generate_launch_description():
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     pcd_save = LaunchConfiguration("pcd_save")
     pcd_save_path = LaunchConfiguration("pcd_save_path")
+    pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
+    pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
     autostart = LaunchConfiguration("autostart")
@@ -177,6 +179,24 @@ def generate_launch_description():
         ),
     )
 
+    declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
+        "pcd_save_trigger_topic",
+        default_value="gicp_lost",
+        description=(
+            "Navigation-mode PCD save trigger; start saving after this Bool "
+            "topic receives true"
+        ),
+    )
+
+    declare_pcd_save_require_lost_cmd = DeclareLaunchArgument(
+        "pcd_save_require_lost",
+        default_value="True",
+        description=(
+            "Wait for the GICP LOST trigger before saving PCD in navigation; "
+            "False saves from startup"
+        ),
+    )
+
     declare_use_sim_time_cmd = DeclareLaunchArgument(
         "use_sim_time",
         default_value="false",
@@ -257,6 +277,8 @@ def generate_launch_description():
                     "show_prior_pcd": show_prior_pcd,
                     "pcd_save": pcd_save,
                     "pcd_save_path": pcd_save_path,
+                    "pcd_save_require_lost": pcd_save_require_lost,
+                    "pcd_save_trigger_topic": pcd_save_trigger_topic,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
@@ -304,6 +326,8 @@ def generate_launch_description():
     ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_pcd_save_cmd)
     ld.add_action(declare_pcd_save_path_cmd)
+    ld.add_action(declare_pcd_save_trigger_topic_cmd)
+    ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)

@@ -145,6 +145,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   map_initialization_timer_ =
     this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
 
+  lost_pub_ = this->create_publisher<std_msgs::msg::Bool>("gicp_lost", rclcpp::QoS(1));
+
   if (publish_prior_pcd_) {
     prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", 1);
     prior_pcd_timer_ =
@@ -293,6 +295,7 @@ void SmallGicpRelocalizationNode::performRegistration()
   const bool previous_good =
     previous_rmse_ <= error_max_ && previous_inlier_ratio_ >= good_inlier_ratio_;
   register_->optimizer.max_iterations = previous_good ? 10 : max_iterations_;
+  register_->optimizer.max_iterations = global_state_==State::LOST ? 0 : register_->optimizer.max_iterations ;
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
   // RMSE = sqrt(总误差 / 内点数); error 是各内点 error 之和(每个已是平方量), 开方后与内点数无关,
   // 便于跨帧/跨块比较, 也便于按"残差多大"直观设阈值
@@ -315,7 +318,6 @@ void SmallGicpRelocalizationNode::performRegistration()
     if (global_state_ == State::SUSPECT) {
       return "SUSPECT";
     }
-    pub_state->publish(global_state_);
     return "LOST";
   };
   RCLCPP_INFO_THROTTLE(
@@ -586,10 +588,15 @@ void SmallGicpRelocalizationNode::checkStateTime()
     } else if ((now - suspect_start_time_).seconds() > suspect_state_timeout_sec_) {
       global_state_ = State::LOST;
       suspect_timer_started_ = false;
+      RCLCPP_WARN(this->get_logger(), "GICP relocalization LOST");
     }
   } else {
     suspect_timer_started_ = false;
   }
+
+  std_msgs::msg::Bool lost_msg;
+  lost_msg.data = global_state_ == State::LOST;
+  lost_pub_->publish(lost_msg);
 }
 
 }  // namespace small_gicp_relocalization

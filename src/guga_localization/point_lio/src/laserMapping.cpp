@@ -115,6 +115,30 @@ void LaserMappingNode::initializeRos2Interfaces() {
     pub_lidar_odometry_ = create_publisher<nav_msgs::msg::Odometry>(
         config_.output_frame.lidar_odometry_topic, 5);
   }
+
+  if (config_.publish.pcd_save_require_lost) {
+    if (config_.publish.pcd_save_trigger_topic.empty()) {
+      RCLCPP_ERROR(get_logger(),
+                   "pcd_save.require_lost 为 true 但 trigger_topic 为空, "
+                   "PCD 将不会保存");
+    } else {
+      rclcpp::SubscriptionOptions options;
+      options.callback_group = callback_group_;
+      sub_pcd_save_trigger_ = create_subscription<std_msgs::msg::Bool>(
+          config_.publish.pcd_save_trigger_topic, rclcpp::QoS(1),
+          [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (msg->data && !pcd_save_armed_) {
+              pcd_save_armed_ = true;
+              RCLCPP_WARN(get_logger(),
+                          "收到 GICP LOST 信号, 开始累积并保存 PCD");
+            }
+          },
+          options);
+      RCLCPP_INFO(get_logger(), "PCD 保存等待 LOST 触发: %s",
+                  config_.publish.pcd_save_trigger_topic.c_str());
+    }
+  }
+
   createSensorSubscriptions();
 }
 void LaserMappingNode::createSensorSubscriptions() {
@@ -175,7 +199,7 @@ void LaserMappingNode::publishFrameOutputs() {
   if (config_.publish.path_enabled) {
     publishPath();
   }
-  if (config_.publish.scan_enabled || config_.publish.pcd_save_enabled) {
+  if (config_.publish.scan_enabled || isPcdSaveActive()) {
     publishFrameWorld();
   }
   if (config_.publish.scan_enabled && config_.publish.scan_body_enabled) {
@@ -344,7 +368,7 @@ void LaserMappingNode::publishFrameWorld() {
 
   // PCD 保存与 scan 发布相互独立: 导航模式可能关闭 scan_publish_en 以省 CPU,
   // 但仍需要累积点云。
-  if (!config_.publish.pcd_save_enabled) {
+  if (!isPcdSaveActive()) {
     return;
   }
 
@@ -398,12 +422,16 @@ LaserMappingNode::~LaserMappingNode() {
   }
 }
 void LaserMappingNode::savePendingPcd() {
-  if (state_.pcl_wait_save->empty() || !config_.publish.pcd_save_enabled) {
+  if (state_.pcl_wait_save->empty() || !isPcdSaveActive()) {
     return;
   }
   savePcd();
   state_.pcl_wait_save->clear();
   pcd_scan_count_ = 0;
+}
+bool LaserMappingNode::isPcdSaveActive() const {
+  return config_.publish.pcd_save_enabled
+         && (!config_.publish.pcd_save_require_lost || pcd_save_armed_);
 }
 std::string LaserMappingNode::pcdOutputPath(int index) const {
   const std::string& configured = config_.publish.pcd_save_path;
