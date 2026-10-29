@@ -15,6 +15,7 @@
 #ifndef SMALL_GICP_RELOCALIZATION__SMALL_GICP_RELOCALIZATION_HPP_
 #define SMALL_GICP_RELOCALIZATION__SMALL_GICP_RELOCALIZATION_HPP_
 
+#include <lifecycle_msgs/msg/state.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,6 +24,9 @@
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "pcl/io/pcd_io.h"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include "rclcpp_lifecycle/lifecycle_publisher.hpp"
+#include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "small_gicp/ann/kdtree_omp.hpp"
 #include "small_gicp/factors/gicp_factor.hpp"
@@ -37,10 +41,21 @@
 namespace small_gicp_relocalization
 {
 
-class SmallGicpRelocalizationNode : public rclcpp::Node
+class SmallGicpRelocalizationNode : public rclcpp_lifecycle::LifecycleNode
 {
 public:
   explicit SmallGicpRelocalizationNode(const rclcpp::NodeOptions & options);
+  using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
+
+  CallbackReturn on_configure(const rclcpp_lifecycle::State & state) override;
+
+  CallbackReturn on_activate(const rclcpp_lifecycle::State & state) override;
+
+  CallbackReturn on_deactivate(const rclcpp_lifecycle::State & state) override;
+
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State & state) override;
+
+  CallbackReturn on_shutdown(const rclcpp_lifecycle::State & state) override;
 
 private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);

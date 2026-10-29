@@ -16,6 +16,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <lifecycle_msgs/msg/state.hpp>
 #include <limits>
 
 #include "pcl/common/common.h"
@@ -27,133 +28,6 @@
 
 namespace small_gicp_relocalization
 {
-
-SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptions & options)
-: Node("small_gicp_relocalization", options),
-  result_t_(Eigen::Isometry3d::Identity()),
-  previous_result_t_(Eigen::Isometry3d::Identity()),
-  baseline_tf_(Eigen::Isometry3d::Identity())
-{
-  this->declare_parameter("num_threads", 4);
-  this->declare_parameter("num_neighbors", 20);
-  this->declare_parameter("global_leaf_size", 0.25);
-  this->declare_parameter("registered_leaf_size", 0.25);
-  this->declare_parameter("max_dist_sq", 1.0);
-  this->declare_parameter("max_iterations", 100);
-  this->declare_parameter("max_roll_pitch_step", 0.05);
-  this->declare_parameter("max_tz_step", 0.02);
-  this->declare_parameter("error_max", 10.0);
-  this->declare_parameter("good_error_max", 0.5);
-  this->declare_parameter("good_inlier_ratio", 0.5);
-  this->declare_parameter("baseline_translation_tolerance", 1.0);
-  this->declare_parameter("baseline_update_translation_threshold", 0.01);
-  this->declare_parameter("baseline_update_yaw_threshold", 0.01);
-  this->declare_parameter("initial_state_timeout_sec", 10.0);
-  this->declare_parameter("suspect_state_timeout_sec", 5.0);
-  this->declare_parameter("map_boundary_margin", 1.0);
-  this->declare_parameter("map_frame", "map");
-  this->declare_parameter("odom_frame", "odom");
-  this->declare_parameter("base_frame", "");
-  this->declare_parameter("robot_base_frame", "");
-  this->declare_parameter("lidar_frame", "");
-  this->declare_parameter<std::vector<double>>("body_to_base_t", std::vector<double>{});
-  this->declare_parameter<std::vector<double>>("body_to_base_r", std::vector<double>{});
-  this->declare_parameter<std::vector<double>>("lidar_to_base_t", std::vector<double>{});
-  this->declare_parameter<std::vector<double>>("lidar_to_base_r", std::vector<double>{});
-  this->declare_parameter("prior_pcd_file", "");
-  this->declare_parameter("publish_prior_pcd", true);
-  this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
-
-  this->get_parameter("num_threads", num_threads_);
-  this->get_parameter("num_neighbors", num_neighbors_);
-  this->get_parameter("global_leaf_size", global_leaf_size_);
-  this->get_parameter("registered_leaf_size", registered_leaf_size_);
-  this->get_parameter("max_dist_sq", max_dist_sq_);
-  this->get_parameter("max_iterations", max_iterations_);
-  this->get_parameter("max_roll_pitch_step", max_roll_pitch_step_);
-  this->get_parameter("max_tz_step", max_tz_step_);
-  this->get_parameter("error_max", error_max_);
-  this->get_parameter("good_error_max", good_error_max_);
-  this->get_parameter("good_inlier_ratio", good_inlier_ratio_);
-  this->get_parameter("baseline_translation_tolerance", baseline_translation_tolerance_);
-  this->get_parameter(
-    "baseline_update_translation_threshold", baseline_update_translation_threshold_);
-  this->get_parameter("baseline_update_yaw_threshold", baseline_update_yaw_threshold_);
-  this->get_parameter("initial_state_timeout_sec", initial_state_timeout_sec_);
-  this->get_parameter("suspect_state_timeout_sec", suspect_state_timeout_sec_);
-  this->get_parameter("map_boundary_margin", map_boundary_margin_);
-  this->get_parameter("map_frame", map_frame_);
-  this->get_parameter("odom_frame", odom_frame_);
-  this->get_parameter("base_frame", base_frame_);
-  this->get_parameter("robot_base_frame", robot_base_frame_);
-  this->get_parameter("lidar_frame", lidar_frame_);
-  this->get_parameter("body_to_base_t", body_to_base_t_);
-  this->get_parameter("body_to_base_r", body_to_base_r_);
-  this->get_parameter("lidar_to_base_t", lidar_to_base_t_);
-  this->get_parameter("lidar_to_base_r", lidar_to_base_r_);
-  this->get_parameter("prior_pcd_file", prior_pcd_file_);
-  this->get_parameter("publish_prior_pcd", publish_prior_pcd_);
-  this->get_parameter("init_pose", init_pose_);
-
-  // [x, y, z, roll, pitch, yaw] - init_pose parameters
-  if (!init_pose_.empty() && init_pose_.size() >= 6) {
-    result_t_.translation() << init_pose_[0], init_pose_[1], init_pose_[2];
-    result_t_.linear() =
-      Eigen::AngleAxisd(init_pose_[5], Eigen::Vector3d::UnitZ()) *
-      Eigen::AngleAxisd(init_pose_[4], Eigen::Vector3d::UnitY()) *
-      Eigen::AngleAxisd(init_pose_[3], Eigen::Vector3d::UnitX()).toRotationMatrix();
-  }
-  initial_result_t_ = result_t_;
-  previous_result_t_ = result_t_;
-  RCLCPP_INFO(
-    this->get_logger(), "initial_tf:%f %f %f", init_pose_[0], init_pose_[1], init_pose_[2]);
-
-  accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-  global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-  register_ = std::make_shared<small_gicp::Registration<
-    small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
-    small_gicp::DistanceRejector, StepLimitOptimizer>>();
-
-  tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
-  tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
-  tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
-
-  loadGlobalMap(prior_pcd_file_);
-
-  pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-    "registered_scan", 10,
-    [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) { registeredPcdCallback(msg); });
-
-  initial_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-    "initialpose", 10, [this](const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
-      initialPoseCallback(msg);
-    });
-
-  register_timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(500),  // 2 Hz
-    [this]() { performRegistration(); });
-
-  transform_timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(50),  // 20 Hz
-    [this]() { publishTransform(); });
-
-  state_check_timer_ =
-    this->create_wall_timer(std::chrono::milliseconds(1000), [this]() { checkStateTime(); });
-  // A component constructor runs inside the container's load_node service.
-  // Waiting for TF here blocks every component queued behind this node,
-  // including the Nav2 servers that own the costmaps.
-  map_initialization_timer_ =
-    this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
-
-  lost_pub_ = this->create_publisher<std_msgs::msg::Bool>("gicp_lost", rclcpp::QoS(1));
-
-  if (publish_prior_pcd_) {
-    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", 1);
-    prior_pcd_timer_ =
-      this->create_wall_timer(std::chrono::seconds(1), [this]() { publishPriorPcd(); });
-  }
-}
-
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
 {
   if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {  //语义不明确
@@ -295,7 +169,8 @@ void SmallGicpRelocalizationNode::performRegistration()
   const bool previous_good =
     previous_rmse_ <= error_max_ && previous_inlier_ratio_ >= good_inlier_ratio_;
   register_->optimizer.max_iterations = previous_good ? 10 : max_iterations_;
-  register_->optimizer.max_iterations = global_state_==State::LOST ? 0 : register_->optimizer.max_iterations ;
+  register_->optimizer.max_iterations =
+    global_state_ == State::LOST ? 0 : register_->optimizer.max_iterations;
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
   // RMSE = sqrt(总误差 / 内点数); error 是各内点 error 之和(每个已是平方量), 开方后与内点数无关,
   // 便于跨帧/跨块比较, 也便于按"残差多大"直观设阈值
@@ -592,6 +467,21 @@ void SmallGicpRelocalizationNode::checkStateTime()
     }
   } else {
     suspect_timer_started_ = false;
+  }
+
+  if (
+    global_state_ == State::LOST &&
+    this->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+    RCLCPP_WARN(this->get_logger(), "定位状态为 LOST,正在停用节点");
+
+    const auto state = this->deactivate();
+
+    if (state.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
+      RCLCPP_INFO(this->get_logger(), "节点已进入 Inactive 状态");
+    } else {
+      RCLCPP_ERROR(
+        this->get_logger(), "节点未进入 Inactive 状态，当前状态：%s", state.label().c_str());
+    }
   }
 
   std_msgs::msg::Bool lost_msg;
