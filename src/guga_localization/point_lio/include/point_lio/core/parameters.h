@@ -89,6 +89,11 @@ struct PublishParams {
   /// 为 true 时只有 trigger_topic 收到 true 后才开始保存 (导航模式配 GICP LOST)
   bool pcd_save_require_lost{false};
   std::string pcd_save_trigger_topic;
+  /// 非空时按定位状态驱动 PCD 保存: 0=INITIAL, 1=FINE, 2=SUSPECT, 3=LOST。
+  /// SUSPECT 开始累积, LOST 写盘并请求重载, FINE 清空缓存。置空则退回 require_lost。
+  std::string pcd_save_state_topic;
+  /// 先验地图重载服务 (std_srvs/Trigger), PCD 写盘完成后调用, 置空则不重载
+  std::string pcd_save_reload_service;
 };
 
 struct SensorParams {

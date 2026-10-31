@@ -116,7 +116,18 @@ void LaserMappingNode::initializeRos2Interfaces() {
         config_.output_frame.lidar_odometry_topic, 5);
   }
 
-  if (config_.publish.pcd_save_require_lost) {
+  if (!config_.publish.pcd_save_state_topic.empty()) {
+    rclcpp::SubscriptionOptions options;
+    options.callback_group = callback_group_;
+    sub_gicp_state_ = create_subscription<std_msgs::msg::UInt8>(
+        config_.publish.pcd_save_state_topic, rclcpp::QoS(1),
+        [this](const std_msgs::msg::UInt8::SharedPtr msg) {
+          gicpStateCallback(msg);
+        },
+        options);
+    RCLCPP_INFO(get_logger(), "PCD 保存按定位状态驱动: %s",
+                config_.publish.pcd_save_state_topic.c_str());
+  } else if (config_.publish.pcd_save_require_lost) {
     if (config_.publish.pcd_save_trigger_topic.empty()) {
       RCLCPP_ERROR(get_logger(),
                    "pcd_save.require_lost 为 true 但 trigger_topic 为空, "
@@ -137,6 +148,13 @@ void LaserMappingNode::initializeRos2Interfaces() {
       RCLCPP_INFO(get_logger(), "PCD 保存等待 LOST 触发: %s",
                   config_.publish.pcd_save_trigger_topic.c_str());
     }
+  }
+
+  if (!config_.publish.pcd_save_reload_service.empty()) {
+    reload_client_ = create_client<std_srvs::srv::Trigger>(
+        config_.publish.pcd_save_reload_service);
+    RCLCPP_INFO(get_logger(), "先验地图重载服务: %s",
+                config_.publish.pcd_save_reload_service.c_str());
   }
 
   createSensorSubscriptions();
@@ -368,6 +386,12 @@ void LaserMappingNode::publishFrameWorld() {
 
   // PCD 保存与 scan 发布相互独立: 导航模式可能关闭 scan_publish_en 以省 CPU,
   // 但仍需要累积点云。
+  // 定位恢复 FINE 时由回调置位, 这里清空累积缓存 (回调不直接碰点云)。
+  if (pcd_save_clear_requested_.exchange(false)) {
+    state_.pcl_wait_save->clear();
+    pcd_scan_count_ = 0;
+  }
+
   if (!isPcdSaveActive()) {
     return;
   }
@@ -397,6 +421,11 @@ void LaserMappingNode::publishFrameWorld() {
     }
     state_.pcl_wait_save->clear();
     pcd_scan_count_ = 0;
+  }
+
+  // LOST 由回调置位, 在主循环里写盘, 避免跨线程操作点云。
+  if (pcd_save_requested_.exchange(false)) {
+    savePcdOnLost();
   }
 }
 void LaserMappingNode::publishFrameBody() {
@@ -430,8 +459,102 @@ void LaserMappingNode::savePendingPcd() {
   pcd_scan_count_ = 0;
 }
 bool LaserMappingNode::isPcdSaveActive() const {
-  return config_.publish.pcd_save_enabled
-         && (!config_.publish.pcd_save_require_lost || pcd_save_armed_);
+  if (!config_.publish.pcd_save_enabled) {
+    return false;
+  }
+  if (!config_.publish.pcd_save_state_topic.empty()) {
+    // 2=SUSPECT 3=LOST: 怀疑丢失后开始累积, 真正丢失时才写盘
+    return gicp_state_ == 2 || gicp_state_ == 3;
+  }
+  return !config_.publish.pcd_save_require_lost || pcd_save_armed_;
+}
+
+void LaserMappingNode::gicpStateCallback(
+    const std_msgs::msg::UInt8::SharedPtr msg) {
+  gicp_state_ = msg->data;
+  switch (msg->data) {
+    case 1:  // FINE: 定位恢复, 清空累积缓存
+      if (pcd_save_armed_ || pcd_save_on_lost_done_) {
+        pcd_save_clear_requested_ = true;
+        pcd_save_armed_ = false;
+        pcd_save_on_lost_done_ = false;
+        RCLCPP_INFO(get_logger(), "定位恢复 FINE, 清空 PCD 累积缓存");
+      }
+      break;
+    case 2:  // SUSPECT: 开始累积
+      if (!pcd_save_armed_) {
+        pcd_save_armed_ = true;
+        RCLCPP_WARN(get_logger(), "定位进入 SUSPECT, 开始累积点云");
+      }
+      break;
+    case 3:  // LOST: 请求保存一次
+      if (pcd_save_armed_ && !pcd_save_on_lost_done_) {
+        pcd_save_on_lost_done_ = true;
+        pcd_save_requested_ = true;
+        RCLCPP_WARN(get_logger(), "定位进入 LOST, 请求保存累积点云");
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void LaserMappingNode::savePcdOnLost() {
+  if (state_.pcl_wait_save->empty()) {
+    RCLCPP_WARN(get_logger(), "定位丢失但累积点云为空, 跳过 PCD 保存");
+    return;
+  }
+
+  const std::string path = pcdOutputPath(0);
+  std::error_code ec;
+  const std::filesystem::path target(path);
+  if (std::filesystem::exists(target, ec)) {
+    const auto stamp = std::to_string(get_clock()->now().nanoseconds());
+    const auto backup =
+        target.parent_path() /
+        (target.stem().string() + "_" + stamp + ".bak.pcd");
+    std::filesystem::copy_file(
+        target, backup, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+      RCLCPP_WARN(get_logger(), "备份先验地图失败: %s", ec.message().c_str());
+    } else {
+      RCLCPP_INFO(get_logger(), "先验地图已备份到 %s", backup.c_str());
+    }
+  }
+
+  if (writePcd(path, *state_.pcl_wait_save)) {
+    RCLCPP_INFO(get_logger(), "定位丢失, 累积点云已写入 %s (%zu 点)",
+                path.c_str(), state_.pcl_wait_save->size());
+  } else {
+    RCLCPP_ERROR(get_logger(), "定位丢失, 写入 %s 失败", path.c_str());
+  }
+  state_.pcl_wait_save->clear();
+  pcd_scan_count_ = 0;
+  requestPriorMapReload();
+}
+
+void LaserMappingNode::requestPriorMapReload() {
+  if (!reload_client_) {
+    RCLCPP_WARN(get_logger(), "未配置重载服务, 先验地图保持旧文件");
+    return;
+  }
+  if (!reload_client_->service_is_ready()) {
+    RCLCPP_WARN(get_logger(), "重载服务不可用, 先验地图保持旧文件");
+    return;
+  }
+  auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+  reload_client_->async_send_request(
+      request,
+      [this](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture future) {
+        const auto response = future.get();
+        if (response->success) {
+          RCLCPP_INFO(get_logger(), "先验地图重载成功: %s",
+                      response->message.c_str());
+        } else {
+          RCLCPP_ERROR(get_logger(), "先验地图重载失败: %s",
+                       response->message.c_str());
+        }
+      });
 }
 std::string LaserMappingNode::pcdOutputPath(int index) const {
   const std::string& configured = config_.publish.pcd_save_path;

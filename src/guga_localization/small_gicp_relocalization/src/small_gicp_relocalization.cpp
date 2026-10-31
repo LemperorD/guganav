@@ -479,6 +479,7 @@ void SmallGicpRelocalizationNode::checkStateTime()
     std_msgs::msg::Bool lost_msg;
     lost_msg.data = true;
     lost_pub_->publish(lost_msg);
+    publishState();
 
     RCLCPP_WARN(this->get_logger(), "定位状态为 LOST,正在停用节点");
 
@@ -504,6 +505,7 @@ void SmallGicpRelocalizationNode::checkStateTime()
   std_msgs::msg::Bool lost_msg;
   lost_msg.data = global_state_ == State::LOST;
   lost_pub_->publish(lost_msg);
+  publishState();
 }
 
 }  // namespace small_gicp_relocalization

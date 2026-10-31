@@ -61,6 +61,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter<std::vector<double>>("lidar_to_base_r", std::vector<double>{});
   this->declare_parameter("prior_pcd_file", "");
   this->declare_parameter("publish_prior_pcd", true);
+  this->declare_parameter("state_pub_topic", "gicp_state");
   init_pose_ = this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
@@ -129,6 +130,26 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_conf
 
   // 5. 创建发布器
   lost_pub_ = this->create_publisher<std_msgs::msg::Bool>("gicp_lost", 1);
+  this->get_parameter("state_pub_topic", state_pub_topic_);
+  if (!state_pub_topic_.empty()) {
+    state_pub_ = this->create_publisher<std_msgs::msg::UInt8>(state_pub_topic_, 1);
+  }
+
+  // 重载服务只在第一次 configure 时创建, cleanup 不销毁它, 以便在 unconfigured
+  // 状态下由 Point-LIO 触发重新读取先验地图。
+  if (!reload_srv_) {
+    reload_srv_ = this->create_service<std_srvs::srv::Trigger>(
+      "reload_prior_map",
+      [this](
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        (void)request;
+        std::string message;
+        response->success = reloadPriorMap(message);
+        response->message = message;
+      });
+    RCLCPP_INFO(this->get_logger(), "重载先验地图服务已创建: reload_prior_map");
+  }
 
   if (publish_prior_pcd_) {
     prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", 1);
@@ -340,6 +361,73 @@ void SmallGicpRelocalizationNode::releasePriorMapResources()
   // result_t_, initial_result_t_, previous_result_t_ and baseline_tf_ are
   // intentionally retained. The inactive transform timer publishes result_t_
   // after the prior map has been released.
+}
+
+void SmallGicpRelocalizationNode::publishState()
+{
+  if (!state_pub_) {
+    return;
+  }
+  std_msgs::msg::UInt8 message;
+  switch (global_state_) {
+    case State::INITIAL:
+      message.data = 0;
+      break;
+    case State::FINE:
+      message.data = 1;
+      break;
+    case State::SUSPECT:
+      message.data = 2;
+      break;
+    case State::LOST:
+      message.data = 3;
+      break;
+    default:
+      message.data = 0;
+      break;
+  }
+  state_pub_->publish(message);
+}
+
+bool SmallGicpRelocalizationNode::reloadPriorMap(std::string & message)
+{
+  if (this->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+    if (this->deactivate().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
+      message = "deactivate failed";
+      return false;
+    }
+  }
+
+  if (
+    this->get_current_state().id() ==
+    lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
+    if (this->cleanup().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED) {
+      message = "cleanup failed";
+      return false;
+    }
+  }
+
+  if (
+    this->get_current_state().id() !=
+    lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED) {
+    message = "node is not unconfigured, current state: " +
+      this->get_current_state().label();
+    return false;
+  }
+
+  if (this->configure().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
+    message = "configure failed, prior pcd may be missing or unreadable";
+    return false;
+  }
+
+  if (this->activate().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+    message = "activate failed";
+    return false;
+  }
+
+  message = "prior map reloaded and node reactivated";
+  RCLCPP_INFO(this->get_logger(), "%s", message.c_str());
+  return true;
 }
 
 }  // namespace small_gicp_relocalization

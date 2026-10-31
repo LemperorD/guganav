@@ -1,3 +1,5 @@
+#include <atomic>
+
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -11,6 +13,8 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/u_int8.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Filter.h"
@@ -32,7 +36,7 @@ private:
   int pcd_index_{0};
   int pcd_scan_count_{0};
   /// @brief 导航模式下收到 GICP LOST 信号后才开始累积/保存 PCD
-  bool pcd_save_armed_{false};
+  std::atomic<bool> pcd_save_armed_{false};
   MainLoopState state_;  ///< 主循环状态
   FrameProcessor processor_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -43,6 +47,18 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
   /// @brief GICP LOST 触发信号 (std_msgs/Bool)
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_pcd_save_trigger_;
+  /// @brief GICP 定位状态 (std_msgs/UInt8): 0=INITIAL 1=FINE 2=SUSPECT 3=LOST
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr sub_gicp_state_;
+  /// @brief 先验地图重载服务客户端, 新 PCD 写盘后调用
+  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reload_client_;
+  /// @brief 最近一次收到的定位状态
+  std::atomic<uint8_t> gicp_state_{0};
+  /// @brief 是否已把 LOST 触发过一次保存请求 (每次 FINE 后复位)
+  bool pcd_save_on_lost_done_{false};
+  /// @brief 主循环看到该标志后执行保存 (回调只置标志, 不碰点云)
+  std::atomic<bool> pcd_save_requested_{false};
+  /// @brief 主循环看到该标志后清空累积缓存 (FINE 时由回调置位)
+  std::atomic<bool> pcd_save_clear_requested_{false};
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
@@ -122,6 +138,12 @@ private:
 
   void savePendingPcd();
   void savePcd();
+  /// @brief 收到定位状态: SUSPECT 开始累积, LOST 请求保存, FINE 清空缓存
+  void gicpStateCallback(const std_msgs::msg::UInt8::SharedPtr msg);
+  /// @brief 把累积点云写到 pcd_save_path, 然后调用重载服务
+  void savePcdOnLost();
+  /// @brief 异步调用先验地图重载服务
+  void requestPriorMapReload();
 
   /** @brief PCD 保存是否已启用 (导航模式还需等待 LOST 触发) */
   [[nodiscard]] bool isPcdSaveActive() const;

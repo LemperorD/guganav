@@ -152,6 +152,10 @@ PointLioParams readParameters(rclcpp::Node* nh) {
         "pcd_save.require_lost", false);
     params.publish.pcd_save_trigger_topic = nh->declare_parameter<std::string>(
         "pcd_save.trigger_topic", "");
+    params.publish.pcd_save_state_topic = nh->declare_parameter<std::string>(
+        "pcd_save.state_topic", "");
+    params.publish.pcd_save_reload_service = nh->declare_parameter<std::string>(
+        "pcd_save.reload_service", "");
     params.lidar.lidar_time_interval = nh->declare_parameter<double>(
         "mapping.lidar_time_inte", 0.1);
 

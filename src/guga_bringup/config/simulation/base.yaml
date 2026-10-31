@@ -99,6 +99,10 @@ point_lio:
       interval:
         -1 # how many LiDAR frames saved in each pcd file;
         # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
+      # 按定位状态驱动 PCD 保存: SUSPECT 开始累积, LOST 写盘并调用重载服务,
+      # FINE 清空缓存。置空则退回 require_lost/trigger_topic 的旧机制。
+      state_topic: "gicp_state"
+      reload_service: "reload_prior_map"
 
 scan_to_sensor_frame:
   ros__parameters:
@@ -164,6 +168,8 @@ small_gicp_relocalization:
                       -1.0, 0.0, 0.0,
                       0.0, -0.173648178, 0.984807753]
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # [x, y, z, roll, pitch, yaw]
+    # 定位状态话题 (std_msgs/UInt8), 供 Point-LIO 驱动 PCD 保存与先验地图重载
+    state_pub_topic: "gicp_state"
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 

@@ -35,6 +35,8 @@
 #include "small_gicp/registration/registration.hpp"
 #include "small_gicp_relocalization/step_limit_optimizer.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/u_int8.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -79,11 +81,23 @@ private:
   /// @brief 本次变换是否把机器人推出先验地图外接框; 越界时 robot_in_map 为机器人在地图中的位置
   bool isOutOfMap(const Eigen::Isometry3d & T_map_odom, Eigen::Vector3d & robot_in_map) const;
   void checkStateTime();
+  /// @brief 发布定位状态 (0=INITIAL, 1=FINE, 2=SUSPECT, 3=LOST), 供 Point-LIO 等
+  ///        下游节点按状态驱动 PCD 保存与先验地图重载
+  void publishState();
+  /// @brief 重新读取 prior_pcd_file 并重建配准目标, 保留 baseline_tf_ 与 result_t_
+  /// @param message 返回给服务调用方的结果说明
+  /// @return true 表示重载并重新激活成功
+  bool reloadPriorMap(std::string & message);
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr prior_pcd_pub_;
   /// @brief 1 Hz 发布 LOST 状态: data=true 表示重定位已丢失
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr lost_pub_;
+  /// @brief 定位状态 (std_msgs/UInt8), 值见 publishState 的说明
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr state_pub_;
+  /// @brief 重载先验地图服务: 重新读取 prior_pcd_file 并重新激活节点
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reload_srv_;
+  std::string state_pub_topic_;
 
   bool accumulation_reset_ = false;
   /// @brief RViz 手动给的初始位姿: 只作种子, 等下一次注册通过基准残差检查后再决定是否升级为基准;

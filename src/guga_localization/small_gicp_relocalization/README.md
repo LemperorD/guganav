@@ -37,6 +37,8 @@ scripts/simulation.sh nav rmul_2025 prior_pcd_file:=/abs/path/rmul_2025.pcd
 | `initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | 订阅 | RViz 手动初始位姿，仅在自动重定位失败或需要人工干预时使用 |
 | `/cloud_pcd` | `sensor_msgs/PointCloud2` | 发布 | 转换到 `odom` 的完整先验地图，仅用于导航可视化 |
 | `gicp_lost` | `std_msgs/Bool` | 发布（1 Hz） | `true` 表示当前处于 LOST；Point-LIO 导航模式据此开启 PCD 保存 |
+| `gicp_state` | `std_msgs/UInt8` | 发布（1 Hz） | 定位状态：`0=INITIAL`、`1=FINE`、`2=SUSPECT`、`3=LOST`；Point-LIO 据此驱动 PCD 累积、写盘与缓存清理 |
+| `reload_prior_map` | `std_srvs/Trigger` | 服务 | 重新读取 `prior_pcd_file` 并重新激活节点；保留 `baseline_tf_` 与 `result_t_`，即沿用最后的 `map -> odom` |
 | `body_to_base_t/_r` | 参数 | 启动时读取一次 | 把 Point-LIO IMU body 系的先验地图换算到 `odom` 系 |
 | TF `base_frame <- lidar_frame` | `tf2` | 未配置上述参数时回退 | 兼容旧配置；查不到时每秒重试 |
 | TF `odom_frame <- base_frame` | `tf2` | 每轮查询 | 越界检查时计算机器人在地图中的水平位置 |
