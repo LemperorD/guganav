@@ -514,25 +514,18 @@ void LaserMappingNode::backupPriorMap() {
 }
 
 bool LaserMappingNode::mergeMapAndWrite() {
-  const std::string path = pcdOutputPath(0);
-  PointCloudXYZI merged;
-  pcl::PCDReader reader;
-  PointCloudXYZI old_cloud;
-  if (reader.read(path, old_cloud) == 0) {
-    merged = old_cloud;
-  }
-
-  merged += *state_.pcl_wait_save;
-
+  // 缓冲里的点云同属本次 odom 系, 直接写快照即可, 不读旧 PCD:
+  // 旧地图可能来自上一次会话, 原点与本次 camera_init 不同, 合并会错层。
   pcl::VoxelGrid<PointType> voxel;
   voxel.setLeafSize(0.1f, 0.1f, 0.1f);
-  voxel.setInputCloud(merged.makeShared());
+  voxel.setInputCloud(state_.pcl_wait_save);
   PointCloudXYZI::Ptr filtered(new PointCloudXYZI());
   voxel.filter(*filtered);
   if (filtered->empty()) {
     return false;
   }
 
+  const std::string path = pcdOutputPath(0);
   backupPriorMap();
   return writePcd(path, *filtered);
 }
@@ -549,9 +542,13 @@ void LaserMappingNode::maybeUpdateMapOnSuspect() {
     suspect_accum_sec_ += (now - suspect_mark_).seconds();
     suspect_tracking_ = false;
   }
+  if (!suspect_now) {
+    // 离开可疑状态, 允许下一段 SUSPECT 再更新一次
+    updated_this_suspect_ = false;
+  }
 
   // 首次丢失由 pcd_save_requested_ 走覆盖写盘, 增量只用于之后的累计触发
-  if (!first_rebuild_done_) {
+  if (!first_rebuild_done_ || updated_this_suspect_) {
     return;
   }
 
@@ -565,14 +562,14 @@ void LaserMappingNode::maybeUpdateMapOnSuspect() {
 
   const bool ok = mergeMapAndWrite();
   if (ok) {
-    RCLCPP_INFO(get_logger(), "可疑状态累计 %.1f s, 已增量更新地图", total);
+    RCLCPP_INFO(get_logger(), "可疑状态累计 %.1f s, 已更新地图 (%zu 点)",
+                total, state_.pcl_wait_save->size());
   } else {
-    RCLCPP_ERROR(get_logger(), "增量更新地图失败, 保留旧文件");
+    RCLCPP_ERROR(get_logger(), "更新地图失败, 保留旧文件");
   }
+  updated_this_suspect_ = true;
   suspect_accum_sec_ = 0.0;
   suspect_mark_ = now;
-  state_.pcl_wait_save->clear();
-  pcd_scan_count_ = 0;
   if (ok) {
     requestPriorMapReload();
   }
@@ -595,7 +592,8 @@ void LaserMappingNode::savePcdOnLost() {
   first_rebuild_done_ = true;
   suspect_accum_sec_ = 0.0;
   suspect_mark_ = get_clock()->now();
-  state_.pcl_wait_save->clear();
+  // 不清空缓冲: 后续快照要包含首次写盘之前的点云, 否则每次更新都会丢掉
+  // 更早的地图。缓冲最长按 12 min 运行时长估算, 内存可接受。
   pcd_scan_count_ = 0;
   requestPriorMapReload();
 }

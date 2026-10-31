@@ -63,6 +63,8 @@ private:
   rclcpp::Time suspect_mark_;
   /// @brief 首次 LOST 已按覆盖方式写过一次地图; 之后改为增量合并
   bool first_rebuild_done_{false};
+  /// @brief 本段 SUSPECT 是否已经更新过一次地图 (离开可疑状态时复位)
+  bool updated_this_suspect_{false};
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
