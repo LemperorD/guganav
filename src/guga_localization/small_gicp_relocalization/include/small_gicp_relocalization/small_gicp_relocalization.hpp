@@ -60,6 +60,9 @@ public:
 private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void loadGlobalMap(const std::string & file_name);
+  bool loadPriorMap();
+  /// @brief Release all prior-map resources while preserving result_t_ for TF fallback.
+  void releasePriorMapResources();
   void initializeGlobalMap();
   void publishPriorPcd();
   void performRegistration();

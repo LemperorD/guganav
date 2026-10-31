@@ -88,7 +88,7 @@ point_lio:
                        -1.0, 0.0, 0.0,
                        0.0, -0.173648178, 0.984807753]
       z_filter:
-        enable: Fasle
+        enable: False
         min_z: -0.2 # registered_scan 在 odom 系中的最低 Z
         max_z: 0.6 # registered_scan 在 odom 系中的最高 Z
 

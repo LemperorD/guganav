@@ -37,14 +37,15 @@ def generate_launch_description():
     pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
     pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     params_file = LaunchConfiguration("params_file")
-    base_params_file = LaunchConfiguration("base_params_file"),
+    base_params_file = LaunchConfiguration("base_params_file")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
-    lifecycle_nodes = ["map_server"]
+    map_lifecycle_nodes = ["map_server"]
+    relocalization_lifecycle_nodes = ["small_gicp_relocalization"]
 
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
@@ -257,7 +258,23 @@ def generate_launch_description():
                 parameters=[
                     {"use_sim_time": use_sim_time},
                     {"autostart": autostart},
-                    {"node_names": lifecycle_nodes},
+                    {"node_names": map_lifecycle_nodes},
+                ],
+            ),
+            # The relocalization node has its own lifecycle and deliberately
+            # deactivates itself on LOST. It does not use Nav2's bond heartbeat,
+            # so manage it separately with bond checking disabled.
+            Node(
+                package="nav2_lifecycle_manager",
+                executable="lifecycle_manager",
+                name="lifecycle_manager_relocalization",
+                output="screen",
+                arguments=["--ros-args", "--log-level", log_level],
+                parameters=[
+                    {"use_sim_time": use_sim_time},
+                    {"autostart": autostart},
+                    {"bond_timeout": 0.0},
+                    {"node_names": relocalization_lifecycle_nodes},
                 ],
             ),
         ],
@@ -296,7 +313,20 @@ def generate_launch_description():
                     {
                         "use_sim_time": use_sim_time,
                         "autostart": autostart,
-                        "node_names": lifecycle_nodes,
+                        "node_names": map_lifecycle_nodes,
+                    }
+                ],
+            ),
+            ComposableNode(
+                package="nav2_lifecycle_manager",
+                plugin="nav2_lifecycle_manager::LifecycleManager",
+                name="lifecycle_manager_relocalization",
+                parameters=[
+                    {
+                        "use_sim_time": use_sim_time,
+                        "autostart": autostart,
+                        "bond_timeout": 0.0,
+                        "node_names": relocalization_lifecycle_nodes,
                     }
                 ],
             ),

@@ -61,7 +61,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter<std::vector<double>>("lidar_to_base_r", std::vector<double>{});
   this->declare_parameter("prior_pcd_file", "");
   this->declare_parameter("publish_prior_pcd", true);
-  this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
+  init_pose_ = this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
@@ -70,11 +70,13 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
       Eigen::AngleAxisd(init_pose_[5], Eigen::Vector3d::UnitZ()) *
       Eigen::AngleAxisd(init_pose_[4], Eigen::Vector3d::UnitY()) *
       Eigen::AngleAxisd(init_pose_[3], Eigen::Vector3d::UnitX()).toRotationMatrix();
+    RCLCPP_INFO(
+      this->get_logger(), "initial_tf:%f %f %f", init_pose_[0], init_pose_[1], init_pose_[2]);
+  } else {
+    RCLCPP_WARN(this->get_logger(), "init_pose must contain at least 6 values; using identity");
   }
   initial_result_t_ = result_t_;
   previous_result_t_ = result_t_;
-  RCLCPP_INFO(
-    this->get_logger(), "initial_tf:%f %f %f", init_pose_[0], init_pose_[1], init_pose_[2]);
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -121,27 +123,9 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_conf
   this->get_parameter("lidar_to_base_r", lidar_to_base_r_);
   this->get_parameter("init_pose", init_pose_);
 
-  // 2. 加载全局地图
-  global_map_->clear();
-  loadGlobalMap(prior_pcd_file_);
-
-  if (global_map_->empty()) {
-    RCLCPP_ERROR(this->get_logger(), "Failed to load global map: %s", prior_pcd_file_.c_str());
-
+  if (!loadPriorMap()) {
     return CallbackReturn::FAILURE;
   }
-
-  // 3. 创建 GICP 配准器
-  register_ = std::make_shared<small_gicp::Registration<
-    small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
-    small_gicp::DistanceRejector, StepLimitOptimizer>>();
-
-  // 4. 创建 TF 相关对象
-  // 如果这些对象已经在构造函数中创建，这里不要重复创建。
-  //
-  // tf_buffer_ = ...
-  // tf_listener_ = ...
-  // tf_broadcaster_ = ...
 
   // 5. 创建发布器
   lost_pub_ = this->create_publisher<std_msgs::msg::Bool>("gicp_lost", 1);
@@ -153,8 +137,6 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_conf
   }
 
   // 6. 重置定位状态
-  accumulated_cloud_->clear();
-
   global_map_ready_ = false;
   has_map_bounds_ = false;
 
@@ -170,8 +152,11 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_acti
 {
   RCLCPP_INFO(this->get_logger(), "Activating small_gicp_relocalization");
 
-  // 1. 重置上一轮积累的点云
-  accumulated_cloud_->clear();
+  // Deactivation released the prior map. Reload it before accepting scans or
+  // starting registration.
+  if (!global_map_ && !loadPriorMap()) {
+    return CallbackReturn::FAILURE;
+  }
 
   // 2. 创建点云订阅
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -191,14 +176,27 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_acti
     }
   });
 
+  if (transform_timer_) {
+    transform_timer_->cancel();
+  }
   transform_timer_ =
     this->create_wall_timer(std::chrono::milliseconds(50), [this]() { publishTransform(); });
 
   state_check_timer_ =
     this->create_wall_timer(std::chrono::milliseconds(1000), [this]() { checkStateTime(); });
 
-  map_initialization_timer_ =
-    this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
+  if (publish_prior_pcd_ && prior_pcd_pub_) {
+    if (prior_pcd_timer_) {
+      prior_pcd_timer_->cancel();
+    }
+    prior_pcd_timer_ =
+      this->create_wall_timer(std::chrono::seconds(1), [this]() { publishPriorPcd(); });
+  }
+
+  if (!global_map_ready_) {
+    map_initialization_timer_ =
+      this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
+  }
 
   RCLCPP_INFO(this->get_logger(), "small_gicp_relocalization activated");
 
@@ -208,15 +206,13 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_acti
 SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_deactivate(
   const rclcpp_lifecycle::State &)
 {
-  RCLCPP_INFO(this->get_logger(), "Deactivating small_gicp_relocalization");
+  RCLCPP_INFO(
+    this->get_logger(), "Deactivating small_gicp_relocalization; keeping map->odom on result_t");
 
-  // 1. 停止所有定时器
+  // Stop localization processing. Resource cleanup is performed by on_cleanup.
+  // transform_timer_ stays alive so map -> odom remains available to Nav2.
   if (register_timer_) {
     register_timer_->cancel();
-  }
-
-  if (transform_timer_) {
-    transform_timer_->cancel();
   }
 
   if (state_check_timer_) {
@@ -235,9 +231,6 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_deac
   pcd_sub_.reset();
   initial_pose_sub_.reset();
 
-  // 3. 清理尚未处理的点云
-  accumulated_cloud_->clear();
-
   RCLCPP_INFO(this->get_logger(), "small_gicp_relocalization deactivated");
 
   return CallbackReturn::SUCCESS;
@@ -248,27 +241,9 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_clea
 {
   RCLCPP_INFO(this->get_logger(), "Cleaning up small_gicp_relocalization");
 
-  // 清理点云
-  if (accumulated_cloud_) {
-    accumulated_cloud_->clear();
-  }
-
-  if (global_map_) {
-    global_map_->clear();
-  }
-
-  // 释放配准对象
-  source_.reset();
-  target_.reset();
-
-  source_tree_.reset();
-  target_tree_.reset();
-
-  register_.reset();
-
-  // 清理地图状态
-  global_map_ready_ = false;
-  has_map_bounds_ = false;
+  // Release the prior map and GICP resources. transform_timer_ and pose results
+  // are retained so inactive/unconfigured nodes can keep publishing result_t_.
+  releasePriorMapResources();
 
   // 清理定位状态
   global_state_ = State::INITIAL;
@@ -293,12 +268,12 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_shut
     register_timer_->cancel();
   }
 
-  if (transform_timer_) {
-    transform_timer_->cancel();
-  }
-
   if (state_check_timer_) {
     state_check_timer_->cancel();
+  }
+
+  if (transform_timer_) {
+    transform_timer_->cancel();
   }
 
   if (map_initialization_timer_) {
@@ -312,13 +287,59 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_shut
   // 销毁订阅
   pcd_sub_.reset();
   initial_pose_sub_.reset();
+  releasePriorMapResources();
 
   RCLCPP_INFO(this->get_logger(), "small_gicp_relocalization shutdown complete");
 
   return CallbackReturn::SUCCESS;
 }
 
-}  // namespace small_gicp_relocalization
+bool SmallGicpRelocalizationNode::loadPriorMap()
+{
+  if (!global_map_) {
+    global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  } else {
+    global_map_->clear();
+  }
+  if (!accumulated_cloud_) {
+    accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  } else {
+    accumulated_cloud_->clear();
+  }
 
-#include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(small_gicp_relocalization::SmallGicpRelocalizationNode)
+  global_map_ready_ = false;
+  has_map_bounds_ = false;
+  loadGlobalMap(prior_pcd_file_);
+  if (global_map_->empty()) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to load global map: %s", prior_pcd_file_.c_str());
+    return false;
+  }
+
+  if (!register_) {
+    register_ = std::make_shared<small_gicp::Registration<
+      small_gicp::GICPFactor, small_gicp::ParallelReductionOMP, small_gicp::NullFactor,
+      small_gicp::DistanceRejector, StepLimitOptimizer>>();
+  }
+  return true;
+}
+
+void SmallGicpRelocalizationNode::releasePriorMapResources()
+{
+  source_.reset();
+  target_.reset();
+  source_tree_.reset();
+  target_tree_.reset();
+  register_.reset();
+  global_map_.reset();
+  accumulated_cloud_.reset();
+
+  global_map_ready_ = false;
+  has_map_bounds_ = false;
+  accumulation_reset_ = false;
+
+  // result_t_, initial_result_t_, previous_result_t_ and baseline_tf_ are
+  // intentionally retained. The inactive transform timer publishes result_t_
+  // after the prior map has been released.
+}
+
+}  // namespace small_gicp_relocalization

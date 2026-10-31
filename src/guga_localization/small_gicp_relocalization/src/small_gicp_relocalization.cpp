@@ -169,8 +169,6 @@ void SmallGicpRelocalizationNode::performRegistration()
   const bool previous_good =
     previous_rmse_ <= error_max_ && previous_inlier_ratio_ >= good_inlier_ratio_;
   register_->optimizer.max_iterations = previous_good ? 10 : max_iterations_;
-  register_->optimizer.max_iterations =
-    global_state_ == State::LOST ? 0 : register_->optimizer.max_iterations;
   auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
   // RMSE = sqrt(总误差 / 内点数); error 是各内点 error 之和(每个已是平方量), 开方后与内点数无关,
   // 便于跨帧/跨块比较, 也便于按"残差多大"直观设阈值
@@ -365,10 +363,14 @@ bool SmallGicpRelocalizationNode::isOutOfMap(
 
 void SmallGicpRelocalizationNode::publishTransform()
 {
-  // 只决定"发什么": 有基准就发基准, 还没定位出基准时才退回 result_t_(init_pose)。
+  // active + FINE 时发布可信基准；inactive（包括 LOST 后停用）以及其余状态
+  // 发布 result_t_。停用期间仍需维持 map -> odom，供 Nav2 继续使用 TF 树。
   // 不回写 result_t_ / previous_result_t_ —— previous_result_t_ 是 2Hz 注册的迭代种子,
   // 让 20Hz 的发布循环去改它会和注册互相抢状态。
-  Eigen::Isometry3d to_publish = global_state_ == State::FINE ? baseline_tf_ : result_t_;
+  const bool lifecycle_active =
+    this->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE;
+  Eigen::Isometry3d to_publish =
+    lifecycle_active && global_state_ == State::FINE ? baseline_tf_ : result_t_;
 
   regulateRegistration(to_publish);
   if (to_publish.matrix().isZero()) {
@@ -376,8 +378,10 @@ void SmallGicpRelocalizationNode::publishTransform()
   }
 
   geometry_msgs::msg::TransformStamped transform_stamped;
+  // inactive 后不再接收 registered_scan，必须用当前时间刷新时间戳，
+  // 否则 TF cache 中的最后一条 map -> odom 会过期。
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615
-  transform_stamped.header.stamp = last_scan_time_ + rclcpp::Duration::from_seconds(0.1);
+  transform_stamped.header.stamp = this->now() + rclcpp::Duration::from_seconds(0.1);
   transform_stamped.header.frame_id = map_frame_;
   transform_stamped.child_frame_id = odom_frame_;
 
@@ -472,16 +476,29 @@ void SmallGicpRelocalizationNode::checkStateTime()
   if (
     global_state_ == State::LOST &&
     this->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+    std_msgs::msg::Bool lost_msg;
+    lost_msg.data = true;
+    lost_pub_->publish(lost_msg);
+
     RCLCPP_WARN(this->get_logger(), "定位状态为 LOST,正在停用节点");
 
-    const auto state = this->deactivate();
+    const auto inactive_state = this->deactivate();
 
-    if (state.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
-      RCLCPP_INFO(this->get_logger(), "节点已进入 Inactive 状态");
-    } else {
+    if (inactive_state.id() != lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
       RCLCPP_ERROR(
-        this->get_logger(), "节点未进入 Inactive 状态，当前状态：%s", state.label().c_str());
+        this->get_logger(), "节点未进入 Inactive 状态，当前状态：%s",
+        inactive_state.label().c_str());
+      return;
     }
+
+    RCLCPP_INFO(this->get_logger(), "节点已进入 Inactive 状态，开始清理先验地图");
+    const auto unconfigured_state = this->cleanup();
+    if (unconfigured_state.id() != lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED) {
+      RCLCPP_ERROR(
+        this->get_logger(), "节点未进入 Unconfigured 状态，当前状态：%s",
+        unconfigured_state.label().c_str());
+    }
+    return;
   }
 
   std_msgs::msg::Bool lost_msg;

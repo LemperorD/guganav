@@ -47,4 +47,20 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([node])
+    # Lifecycle 管理器
+    lifecycle_manager = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='small_gicp_relocalization_node',
+        output='screen',
+        parameters=[{
+            'autostart': True,
+            # This node does not create a Nav2 bond heartbeat.
+            'bond_timeout': 0.0,
+            'node_names': [
+                'small_gicp_relocalization'
+            ],
+        }],
+    )
+
+    return LaunchDescription([node, lifecycle_manager])
