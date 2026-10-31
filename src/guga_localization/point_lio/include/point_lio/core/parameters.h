@@ -94,6 +94,8 @@ struct PublishParams {
   std::string pcd_save_state_topic;
   /// 先验地图重载服务 (std_srvs/Trigger), PCD 写盘完成后调用, 置空则不重载
   std::string pcd_save_reload_service;
+  /// SUSPECT/LOST 状态累计达到该秒数后增量更新地图并重载 (首次 LOST 仍立即覆盖)
+  double pcd_save_suspect_build_delay_sec{3.0};
 };
 
 struct SensorParams {

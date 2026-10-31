@@ -386,11 +386,8 @@ void LaserMappingNode::publishFrameWorld() {
 
   // PCD 保存与 scan 发布相互独立: 导航模式可能关闭 scan_publish_en 以省 CPU,
   // 但仍需要累积点云。
-  // 定位恢复 FINE 时由回调置位, 这里清空累积缓存 (回调不直接碰点云)。
-  if (pcd_save_clear_requested_.exchange(false)) {
-    state_.pcl_wait_save->clear();
-    pcd_scan_count_ = 0;
-  }
+  // 维护 SUSPECT/LOST 累计计时, FINE 帧也要执行, 用于结算上一段可疑时长。
+  maybeUpdateMapOnSuspect();
 
   if (!isPcdSaveActive()) {
     return;
@@ -473,12 +470,10 @@ void LaserMappingNode::gicpStateCallback(
     const std_msgs::msg::UInt8::SharedPtr msg) {
   gicp_state_ = msg->data;
   switch (msg->data) {
-    case 1:  // FINE: 定位恢复, 清空累积缓存
-      if (pcd_save_armed_ || pcd_save_on_lost_done_) {
-        pcd_save_clear_requested_ = true;
+    case 1:  // FINE: 暂停累积, 不清空缓存, 下次 SUSPECT 继续累加
+      if (pcd_save_armed_) {
         pcd_save_armed_ = false;
-        pcd_save_on_lost_done_ = false;
-        RCLCPP_INFO(get_logger(), "定位恢复 FINE, 清空 PCD 累积缓存");
+        RCLCPP_INFO(get_logger(), "定位恢复 FINE, 暂停点云累积");
       }
       break;
     case 2:  // SUSPECT: 开始累积
@@ -487,15 +482,99 @@ void LaserMappingNode::gicpStateCallback(
         RCLCPP_WARN(get_logger(), "定位进入 SUSPECT, 开始累积点云");
       }
       break;
-    case 3:  // LOST: 请求保存一次
-      if (pcd_save_armed_ && !pcd_save_on_lost_done_) {
+    case 3:  // LOST: 首次立即覆盖写盘, 之后交给累计计时做增量
+      if (!first_rebuild_done_ && !pcd_save_on_lost_done_) {
         pcd_save_on_lost_done_ = true;
         pcd_save_requested_ = true;
-        RCLCPP_WARN(get_logger(), "定位进入 LOST, 请求保存累积点云");
+        RCLCPP_WARN(get_logger(), "定位进入 LOST, 首次触发覆盖写盘");
       }
       break;
     default:
       break;
+  }
+}
+
+void LaserMappingNode::backupPriorMap() {
+  const std::string path = pcdOutputPath(0);
+  std::error_code ec;
+  const std::filesystem::path target(path);
+  if (!std::filesystem::exists(target, ec)) {
+    return;
+  }
+  const auto stamp = std::to_string(get_clock()->now().nanoseconds());
+  const auto backup = target.parent_path() /
+      (target.stem().string() + "_" + stamp + ".bak.pcd");
+  std::filesystem::copy_file(
+      target, backup, std::filesystem::copy_options::overwrite_existing, ec);
+  if (ec) {
+    RCLCPP_WARN(get_logger(), "备份先验地图失败: %s", ec.message().c_str());
+  } else {
+    RCLCPP_INFO(get_logger(), "先验地图已备份到 %s", backup.c_str());
+  }
+}
+
+bool LaserMappingNode::mergeMapAndWrite() {
+  const std::string path = pcdOutputPath(0);
+  PointCloudXYZI merged;
+  pcl::PCDReader reader;
+  PointCloudXYZI old_cloud;
+  if (reader.read(path, old_cloud) == 0) {
+    merged = old_cloud;
+  }
+
+  merged += *state_.pcl_wait_save;
+
+  pcl::VoxelGrid<PointType> voxel;
+  voxel.setLeafSize(0.1f, 0.1f, 0.1f);
+  voxel.setInputCloud(merged.makeShared());
+  PointCloudXYZI::Ptr filtered(new PointCloudXYZI());
+  voxel.filter(*filtered);
+  if (filtered->empty()) {
+    return false;
+  }
+
+  backupPriorMap();
+  return writePcd(path, *filtered);
+}
+
+void LaserMappingNode::maybeUpdateMapOnSuspect() {
+  const auto now = get_clock()->now();
+  const uint8_t state = gicp_state_.load();
+  const bool suspect_now = (state == 2 || state == 3);
+
+  if (suspect_now && !suspect_tracking_) {
+    suspect_tracking_ = true;
+    suspect_mark_ = now;
+  } else if (!suspect_now && suspect_tracking_) {
+    suspect_accum_sec_ += (now - suspect_mark_).seconds();
+    suspect_tracking_ = false;
+  }
+
+  // 首次丢失由 pcd_save_requested_ 走覆盖写盘, 增量只用于之后的累计触发
+  if (!first_rebuild_done_) {
+    return;
+  }
+
+  const double delay = config_.publish.pcd_save_suspect_build_delay_sec;
+  const double total =
+      suspect_accum_sec_ +
+      (suspect_tracking_ ? (now - suspect_mark_).seconds() : 0.0);
+  if (delay <= 0.0 || total < delay || state_.pcl_wait_save->empty()) {
+    return;
+  }
+
+  const bool ok = mergeMapAndWrite();
+  if (ok) {
+    RCLCPP_INFO(get_logger(), "可疑状态累计 %.1f s, 已增量更新地图", total);
+  } else {
+    RCLCPP_ERROR(get_logger(), "增量更新地图失败, 保留旧文件");
+  }
+  suspect_accum_sec_ = 0.0;
+  suspect_mark_ = now;
+  state_.pcl_wait_save->clear();
+  pcd_scan_count_ = 0;
+  if (ok) {
+    requestPriorMapReload();
   }
 }
 
@@ -506,28 +585,16 @@ void LaserMappingNode::savePcdOnLost() {
   }
 
   const std::string path = pcdOutputPath(0);
-  std::error_code ec;
-  const std::filesystem::path target(path);
-  if (std::filesystem::exists(target, ec)) {
-    const auto stamp = std::to_string(get_clock()->now().nanoseconds());
-    const auto backup =
-        target.parent_path() /
-        (target.stem().string() + "_" + stamp + ".bak.pcd");
-    std::filesystem::copy_file(
-        target, backup, std::filesystem::copy_options::overwrite_existing, ec);
-    if (ec) {
-      RCLCPP_WARN(get_logger(), "备份先验地图失败: %s", ec.message().c_str());
-    } else {
-      RCLCPP_INFO(get_logger(), "先验地图已备份到 %s", backup.c_str());
-    }
-  }
-
+  backupPriorMap();
   if (writePcd(path, *state_.pcl_wait_save)) {
     RCLCPP_INFO(get_logger(), "定位丢失, 累积点云已写入 %s (%zu 点)",
                 path.c_str(), state_.pcl_wait_save->size());
   } else {
     RCLCPP_ERROR(get_logger(), "定位丢失, 写入 %s 失败", path.c_str());
   }
+  first_rebuild_done_ = true;
+  suspect_accum_sec_ = 0.0;
+  suspect_mark_ = get_clock()->now();
   state_.pcl_wait_save->clear();
   pcd_scan_count_ = 0;
   requestPriorMapReload();

@@ -57,8 +57,12 @@ private:
   bool pcd_save_on_lost_done_{false};
   /// @brief 主循环看到该标志后执行保存 (回调只置标志, 不碰点云)
   std::atomic<bool> pcd_save_requested_{false};
-  /// @brief 主循环看到该标志后清空累积缓存 (FINE 时由回调置位)
-  std::atomic<bool> pcd_save_clear_requested_{false};
+  /// @brief SUSPECT/LOST 累计计时 (只在主线程读写)
+  bool suspect_tracking_{false};
+  double suspect_accum_sec_{0.0};
+  rclcpp::Time suspect_mark_;
+  /// @brief 首次 LOST 已按覆盖方式写过一次地图; 之后改为增量合并
+  bool first_rebuild_done_{false};
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
       pub_laser_cloud_full_res_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
@@ -142,6 +146,12 @@ private:
   void gicpStateCallback(const std_msgs::msg::UInt8::SharedPtr msg);
   /// @brief 把累积点云写到 pcd_save_path, 然后调用重载服务
   void savePcdOnLost();
+  /// @brief 主循环里累计 SUSPECT/LOST 时长, 达到阈值后增量更新地图并重载
+  void maybeUpdateMapOnSuspect();
+  /// @brief 旧地图 + 累积点云合并后体素下采样再原子写回
+  bool mergeMapAndWrite();
+  /// @brief 写盘前把旧地图复制为带时间戳的备份
+  void backupPriorMap();
   /// @brief 异步调用先验地图重载服务
   void requestPriorMapReload();
 

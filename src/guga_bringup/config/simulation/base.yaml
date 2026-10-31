@@ -103,6 +103,8 @@ point_lio:
       # FINE 清空缓存。置空则退回 require_lost/trigger_topic 的旧机制。
       state_topic: "gicp_state"
       reload_service: "reload_prior_map"
+      # SUSPECT/LOST 累计时长达到该秒数后增量更新地图并重载; 首次 LOST 仍立即覆盖
+      suspect_build_delay_sec: 3.0
 
 scan_to_sensor_frame:
   ros__parameters:
