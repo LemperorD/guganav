@@ -361,13 +361,15 @@ behavior_server:
     cycle_frequency: 10.0
 
     behavior_plugins:
-      ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+      ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait", "escape_obstacle_layer"]
 
     spin:
       plugin: "nav2_behaviors/Spin"
 
+    # 标准 BackUp 保持 nav2 语义：固定距离，起点已在障碍里时会在第一步判碰撞失败。
+    # "从膨胀层里出来"由下面的 escape_obstacle_layer 负责，两者不要混用。
     backup:
-      plugin: "pb_nav2_behaviors/BackUpFreeSpace"
+      plugin: "nav2_behaviors/BackUp"
 
     drive_on_heading:
       plugin: "nav2_behaviors/DriveOnHeading"
@@ -377,6 +379,9 @@ behavior_server:
 
     assisted_teleop:
       plugin: "nav2_behaviors/AssistedTeleop"
+
+    escape_obstacle_layer:
+      plugin: "pb_nav2_behaviors/EscapeObstacleLayer"
 
     local_frame: odom
 
@@ -393,16 +398,24 @@ behavior_server:
     min_rotational_vel: 0.4
 
     rotational_acc_lim: 3.2
-    # params for pb_nav2_behaviors/BackUpFreeSpace
-
+    # ── pb_nav2_behaviors/EscapeObstacleLayer ──
     # 方向判定与位姿都取局部代价地图：它才是决定控制器能否接手的图，
     # 且与执行中的 footprint 碰撞检查同图（碰撞检查由 behavior_server 用 local_costmap 建立）。
     service_name: "local_costmap/get_costmap"
     costmap_frame: odom
 
-    max_radius: 3.0
-
-    visualize: false
+    # 行走/搜索上限。正常情况下出口在 0.1~0.5 m，这条只是安全阀，不要当后退距离用。
+    default_max_distance: 1.2
+    default_speed: 0.25
+    default_time_allowance: 8.0
+    # 脱离 253 后再多走一点，避免停在代价 240+ 的边界上又被判失败
+    exit_clearance: 0.1
+    # 起点本身就压在 254 里时，允许穿过这么厚的真障碍把车拉出来
+    lethal_traverse_distance: 0.5
+    footprint_radius: 0.4
+    # 执行中重选方向的周期，以及"新方向与当前方向夹角小于该值就不换"的迟滞（20°）
+    rescan_period: 0.2
+    angle_hysteresis: 0.3490658503988659
 
 velocity_smoother:
   ros__parameters:

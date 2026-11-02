@@ -18,6 +18,20 @@ ament_auto_add_library(pb_back_up_frees_space_behavior SHARED
   src/behaviors/back_up_free_space.cpp
 )
 
+# 从膨胀层硬区里脱困：走多远由几何决定，不设固定后退距离
+ament_auto_add_library(pb_escape_obstacle_layer_behavior SHARED
+  src/behaviors/escape_obstacle_layer.cpp
+)
+
+# 对应的行为树节点。bt_navigator 的 plugin_lib_names 里写 pb_escape_obstacle_layer_bt_node，
+# 由 BehaviorTree.CPP 以 libpb_escape_obstacle_layer_bt_node.so 的形式加载。
+ament_auto_add_library(pb_escape_obstacle_layer_bt_node SHARED
+  src/bt/escape_obstacle_layer_action.cpp
+)
+# BehaviorTree.CPP 只在定义了 BT_PLUGIN_EXPORT 时才把 BT_RegisterNodesFromPlugin
+# 导出成外部符号；否则该宏展开成 static，bt_navigator 加载时会找不到注册函数。
+target_compile_definitions(pb_escape_obstacle_layer_bt_node PRIVATE BT_PLUGIN_EXPORT)
+
 # 库名不能叫 "layers"：会与系统 Nav2 的 liblayers.so（提供 Static/Obstacle/Voxel/Inflation
 # 层）同名冲突，导致 pluginlib 加载本包库时无法解析继承自 ObstacleLayer 的符号。
 ament_auto_add_library(pb_nav2_layers SHARED
@@ -39,6 +53,13 @@ if(BUILD_TESTING)
   )
   target_link_libraries(back_up_free_space_test
     pb_back_up_frees_space_behavior
+  )
+
+  ament_add_gtest(escape_obstacle_layer_test
+    test/escape_obstacle_layer_test.cpp
+  )
+  target_link_libraries(escape_obstacle_layer_test
+    pb_escape_obstacle_layer_behavior
   )
 
   ament_add_gtest(obstacle_tests test/obstacle_tests.cpp)

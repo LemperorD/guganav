@@ -147,7 +147,7 @@ terrain_analysis:
     limitGroundLift: False
     maxGroundLift: 0.3
     minBlockPointNum: 10
-    minObstacleHeight: 0.1 # 障碍输出下界(距局部地面)：地面带死区，吸收地面高度估计误差，实车取 4cm。清除用的返回的雷达射线不受此下界约束
+    minObstacleHeight: 0.05 # 障碍输出下界(距局部地面)：地面带死区，吸收地面高度估计误差，实车取 4cm。清除用的返回的雷达射线不受此下界约束
     ceilingClearance: 0.62 # 障碍输出上界，也是唯一上界(距局部地面)：按车体高度+100mm 设定（车高520mm→0.62）。配合 minObstacleHeight 组成输出带 minObstacleHeight<=h<该值；原 vehicleHeight 截断已删除，换车只需改这一个值
     minRelZ: -1.5 # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理
     groundFloorZ: -0.2 # 地面候选的绝对高度地板(odom z)：低于此值的点不参与地面估计，也是该阶段唯一的候选筛选。须贴近实际地面z：odom原点与base_footprint重合（实测 odom→base_footprint 为单位变换），平地地面z≈0，故取地面下方约0.2m。注意 lidar_z 是雷达高度(平地+0.230)，不是本值的基准；下坡时地面会低于该地板而被排除，坡面需重设
@@ -170,7 +170,7 @@ small_gicp_relocalization:
     baseline_translation_tolerance: 2.0 #惯性约束: 候选 map->odom 相对基准 tf 的平移偏差上限(m)，超出则舍弃本次变换并回到基准
     baseline_update_translation_threshold: 0.01 # 小于该平移变化时保持 map->odom，抑制毫米级抖动
     baseline_update_yaw_threshold: 0.01 # 小于该旋转变化(rad)时保持 map->odom
-    initial_state_timeout_sec: 10.0 # INITIAL 持续超时后进入 SUSPECT
+    initial_state_timeout_sec: 5.0 # INITIAL 持续超时后进入 SUSPECT
     suspect_state_timeout_sec: 15.0 # SUSPECT 持续超时后进入 LOST
     good_error_max: 0.25 # RMSE(sqrt(每个内点的 GICP error 均值))上限，只有低于该值且未越界的结果才能成为基准 tf，需按日志标定
     good_inlier_ratio: 0.99 # 内点率下限，只有 RMSE 达标且内点率高于该值、且未越界的结果才能成为基准 tf，需按日志标定
@@ -309,6 +309,7 @@ bt_navigator:
       - nav2_wait_action_bt_node
       - nav2_assisted_teleop_action_bt_node
       - nav2_back_up_action_bt_node
+      - pb_escape_obstacle_layer_bt_node
       - nav2_drive_on_heading_bt_node
       - nav2_clear_costmap_service_bt_node
       - nav2_is_stuck_condition_bt_node

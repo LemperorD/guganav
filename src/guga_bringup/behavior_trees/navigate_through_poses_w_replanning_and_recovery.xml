@@ -31,7 +31,8 @@
             <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
           </Sequence>
-          <BackUp backup_dist="0.3" backup_speed="1.0"/>
+          <!-- 从膨胀层硬区里出来：走多远由几何决定，max_distance 只是安全阀 -->
+          <EscapeObstacleLayer max_distance="1.2" speed="0.25" time_allowance="8.0"/>
         </RoundRobin>
       </ReactiveFallback>
     </RecoveryNode>
