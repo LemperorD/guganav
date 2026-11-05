@@ -69,7 +69,6 @@ guganav/
 │   │   ├── livox_ros_driver2/ #   览沃激光雷达（含 Livox-SDK2）
 │   │   ├── hik_camera_ros2_driver/ # 海康相机（子模块，当前为空目录）
 │   │   ├── hik_driver/        #   海康相机（新版，开发中，默认跳过编译）
-│   │   ├── usbjs_driver/      #   USB 手柄（未接入启动链路）
 │   │   └── camera_interface/  #   相机通用接口
 │   │
 │   ├── guga_perception/       # [感知层]

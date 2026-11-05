@@ -6,7 +6,7 @@
  *   - image_raw + camera_info via image_transport::CameraPublisher
  *   - Dynamic ROS parameters (exposure_time, gain, ...) → camera set*Param
  *
- * Follows the usbjs_driver / serial_driver Main/Node split pattern:
+ * Follows the serial_driver Main/Node split pattern:
  * all SDK-specific logic is in HikCameraMain; this class only speaks ROS.
  */
 
