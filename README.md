@@ -20,7 +20,6 @@
   - [仓库结构](#仓库结构)
   - [环境要求](#环境要求)
   - [安装依赖](#安装依赖)
-    - [海康 MVS SDK](#海康-mvs-sdk)
     - [公开依赖与工具](#公开依赖与工具)
     - [准备仿真 PCD 地图](#准备仿真-pcd-地图)
   - [构建](#构建)
@@ -45,7 +44,7 @@
 - 支持 SLAM、地图加载、Point-LIO 里程计和 small_gicp 重定位。
 - 包含 JPS 全局规划、B-spline 轨迹优化和 Nav2 自定义插件。
 - 提供全向 PID Pure Pursuit 控制器和 acados MPC 控制器。
-- 集成 Livox 雷达、串口通信、手柄调试和工业相机接口。
+- 集成 Livox 雷达与串口通信。
 - 提供 Gazebo/RMOSS 仿真资源、点云适配工具和 RViz 配置。
 - 配置 pre-commit 与核心包测试，覆盖地形分析、控制、决策和 JPS 模块。
 
@@ -57,7 +56,7 @@ guganav/
 │   ├── guga_bringup/        # 实车/仿真 launch、Nav2 参数、地图、RViz 配置
 │   ├── guga_interfaces/     # 自定义 msg/srv/action
 │   ├── guga_description/    # 机器人 URDF/Xacro/SDF 相关描述
-│   ├── guga_driver/         # 雷达、串口、相机、手柄等驱动
+│   ├── guga_driver/         # 雷达与串口驱动
 │   ├── guga_perception/     # 地形分析、点云转换、代价地图层
 │   ├── guga_localization/   # Point-LIO 和 GICP 重定位
 │   ├── guga_planner/        # Nav2 插件、JPS、B-spline 优化
@@ -87,7 +86,6 @@ guganav/
 | 依赖 | 用途 |
 | --- | --- |
 | Livox SDK / `livox_ros_driver2` | Livox 雷达驱动 |
-| 海康 MVS SDK | `hik_driver` 工业相机驱动 |
 | acados | `mpc_controller` 的 MPC 求解器 |
 | Pangolin / OpenGL | Pangolin UI 或历史 UI 模块 |
 
@@ -106,42 +104,9 @@ python3 -m pip install --user -e ~/tools/acados/interfaces/acados_template
 
 ## 安装依赖
 
-### 海康 MVS SDK
-
-`hik_driver` 直接依赖海康/Hikrobot MVS SDK，先准备 SDK，再执行仓库的一键安装脚本。
-从海康机器视觉下载中心下载 Linux 版 MVS SDK：
-
-```text
-https://www.hikrobotics.com/en/machinevision/service/download/
-```
-
-默认安装或解压到 `/opt/MVS`，并确认头文件和驱动库存在：
-
-```bash
-test -f /opt/MVS/include/MvCameraControl.h
-test -e /opt/MVS/lib/64/libMvCameraControl.so
-sudo ldconfig
-```
-
-如果 SDK 位于其他目录，可以让安装脚本创建 `/opt/MVS` 软链接：
-
-```bash
-cd ~/guganav
-INSTALL_HIK_MVS=1 HIK_MVS_SOURCE_DIR=/实际/MVS/目录 \
-  bash scripts/ci/install_deps_humble.sh
-```
-
-也可以在安装和构建时都指定 SDK 路径，不创建软链接：
-
-```bash
-cd ~/guganav
-HIK_MVS_ROOT=/实际/MVS/目录 bash scripts/ci/install_deps_humble.sh
-HIK_MVS_ROOT=/实际/MVS/目录 scripts/colconBuild.sh
-```
-
 ### 公开依赖与工具
 
-准备好 MVS SDK 后，使用仓库脚本安装公开 apt/rosdep 依赖和 acados：
+使用仓库脚本安装公开 apt/rosdep 依赖和 acados：
 
 ```bash
 cd ~/guganav

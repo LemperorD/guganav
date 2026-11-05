@@ -47,7 +47,7 @@ guganav/
 │   └── decision/              # 决策与方案文档、组委会规则书 PDF
 │
 ├── scripts/                   # 工具脚本
-│   ├── colconBuild.sh         # 构建（检测 Hik MVS，缺 SDK 则跳过该包）
+│   ├── colconBuild.sh         # 构建
 │   ├── reality.sh             # 实车启动与进程管理
 │   ├── simulation.sh          # 仿真启动（含 gazebo 模式）
 │   ├── gitFetch.sh / gitPush.sh / deepseek.sh
@@ -66,10 +66,7 @@ guganav/
 │   │
 │   ├── guga_driver/           # [驱动层]
 │   │   ├── serial_driver/     #   串口通信（BR 协议，与 MCU 通信）
-│   │   ├── livox_ros_driver2/ #   览沃激光雷达（含 Livox-SDK2）
-│   │   ├── hik_camera_ros2_driver/ # 海康相机（子模块，当前为空目录）
-│   │   ├── hik_driver/        #   海康相机（新版，开发中，默认跳过编译）
-│   │   └── camera_interface/  #   相机通用接口
+│   │   └── livox_ros_driver2/ #   览沃激光雷达（含 Livox-SDK2）
 │   │
 │   ├── guga_perception/       # [感知层]
 │   │   ├── terrain_analysis/  #   地形可通行性分析 ★模式A范例
@@ -124,7 +121,7 @@ guganav/
 ### 数据流（实车模式）
 
 ```
-传感器 (Livox/相机) → perception (地形/扫描) → planner (Nav2) → controller (PID)
+传感器 (Livox) → perception (地形/扫描) → planner (Nav2) → controller (PID)
                        ↓                              ↓
                   localization (Point-LIO)         decision (状态机)
                        ↓                              ↓

@@ -11,7 +11,6 @@ USE_ROSDEPC="${USE_ROSDEPC:-0}"
 INSTALL_ACADOS="${INSTALL_ACADOS:-1}"
 INSTALL_ACADOS_PYTHON="${INSTALL_ACADOS_PYTHON:-1}"
 INSTALL_SMALL_GICP="${INSTALL_SMALL_GICP:-1}"
-INSTALL_HIK_MVS="${INSTALL_HIK_MVS:-0}"
 ACADOS_SOURCE_DIR="${ACADOS_SOURCE_DIR:-${HOME}/tools/acados}"
 ACADOS_REPO="${ACADOS_REPO:-https://github.com/acados/acados.git}"
 # Current upstream main commit used as the known-good CI baseline.
@@ -26,8 +25,6 @@ SMALL_GICP_CLONE_DEPTH="${SMALL_GICP_CLONE_DEPTH:-1}"
 SMALL_GICP_JOBS="${SMALL_GICP_JOBS:-$(nproc)}"
 SMALL_GICP_INSTALL_PREFIX="${SMALL_GICP_INSTALL_PREFIX:-/usr/local}"
 XMACRO_VERSION="${XMACRO_VERSION:-1.2.1}"
-HIK_MVS_ROOT="${HIK_MVS_ROOT:-/opt/MVS}"
-HIK_MVS_SOURCE_DIR="${HIK_MVS_SOURCE_DIR:-}"
 ROSDEP_SKIP_KEYS="${ROSDEP_SKIP_KEYS:-}"
 DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 
@@ -311,72 +308,10 @@ install_small_gicp() {
   write_github_env SMALL_GICP_INSTALL_PREFIX "${SMALL_GICP_INSTALL_PREFIX}"
 }
 
-hik_mvs_available() {
-  local root="$1"
-  local library
-  local libraries=(
-    MvCameraControl
-    FormatConversion
-    MediaProcess
-    MVRender
-    MvUsb3vTL
-  )
-
-  [ -f "${root}/include/MvCameraControl.h" ] || return 1
-  for library in "${libraries[@]}"; do
-    [ -e "${root}/lib/64/lib${library}.so" ] || return 1
-  done
-}
-
-install_hik_mvs() {
-  if hik_mvs_available "${HIK_MVS_ROOT}"; then
-    echo "Hikrobot MVS SDK found at ${HIK_MVS_ROOT}"
-    write_github_env HIK_MVS_AVAILABLE 1
-    return
-  fi
-
-  if [ "${INSTALL_HIK_MVS}" != "1" ]; then
-    echo "Skipping Hikrobot MVS SDK because INSTALL_HIK_MVS=${INSTALL_HIK_MVS}"
-    write_github_env HIK_MVS_AVAILABLE 0
-    return
-  fi
-
-  if [ -z "${HIK_MVS_SOURCE_DIR}" ]; then
-    cat >&2 <<EOF
-Hikrobot MVS SDK is not available at ${HIK_MVS_ROOT}.
-Download the Linux SDK from the official Hikrobot download center, install or
-extract it locally, then rerun with:
-  INSTALL_HIK_MVS=1 HIK_MVS_SOURCE_DIR=/path/to/MVS bash scripts/ci/install_deps_humble.sh
-EOF
-    exit 1
-  fi
-
-  if ! hik_mvs_available "${HIK_MVS_SOURCE_DIR}"; then
-    echo "HIK_MVS_SOURCE_DIR does not look like a valid MVS SDK root: ${HIK_MVS_SOURCE_DIR}" >&2
-    exit 1
-  fi
-
-  if [ -L "${HIK_MVS_ROOT}" ]; then
-    run_root ln -sfn "${HIK_MVS_SOURCE_DIR}" "${HIK_MVS_ROOT}"
-  elif [ ! -e "${HIK_MVS_ROOT}" ]; then
-    run_root mkdir -p "$(dirname "${HIK_MVS_ROOT}")"
-    run_root ln -s "${HIK_MVS_SOURCE_DIR}" "${HIK_MVS_ROOT}"
-  fi
-
-  if ! hik_mvs_available "${HIK_MVS_ROOT}"; then
-    echo "Hikrobot MVS SDK is present at ${HIK_MVS_SOURCE_DIR}, but ${HIK_MVS_ROOT} does not expose the expected files." >&2
-    exit 1
-  fi
-
-  echo "Hikrobot MVS SDK available at ${HIK_MVS_ROOT}"
-  write_github_env HIK_MVS_AVAILABLE 1
-}
-
 install_apt_dependencies
 install_rosdep_dependencies
 install_python_dependencies
 install_small_gicp
-install_hik_mvs
 install_acados
 
 cat <<EOF
