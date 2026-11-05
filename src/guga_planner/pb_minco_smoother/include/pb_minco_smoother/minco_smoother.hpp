@@ -37,7 +37,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 
 // 自定义消息
-#include <guga_common/msg/minco_trajectory.hpp>
+#include <guga_interfaces/msg/minco_trajectory.hpp>
 
 #include "gcopter/trajectory.hpp"
 #include "pb_minco_smoother/costmap_esdf_adapter.hpp"
@@ -45,10 +45,10 @@
 
 namespace pb_minco {
 
-/**
- * @brief MINCO 轨迹平滑器参数
- */
-struct MincoSmootherParams {
+  /**
+   * @brief MINCO 轨迹平滑器参数
+   */
+  struct MincoSmootherParams {
     // ========== 优化权重 ==========
     double weight_smooth = 1.0;        ///< 平滑性权重
     double weight_obstacle = 100.0;    ///< 避障权重
@@ -66,7 +66,7 @@ struct MincoSmootherParams {
     int integral_resolution = 8;  ///< 积分采样分辨率
 
     // ========== 路径处理参数 ==========
-    int min_waypoints = 3;  ///< 最少路点数
+    int min_waypoints = 3;   ///< 最少路点数
     int max_waypoints = 50;  ///< 最多路点数，防止 MINCO 优化段数过多
     double initial_time_per_meter = 0.5;  ///< 初始每米时间估计 (s/m) [已废弃]
 
@@ -99,10 +99,10 @@ struct MincoSmootherParams {
 
     // ========== 两阶段优化参数 ==========
     // --- 第一阶段（Shape Optimization）权重 ---
-    double stage1_weight_smooth = 1.0;  ///< 第一阶段平滑性权重
+    double stage1_weight_smooth = 1.0;     ///< 第一阶段平滑性权重
     double stage1_weight_obstacle = 50.0;  ///< 第一阶段避障权重（放松）
     double stage1_weight_feasibility =
-        5.0;  ///< 第一阶段动力学可行性权重（放松）
+        5.0;                           ///< 第一阶段动力学可行性权重（放松）
     double stage1_weight_time = 10.0;  ///< 第一阶段时间正则化权重
     double stage1_weight_mean_time = 10.0;  ///< 第一阶段平均时间约束权重
     int stage1_max_iterations = 2000;       ///< 第一阶段最大迭代次数
@@ -110,18 +110,18 @@ struct MincoSmootherParams {
     // --- 平均时间约束参数（两阶段共用） ---
     double mean_time_lower_bound = 0.9;  ///< 段时间下界 = avg_T * lower_bound
     double mean_time_upper_bound = 1.1;  ///< 段时间上界 = avg_T * upper_bound
-    double weight_mean_time = 10.0;  ///< 第二阶段平均时间约束权重
-};
+    double weight_mean_time = 10.0;      ///< 第二阶段平均时间约束权重
+  };
 
-/**
- * @class MincoSmoother
- * @brief Nav2 Smoother 插件 - 基于 MINCO 算法的轨迹平滑
- *
- * 将 A* 规划器输出的离散路径点转换为时间参数化的平滑多项式轨迹。
- * 优化目标包括：平滑性（最小化 Jerk）、避障（ESDF）、动力学可行性。
- */
-class MincoSmoother : public nav2_core::Smoother {
-   public:
+  /**
+   * @class MincoSmoother
+   * @brief Nav2 Smoother 插件 - 基于 MINCO 算法的轨迹平滑
+   *
+   * 将 A* 规划器输出的离散路径点转换为时间参数化的平滑多项式轨迹。
+   * 优化目标包括：平滑性（最小化 Jerk）、避障（ESDF）、动力学可行性。
+   */
+  class MincoSmoother : public nav2_core::Smoother {
+  public:
     /**
      * @brief 构造函数
      */
@@ -142,7 +142,7 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param footprint_sub 足迹订阅器
      */
     void configure(
-        const nav2_util::LifecycleNode::WeakPtr &parent, std::string name,
+        const nav2_util::LifecycleNode::WeakPtr& parent, std::string name,
         std::shared_ptr<tf2_ros::Buffer> tf,
         std::shared_ptr<nav2_costmap_2d::CostmapSubscriber> costmap_sub,
         std::shared_ptr<nav2_costmap_2d::FootprintSubscriber> footprint_sub)
@@ -170,10 +170,10 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param max_time 最大允许时间
      * @return 是否成功完成（true）或被时间限制中断（false）
      */
-    bool smooth(nav_msgs::msg::Path &path,
-                const rclcpp::Duration &max_time) override;
+    bool smooth(nav_msgs::msg::Path& path,
+                const rclcpp::Duration& max_time) override;
 
-   protected:
+  protected:
     /**
      * @brief 从 ROS 参数加载配置
      */
@@ -185,12 +185,13 @@ class MincoSmoother : public nav2_core::Smoother {
      * 包含经过梯形速度规划和均匀时间重采样后的路点和时间分配
      */
     struct PathProcessingResult {
-        Eigen::Matrix2Xd waypoints;  ///< 均匀时间重采样后的路点
-        Eigen::VectorXd times;  ///< 每段的初始时间分配（均匀）
-        double total_time;      ///< 总时间估计
-        bool success;           ///< 处理结果是否有效
+      Eigen::Matrix2Xd waypoints;  ///< 均匀时间重采样后的路点
+      Eigen::VectorXd times;       ///< 每段的初始时间分配（均匀）
+      double total_time;           ///< 总时间估计
+      bool success;                ///< 处理结果是否有效
 
-        PathProcessingResult() : total_time(0.0), success(false) {}
+      PathProcessingResult() : total_time(0.0), success(false) {
+      }
     };
 
     /**
@@ -205,9 +206,9 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param start_velocity 起点速度向量（用于梯形规划）
      * @return 处理结果，包含路点和时间分配
      */
-    PathProcessingResult processPath(const nav_msgs::msg::Path &path,
-                                     const Eigen::Vector2d &start_velocity,
-                                     const Eigen::Vector2d &start_pose);
+    PathProcessingResult processPath(const nav_msgs::msg::Path& path,
+                                     const Eigen::Vector2d& start_velocity,
+                                     const Eigen::Vector2d& start_pose);
 
     /**
      * @brief 使用梯形速度规划计算走完指定距离所需的时间
@@ -221,9 +222,9 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param maxA 最大加速度
      * @return 所需时间
      */
-    double evaluateDuration(const double &length, const double &startV,
-                            const double &endV, const double &maxV,
-                            const double &maxA);
+    double evaluateDuration(const double& length, const double& startV,
+                            const double& endV, const double& maxV,
+                            const double& maxA);
 
     /**
      * @brief 使用梯形速度规划计算给定时间点对应的路程
@@ -239,10 +240,10 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param maxA 最大加速度
      * @return 对应的路程
      */
-    double evaluateLength(const double &curt, const double &locallength,
-                          const double &localtime, const double &startV,
-                          const double &endV, const double &maxV,
-                          const double &maxA);
+    double evaluateLength(const double& curt, const double& locallength,
+                          const double& localtime, const double& startV,
+                          const double& endV, const double& maxV,
+                          const double& maxA);
 
     /**
      * @brief 从 MINCO 轨迹生成 Nav2 路径
@@ -251,19 +252,19 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param header 路径消息头
      * @return 采样后的 Nav2 路径
      */
-    nav_msgs::msg::Path trajectoryToPath(const Trajectory<5, 2> &traj,
-                                         const std_msgs::msg::Header &header);
+    nav_msgs::msg::Path trajectoryToPath(const Trajectory<5, 2>& traj,
+                                         const std_msgs::msg::Header& header);
 
     /**
      * @brief 计算路径上两点之间的欧几里得距离
      */
-    double computePathLength(const Eigen::Matrix2Xd &points);
+    double computePathLength(const Eigen::Matrix2Xd& points);
 
     /**
      * @brief 发布轨迹可视化
      */
-    void publishTrajectoryVisualization(const Trajectory<5, 2> &traj,
-                                        const std_msgs::msg::Header &header);
+    void publishTrajectoryVisualization(const Trajectory<5, 2>& traj,
+                                        const std_msgs::msg::Header& header);
 
     /**
      * @brief 发布中间路点可视化（球形 Marker）
@@ -274,8 +275,8 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param waypoints 路点矩阵 (2 x N)
      * @param header 消息头
      */
-    void publishWaypointsVisualization(const Eigen::Matrix2Xd &waypoints,
-                                       const std_msgs::msg::Header &header);
+    void publishWaypointsVisualization(const Eigen::Matrix2Xd& waypoints,
+                                       const std_msgs::msg::Header& header);
 
     /**
      * @brief 发布最终轨迹路点可视化（MarkerArray）
@@ -287,7 +288,7 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param header 消息头
      */
     void publishFinalWaypointsVisualization(
-        const Eigen::Matrix2Xd &waypoints, const std_msgs::msg::Header &header);
+        const Eigen::Matrix2Xd& waypoints, const std_msgs::msg::Header& header);
 
     /**
      * @brief 将 MINCO 轨迹转换为 ROS 消息
@@ -297,9 +298,9 @@ class MincoSmoother : public nav2_core::Smoother {
      * @param start_time 轨迹起始绝对时间
      * @return MincoTrajectory 消息
      */
-    guga_common::msg::MincoTrajectory trajectoryToMsg(
-        const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header,
-        const rclcpp::Time &start_time);
+    guga_interfaces::msg::MincoTrajectory trajectoryToMsg(
+        const Trajectory<5, 2>& traj, const std_msgs::msg::Header& header,
+        const rclcpp::Time& start_time);
 
     /**
      * @brief 轨迹投影结果结构体
@@ -308,17 +309,18 @@ class MincoSmoother : public nav2_core::Smoother {
      * 以及投影点处的位置、速度和加速度信息。
      */
     struct TrajectoryProjectionResult {
-        bool valid = false;            ///< 投影是否有效
-        double projection_time = 0.0;  ///< 投影点在轨迹上的时间参数
-        double distance = 0.0;  ///< 机器人当前位置到投影点的距离
-        Eigen::Vector2d position;      ///< 投影点位置
-        Eigen::Vector2d velocity;      ///< 投影点速度
-        Eigen::Vector2d acceleration;  ///< 投影点加速度 (S=3 热启动)
+      bool valid = false;            ///< 投影是否有效
+      double projection_time = 0.0;  ///< 投影点在轨迹上的时间参数
+      double distance = 0.0;         ///< 机器人当前位置到投影点的距离
+      Eigen::Vector2d position;      ///< 投影点位置
+      Eigen::Vector2d velocity;      ///< 投影点速度
+      Eigen::Vector2d acceleration;  ///< 投影点加速度 (S=3 热启动)
 
-        TrajectoryProjectionResult()
-            : position(Eigen::Vector2d::Zero()),
-              velocity(Eigen::Vector2d::Zero()),
-              acceleration(Eigen::Vector2d::Zero()) {}
+      TrajectoryProjectionResult()
+          : position(Eigen::Vector2d::Zero()),
+            velocity(Eigen::Vector2d::Zero()),
+            acceleration(Eigen::Vector2d::Zero()) {
+      }
     };
 
     /**
@@ -338,10 +340,10 @@ class MincoSmoother : public nav2_core::Smoother {
      *       因为已经经过的轨迹部分没有参考意义。
      */
     TrajectoryProjectionResult findProjectionOnTrajectory(
-        const Trajectory<5, 2> &traj, const Eigen::Vector2d &robot_pos,
-        const rclcpp::Time &traj_start_time, const rclcpp::Time &current_time);
+        const Trajectory<5, 2>& traj, const Eigen::Vector2d& robot_pos,
+        const rclcpp::Time& traj_start_time, const rclcpp::Time& current_time);
 
-   private:
+  private:
     // 节点相关
     nav2_util::LifecycleNode::WeakPtr node_;
     rclcpp::Logger logger_{rclcpp::get_logger("MincoSmoother")};
@@ -422,7 +424,7 @@ class MincoSmoother : public nav2_core::Smoother {
 
     // 发布器 - MINCO 多项式轨迹（用于 Controller 订阅）
     rclcpp_lifecycle::LifecyclePublisher<
-        guga_common::msg::MincoTrajectory>::SharedPtr minco_traj_pub_;
+        guga_interfaces::msg::MincoTrajectory>::SharedPtr minco_traj_pub_;
 
     // 轨迹 ID 计数器（用于生成唯一标识）
     uint32_t trajectory_id_counter_ = 0;
@@ -431,7 +433,7 @@ class MincoSmoother : public nav2_core::Smoother {
     std::mutex dyn_obs_cache_mutex_;  ///< 保护缓存的互斥锁
 
     // ========== 滚动规划：轨迹缓存 ==========
-    Trajectory<5, 2> last_trajectory_;  ///< 上一条优化后的轨迹 (S=3, Quintic)
+    Trajectory<5, 2> last_trajectory_;   ///< 上一条优化后的轨迹 (S=3, Quintic)
     rclcpp::Time last_trajectory_time_;  ///< 上一条轨迹的发布时间戳
     bool has_valid_trajectory_ = false;  ///< 是否有有效的历史轨迹
 
@@ -444,7 +446,7 @@ class MincoSmoother : public nav2_core::Smoother {
      */
     rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
         std::vector<rclcpp::Parameter> parameters);
-};
+  };
 
 }  // namespace pb_minco
 

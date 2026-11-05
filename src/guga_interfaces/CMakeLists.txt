@@ -8,20 +8,20 @@ find_package(std_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Armor.msg"
-  "msg/Armors.msg"
-  "msg/Target.msg"
-  "msg/GameStatus.msg"
-  "msg/RobotStatus.msg"
-  "msg/RfidStatus.msg"
+  "msg/enemy/Armor.msg"
+  "msg/enemy/Armors.msg"
+  "msg/enemy/Target.msg"
+  "msg/referee/GameStatus.msg"
+  "msg/referee/RobotStatus.msg"
+  "msg/referee/RfidStatus.msg"
+  "msg/MincoTrajectory.msg"
 
   "action/EscapeObstacleLayer.action"
 
   DEPENDENCIES
-    geometry_msgs
-    std_msgs
-    builtin_interfaces
+  geometry_msgs
+  std_msgs
+  builtin_interfaces
 )
-
 
 ament_package()

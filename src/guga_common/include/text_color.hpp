@@ -1,7 +1,5 @@
-#ifndef GUGA_COMMON_COMMON_LIBS_HPP
-#define GUGA_COMMON_COMMON_LIBS_HPP
+#pragma once
 
-#include <cmath>
 #include <string>
 #include <deque>
 
@@ -26,7 +24,3 @@ const std::string WHITE_LIGHT = "\033[1;97m";
 const std::string RESET = "\033[0m";
 const std::string BOLD = "\033[1m";
 const std::string UNDERLINE = "\033[4m";
-
-double unwarp_angle(double current, const double previous);
-
-#endif // GUGA_COMMON_COMMON_LIBS_HPP
