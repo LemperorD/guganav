@@ -63,13 +63,7 @@ jobs:
           source scripts/ci/env_humble.sh
           set -u
           rosdep check --from-paths src --ignore-src --rosdistro humble
-          package_args=()
-          if [ "${HIK_MVS_AVAILABLE:-0}" != "1" ]; then
-            # Public runners cannot download the closed-source MVS SDK.
-            package_args+=(--packages-skip hik_driver)
-          fi
           colcon build --symlink-install \
-            "${package_args[@]}" \
             --cmake-args \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
@@ -91,9 +85,6 @@ jobs:
           test -f "${SMALL_GICP_INSTALL_PREFIX}/lib/cmake/small_gicp/small_gicp-config.cmake"
           ros2 pkg prefix guga_ui_pangolin
           ros2 pkg prefix serial_driver
-          if [ "${HIK_MVS_AVAILABLE:-0}" = "1" ]; then
-            ros2 pkg prefix hik_driver
-          fi
           ros2 launch pb2025_robot_description robot_description_launch.py --show-args >/dev/null
 
       - name: Run workspace tests
@@ -104,11 +95,6 @@ jobs:
           source /opt/ros/humble/setup.bash
           source install/setup.bash
           set -u
-          package_args=()
-          if [ "${HIK_MVS_AVAILABLE:-0}" != "1" ]; then
-            package_args+=(--packages-skip hik_driver)
-          fi
           colcon test \
-            "${package_args[@]}" \
             --event-handlers console_direct+
           colcon test-result --all --verbose

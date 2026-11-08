@@ -29,6 +29,7 @@
   <depend>laser_geometry</depend>
   <depend>nav2_behaviors</depend>
   <depend>pluginlib</depend>
+  <depend>guga_interfaces</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

@@ -108,7 +108,10 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Full path to a single params file override (disables 3-file merge)",
+        description=(
+            "Full path to a single params file override (disables 3-file merge); "
+            "该文件需自带 nonrotating_vel_transform 段，否则该节点拿不到话题名"
+        ),
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -219,6 +222,11 @@ def generate_launch_description():
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=configured_params,
+                # 恢复动作（后退等）的速度也必须走与控制器同一条链路：
+                # cmd_vel_controller -> velocity_smoother -> nonrotating_vel_transform -> cmd_vel。
+                # 不重映射时 behavior_server 直发 cmd_vel（串口驱动那一侧），
+                # 自旋模式下方向没有做坐标变换，也绕过速度平滑与 /chassis_stop。
+                remappings=[("cmd_vel", "cmd_vel_controller")],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -261,32 +269,10 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[
-                    {
-                        "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
-                        "chassis_frame": "chassis",
-                        "odom_topic": "odometry",
-                        "local_plan_topic": "local_plan",
-                        "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
-                        "cmd_spin_topic": "cmd_spin",
-                        "chassis_mode_topic": "chassis_mode",
-                        # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
-                        # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
-                        "initial_chassis_mode": PythonExpression(
-                            [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
-                            ]
-                        ),
-                        "init_spin_speed": PythonExpression(
-                            [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
-                            ]
-                        ),
-                    }
-                ],
+                # 参数在 config/{reality,simulation}/base.yaml 的
+                # nonrotating_vel_transform 段；initial_chassis_mode / init_spin_speed
+                # 按控制器差异在 controller/<profile>.yaml 里。
+                parameters=configured_params,
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -348,6 +334,8 @@ def generate_launch_description():
                 plugin="behavior_server::BehaviorServer",
                 name="behavior_server",
                 parameters=configured_params,
+                # 同上：恢复动作的速度与控制器共用一条链路
+                remappings=[("cmd_vel", "cmd_vel_controller")],
             ),
             ComposableNode(
                 package="nav2_bt_navigator",
@@ -374,32 +362,10 @@ def generate_launch_description():
                 package="nonrotating_vel_transform",
                 plugin="nonrotating_vel_transform::NonrotatingVelTransform",
                 name="nonrotating_vel_transform",
-                parameters=[
-                    {
-                        "use_sim_time": use_sim_time,
-                        "robot_base_frame": "base_footprint",
-                        "nonrotating_robot_base_frame": "base_footprint_nonrotating",
-                        "chassis_frame": "chassis",
-                        "odom_topic": "odometry",
-                        "local_plan_topic": "local_plan",
-                        "input_cmd_vel_topic": "cmd_vel_smoothed",
-                        "output_cmd_vel_topic": "cmd_vel",
-                        "cmd_spin_topic": "cmd_spin",
-                        "chassis_mode_topic": "chassis_mode",
-                        # mppi/mpc 走 base_footprint_nonrotating，启动即小陀螺；
-                        # pid 的 costmap 仍用旋转的 base_footprint，不能自旋，保持跟随模式
-                        "initial_chassis_mode": PythonExpression(
-                            [
-                                "1 if '", controller, "' in ('mppi', 'mpc') else 0",
-                            ]
-                        ),
-                        "init_spin_speed": PythonExpression(
-                            [
-                                "3.14 if '", controller, "' in ('mppi', 'mpc') else 0.0",
-                            ]
-                        ),
-                    }
-                ],
+                # 参数在 config/{reality,simulation}/base.yaml 的
+                # nonrotating_vel_transform 段；initial_chassis_mode / init_spin_speed
+                # 按控制器差异在 controller/<profile>.yaml 里。
+                parameters=configured_params,
             ),
             ComposableNode(
                 package="nav2_lifecycle_manager",

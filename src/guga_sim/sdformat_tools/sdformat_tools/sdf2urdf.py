@@ -34,6 +34,10 @@ def convert_geometry(in_node, out_doc, out_parent_node):
                 uri = model_uri_to_urdf_uri(uri_node.firstChild.data)
                 new_mesh_node = create_child_node(out_doc, new_node, 'mesh')
                 new_mesh_node.setAttribute('filename', uri)
+                scale_node = get_child_node_by_tag(child, 'scale')
+                if scale_node is not None:
+                    new_mesh_node.setAttribute(
+                        'scale', ' '.join(scale_node.firstChild.data.split()))
                 return True
             elif child.tagName == 'box':
                 size_node = get_child_node_by_tag(child, 'size')

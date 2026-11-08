@@ -1,330 +1,246 @@
-# Model Predictive Path Integral Controller
+# nav2_mppi_controller
 
-## Overview
+> **调参入口**：`scripts/paramview.sh` 打开 Web 界面，可动态改参数、与合并后的配置基线对比、可直接保存。`scripts/paramview/params_list/mppi_para.txt` 处可添加动态修改参数。
 
-> **本地集成说明（guganav）**：本包为 Nav2 官方 MPPI 控制器（上游代码，无本地算法改动）。
-> 哨兵 TES（小陀螺）场景下的坐标系适配在包外完成：
-> - 速度输出基于 `base_footprint_nonrotating` 坐标系，该 tf 由
->   `nonrotating_vel_transform` 包发布（`base_footprint → base_footprint_nonrotating`），
->   底盘自旋时控制器仍能稳定跟踪路径。
-> - TES 自旋速度叠加（`cmd_spin` + `chassis_mode`）由 `nonrotating_vel_transform`
->   在输出 `cmd_vel` 前完成，本控制器不做自旋相关处理。
-> - 其余参数与官方保持一致，可直接参考下方 Configuration 与 Nav2 官方文档。
+基于采样的局部轨迹控制器：从高斯分布采样控制序列、按插件化评价器（critic）打分并 softmax 加权，
+输出最优速度指令。本包是 Nav2 官方 MPPI 控制器的本地 fork，插件名改为
+`guga_source_mppi_controller::MPPIController`，由 `controller_server` 的 `FollowPath` 插件加载。
 
-This is a predictive controller (local trajectory planner) that implements the [Model Predictive Path Integral (MPPI)](https://ieeexplore.ieee.org/document/7487277) algorithm to track a path with adaptive collision avoidance. It contains plugin-based critic functions to impact the behavior of the algorithm. It was created by [Aleksei Budyakov](https://www.linkedin.com/in/aleksei-budyakov-334889224/) and adapted & developed for Nav2 by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/).
+## 架构
 
-This plugin implements the ``nav2_core::Controller`` interface allowing it to be used across the navigation stack as a local trajectory planner in the controller server's action server (``controller_server``).
+主线只有一条：`controller_server` 每个控制周期调用一次 `computeVelocityCommands()` →
+`transformPath()` 裁剪路径 → `Optimizer::evalControl()` 跑一次 MPPI → 返回 `TwistStamped`。
+详细步骤如下：
 
-This controller is measured to run at 50+ Hz on a modest Intel processor (4th gen i5). See its Configuration Guide Page for additional parameter descriptions.
+1. `src/controller.cpp` — `MPPIController`，实现 `nav2_core::Controller` 接口。
+   - 初始化：`configure()` 读 `visualize` / `reset_period`，组装 `Optimizer`、`PathHandler`、
+     `ParametersHandler` 与 `TrajectoryVisualizer`；`setPlan()` 把全局路径交给 `PathHandler`。
+   - 循环：`computeVelocityCommands()` 是每周期入口，距上次调用超过 `reset_period` 时先复位，再调用优化器。
 
-It works currently with Differential, Omnidirectional, and Ackermann robots.
+2. `src/optimizer.cpp` — MPPI 主循环。
+   - `prepare()` 更新状态与实测速度、移动控制序列，并生成带噪控制；
+   - `optimize()` 迭代 `iteration_count` 次：采样轨迹 → 评价器打分 → softmax 加权更新控制序列；
+   - `fallback()` 在无可行轨迹时软复位重试；
+   - 结束后做 Savitsky-Golay 平滑，再去除不符合加速度的选项，最后 `getControlFromSequenceAsTwist()`
+     取第一个预测序列的第一位（yaml里频率不等于 1/dt）/第零位（二者相等时）作为输出。
 
-## MPPI Description
+3. `src/critics/`、`src/critic_manager.cpp` — 12 个插件式评价器与加载、调度逻辑。
 
-The MPPI algorithm is an MPC variant that finds a control velocity for the robot using an iterative approach. Using the previous time step's best control solution and the robot's current state, a set of randomly sampled perturbations from a Gaussian distribution are applied. These noised controls are forward simulated to generate a set of trajectories within the robot's motion model.
+文件列表：
 
-Next, these trajectories are scored using a set of plugin-based critic functions to find the best trajectory in the batch. The output scores are used to set the best control with a soft max function.
+- `src/controller.cpp`：控制器插件入口与生命周期。
+- `src/optimizer.cpp`：MPPI 优化主循环、约束与运动模型积分。
+- `src/critic_manager.cpp`：按 `critics` 列表插件化加载评价器并依序计分。
+- `src/path_handler.cpp`：全局路径裁剪与坐标变换。
+- `src/parameters_handler.cpp`：参数声明与动态更新（支持 `ros2 param set`）。
+- `src/noise_generator.cpp`：采样噪声生成。
+- `src/trajectory_visualizer.cpp`：候选轨迹与最优轨迹可视化。
+- `include/nav2_mppi_controller/motion_models.hpp`：DiffDrive / Omni / Ackermann 运动模型。
+- `include/nav2_mppi_controller/critics/*.hpp`：各评价器接口。
+- `test/*.cpp`：单元测试（见“测试”一节）。
 
-This process is then repeated a number of times and returns a converged solution. This solution is then used as the basis of the next time step's initial control.
+本地 fork 相对上游的行为差异：插件名改为 `guga_source_mppi_controller::MPPIController`（上游名
+`nav2_mppi_controller::MPPIController` 在本地不可用）；移植了上游加速度约束（PR #4352 / #5266 / #6072）；
+平滑（SGF）之后、下发之前再按加速度包络钳制一次；新增 `debug_timing` 参数输出单周期耗时拆解；新增
+`last_command_vel_` 记录上一周期指令，供 odom 低频时的滞后补偿使用。
 
-## Features
+TES（小陀螺）场景的坐标系适配不在本包：局部代价地图与控制器位姿使用 `base_footprint_nonrotating`，
+自旋速度叠加（`cmd_spin` + `chassis_mode`）由 `nonrotating_vel_transform` 在输出 `cmd_vel` 前完成。
 
-- Predictive MPC trajectory planner
-- Utilizes plugin-based critics which can be swapped out, tuned, or replaced easily by the user
-- Highly optimized CPU-only performance using vectorization and tensor operations
-- Supports a number of common motion models, including Ackermann, Differential-Drive, and Omni-directional
-- Includes fallback mechanisms to handle soft-failures before escalating to recovery behaviors
-- High-quality code implementation with Doxygen, high unit test coverage, documentation, and parameter guide
-- Easily extensible to support modern research variants of MPPI
-- Comes pre-tuned for good out-of-the-box behavior
+## 数据流
 
-## Configuration
-
-### Controller
- | Parameter                  | Type   | Definition                                                                                                                                                                                                                                                                                                           |
- | ---------------------      | ------ | -------------------------------------------------------------------------------------------------------- |
- | motion_model               | string | Default: DiffDrive. Type of model [DiffDrive, Omni, Ackermann].                                          |
- | critics                    | string | Default: None. Critics (plugins) names                                                                   |
- | iteration_count            | int    | Default 1. Iteration count in MPPI algorithm. Recommend to keep as 1 and prefer more batches.            |
- | batch_size                 | int    | Default 1000. Count of randomly sampled candidate trajectories                                            |
- | time_steps                 | int    | Default 56. Number of time steps (points) in each sampled trajectory                                     |
- | model_dt                   | double | Default: 0.05. Time interval (s) between two sampled points in trajectories.                              |
- | vx_std                     | double | Default 0.2. Sampling standard deviation for VX                                                          |
- | vy_std                     | double | Default 0.2. Sampling standard deviation for VY                                                          |
- | wz_std                     | double | Default 0.4. Sampling standard deviation for Wz                                                          |
- | vx_max                     | double | Default 0.5. Max VX (m/s)                                                                                |
- | vy_max                     | double | Default 0.5. Max VY in either direction, if holonomic. (m/s)                                             |
- | vx_min                     | double | Default -0.35. Min VX (m/s)                                                                              |
- | wz_max                     | double | Default 1.9. Max WZ (rad/s)                                                                              |
- | temperature                | double | Default: 0.3. Selectiveness of trajectories by their costs (The closer this value to 0, the "more" we take in consideration controls with less cost), 0 mean use control with best cost, huge value will lead to just taking mean of all trajectories without cost consideration                                                   |
- | gamma                      | double | Default: 0.015. A trade-off between smoothness (high) and low energy (low). This is a complex parameter that likely won't need to be changed from the default of `0.1` which works well for a broad range of cases. See Section 3D-2 in "Information Theoretic Model Predictive Control: Theory and Applications to Autonomous Driving" for detailed information.       |
- | visualize                  | bool   | Default: false. Publish visualization of trajectories, which can slow down the controller significantly. Use only for debugging.                                                                                                                                       |
- | retry_attempt_limit        | int    | Default 1. Number of attempts to find feasible trajectory on failure for soft-resets before reporting failure.                                                                                                                                                                                                       |
-| reset_period            | double    | Default 1.0. required time of inactivity to reset optimizer  (only in Humble due to backport ABI policies)            |
- | regenerate_noises          | bool   | Default false. Whether to regenerate noises each iteration or use single noise distribution computed on initialization and reset. Practically, this is found to work fine since the trajectories are being sampled stochastically from a normal distribution and reduces compute jittering at run-time due to thread wake-ups to resample normal distribution. |
-
-#### Trajectory Visualizer
- | Parameter             | Type   | Definition                                                                                                  |
- | ---------------       | ------ | ----------------------------------------------------------------------------------------------------------- |
- | trajectory_step       | int    | Default: 5. The step between trajectories to visualize to downsample candidate trajectory pool.             |
- | time_step             | int    | Default: 3. The step between points on trajectories to visualize to downsample trajectory density.          |
-
-#### Path Handler
- | Parameter                  | Type   | Definition                                                                                                  |
- | ---------------            | ------ | ----------------------------------------------------------------------------------------------------------- |
- | max_robot_pose_search_dist | double | Default: Costmap half-size. Max integrated distance ahead of robot pose to search for nearest path point in case of path looping.   |
- | prune_distance             | double | Default: 1.5. Distance ahead of nearest point on path to robot to prune path to.                            |
- | transform_tolerance        | double | Default: 0.1. Time tolerance for data transformations with TF.                                              |
- | enforce_path_inversion        | double | Default: False. If true, it will prune paths containing cusping points for segments changing directions (e.g. path inversions) such that the controller will be forced to change directions at or very near the planner's requested inversion point. This is targeting Smac Planner users with feasible paths who need their robots to switch directions where specifically requested.      |
- | inversion_xy_tolerance        | double | Default: 0.2. Cartesian proximity (m) to path inversion point to be considered "achieved" to pass on the rest of the path after path inversion.      |
- | inversion_yaw_tolerance        | double | Default: 0.4. Angular proximity (radians) to path inversion point to be considered "achieved" to pass on the rest of the path after path inversion. 0.4 rad = 23 deg.  |
-
-#### Ackermann Motion Model
- | Parameter            | Type   | Definition                                                                                                  |
- | -------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
- | min_turning_r        | double | minimum turning radius for ackermann motion model                                                           |
-
-#### Constraint Critic
- | Parameter             | Type   | Definition                                                                                                  |
- | ---------------       | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight           | double | Default 4.0. Weight to apply to critic term.                                                                |
- | cost_power            | int    | Default 1. Power order to apply to term.   
-
-#### Goal Angle Critic
- | Parameter                        | Type   | Definition                                                                                                  |
- | ---------------                  | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight                      | double | Default 3.0. Weight to apply to critic term.                                                                |
- | cost_power                       | int    | Default 1. Power order to apply to term.                                                                    |
- | threshold_to_consider            | double | Default 0.5. Minimal distance between robot and goal above which angle goal cost considered.               |
- | symmetric_yaw_tolerance | bool | Default false. Enable for symmetric robots - allows goal approach from either forward or backward (goal ± 180°) without penalty if either is valid and wish the controller to select the easiest one itself. |
-
-#### Goal Critic
- | Parameter            | Type   | Definition                                                                                                  |
- | -------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight          | double | Default 5.0. Weight to apply to critic term.                                                                |
- | cost_power           | int    | Default 1. Power order to apply to term.                                                                    |
- | threshold_to_consider      | double | Default 1.4. Distance between robot and goal above which goal cost starts being considered                                    |
-
-
-#### Obstacles Critic
-
-Uses estimated distances from obstacles using cost and inflation parameters to avoid obstacles
-
- | Parameter            | Type   | Definition                                                                                                  |
- | ---------------      | ------ | ----------------------------------------------------------------------------------------------------------- |
- | consider_footprint   | bool   | Default: False. Whether to use point cost (if robot is circular or low compute power) or compute SE2 footprint cost. |
- | critical_weight          | double | Default 20.0. Weight to apply to critic for near collisions closer than `collision_margin_distance` to prevent near collisions **only** as a method of virtually inflating the footprint. This should not be used to generally influence obstacle avoidance away from critical collisions.                                                                |
- | repulsion_weight          | double | Default 1.5. Weight to apply to critic for generally preferring routes in lower cost space. This is separated from the critical term to allow for fine tuning of obstacle behaviors with path alignment for dynamic scenes without impacting actions which may directly lead to near-collisions. This is applied within the `inflation_radius` distance from obstacles.                                                                |
- | cost_power           | int    | Default 1. Power order to apply to term.                                                                    |
- | collision_cost       | double | Default 10000.0. Cost to apply to a true collision in a trajectory.                                          |
- | collision_margin_distance   | double    | Default 0.10. Margin distance from collision to apply severe penalty, similar to footprint inflation. Between 0.05-0.2 is reasonable. |
- | near_goal_distance          | double    | Default 0.5. Distance near goal to stop applying preferential obstacle term to allow robot to smoothly converge to goal pose in close proximity to obstacles.   
- | cost_scaling_factor       | double    | Default 10.0. Exponential decay factor across inflation radius. This should be the same as for your inflation layer (Humble only)
- | inflation_radius          | double    | Default 0.55. Radius to inflate costmap around lethal obstacles. This should be the same as for your inflation layer (Humble only)
-
-#### Cost Critic
-
-Uses inflated costmap cost directly to avoid obstacles
-
- | Parameter            | Type   | Definition                                                                                                  |
- | ---------------      | ------ | ----------------------------------------------------------------------------------------------------------- |
- | consider_footprint   | bool   | Default: False. Whether to use point cost (if robot is circular or low compute power) or compute SE2 footprint cost. |
- | cost_weight          | double | Default 3.81. Wight to apply to critic to avoid obstacles.                                       | 
- | cost_power           | int    | Default 1. Power order to apply to term.                                                                    |
- | collision_cost       | double | Default 1000000.0. Cost to apply to a true collision in a trajectory.                                          |
- | critical_cost       | double | Default 300.0. Cost to apply to a pose with any point in in inflated space to prefer distance from obstacles.                                          |
- | near_goal_distance          | double    | Default 0.5. Distance near goal to stop applying preferential obstacle term to allow robot to smoothly converge to goal pose in close proximity to obstacles.   
- | inflation_layer_name        | string    | Default "". Name of the inflation layer. If empty, it uses the last inflation layer in the costmap. If you have multiple inflation layers, you may want to specify the name of the layer to use. |
-
-#### Path Align Critic
- | Parameter                  | Type   | Definition                                                                                                                         |
- | ---------------            | ------ | -----------------------------------------------------------------------------------------------------------                        |
- | cost_weight                | double | Default 10.0. Weight to apply to critic term.                                                                                       |
- | cost_power                 | int    | Default 1. Power order to apply to term.                                                                                           |
- | threshold_to_consider      | double | Default 0.5. Distance between robot and goal above which path align cost stops being considered                                    |
- | offset_from_furthest      | double | Default 20. Checks that the candidate trajectories are sufficiently far along their way tracking the path to apply the alignment critic. This ensures that path alignment is only considered when actually tracking the path, preventing awkward initialization motions preventing the robot from leaving the path to achieve the appropriate heading.  |
- | trajectory_point_step      | double | Default 4. Step of trajectory points to evaluate for path distance to reduce compute time. Between 1-10 is typically reasonable.   |
- | max_path_occupancy_ratio   | double | Default 0.07 (7%). Maximum proportion of the path that can be occupied before this critic is not considered to allow the obstacle and path follow critics to avoid obstacles while following the path's intent in presence of dynamic objects in the scene.  |
- | use_path_orientations   | bool | Default false. Whether to consider path's orientations in path alignment, which can be useful when paired with feasible smac planners to incentivize directional changes only where/when the smac planner requests them. If you want the robot to deviate and invert directions where the controller sees fit, keep as false. If your plans do not contain orientation information (e.g. navfn), keep as false.  |
-
-Note: There is a "Legacy" version of this critic also available with the same parameters of an old formulation pre-October 2023.
-
-#### Path Angle Critic
- | Parameter                 | Type   | Definition                                                                                                  |
- | ---------------           | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight               | double | Default 2.0. Weight to apply to critic term.                                                                |
- | cost_power                | int    | Default 1. Power order to apply to term.                                                                    |
- | threshold_to_consider     | double | Default 0.5. Distance between robot and goal above which path angle cost stops being considered             |
- | offset_from_furthest      | int    | Default 4. Number of path points after furthest one any trajectory achieves to compute path angle relative to.  |
- | max_angle_to_furthest     | double | Default 1.2. Angular distance between robot and goal above which path angle cost starts being considered           |
- | forward_preference     | bool | Default true. Whether or not your robot has a preference for which way is forward in motion. Different from if reversing is generally allowed, but if you robot contains *no* particular preference one way or another.           |
-
-
-#### Path Follow Critic
- | Parameter             | Type   | Definition                                                                                                  |
- | ---------------       | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight           | double | Default 5.0. Weight to apply to critic term.                                                                |
- | cost_power            | int    | Default 1. Power order to apply to term.   |
- | offset_from_furthest  | int    | Default 6. Number of path points after furthest one any trajectory achieves to drive path tracking relative to.     |
- | threshold_to_consider        | float  | Default 1.4. Distance between robot and goal above which path follow cost stops being considered  | 
-
-#### Prefer Forward Critic
- | Parameter             | Type   | Definition                                                                                                  |
- | ---------------       | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight           | double | Default 5.0. Weight to apply to critic term.                                                                |
- | cost_power            | int    | Default 1. Power order to apply to term.                                                                    |
- | threshold_to_consider | double | Default 0.5. Distance between robot and goal above which prefer forward cost stops being considered         |
-
-
-#### Twirling Critic
- | Parameter             | Type   | Definition                                                                                                  |
- | ---------------       | ------ | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight           | double | Default 10.0. Weight to apply to critic term.                                                               |
- | cost_power            | int    | Default 1. Power order to apply to term.                                                                    |
-
-
-#### Velocity Deadband Critic
- | Parameter             | Type     | Definition                                                                                                  |
- | ---------------       | ------   | ----------------------------------------------------------------------------------------------------------- |
- | cost_weight           | double   | Default 35.0. Weight to apply to critic term.                                                               |
- | cost_power            | int      | Default 1. Power order to apply to term.                                                                    |
- | deadband_velocities   | double[] | Default [0.0, 0.0, 0.0].  The array of deadband velocities [vx, vz, wz]. A zero array indicates that the critic will take no action.      |
-
-
-### XML configuration example
 ```
-controller_server:
-  ros__parameters:
-    controller_frequency: 30.0
-    FollowPath:
-      plugin: "nav2_mppi_controller::MPPIController"
-      time_steps: 56
-      model_dt: 0.05
-      batch_size: 2000
-      vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 0.4
-      vx_max: 0.5
-      vx_min: -0.35
-      vy_max: 0.5
-      wz_max: 1.9
-      iteration_count: 1
-      prune_distance: 1.7
-      transform_tolerance: 0.1
-      temperature: 0.3
-      gamma: 0.015
-      motion_model: "DiffDrive"
-      visualize: false
-      TrajectoryVisualizer:
-        trajectory_step: 5
-        time_step: 3
-      AckermannConstraints:
-        min_turning_r: 0.2
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
-      ConstraintCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 4.0
-      GoalCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 1.4
-      GoalAngleCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.0
-        threshold_to_consider: 0.5
-      PreferForwardCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 0.5
-      # ObstaclesCritic:
-      #   enabled: true
-      #   cost_power: 1
-      #   repulsion_weight: 1.5
-      #   critical_weight: 20.0
-      #   consider_footprint: false
-      #   collision_cost: 10000.0
-      #   collision_margin_distance: 0.1
-      #   near_goal_distance: 0.5
-      CostCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.81
-        critical_cost: 300.0
-        consider_footprint: true
-        collision_cost: 1000000.0
-        near_goal_distance: 1.0
-      PathAlignCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 14.0
-        max_path_occupancy_ratio: 0.05
-        trajectory_point_step: 3
-        threshold_to_consider: 0.5
-        offset_from_furthest: 20
-        use_path_orientations: false
-      PathFollowCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        offset_from_furthest: 5
-        threshold_to_consider: 1.4
-      PathAngleCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 2.0
-        offset_from_furthest: 4
-        threshold_to_consider: 0.5
-        max_angle_to_furthest: 1.0
-        forward_preference: true
-      # VelocityDeadbandCritic:
-      #   enabled: true
-      #   cost_power: 1
-      #   cost_weight: 35.0
-      #   deadband_velocities: [0.05, 0.05, 0.05]
-      # TwirlingCritic:
-      #   enabled: true
-      #   twirling_cost_power: 1
-      #   twirling_cost_weight: 10.0
+bt_navigator
+  │ 全局路径（setPlan 接口，非话题）
+  ▼
+controller_server（controller_frequency: 30 Hz）
+  │ 位姿（话题） / 速度（话题） / goal_checker
+  ▼
+MPPIController（FollowPath 插件）
+  │ cmd_vel_controller（launch 中 remap cmd_vel → cmd_vel_controller）
+  ▼
+velocity_smoother（30 Hz）→ cmd_vel_smoothed
+  ▼
+nonrotating_vel_transform（60 Hz 重发 + 自旋叠加）→ cmd_vel → robot_base
+
+  MPPI 内部：transformPath → evalControl（prepare → optimize × iteration_count
+  → fallback 重试 → SGF 平滑 → 约束钳制 → TwistStamped）
+  可选输出：trajectories / transformed_global_plan → RViz
 ```
-## Topics
 
-| Topic                     | Type                             | Description                                                           |
-|---------------------------|----------------------------------|-----------------------------------------------------------------------|
-| `trajectories`            | `visualization_msgs/MarkerArray` | Randomly generated trajectories, including resulting control sequence |
-| `transformed_global_plan` | `nav_msgs/Path`                  | Part of global plan considered by local planner                       |
+## 输入
 
-## Notes to Users
+| 节点                | 接口/Topic   | 类型                 | 来源包/节点                                         |
+| ------------------- | ------------ | -------------------- | --------------------------------------------------- |
+| `MPPIController`    | `setPlan()`  | `nav_msgs/Path`      | `controller_server`（由 bt_navigator 触发）         |
+| `controller_server` | `odometry`   | `nav_msgs/Odometry`  | `point_lio`（`odom_topic` 配置项）                  |
+| `MPPIController`    | 代价地图接口 | `nav2_costmap_2d`    | `local_costmap`（`Costmap2DROS`）                   |
+| `MPPIController`    | `tf`         | `tf2_msgs/TFMessage` | 导航栈（`map → odom → base_footprint_nonrotating`） |
 
-### General Words of Wisdom
+## 输出
 
-The `model_dt` parameter generally should be set to the duration of your control frequency. So if your control frequency is 20hz, this should be `0.05`. However, you may also set it lower **but not larger**.
+| 节点                | Topic                     | 类型                             | 坐标系                       | 下游订阅者          | 用途                                 |
+| ------------------- | ------------------------- | -------------------------------- | ---------------------------- | ------------------- | ------------------------------------ |
+| `controller_server` | `cmd_vel_controller`      | `geometry_msgs/Twist`            | 机器人本体（nonrotating 系） | `velocity_smoother` | 最优速度指令                         |
+| `MPPIController`    | `trajectories`            | `visualization_msgs/MarkerArray` | 代价地图全局系（map）        | RViz                | 候选与最优轨迹（`visualize` 打开时） |
+| `MPPIController`    | `transformed_global_plan` | `nav_msgs/Path`                  | 代价地图全局系（map）        | RViz                | 裁剪后的局部路径                     |
 
-Visualization of the trajectories using `visualize` uses compute resources to back out trajectories for visualization and therefore slows compute time. It is not suggested that this parameter is set to `true` during a deployed use, but is a useful debug instrument while tuning the system, but use sparingly. Visualizing 2000 batches @ 56 points at 30 hz is _a lot_.
+`cmd_vel_controller` 是唯一的控制输出，经 `velocity_smoother`（加速度限幅）与
+`nonrotating_vel_transform`（旋转补偿 + 自旋叠加）之后才送到串口驱动；后两个可视化话题只在
+`visualize: true` 时发布，且会明显增加计算量。
 
-The most common parameters you might want to start off changing are the velocity profiles (`vx_max`, `vx_min`, `wz_max`, and `vy_max` if holonomic) and the `motion_model` to correspond to your vehicle. Its wise to consider the `prune_distance` of the path plan in proportion to your maximum velocity and prediction horizon. The only deeper parameter that will likely need to be adjusted for your particular settings is the Obstacle critics' `repulsion_weight` since the tuning of this is proportional to your inflation layer's radius. Higher radii should correspond to reduced `repulsion_weight` due to the penalty formation (e.g. `inflation_radius - min_dist_to_obstacle`). If this penalty is too high, the robot will slow significantly when entering cost-space from non-cost space or jitter in narrow corridors. It is noteworthy, but likely not necessary to be changed, that the Obstacle critic may use the full footprint information if `consider_footprint = true`, though comes at an increased compute cost.
+## 评价器
 
-If you don't require path following behavior (e.g. just want to follow a goal pose and let the model predictive elements decide the best way to accomplish that), you may easily remove the PathAlign, PathFollow and PathAngle critics. 
+`critics` 列表决定加载哪些插件；列表里的每个 critic 在 `score()` 开头检查自己的 `enabled` 参数，
+`enabled: false` 时直接返回、不计分。本地实车配置加载 9 个，实际计分 5 个：
 
-By default, the controller is tuned and has the capabilities established in the PathAlign/Obstacle critics to generally follow the path closely when no obstacles prevent it, but able to deviate from the path when blocked. See `PathAlignCritic::score()` for details, but it is disabled when the local path is blocked so the obstacle critic takes over in that state.
+| 插件                     | 作用                                                      | 实车配置（列表 / enabled） |
+| ------------------------ | --------------------------------------------------------- | -------------------------- |
+| `ConstraintCritic`       | 约束速度与加速度越界                                      | 列表内 / true              |
+| `CostCritic`             | 用代价地图代价避障，`consider_footprint` 控制是否按足迹算 | 列表内 / true              |
+| `ObstaclesCritic`        | 用“到障碍的距离”反算避障代价，与膨胀层参数耦合            | 不在列表                   |
+| `GoalCritic`             | 到目标点的距离代价                                        | 列表内 / true              |
+| `GoalAngleCritic`        | 到点后车头朝向代价                                        | 列表内 / false             |
+| `PathAlignCritic`        | 不贴合轨迹的代价                                          | 列表内 / true              |
+| `PathAlignLegacyCritic`  | 2023-10 之前的旧对齐公式                                  | 不在列表                   |
+| `PathFollowCritic`       | 沿路径推进（惩罚偏离路径前端的滞后，鼓励向路线方向前进）  | 列表内 / true              |
+| `PathAngleCritic`        | 路径方向角偏好                                            | 列表内 / false             |
+| `PreferForwardCritic`    | 偏好前进（抑制倒车）                                      | 列表内 / false             |
+| `TwirlingCritic`         | 抑制不必要的旋转：对整条轨迹的平均 \|wz\| 无条件计代价    | 列表内 / false             |
+| `VelocityDeadbandCritic` | 低速死区，抑制低速抖动                                    | 不在列表（注释中）         |
 
-### Prediction Horizon, Costmap Sizing, and Offsets
+实车计分的 5 个是 Constraint、Cost、Goal、PathAlign、PathFollow。`ObstaclesCritic` 的取值与仿真对齐但
+未启用：启用前需要把 `inflation_radius` / `cost_scaling_factor` 改成与局部代价地图膨胀层完全一致（详见
+`src/guga_bringup/config/reality/controller/mppi.yaml` 的注释）。`TwirlingCritic` 的“抑制转向”是全局旋钮，不是只在原地
+打转时生效；调大后车头不易摆动，但也更容易转不动。
 
-As this is a predictive planner, there is some relationship between maximum speed, prediction times, and costmap size that users should keep in mind while tuning for their application. If a controller server costmap is set to 3.0m in size, that means that with the robot in the center, there is 1.5m of information on either side of the robot. When your prediction horizon (time_steps * model_dt) at maximum speed (vx_max) is larger than this, then your robot will be artificially limited in its maximum speeds and behavior by the costmap limitation. For example, if you predict forward 3 seconds (60 steps @ 0.05s per step) at 0.5m/s maximum speed, the **minimum** required costmap radius is 1.5m - or 3m total width.
+## 管线
 
-The same applies to the Path Follow and Align offsets from furthest. In the same example if the furthest point we can consider is already at the edge of the costmap, then further offsets are thresholded because they're unusable. So its important while selecting these parameters to make sure that the theoretical offsets can exist on the costmap settings selected with the maximum prediction horizon and velocities desired. Setting the threshold for consideration in the path follower + goal critics as the same as your prediction horizon can make sure you have clean hand-offs between them, as the path follower will otherwise attempt to slow slightly once it reaches the final goal pose as its marker.
+本节讲解主要函数作用。
 
-The Path Follow critic cannot drive velocities greater than the projectable distance of that velocity on the available path on the rolling costmap. The Path Align critic `offset_from_furthest` represents the number of path points a trajectory passes through while tracking the path. If this is set either absurdly low (e.g. 5) it can trigger when a robot is simply trying to start path tracking causing some suboptimal behaviors and local minima while starting a task. If it is set absurdly high (e.g. 50) relative to the path resolution and costmap size, then the critic may never trigger or only do so when at full-speed. A balance here is wise. A selection of this value to be ~30% of the maximum velocity distance projected is good (e.g. if a planner produces points every 2.5cm, 60 can fit on the 1.5m local costmap radius. If the max speed is 0.5m/s with a 3s prediction time, then 20 points represents 33% of the maximum speed projected over the prediction horizon onto the path). When in doubt, `prediction_horizon_s * max_speed / path_resolution / 3.0` is a good baseline.
+| 函数                              | 位置                      | 职责                                                                            |
+| --------------------------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `configure`                       | controller.cpp            | 读 `visualize`/`reset_period`，初始化优化器、路径处理与可视化                   |
+| `setPlan`                         | controller.cpp            | 把全局路径交给 `PathHandler`                                                    |
+| `computeVelocityCommands`         | controller.cpp            | 每周期入口：超时复位 → `transformPath` → `evalControl` → 可选 `visualize`       |
+| `transformPath`                   | path_handler.cpp          | 把路径裁剪到代价地图可及范围，并变换到机器人局部系                              |
+| `evalControl`                     | optimizer.cpp             | 一次优化的总编排：prepare → optimize 迭代 → fallback 重试 → SGF 平滑 → 约束钳制 |
+| `prepare`                         | optimizer.cpp             | 更新位姿与速度、移动控制序列、生成带噪控制                                      |
+| `optimize`                        | optimizer.cpp             | `iteration_count` 次采样 → 评分 → softmax 加权，更新控制序列                    |
+| `fallback`                        | optimizer.cpp             | 无可行轨迹时软复位并重试                                                        |
+| `applyControlSequenceConstraints` | optimizer.cpp             | 按 `ax/ay/az` 与速度上限逐时间步钳制控制序列                                    |
+| `getControlFromSequenceAsTwist`   | optimizer.cpp             | 取第一个时间步的控制量，转成 `TwistStamped`                                     |
+| `evalTrajectoriesScores`          | critic_manager.cpp        | 依序调用各 critic 的 `score()`；`debug_timing` 时记录每个 critic 的耗时         |
+| `add` / `visualize`               | trajectory_visualizer.cpp | `visualize: true` 时发布候选轨迹、最优轨迹与局部路径                            |
+| `generateNextNoises`              | noise_generator.cpp       | 生成高斯采样噪声（`regenerate_noises` 决定是否每步重采样）                      |
 
-### Obstacle, Inflation Layer, and Path Following
 
-There also exists a relationship between the costmap configurations and the Obstacle critic configurations. If the Obstacle critic is not well tuned with the costmap parameters (inflation radius, scale) it can cause the robot to wobble significantly as it attempts to take finitely lower-cost trajectories with a slightly lower cost in exchange for jerky motion. The default behavior was tuned for small AMRs (e.g. turtlebots or similar), so if using a larger robot, you may want to reduce the `repulsion_weight` in kind. It may also perform awkward maneuvers when in free-space to try to maximize time in a small pocket of 0-cost over a more natural motion which involves moving into some low-costed region. Finally, it may generally refuse to go into costed space at all when starting in a free 0-cost space if the gain is set disproportionately higher than the Path Follow scoring to encourage the robot to move along the path. This is due to the critic cost of staying in free space becoming more attractive than entering even lightly costed space in exchange for progression along the task. 
+## 参数
 
-Thus, care should be taken to select weights of the obstacle critic in conjunction with the costmap inflation radius and scale so that a robot does not have such issues. How I (Steve, your friendly neighborhood navigator) tuned this was to first create the appropriate obstacle critic behavior desirable in conjunction with the inflation layer parameters. Its worth noting that the Obstacle critic converts the cost into a distance from obstacles, so the nature of the distribution of costs in the inflation isn't overly significant. However, the inflation radius and the scale will define the cost at the end of the distribution where free-space meets the lowest cost value within the radius. So testing for quality behavior when going over that threshold should be considered.
+参数来自 `src/guga_bringup/config/<profile>/controller/mppi.yaml` 的 `controller_server` 段与
+`FollowPath` 子段。下表是实车（reality）的取值；仿真（simulation）的采样与速度上限不同，见对应文件。
+未在本地配置中显式写出的参数取上游默认值。
 
-As you increase or decrease your weights on the Obstacle, you may notice the aforementioned behaviors (e.g. won't overcome free to non-free threshold). To overcome them, increase the FollowPath critic cost to increase the desire for the trajectory planner to continue moving towards the goal. Make sure to not overshoot this though, keep them balanced. A desirable outcome is smooth motion roughly in the center of spaces without significant close interactions with obstacles. It shouldn't be perfectly following a path yet nor should the output velocity be wobbling jaggedly.
+### 控制器与优化器
 
-Once you have your obstacle avoidance behavior tuned and matched with an appropriate path following penalty, tune the Path Align critic to align with the path. If you design exact-path-alignment behavior, its possible to skip the obstacle critic step as highly tuning the system to follow the path will give it less ability to deviate to avoid obstacles (though it'll slow and stop). Tuning the critic weight for the Obstacle critic high will do the job to avoid near-collisions but the repulsion weight is largely unnecessary to you. For others wanting more dynamic behavior, it _can_ be beneficial to slowly lower the weight on the obstacle critic to give the path alignment critic some more room to work. If your path was generated with a cost-aware planner (like all provided by Nav2) and providing paths sufficiently far from obstacles for your satisfaction, the impact of a slightly reduced Obstacle critic with a Path Alignment critic will do you well. Not over-weighting the path align critic will allow the robot to  deviate from the path to get around dynamic obstacles in the scene or other obstacles not previous considered during path planning. It is subjective as to the best behavior for your application, but it has been shown that MPPI can be an exact path tracker and/or avoid dynamic obstacles very fluidly and everywhere in between. The defaults provided are in the generally right regime for a balanced initial trade-off. 
+| 参数                   | 作用                                                    |
+| ---------------------- | ------------------------------------------------------- |
+| `controller_frequency` | 控制周期（实车 30 Hz，`model_dt` 必须与之对齐）         |
+| `plugin`               | 实车为 `guga_source_mppi_controller::MPPIController`    |
+| `motion_model`         | 运动模型，实车 `Omni`（麦克纳姆底盘）                   |
+| `time_steps`           | 每条采样轨迹的时间步数（实车 48）                       |
+| `model_dt`             | 采样点时间间隔（实车 1/30 s，须等于 1/控制频率）        |
+| `batch_size`           | 每轮采样的候选轨迹数（实车 1400）                       |
+| `iteration_count`      | MPPI 迭代次数（实车 2；上游建议保持 1、优先加大 batch） |
+| `temperature`          | softmax 选择强度，越小越偏向最优轨迹（实车 0.2）        |
+| `gamma`                | 控制序列平滑与能耗的权衡（实车 0.012）                  |
+| `visualize`            | 是否发布候选轨迹（实车 false，调试时打开）              |
+| `debug_timing`         | 本 fork 新增：每 2 s 打印单周期耗时与各 critic 耗时     |
+| `reset_period`         | 无调用超过该时长就复位优化器（默认 1.0 s）              |
+
+### 采样与速度上限
+
+| 参数     | 作用                                                                                    |
+| -------- | --------------------------------------------------------------------------------------- |
+| `vx_std` | 线速度 x 的采样标准差（实车 0.3）                                                       |
+| `vy_std` | 线速度 y 的采样标准差（实车 0.3）                                                       |
+| `wz_std` | 角速度采样标准差（实车 0.01，几乎不采样转向）                                           |
+| `vx_max` | 最大前进速度（实车 3.0 m/s）                                                            |
+| `vx_min` | 最大倒车速度（实车 -3.0 m/s）                                                           |
+| `vy_max` | 最大横向速度（实车 3.0 m/s）                                                            |
+| `vy_min` | 最小横向速度（实车 -4.0 m/s）                                                           |
+| `wz_max` | 最大角速度（实车 1.0 rad/s；自旋由 `nonrotating_vel_transform` 叠加，控制器不输出转向） |
+
+### 加速度约束
+
+| 参数     | 作用                                                                  |
+| -------- | --------------------------------------------------------------------- |
+| `ax_max` | 加速上限（实车 2.0 m/s²，不宽于下游执行能力）                         |
+| `ax_min` | 减速下限（实车 -4.5 m/s²，必须与 `velocity_smoother.max_decel` 一致） |
+| `ay_max` | 横向加速上限（实车 3.0 m/s²）                                         |
+| `ay_min` | 横向减速下限（实车 -4.5 m/s²）                                        |
+| `az_max` | 角加速度上限（实车 0.0，自旋角速度不归控制器管）                      |
+
+### 评价器参数（实车值）
+
+| 评价器                | 参数与取值                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConstraintCritic`    | `cost_weight: 5.0`、`cost_power: 1`                                                                                                                 |
+| `CostCritic`          | `cost_weight: 4.0`、`critical_cost: 300`、`trajectory_point_step: 2`、`consider_footprint: false`、`collision_cost: 1e6`、`near_goal_distance: 1.0` |
+| `GoalCritic`          | `cost_weight: 5.0`、`threshold_to_consider: 1.4`                                                                                                    |
+| `GoalAngleCritic`     | 已配置但不启用：`cost_weight: 5.0`、`threshold_to_consider: 0.5`                                                                                    |
+| `PathAlignCritic`     | `cost_weight: 5.0`、`offset_from_furthest: 10`、`trajectory_point_step: 4`、`max_path_occupancy_ratio: 0.05`                                        |
+| `PathFollowCritic`    | `cost_weight: 7.0`、`offset_from_furthest: 6`、`threshold_to_consider: 0.8`                                                                         |
+| `PathAngleCritic`     | 已配置但不启用：`cost_weight: 2.0`、`offset_from_furthest: 4`、`max_angle_to_furthest: 1.0`                                                         |
+| `PreferForwardCritic` | 已配置但不启用：`cost_weight: 5.0`、`threshold_to_consider: 0.5`                                                                                    |
+| `TwirlingCritic`      | 已配置但不启用：`cost_weight: 3.0`                                                                                                                  |
+| `ObstaclesCritic`     | 不在 `critics` 列表：`repulsion_weight: 2.0`、`critical_weight: 25.0`、`inflation_radius: 0.367`、`cost_scaling_factor: 10.0`                       |
+
+### 轨迹可视化
+
+| 参数              | 作用                           |
+| ----------------- | ------------------------------ |
+| `trajectory_step` | 候选轨迹抽样的步长（实车 5）   |
+| `time_step`       | 单条轨迹上取点的步长（实车 3） |
+
+注意：`model_dt` 与 `controller_frequency` 必须对齐，误差超过 1e-6 时控制序列移位会关闭或
+`configure` 直接抛异常；`ax_min` / `ay_min` 与 `velocity_smoother.max_decel` 成对调整，只改一边会出现
+过冲或减速偏慢。
+
+## 测试
+
+```bash
+# 构建并运行本包测试（pre-commit 钩子与 CI 都调用它）
+scripts/pre-commit/run_mppi_tests.sh
+```
+
+当前 `nav2_mppi_controller` 测试套件：
+
+- `optimizer_smoke_test`：优化器冒烟测试
+- `optimizer_unit_tests`：优化器单元测试
+- `controller_state_transition_test`：控制器生命周期状态转换
+- `models_test`：状态、轨迹、控制序列等模型
+- `noise_generator_test`：噪声生成
+- `parameter_handler_test`：参数声明与动态更新
+- `motion_model_tests`：DiffDrive / Omni / Ackermann 运动模型
+- `trajectory_visualizer_tests`：轨迹可视化
+- `utils_test`：路径与代价工具函数
+- `path_handler_test`：路径裁剪与变换
+- `critic_manager_test`：评价器加载与评分调度
+- `critics_tests`：各评价器行为（单独链接 `mppi_critics`）
+
+本包已纳入 `.pre-commit-config.yaml`（clang-format 与 `test-mppi-controller`）与
+`.github/workflows/ci.yml`。
+
+包内 `doxygen/Doxyfile` 可在包根生成方法级 HTML 文档（类页面里列出每个函数与其中文 `@brief` 说明）：
+
+```bash
+# 1. 在包根生成（输出 doxygen/html/index.html，生成物由根 .gitignore 忽略）
+cd src/guga_controller/nav2_mppi_controller && doxygen doxygen/Doxyfile
+
+# 2. 回工作区根构建，安装到 share 后用浏览器打开（在 source 过 setup.bash 的终端里）
+colcon build --packages-select nav2_mppi_controller
+google-chrome "$(ros2 pkg prefix nav2_mppi_controller)/share/nav2_mppi_controller/doxygen/html/index.html"
+```
+
+需要 doxygen 1.13 及以上；没有 root 权限时可使用官方便携二进制，把其 `bin/` 目录加入 `PATH`。

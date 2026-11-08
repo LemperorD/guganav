@@ -54,6 +54,7 @@
 #include "pb_nav2_plugins/layers/obstacle_layer_local.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -61,6 +62,8 @@
 #include "nav2_costmap_2d/costmap_math.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
+#include "tf2/utils.h"
+#include "tf2_ros/buffer.h"
 
 PLUGINLIB_EXPORT_CLASS(pb_nav2_costmap_2d::ObstacleLayerLocal, nav2_costmap_2d::Layer)
 
@@ -99,6 +102,15 @@ void ObstacleLayerLocal::onInitialize()
   declareParameter("combination_method", rclcpp::ParameterValue(1));
   declareParameter("observation_sources", rclcpp::ParameterValue(std::string("")));
 
+  // 全局系参考变换（map→odom）跳变检测：默认关闭，需要在全局代价地图上显式打开
+  declareParameter("tf_jump_reset_enabled", rclcpp::ParameterValue(false));
+  declareParameter("tf_jump_child_frame", rclcpp::ParameterValue(std::string("odom")));
+  declareParameter("tf_jump_translation_threshold", rclcpp::ParameterValue(0.05));
+  declareParameter("tf_jump_yaw_threshold", rclcpp::ParameterValue(0.05));
+  declareParameter("tf_jump_min_interval", rclcpp::ParameterValue(2.0));
+  declareParameter("tf_jump_full_window", rclcpp::ParameterValue(true));
+  declareParameter("tf_jump_skip_marking_cycles", rclcpp::ParameterValue(1));
+
   auto node = node_.lock();
 
   if (!node) {
@@ -110,6 +122,14 @@ void ObstacleLayerLocal::onInitialize()
   node->get_parameter(name_ + "." + "min_obstacle_height", min_obstacle_height_);
   node->get_parameter(name_ + "." + "max_obstacle_height", max_obstacle_height_);
   node->get_parameter(name_ + "." + "combination_method", combination_method_);
+  node->get_parameter(name_ + "." + "tf_jump_reset_enabled", tf_jump_reset_enabled_);
+  node->get_parameter(name_ + "." + "tf_jump_child_frame", tf_jump_child_frame_);
+  node->get_parameter(
+    name_ + "." + "tf_jump_translation_threshold", tf_jump_translation_threshold_);
+  node->get_parameter(name_ + "." + "tf_jump_yaw_threshold", tf_jump_yaw_threshold_);
+  node->get_parameter(name_ + "." + "tf_jump_min_interval", tf_jump_min_interval_);
+  node->get_parameter(name_ + "." + "tf_jump_full_window", tf_jump_full_window_);
+  node->get_parameter(name_ + "." + "tf_jump_skip_marking_cycles", tf_jump_skip_marking_cycles_);
   node->get_parameter("track_unknown_space", track_unknown_space);
   node->get_parameter("transform_tolerance", transform_tolerance);
   node->get_parameter(name_ + "." + "observation_sources", topics_string);
@@ -134,6 +154,24 @@ void ObstacleLayerLocal::onInitialize()
   was_reset_ = false;
 
   global_frame_ = layered_costmap_->getGlobalFrameID();
+
+  if (tf_jump_reset_enabled_) {
+    if (global_frame_ == tf_jump_child_frame_) {
+      // 本层的全局系就是被观察的子坐标系（滚动代价地图走 odom），无跳变可测
+      tf_jump_reset_enabled_ = false;
+      RCLCPP_INFO(
+        logger_, "%s 的全局系与跳变检测子系同为 %s，本层不启用跳变重置", name_.c_str(),
+        global_frame_.c_str());
+    } else {
+      RCLCPP_INFO(
+        logger_,
+        "%s 启用跳变重置：监视 %s→%s，平移阈值 %.3f m，偏航阈值 %.3f rad，"
+        "最短间隔 %.2f s，跳变后丢弃 %d 轮观测",
+        name_.c_str(), global_frame_.c_str(), tf_jump_child_frame_.c_str(),
+        tf_jump_translation_threshold_, tf_jump_yaw_threshold_, tf_jump_min_interval_,
+        tf_jump_skip_marking_cycles_);
+    }
+  }
 
   auto sub_opt = rclcpp::SubscriptionOptions();
   sub_opt.callback_group = callback_group_;
@@ -402,6 +440,83 @@ void ObstacleLayerLocal::pointCloud2Callback(
   buffer->unlock();
 }
 
+void ObstacleLayerLocal::checkGlobalFrameJump()
+{
+  if (!tf_jump_reset_enabled_ || tf_ == nullptr || global_frame_.empty()) {
+    return;
+  }
+
+  geometry_msgs::msg::TransformStamped tf_msg;
+  try {
+    tf_msg = tf_->lookupTransform(global_frame_, tf_jump_child_frame_, tf2::TimePointZero);
+  } catch (const tf2::TransformException & ex) {
+    // 变换暂时不可用不算跳变：保持基线不动，等变换恢复后再比较
+    RCLCPP_DEBUG(
+      logger_, "无法查询 %s→%s，本轮跳过跳变检测：%s", global_frame_.c_str(),
+      tf_jump_child_frame_.c_str(), ex.what());
+    return;
+  }
+
+  const double x = tf_msg.transform.translation.x;
+  const double y = tf_msg.transform.translation.y;
+  const double yaw = tf2::getYaw(tf_msg.transform.rotation);
+
+  if (!has_tf_jump_ref_) {
+    has_tf_jump_ref_ = true;
+    tf_jump_ref_x_ = x;
+    tf_jump_ref_y_ = y;
+    tf_jump_ref_yaw_ = yaw;
+    // 首次读到变换时打一条 INFO：实车上区分"读不到 TF（坐标系名不对）"与
+    // "读到了但没有触发"只能靠这条，调试级别的日志默认看不到
+    RCLCPP_INFO(
+      logger_, "已读到 %s→%s：x=%.3f y=%.3f yaw=%.3f，之后按相邻两轮增量判定跳变",
+      global_frame_.c_str(), tf_jump_child_frame_.c_str(), x, y, yaw);
+    return;
+  }
+
+  const double dx = x - tf_jump_ref_x_;
+  const double dy = y - tf_jump_ref_y_;
+  const double d_yaw = yaw - tf_jump_ref_yaw_;
+
+  // 基线每轮都推进：判定只针对本轮相对上轮的增量，避免偏差长期累积后被反复触发
+  tf_jump_ref_x_ = x;
+  tf_jump_ref_y_ = y;
+  tf_jump_ref_yaw_ = yaw;
+
+  if (!tfJumpExceedsThresholds(
+        dx, dy, d_yaw, tf_jump_translation_threshold_, tf_jump_yaw_threshold_)) {
+    return;
+  }
+
+  const double wrapped_yaw = std::remainder(d_yaw, 2.0 * M_PI);
+  const double translation = std::hypot(dx, dy);
+
+  // 定位持续小幅修正时会不断越过阈值，这里限制重置频率，避免代价地图被反复清空。
+  // 用 INFO 加节流：被拦下的次数是判断"阈值是否与定位更新的单步幅度匹配"的直接依据，
+  // 只在 DEBUG 打印时实车上区分不了"没读到 TF"与"跳变被最小间隔拦下"。
+  if (
+    has_tf_jump_reset_time_ &&
+    (clock_->now() - tf_jump_reset_time_).seconds() < tf_jump_min_interval_) {
+    RCLCPP_INFO_THROTTLE(
+      logger_, *clock_, 2000,
+      "%s→%s 跳变 (Δ=%.3f m, Δyaw=%.3f rad)，距上次重置不足 %.2f s，本轮不重置",
+      global_frame_.c_str(), tf_jump_child_frame_.c_str(), translation, wrapped_yaw,
+      tf_jump_min_interval_);
+    return;
+  }
+
+  has_tf_jump_reset_time_ = true;
+  tf_jump_reset_time_ = clock_->now();
+
+  RCLCPP_WARN(
+    logger_, "检测到 %s→%s 跳变 (Δ=%.3f m, Δyaw=%.3f rad)，清空 %s 累积的障碍标记并按新变换重建",
+    global_frame_.c_str(), tf_jump_child_frame_.c_str(), translation, wrapped_yaw, name_.c_str());
+
+  reset();
+  skip_observations_cycles_ = tf_jump_skip_marking_cycles_;
+  force_full_window_ = tf_jump_full_window_;
+}
+
 void ObstacleLayerLocal::updateBounds(
   double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x,
   double * max_y)
@@ -410,11 +525,26 @@ void ObstacleLayerLocal::updateBounds(
   if (rolling_window_) {  // 移动代价地图,更新激光源(雷达)位置
     updateOrigin(robot_x - getSizeInMetersX() / 2, robot_y - getSizeInMetersY() / 2);
   }
+
+  // 全局系参考变换跳变检查放在 enabled 判断之前：重置只作用于本层栅格，
+  // 且参考变换的基线必须持续更新，否则本层重新启用时会拿旧基线做比较
+  checkGlobalFrameJump();
+
   if (!enabled_) {
     return;
   }
   // 处理特殊情况
   useExtraBounds(min_x, min_y, max_x, max_y);
+
+  // 跳变后的这一轮把更新窗口扩到整张图：主代价地图只在更新窗口内被重置，
+  // 不扩窗口时按旧变换写入主图的旧标记会一直留在窗口之外
+  if (force_full_window_) {
+    force_full_window_ = false;
+    *min_x = std::min(*min_x, getOriginX());
+    *max_x = std::max(*max_x, getOriginX() + getSizeInMetersX());
+    *min_y = std::min(*min_y, getOriginY());
+    *max_y = std::max(*max_y, getOriginY() + getSizeInMetersY());
+  }
 
   bool current = true;
   std::vector<Observation> observations, clearing_observations;
@@ -427,6 +557,14 @@ void ObstacleLayerLocal::updateBounds(
 
   // 更新整层的新鲜度
   current_ = current;
+
+  // 跳变后的若干轮丢弃观测：缓冲里的点云是按跳变前的变换写入全局系，
+  // 直接使用会在旧位置重新标记。这里仍然取出观测（让缓冲完成淘汰），只是不使用
+  if (skip_observations_cycles_ > 0) {
+    --skip_observations_cycles_;
+    observations.clear();
+    clearing_observations.clear();
+  }
 
   // 射线清除出自由空间
   for (const auto & observation : clearing_observations) {

@@ -18,6 +18,11 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
   this->declare_parameter<double>("min_odometry_dt", 1e-3);
   this->declare_parameter<double>("max_linear_velocity", 10.0);
   this->declare_parameter<double>("max_angular_velocity", 20.0);
+  this->declare_parameter<bool>("zero_base_z", false);
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_t", std::vector<double>{});
+  this->declare_parameter<std::vector<double>>(
+    "lidar_to_base_r", std::vector<double>{});
 
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("base_frame", base_frame_);
@@ -25,6 +30,9 @@ ScanToSensorFrameNode::ScanToSensorFrameNode(const rclcpp::NodeOptions & options
   this->get_parameter("min_odometry_dt", min_odometry_dt_);
   this->get_parameter("max_linear_velocity", max_linear_velocity_);
   this->get_parameter("max_angular_velocity", max_angular_velocity_);
+  this->get_parameter("zero_base_z", zero_base_z_);
+  this->get_parameter("lidar_to_base_t", lidar_to_base_t_);
+  this->get_parameter("lidar_to_base_r", lidar_to_base_r_);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -91,12 +99,33 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
 
   tf2::fromMsg(odometry_msg->pose.pose, tf_odom_to_lidar_);
   tf_lidar_to_robot_base_ = getTransform(lidar_frame_, robot_base_frame_, last_pcd_stamp_);
-  tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
+  if (lidar_to_base_t_.size() == 3 && lidar_to_base_r_.size() == 9) {
+    const tf2::Matrix3x3 rotation(
+      lidar_to_base_r_[0], lidar_to_base_r_[1], lidar_to_base_r_[2],
+      lidar_to_base_r_[3], lidar_to_base_r_[4], lidar_to_base_r_[5],
+      lidar_to_base_r_[6], lidar_to_base_r_[7], lidar_to_base_r_[8]);
+    const tf2::Vector3 translation(
+      lidar_to_base_t_[0], lidar_to_base_t_[1], lidar_to_base_t_[2]);
+    tf_lidar_to_chassis =
+      tf2::Transform(rotation, translation).inverse();
+  } else {
+    tf_lidar_to_chassis = getTransform(lidar_frame_, base_frame_, last_pcd_stamp_);
+  }
 
+  tf2::Transform tf_odom_to_chassis = tf_odom_to_lidar_ * tf_lidar_to_chassis;
+  if (zero_base_z_) {
+    // 平地模式: 只保留 x/y, 把 base_footprint 锁在 odom 的 z=0 平面上,
+    // 让 point_lio 的 z 漂移不进入 odom->base_footprint。
+    tf_odom_to_chassis.setOrigin(tf2::Vector3(
+      tf_odom_to_chassis.getOrigin().x(), tf_odom_to_chassis.getOrigin().y(), 0.0));
+  }
   {
     std::lock_guard<std::mutex> lock(chassis_tf_mutex_);
     std::lock_guard<std::mutex> lock2(chassis_odom_mutex_);
-    tf_odom_to_chassis_ = tf_odom_to_lidar_ * tf_lidar_to_chassis;
+    chassis_header_.frame_id = odom_frame_;
+    chassis_header_.stamp = last_pcd_stamp_;
+    tf_odom_to_chassis_ = tf_odom_to_chassis;
+    chassis_tf_header_ = chassis_header_;
     chassis_odom_ready_ = true;
     chassis_tf_ready_ = true;
   }
@@ -105,6 +134,8 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
 
   {
     std::lock_guard<std::mutex> lock(robot_base_odom_mutex_);
+    robot_base_header_.frame_id = odom_frame_;
+    robot_base_header_.stamp = last_pcd_stamp_;
     tf_odom_to_robot_base_ = tf_odom_to_lidar_ * tf_lidar_to_robot_base_;
     robot_base_odom_ready_ = true;
   }
@@ -114,6 +145,7 @@ void ScanToSensorFrameNode::laserCloudAndOdometryHandler(
     std::lock_guard<std::mutex> lock(sensor_scan_mutex_);
     sensor_scan_ready_ = true;
     in_ = *pcd_msg;
+    sensor_scan_odom_to_lidar_ = tf_odom_to_lidar_;
   }
   sensor_scan_cv_.notify_one();
 
@@ -270,48 +302,54 @@ void ScanToSensorFrameNode::publishRobotBaseOdometry(
 void ScanToSensorFrameNode::updateChassisTF() {
   while (rclcpp::ok()) {
     tf2::Transform input;
+    std_msgs::msg::Header header;
     {
       std::unique_lock<std::mutex> lock(chassis_tf_mutex_);
       chassis_tf_cv_.wait(lock, [this]() {
         return chassis_tf_ready_ || !rclcpp::ok();
       });
+      if (!rclcpp::ok()) { return; }
+      input = tf_odom_to_chassis_;
+      header = chassis_tf_header_;
+      chassis_tf_ready_ = false;
     }
-    input = tf_odom_to_chassis_;
-    chassis_tf_ready_ = false;
-    if (!rclcpp::ok()) { return; }
-    publishTransform(input, odom_frame_, base_frame_, last_pcd_stamp_);
+    publishTransform(input, header.frame_id, base_frame_, header.stamp);
   }
 }
 
 void ScanToSensorFrameNode::updateChassisOdometry() {
   while (rclcpp::ok()) {
     tf2::Transform input;
+    std_msgs::msg::Header header;
     {
       std::unique_lock<std::mutex> lock(chassis_odom_mutex_);
       chassis_odom_cv_.wait(lock, [this]() {
         return chassis_odom_ready_ || !rclcpp::ok();
       });
+      if (!rclcpp::ok()) { return; }
+      input = tf_odom_to_chassis_;
+      header = chassis_header_;
+      chassis_odom_ready_ = false;
     }
-    input = tf_odom_to_chassis_;
-    chassis_odom_ready_ = false;
-    if (!rclcpp::ok()) { return; }
-    publishChassisOdometry(input, odom_frame_, base_frame_, last_pcd_stamp_, pub_chassis_odometry_);
+    publishChassisOdometry(input, header.frame_id, base_frame_, header.stamp, pub_chassis_odometry_);
   }
 }
 
 void ScanToSensorFrameNode::updateRobotBaseOdometry() {
   while (rclcpp::ok()) {
     tf2::Transform input;
+    std_msgs::msg::Header header;
     {
       std::unique_lock<std::mutex> lock(robot_base_odom_mutex_);
       robot_base_odom_cv_.wait(lock, [this]() {
         return robot_base_odom_ready_ || !rclcpp::ok();
       });
+      if (!rclcpp::ok()) { return; }
+      input = tf_odom_to_robot_base_;
+      header = robot_base_header_;
+      robot_base_odom_ready_ = false;
     }
-    input = tf_odom_to_robot_base_;
-    robot_base_odom_ready_ = false;
-    if (!rclcpp::ok()) { return; }
-    publishRobotBaseOdometry(input, odom_frame_, robot_base_frame_, last_pcd_stamp_, pub_robot_base_odometry_);
+    publishRobotBaseOdometry(input, header.frame_id, robot_base_frame_, header.stamp, pub_robot_base_odometry_);
   }
 }
 
@@ -319,16 +357,20 @@ void ScanToSensorFrameNode::updateSensorScan() {
   while (rclcpp::ok()) {
     {
       sensor_msgs::msg::PointCloud2 input;
+      tf2::Transform odom_to_lidar;
       {
         std::unique_lock<std::mutex> lock(sensor_scan_mutex_);
         sensor_scan_cv_.wait(lock, [this]() {
           return sensor_scan_ready_ || !rclcpp::ok();
         });
+        if (!rclcpp::ok()) { return; }
+        // Copy the cloud and its pose while the producer is excluded. In
+        // particular, data/fields must not be resized during this copy.
+        input = in_;
+        odom_to_lidar = sensor_scan_odom_to_lidar_;
+        sensor_scan_ready_ = false;
       }
-      input = in_;
-      sensor_scan_ready_ = false;
-      if (!rclcpp::ok()) { return; }
-      pcl_ros::transformPointCloud(lidar_frame_, tf_odom_to_lidar_.inverse(), input, out_);
+      pcl_ros::transformPointCloud(lidar_frame_, odom_to_lidar.inverse(), input, out_);
     }
     pub_laser_cloud_->publish(out_);
   }

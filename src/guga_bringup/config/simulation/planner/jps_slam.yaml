@@ -25,8 +25,12 @@ planner_server:
 local_costmap:
   local_costmap:
     ros__parameters:
+      # 建图自举：首帧雷达地图形成前把未知空间视为自由空间，
+      # 否则控制器会因周围全是 NO_INFORMATION 而拒绝起步。
+      track_unknown_space: false
 
-      plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
+      # 局部滚动图不依赖尚不存在的全局静态图，只负责机器人周围即时避障。
+      plugins: ["obstacle_layer", "esdf_layer", "inflation_layer"]
 
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer
@@ -45,8 +49,12 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
+      track_unknown_space: false
 
-      plugins: ["static_layer", "obstacle_layer", "esdf_layer", "inflation_layer"]
+      # 建图模式没有预先存在的静态图；直接使用实时地形障碍。
+      # 否则 static_layer 会等待 slam_toolbox 的首张 /map，形成
+      # “不走就没有地图、没有地图就不能走”的启动死锁。
+      plugins: ["obstacle_layer", "esdf_layer", "inflation_layer"]
 
       esdf_layer:
         plugin: rog_map_layer::EsdfLayer

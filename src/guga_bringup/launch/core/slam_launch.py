@@ -10,6 +10,7 @@ from launch_ros.actions import LifecycleNode, Node
 from launch_ros.descriptions import ParameterFile
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
+from launch_ros.parameter_descriptions import ParameterValue
 from lifecycle_msgs.msg import Transition
 from nav2_common.launch import RewrittenYaml
 
@@ -24,6 +25,7 @@ def generate_launch_description():
     base_params_file = LaunchConfiguration("base_params_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
+    pcd_save = LaunchConfiguration("pcd_save")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
@@ -75,6 +77,12 @@ def generate_launch_description():
         "autostart",
         default_value="True",
         description="Automatically startup the nav2 stack",
+    )
+
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown in mapping mode",
     )
 
     declare_use_respawn_cmd = DeclareLaunchArgument(
@@ -152,7 +160,7 @@ def generate_launch_description():
         parameters=[
             configured_params,
             {"prior_pcd.enable": False},
-            {"pcd_save.pcd_save_en": True},
+            {"pcd_save.pcd_save_en": ParameterValue(pcd_save, value_type=bool)},
         ],
         arguments=["--ros-args", "--log-level", log_level],
     )
@@ -219,6 +227,7 @@ def generate_launch_description():
     ld.add_action(declare_base_params_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_autostart_cmd)
+    ld.add_action(declare_pcd_save_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
 

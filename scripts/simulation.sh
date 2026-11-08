@@ -2,6 +2,8 @@
 set -euo pipefail
 
 WS=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+GUGANAV_MODE="simulation"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/common.sh"
 if [ -z "${SIMULATION_SESSION_ID:-}" ]; then
   export SIMULATION_SESSION_ID="$$-${RANDOM:-0}"
   rm -f "/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
@@ -9,6 +11,7 @@ else
   export SIMULATION_SESSION_ID
 fi
 SIMULATION_SHUTDOWN_FILE="/tmp/guganav_simulation_shutdown_${SIMULATION_SESSION_ID}"
+GUGANAV_SHUTDOWN_FILE="$SIMULATION_SHUTDOWN_FILE"
 SIMULATION_CLEANUP_STARTED=0
 
 usage() {
@@ -22,6 +25,12 @@ Examples:
   scripts/simulation.sh m rmul_2025
   scripts/simulation.sh map rmul_2025
   scripts/simulation.sh nav rmuc_2025 planner:=jps controller:=mppi use_rviz:=False
+  scripts/simulation.sh nav rmul_2025 show_prior_pcd:=True
+
+Prior PCD visualization:
+  Enabled by default in navigation and forced off in mapping.
+  show_prior_pcd:=False
+      Disable publication in navigation mode.
 
 Planner (planner:=):
   planner:=jps         JPS global planner
@@ -47,153 +56,31 @@ controller (1-3).
 EOF
 }
 
-pause_if_interactive() {
-  if [ -t 0 ] && [ -t 1 ]; then
-    printf "\nPress Enter to close..."
-    read -r _
-  fi
-}
 
-source_setup() {
-  local setup_file=$1
-  if [ -f "$setup_file" ]; then
-    set +u
-    source "$setup_file"
-    set -u
-  fi
-}
 
-require_workspace_setup() {
-  if [ -z "${ROS_DISTRO:-}" ]; then
-    source_setup /opt/ros/humble/setup.bash
-  fi
 
-  if [ ! -f "$WS/install/setup.bash" ]; then
-    echo "Missing workspace setup: $WS/install/setup.bash" >&2
-    echo "Run colcon build before starting simulation." >&2
-    exit 1
-  fi
 
-  source_setup "$WS/install/setup.bash"
-  cd "$WS"
-}
-
-quote_command() {
-  printf "%q " "$@"
-}
-
-is_true() {
-  case "${1,,}" in
-    true | 1 | yes | on)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
 
 PLANNER_CHOICES="jps smac2d smachybrid"
 CONTROLLER_CHOICES="pid mppi mpc"
 
 SIMULATION_PARAMS_DIR="$WS/src/guga_bringup/config/simulation"
 
-validate_choice() {
-  local name=$1
-  local value=$2
-  local valid=$3
-  local choice
-  for choice in $valid; do
-    if [ "$choice" = "$value" ]; then
-      return 0
-    fi
-  done
-  echo "Invalid ${name}: '$value'. Valid values: $valid" >&2
-  return 1
-}
 
 select_planner() {
-  local selection
-
-  # stdout is captured by the caller, so use /dev/tty to detect and read an
-  # actual interactive terminal instead of checking stdout's terminal state.
-  if [ ! -r /dev/tty ]; then
-    printf 'jps'
-    return 0
-  fi
-
-  cat >&2 <<'EOF'
-
-Select global planner:
-  1) JPS (jps)
-  2) SmacPlanner2D (smac2d)
-  3) SmacPlannerHybrid (smachybrid)
-EOF
-  while true; do
-    printf 'Planner [1]: ' >&2
-    if ! read -r selection < /dev/tty; then
-      selection=1
-    fi
-    case "${selection:-1}" in
-      1)
-        printf 'jps'
-        return 0
-        ;;
-      2)
-        printf 'smac2d'
-        return 0
-        ;;
-      3)
-        printf 'smachybrid'
-        return 0
-        ;;
-      *)
-        echo "Please select 1, 2, or 3." >&2
-        ;;
-    esac
-  done
+  # 交互实现与 reality.sh 共用（scripts/lib/common.sh 的 select_profile）：
+  # 无可用终端时返回默认值，stdout 只输出结果，菜单走 stderr。
+  select_profile "Select global planner:" "Planner" "jps" \
+    "jps|JPS (jps)" \
+    "smac2d|SmacPlanner2D (smac2d)" \
+    "smachybrid|SmacPlannerHybrid (smachybrid)"
 }
 
 select_controller() {
-  local selection
-
-  # stdout is captured by the caller, so use /dev/tty to detect and read an
-  # actual interactive terminal instead of checking stdout's terminal state.
-  if [ ! -r /dev/tty ]; then
-    printf 'pid'
-    return 0
-  fi
-
-  cat >&2 <<'EOF'
-
-Select controller:
-  1) omni PID (pid)
-  2) MPPI (mppi)
-  3) MPC (mpc)
-EOF
-  while true; do
-    printf 'Controller [1]: ' >&2
-    if ! read -r selection < /dev/tty; then
-      selection=1
-    fi
-    case "${selection:-1}" in
-      1)
-        printf 'pid'
-        return 0
-        ;;
-      2)
-        printf 'mppi'
-        return 0
-        ;;
-      3)
-        printf 'mpc'
-        return 0
-        ;;
-      *)
-        echo "Please select 1, 2, or 3." >&2
-        ;;
-    esac
-  done
+  select_profile "Select controller:" "Controller" "pid" \
+    "pid|omni PID (pid)" \
+    "mppi|MPPI (mppi)" \
+    "mpc|MPC (mpc)"
 }
 
 # ────────────────────────────────────────────────────────────────
@@ -310,6 +197,7 @@ cleanup_simulation_processes() {
     "ign_sim_pointcloud_tool"
     "point_lio"
     "small_gicp"
+    "pcd_to_pointcloud"
     "scan_to_sensor_frame"
     "terrain_analysis"
     "controller_server"
@@ -375,18 +263,6 @@ cleanup_simulation_processes() {
     2>/dev/null || true
 }
 
-exit_with_launch_status() {
-  local status=$1
-
-  # 130=SIGINT(Ctrl-C)、143=SIGTERM：主动关闭信号，视为正常退出；
-  # 或者 SHUTDOWN_FILE 已创建（清理函数已执行）也视为主动关闭。
-  if [ "$status" -eq 130 ] || [ "$status" -eq 143 ] || \
-     { [ "$status" -ne 0 ] && [ -f "$SIMULATION_SHUTDOWN_FILE" ]; }; then
-    exit 0
-  fi
-
-  exit "$status"
-}
 
 install_simulation_cleanup_traps() {
   trap 'cleanup_simulation_processes' EXIT
@@ -407,7 +283,7 @@ wait_for_simulation_terminal_close() {
   fi
 }
 
-ensure_simulation_prior_pcd() {
+resolve_simulation_prior_pcd() {
   local world_arg=$1
   local prior_pcd_arg=${2:-}
   local source_pcd="$WS/src/guga_bringup/pcd/simulation/${world_arg}.pcd"
@@ -415,13 +291,20 @@ ensure_simulation_prior_pcd() {
 
   if [ -n "$prior_pcd_arg" ]; then
     if [ -f "$prior_pcd_arg" ]; then
+      printf '%s\n' "$prior_pcd_arg"
       return 0
     fi
     echo "Missing prior PCD file: $prior_pcd_arg" >&2
     return 1
   fi
 
-  if [ -f "$source_pcd" ] || [ -f "$install_pcd" ]; then
+  if [ -f "$source_pcd" ]; then
+    printf '%s\n' "$source_pcd"
+    return 0
+  fi
+
+  if [ -f "$install_pcd" ]; then
+    printf '%s\n' "$install_pcd"
     return 0
   fi
 
@@ -442,6 +325,10 @@ Use one of these options:
      scripts/simulation.sh nav $world_arg prior_pcd_file:=/path/to/${world_arg}.pcd
 EOF
   return 1
+}
+
+ensure_simulation_prior_pcd() {
+  resolve_simulation_prior_pcd "$@" >/dev/null
 }
 
 run_in_terminal() {
@@ -479,6 +366,7 @@ run_complete_simulation() {
   local world_arg=rmul_2025
   local slam_arg=False
   local prior_pcd_arg=""
+  local map_arg=""
 
   if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
     world_arg=$1
@@ -494,6 +382,9 @@ run_complete_simulation() {
         ;;
       prior_pcd_file:=*)
         prior_pcd_arg=${arg#prior_pcd_file:=}
+        ;;
+      map:=*)
+        map_arg=${arg#map:=}
         ;;
     esac
   done
@@ -598,6 +489,7 @@ if [ "$#" -gt 0 ] && [[ "$1" != *":="* ]]; then
 fi
 
 launch_args=()
+show_prior_pcd=""
 for arg in "$@"; do
   case "$arg" in
     world:=*)
@@ -606,17 +498,30 @@ for arg in "$@"; do
     slam:=*)
       slam=${arg#slam:=}
       ;;
+    show_prior_pcd:=*)
+      show_prior_pcd=${arg#show_prior_pcd:=}
+      ;;
     *)
       launch_args+=("$arg")
       ;;
   esac
 done
 
+if [ -z "$show_prior_pcd" ]; then
+  if is_true "$slam"; then
+    show_prior_pcd=False
+  else
+    show_prior_pcd=True
+  fi
+fi
+
+prior_pcd_arg=""
 if [ "$slam" = "False" ]; then
-  prior_pcd_arg=""
   for arg in "${launch_args[@]}"; do
     if [[ "$arg" == prior_pcd_file:=* ]]; then
       prior_pcd_arg=${arg#prior_pcd_file:=}
+    elif [[ "$arg" == map:=* ]]; then
+      map_arg=${arg#map:=}
     fi
   done
   ensure_simulation_prior_pcd "$world" "$prior_pcd_arg"
@@ -624,12 +529,34 @@ fi
 
 require_workspace_setup
 
+case "${show_prior_pcd,,}" in
+  true | 1 | yes | on | false | 0 | no | off)
+    ;;
+  *)
+    echo "Invalid show_prior_pcd: '$show_prior_pcd'. Use True or False." >&2
+    exit 2
+    ;;
+esac
+
+if is_true "$slam" && is_true "$show_prior_pcd"; then
+  echo "Ignoring show_prior_pcd in mapping mode."
+  show_prior_pcd=False
+fi
+
+if is_true "$show_prior_pcd"; then
+  prior_pcd_file=$(resolve_simulation_prior_pcd "$world" "$prior_pcd_arg")
+  echo "Prior PCD visualization enabled: $prior_pcd_file"
+  echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
+fi
+
 install_simulation_cleanup_traps
 set +e
 ros2 launch guga_bringup simulation_launch.py \
   world:="$world" \
   slam:="$slam" \
+  show_prior_pcd:="$show_prior_pcd" \
   "${launch_args[@]}"
 launch_status=$?
 set -e
+
 exit_with_launch_status "$launch_status"

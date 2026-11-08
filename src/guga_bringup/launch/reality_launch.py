@@ -32,6 +32,11 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
     use_decision = LaunchConfiguration("use_decision")
+    show_prior_pcd = LaunchConfiguration("show_prior_pcd")
+    pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_path = LaunchConfiguration("pcd_save_path")
+    pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
+    pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     # ── 参数分层（与 simulation 同机制）：planner/controller 选择 → 三文件合并 ──
     planner = LaunchConfiguration("planner")
     controller = LaunchConfiguration("controller")
@@ -54,8 +59,8 @@ def generate_launch_description():
 
     declare_world_cmd = DeclareLaunchArgument(
         "world",
-        default_value="rmul_2024",
-        description="Select world: 'rmul_2024' or 'rmuc_2024' (map file share the same name as the this parameter)",
+        default_value="floor2",
+        description="Select world: 'floor2' (map file share the same name as the this parameter)",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
@@ -97,33 +102,46 @@ def generate_launch_description():
         ),
     )
     declare_planner_cmd = DeclareLaunchArgument(
-        "planner", default_value="jps", choices=["jps", "smac2d", "smachybrid"],
-        description="Global planner: jps, smac2d, or smachybrid",
+        "planner", default_value="smac2d", choices=["jps", "smac2d"],
+        description="Global planner: jps or smac2d (config/reality/planner/)",
     )
     declare_controller_cmd = DeclareLaunchArgument(
-        "controller", default_value="mppi", choices=["pid", "mppi", "mpc"],
-        description="Controller: pid, mppi, or mpc",
+        "controller", default_value="mppi", choices=["pid", "mppi"],
+        description="Controller: pid or mppi (config/reality/controller/)",
     )
 
-    def default_params_file(which):
-        return PythonExpression(
-            [
-                "'", params_file, "' != '' and '", params_file,
-                "' or '", os.path.join(bringup_dir, "config", "reality", which), "'",
-            ]
-        )
+    def reality_params_file(which):
+        return os.path.join(bringup_dir, "config", "reality", which)
+
+    # 单文件覆盖模式未启用（见 declare_params_file_cmd 的说明），三文件合并固定生效：
+    # base 固定，controller/planner 两层的文件由 controller:=/planner:= 决定，
+    # 否则选了 pid/jps 却仍然加载 mppi/smac2d 的参数。
     params_file = ""
     declare_base_params_file_cmd = DeclareLaunchArgument(
-        "base_params_file", default_value=default_params_file("base.yaml"),
+        "base_params_file", default_value=reality_params_file("base.yaml"),
         description="Common params file (merge base layer)",
     )
     declare_controller_params_file_cmd = DeclareLaunchArgument(
-        "controller_params_file", default_value=default_params_file("controller/mppi.yaml"),
-        description="Controller-diff params file (pid default, mppi available)",
+        "controller_params_file",
+        default_value=PythonExpression(
+            [
+                "'", controller, "' == 'mppi' and '",
+                reality_params_file("controller/mppi.yaml"),
+                "' or '", reality_params_file("controller/pid.yaml"), "'",
+            ]
+        ),
+        description="Controller-diff params file, chosen by controller:= (mppi|pid)",
     )
     declare_planner_params_file_cmd = DeclareLaunchArgument(
-        "planner_params_file", default_value=default_params_file("planner/jps.yaml"),
-        description="Planner-diff params file",
+        "planner_params_file",
+        default_value=PythonExpression(
+            [
+                "'", planner, "' == 'jps' and '",
+                reality_params_file("planner/jps.yaml"),
+                "' or '", reality_params_file("planner/smac2d.yaml"), "'",
+            ]
+        ),
+        description="Planner-diff params file, chosen by planner:= (jps|smac2d)",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -172,6 +190,49 @@ def generate_launch_description():
         "use_decision",
         default_value="False",
         description="Whether to start simple_decision",
+    )
+
+    declare_show_prior_pcd_cmd = DeclareLaunchArgument(
+        "show_prior_pcd",
+        default_value="True",
+        description="Publish the prior PCD in navigation; forced off in mapping mode",
+    )
+
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown in both modes",
+    )
+
+    declare_pcd_save_path_cmd = DeclareLaunchArgument(
+        "pcd_save_path",
+        default_value=[
+            TextSubstitution(text=os.path.join(bringup_dir, "pcd", "reality", "")),
+            world,
+            TextSubstitution(text=".pcd"),
+        ],
+        description=(
+            "Navigation-mode PCD output path; defaults to the prior map path "
+            "pcd/reality/<world>.pcd and overwrites it on shutdown"
+        ),
+    )
+
+    declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
+        "pcd_save_trigger_topic",
+        default_value="gicp_lost",
+        description=(
+            "Bool topic used when pcd_save_require_lost is True; saving starts "
+            "after it receives true"
+        ),
+    )
+
+    declare_pcd_save_require_lost_cmd = DeclareLaunchArgument(
+        "pcd_save_require_lost",
+        default_value="True",
+        description=(
+            "Wait for the GICP LOST trigger before saving navigation PCD; "
+            "False saves from startup"
+        ),
     )
 
     # Create our own temporary YAML files that include substitutions
@@ -244,6 +305,11 @@ def generate_launch_description():
             "slam": slam,
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
+            "show_prior_pcd": show_prior_pcd,
+            "pcd_save": pcd_save,
+            "pcd_save_path": pcd_save_path,
+            "pcd_save_require_lost": pcd_save_require_lost,
+            "pcd_save_trigger_topic": pcd_save_trigger_topic,
             "use_sim_time": use_sim_time,
             "controller": controller,
             "planner": planner,
@@ -302,6 +368,11 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
     ld.add_action(declare_use_decision_cmd)
+    ld.add_action(declare_show_prior_pcd_cmd)
+    ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_path_cmd)
+    ld.add_action(declare_pcd_save_trigger_topic_cmd)
+    ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     # Add the actions to launch all of the navigation nodes

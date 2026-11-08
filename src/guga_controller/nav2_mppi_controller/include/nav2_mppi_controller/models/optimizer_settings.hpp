@@ -22,19 +22,52 @@ namespace mppi::models
 {
 
 /**
+ * @struct mppi::models::AccelDeltas
+ * @brief 加速度约束换算成每个时间步允许的速度增量（参数或控制周期变化时算好）
+ *
+ * 两套值：`*_first` 用真实控制周期（t=0 的可行性），`*_model` 用预测步长
+ * model_dt（t>=1）。某侧留 0 时对应值为 ±inf，表示该侧不限制。
+ */
+struct AccelDeltas
+{
+  // 第 0 步（真实控制周期）允许的纵向速度增量。
+  float vx_max_first{0.0f};
+  float vx_min_first{0.0f};
+  // 第 0 步允许的横向速度增量（仅全向底盘使用）。
+  float vy_max_first{0.0f};
+  float vy_min_first{0.0f};
+  // 第 0 步允许的偏航角速度增量。
+  float wz_max_first{0.0f};
+  // 第 1 步起（预测步长 model_dt）允许的纵向速度增量。
+  float vx_max_model{0.0f};
+  float vx_min_model{0.0f};
+  // 第 1 步起允许的横向速度增量。
+  float vy_max_model{0.0f};
+  float vy_min_model{0.0f};
+  // 第 1 步起允许的偏航角速度增量。
+  float wz_max_model{0.0f};
+};
+
+/**
  * @struct mppi::models::OptimizerSettings
  * @brief 优化器使用的约束、采样规模和迭代设置
  */
 struct OptimizerSettings
 {
-  // 参数配置的原始速度约束，不受运行时限速影响。
-  models::ControlConstraints base_constraints{0, 0, 0, 0};
-  // 当前生效的速度约束，可能被运行时限速修改。
-  models::ControlConstraints constraints{0, 0, 0, 0};
+  // 参数配置的原始速度/加速度约束，不受运行时限速影响。
+  models::ControlConstraints base_constraints{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  // 当前生效的约束，可能被运行时限速修改。
+  models::ControlConstraints constraints{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  // 由 constraints 与控制周期预先换算好的每步速度增量上限。
+  models::AccelDeltas accel_deltas{};
   // 三个控制维度的采样噪声标准差。
   models::SamplingStd sampling_std{0, 0, 0};
   // 相邻预测状态之间的积分时间间隔。
   float model_dt{0};
+  // 控制周期 1/controller_frequency；t=0 的加速度可行性用它而不是 model_dt。
+  float controller_period{0};
+  // Savitzky-Golay 滤波阶数：1 = 9 点滑动均值（更平滑），2 = 二次九点（默认）。
+  unsigned int sgf_order{2u};
   // 轨迹成本转换为权重时使用的温度参数。
   float temperature{0};
   // 控制扰动成本的正则化系数。

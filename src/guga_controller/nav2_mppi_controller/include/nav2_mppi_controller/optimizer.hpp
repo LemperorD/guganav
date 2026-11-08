@@ -160,9 +160,36 @@ protected:
   void generateNoisedTrajectories();
 
   /**
-   * @brief 对控制序列应用底盘硬约束
+   * @brief 在加噪之前把控制序列第 0 项约束到"从当前速度出发一步可达"的范围内
+   *
+   * 移植自上游 nav2 PR #6072：迭代间可行性。只在启用加速度约束时生效。
+   */
+  void applyControlSequenceInterIterationConstraints();
+
+  /**
+   * @brief 对控制序列应用底盘硬约束（速度上限 + 加速度可行性）
+   *
+   * 加速度约束的起点是**上一周期下发的指令**（`last_command_vel_`），不是
+   * `state_.speed`。`state_.speed` 来自 odom（实车约 50 Hz、仿真约 10 Hz），
+   * 相对 30 Hz 控制周期仍有半拍到数拍的延迟；若命令也从它起夹，减速命令会被
+   * "钉"在陈旧速度上（|ax_min| 越小越明显），表现为到点停不住/过冲。
+   * 预测初值仍用 `state_.speed`，两者解耦。
    */
   void applyControlSequenceConstraints();
+
+  /**
+   * @brief 是否启用了任一轴的加速度约束
+   * @return 返回值: 任一加速度上限非零时为 true；全零表示保持移植前行为
+   */
+  bool accelConstraintsEnabled() const;
+
+  /**
+   * @brief 按当前约束与控制周期重算每步允许的速度增量（`AccelDeltas`）
+   *
+   * 只在参数或控制周期变化时调用；`applyControlSequenceInterIterationConstraints()`
+   * 与 `applyControlSequenceConstraints()` 直接读缓存，避免每轮优化重复换算。
+   */
+  void updateAccelDeltas();
 
   /**
    * @brief 更新状态张量内每个时间步的预测速度
@@ -251,6 +278,12 @@ protected:
   models::Trajectories generated_trajectories_;  ///< 本轮生成的候选轨迹。
   models::Path path_;  ///< 当前局部参考路径张量。
   xt::xtensor<float, 1> costs_;  ///< 各候选轨迹的累计成本。
+  /// 上一周期实际下发的速度指令，用于测量滞后补偿（上游 PR #6072）。
+  geometry_msgs::msg::Twist last_command_vel_;
+  /// 是否已有上一周期指令；reset 后首拍用实测速度播种，避免从 0 起爬。
+  bool has_last_command_{false};
+  /// 是否每 2 s 打印一次单周期耗时拆解（参数 <plugin>.debug_timing，默认 false）
+  bool debug_timing_{false};
 
   /// 传递给评分器的共享数据，其中包含对以上成员的引用。
   CriticData critics_data_ =

@@ -1,5 +1,4 @@
-#ifndef NONROTATING_VEL_TRANSFORM__NONROTATING_VEL_TRANSFORM_HPP_
-#define NONROTATING_VEL_TRANSFORM__NONROTATING_VEL_TRANSFORM_HPP_
+#pragma once
 
 #include <memory>
 #include <mutex>
@@ -51,6 +50,14 @@ private:
   void chassisModeCallback(std_msgs::msg::UInt8::SharedPtr msg);
   void updateGimbalYaw();
   void publishTransform();
+  /**
+   * @brief 按 publish_frequency 定时重发最新一条速度指令（无损传输）
+   *
+   * 只做旋转补偿，不做任何再次限速/滤波：控制器（MPPI）的预测基于它自己下发的
+   * 指令序列，控制器之后任何改写都会让实际执行偏离预测。超过 cmd_vel_timeout
+   * 没有新指令时下发 0 速度（而不是继续重发最后一条非零指令）。
+   */
+  void publishCommand();
   /** @brief littleTES/goHome 下用 spin 外推底盘 yaw，避免 odom 低频导致补偿跳变。 */
   double estimateRobotBaseAngle() const;
   geometry_msgs::msg::Twist transformVelocity(
@@ -75,6 +82,9 @@ private:
 
   rclcpp::TimerBase::SharedPtr tf_sub_timer_;
   rclcpp::TimerBase::SharedPtr tf_pub_timer_;
+  rclcpp::TimerBase::SharedPtr cmd_vel_pub_timer_;
+  /// enable_spin 的动态参数回调句柄（不保存则回调会被注销）
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
 
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -87,11 +97,22 @@ private:
   std::string input_cmd_vel_topic_;
   std::string output_cmd_vel_topic_;
   std::string vis_cmd_vel_topic_;
-  std::string vis_frame_id_;
   double vis_scale_{1.0};
   std::string chassis_mode_topic_;
   float spin_speed_;
+  double correct_ratio_{1.2};
   bool output_in_chassis_frame_{false};
+  /// 是否发布 cmd_vel 可视化 Marker（RViz 箭头）。false 时完全不构造 Marker，
+  /// 已有 Marker 会因 0.5 s lifetime 自动消失；可运行时 ros2 param set 切换。
+  bool enable_vis_{true};
+  /**
+   * @brief 是否允许本节点改写输出角速度（叠加底盘自旋）
+   *
+   * false 时 angular.z 原样透传（只做坐标系/旋转补偿，不改角速度），用于把
+   * "自旋叠加"从整条链里摘出来做 A/B（例如排查与转向耦合的抖动/过冲）。
+   * 不影响 TF（robot_base_frame -> nonrotating_robot_base_frame）与线速度的补偿。
+   */
+  bool enable_spin_{true};
   uint8_t chassis_mode_{littleTES};
   double chassis_followed_yaw_ = 0.0;
 
@@ -100,8 +121,11 @@ private:
   double current_robot_base_angle_{0.0};
   rclcpp::Time last_odom_stamp_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_controller_activate_time_;
+  // 最新指令的到达时刻与重发配置（见 publishCommand()）
+  rclcpp::Time last_cmd_vel_time_{0, 0, RCL_ROS_TIME};
+  double publish_frequency_{50.0};
+  double cmd_vel_timeout_{0.5};
+  size_t vis_pub_counter_{0};
 };
 
 }  // namespace nonrotating_vel_transform
-
-#endif  // NONROTATING_VEL_TRANSFORM__NONROTATING_VEL_TRANSFORM_HPP_

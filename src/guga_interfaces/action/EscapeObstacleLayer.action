@@ -1,0 +1,19 @@
+# 从当前位姿朝"最省距离离开障碍/膨胀硬区"的方向移动，
+# 直到车心所在栅格脱离 cost >= 253 的膨胀带并再多走 exit_clearance，
+# 或触及下面任一上限（此时行为返回 FAILED，而不是谎报成功）。
+
+# 最大行走距离（m）。<= 0 时取节点参数 default_max_distance。
+float32 max_distance
+
+# 行走速度（m/s）。<= 0 时取节点参数 default_speed。
+float32 speed
+
+# 时间上限（s）。<= 0 时取节点参数 default_time_allowance。
+float32 time_allowance
+---
+# 结果
+builtin_interfaces/Duration total_elapsed_time
+---
+# 反馈
+float32 distance_traveled
+float32 current_cost

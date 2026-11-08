@@ -2,7 +2,7 @@
 
 #include "terrain_analysis/per_frame_height_map.hpp"
 #include "terrain_analysis/persistent_voxel_map.hpp"
-#include "guga_common/geometry.hpp"
+#include "geometry.hpp"
 
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/node.hpp>

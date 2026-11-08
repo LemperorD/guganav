@@ -25,9 +25,9 @@ namespace jps_planner {
   struct SearchNode {
     int x{};
     int y{};
-    double g{INF_COST};  // 从起点到此节点的实际代价
-    double h{INF_COST};  // 从此节点到终点的启发式估计
-    double f{INF_COST};  // f = g + h (A* 排序键)
+    double g{INF_COST};                 // 从起点到此节点的实际代价
+    double h{INF_COST};                 // 从此节点到终点的启发式估计
+    double f{INF_COST};                 // f = g + h (A* 排序键)
     const SearchNode* parent{nullptr};  // 指向最优路径上的前驱节点
     bool closed{false};                 // 是否已从开放列表中删去
   };
@@ -36,8 +36,8 @@ namespace jps_planner {
   struct JPSConfig {
     double w_euc_cost{1.0};         // 欧几里得距离代价权重
     double w_traversal_cost{10.0};  // 通行代价权重 (Theta* 缩放后)
-    double w_heuristic_cost{1.0};  // 启发式代价权重 (控制贪心程度)
-    bool allow_unknown{false};     // 是否允许穿越未知空间 (cost=255)
+    double w_heuristic_cost{1.0};   // 启发式代价权重 (控制贪心程度)
+    bool allow_unknown{false};      // 是否允许穿越未知空间 (cost=255)
   };
 
   /** @brief JPS 搜索过程中收集的调试数据 (仅 debug_enabled=true 时启用)。 */

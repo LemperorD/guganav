@@ -28,6 +28,10 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
     use_ui = LaunchConfiguration("use_ui")
+    show_prior_pcd = LaunchConfiguration("show_prior_pcd")
+    pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
+    pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
     # 显式 params_file:= 时退化为单文件（三份都指向它）
     planner = LaunchConfiguration("planner")
@@ -63,7 +67,7 @@ def generate_launch_description():
     declare_world_cmd = DeclareLaunchArgument(
         "world",
         default_value="rmuc_2025",
-        description="Select world: 'rmul_2024' or 'rmuc_2024' or 'rmul_2025' or 'rmuc_2025' or 'rmuc_2026' or 'rmul_2026'(map file share the same name as this parameter)",
+        description="Select world: 'rmul_2024' or 'rmuc_2024' or 'rmul_2025' or 'rmuc_2025' or 'rmuc_2026' or 'rmul_2026' or 'rmul_2027' or 'room_207'(map file share the same name as this parameter)",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
@@ -125,7 +129,10 @@ def generate_launch_description():
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
         default_value="",
-        description="Single params file override (disables 3-file merge)",
+        description=(
+            "Single params file override (disables 3-file merge); "
+            "该文件需自带 nonrotating_vel_transform 段，否则该节点拿不到话题名"
+        ),
     )
     declare_base_params_file_cmd = DeclareLaunchArgument(
         "base_params_file",
@@ -208,6 +215,36 @@ def generate_launch_description():
         description="Whether to start the guga_ui_pangolin process",
     )
 
+    declare_show_prior_pcd_cmd = DeclareLaunchArgument(
+        "show_prior_pcd",
+        default_value="True",
+        description="Publish the prior PCD in navigation; forced off in mapping mode",
+    )
+
+    declare_pcd_save_cmd = DeclareLaunchArgument(
+        "pcd_save",
+        default_value="True",
+        description="Save accumulated scans to point_lio/PCD on shutdown in both modes",
+    )
+
+    declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
+        "pcd_save_trigger_topic",
+        default_value="gicp_lost",
+        description=(
+            "Bool topic used when pcd_save_require_lost is True; saving starts "
+            "after it receives true"
+        ),
+    )
+
+    declare_pcd_save_require_lost_cmd = DeclareLaunchArgument(
+        "pcd_save_require_lost",
+        default_value="True",
+        description=(
+            "Wait for the GICP LOST trigger before saving navigation PCD; "
+            "False saves from startup"
+        ),
+    )
+
     start_velodyne_convert_tool = Node(
         package="ign_sim_pointcloud_tool",
         executable="ign_sim_pointcloud_tool_node",
@@ -238,6 +275,10 @@ def generate_launch_description():
             "slam": slam,
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
+            "show_prior_pcd": show_prior_pcd,
+            "pcd_save": pcd_save,
+            "pcd_save_require_lost": pcd_save_require_lost,
+            "pcd_save_trigger_topic": pcd_save_trigger_topic,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
             "base_params_file": base_params_file,
@@ -276,6 +317,10 @@ def generate_launch_description():
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_ui_cmd)
+    ld.add_action(declare_show_prior_pcd_cmd)
+    ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_trigger_topic_cmd)
+    ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_use_respawn_cmd)
 
     ld.add_action(start_velodyne_convert_tool)

@@ -145,9 +145,10 @@ namespace terrain_analysis {
     }
     double minimum_z = elevations[0];
     double quantile_z = elevations[quantile_index];
-    voxel_elev_[cell] = config_.limit_ground_lift ? std::min(
-                            quantile_z, minimum_z + config_.max_ground_lift)
-                                                  : quantile_z;
+    voxel_elev_[cell] = config_.limit_ground_lift
+                            ? std::min(quantile_z,
+                                       minimum_z + config_.max_ground_lift)
+                            : quantile_z;
   }
 
   void PerFrameHeightMap::elevateByMinimum(int cell) {

@@ -20,7 +20,6 @@
   - [仓库结构](#仓库结构)
   - [环境要求](#环境要求)
   - [安装依赖](#安装依赖)
-    - [海康 MVS SDK](#海康-mvs-sdk)
     - [公开依赖与工具](#公开依赖与工具)
     - [准备仿真 PCD 地图](#准备仿真-pcd-地图)
   - [构建](#构建)
@@ -45,7 +44,7 @@
 - 支持 SLAM、地图加载、Point-LIO 里程计和 small_gicp 重定位。
 - 包含 JPS 全局规划、B-spline 轨迹优化和 Nav2 自定义插件。
 - 提供全向 PID Pure Pursuit 控制器和 acados MPC 控制器。
-- 集成 Livox 雷达、串口通信、手柄调试和工业相机接口。
+- 集成 Livox 雷达与串口通信。
 - 提供 Gazebo/RMOSS 仿真资源、点云适配工具和 RViz 配置。
 - 配置 pre-commit 与核心包测试，覆盖地形分析、控制、决策和 JPS 模块。
 
@@ -57,7 +56,7 @@ guganav/
 │   ├── guga_bringup/        # 实车/仿真 launch、Nav2 参数、地图、RViz 配置
 │   ├── guga_interfaces/     # 自定义 msg/srv/action
 │   ├── guga_description/    # 机器人 URDF/Xacro/SDF 相关描述
-│   ├── guga_driver/         # 雷达、串口、相机、手柄等驱动
+│   ├── guga_driver/         # 雷达与串口驱动
 │   ├── guga_perception/     # 地形分析、点云转换、代价地图层
 │   ├── guga_localization/   # Point-LIO 和 GICP 重定位
 │   ├── guga_planner/        # Nav2 插件、JPS、B-spline 优化
@@ -65,7 +64,7 @@ guganav/
 │   ├── guga_decision/       # 决策节点和行为树相关代码
 │   ├── guga_sim/            # Gazebo/RMOSS 仿真资源与工具
 │   └── guga_ui*/            # UI 模块和历史 UI 代码
-├── scripts/                 # 构建、仿真、建图、测试、提交辅助脚本
+├── scripts/                 # 构建、仿真、实车启动、调参、测试、提交辅助脚本
 ├── docs/                    # 编码规范、测试诊断、性能测试、重构验证
 ├── autostart/               # 自启动相关配置
 ├── rosbag/                  # 本地 rosbag 数据目录
@@ -87,7 +86,6 @@ guganav/
 | 依赖 | 用途 |
 | --- | --- |
 | Livox SDK / `livox_ros_driver2` | Livox 雷达驱动 |
-| 海康 MVS SDK | `hik_driver` 工业相机驱动 |
 | acados | `mpc_controller` 的 MPC 求解器 |
 | Pangolin / OpenGL | Pangolin UI 或历史 UI 模块 |
 
@@ -106,42 +104,9 @@ python3 -m pip install --user -e ~/tools/acados/interfaces/acados_template
 
 ## 安装依赖
 
-### 海康 MVS SDK
-
-`hik_driver` 直接依赖海康/Hikrobot MVS SDK，先准备 SDK，再执行仓库的一键安装脚本。
-从海康机器视觉下载中心下载 Linux 版 MVS SDK：
-
-```text
-https://www.hikrobotics.com/en/machinevision/service/download/
-```
-
-默认安装或解压到 `/opt/MVS`，并确认头文件和驱动库存在：
-
-```bash
-test -f /opt/MVS/include/MvCameraControl.h
-test -e /opt/MVS/lib/64/libMvCameraControl.so
-sudo ldconfig
-```
-
-如果 SDK 位于其他目录，可以让安装脚本创建 `/opt/MVS` 软链接：
-
-```bash
-cd ~/guganav
-INSTALL_HIK_MVS=1 HIK_MVS_SOURCE_DIR=/实际/MVS/目录 \
-  bash scripts/ci/install_deps_humble.sh
-```
-
-也可以在安装和构建时都指定 SDK 路径，不创建软链接：
-
-```bash
-cd ~/guganav
-HIK_MVS_ROOT=/实际/MVS/目录 bash scripts/ci/install_deps_humble.sh
-HIK_MVS_ROOT=/实际/MVS/目录 scripts/colconBuild.sh
-```
-
 ### 公开依赖与工具
 
-准备好 MVS SDK 后，使用仓库脚本安装公开 apt/rosdep 依赖和 acados：
+使用仓库脚本安装公开 apt/rosdep 依赖和 acados：
 
 ```bash
 cd ~/guganav
@@ -243,6 +208,16 @@ scripts/simulation.sh nav rmul_2025
 scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 ```
 
+导航模式默认在 RViz 中显示当前场景的先验 PCD：
+
+```bash
+scripts/simulation.sh nav rmul_2025
+```
+
+导航时可通过 `show_prior_pcd:=False` 关闭；建图模式始终强制关闭。开启时
+`small_gicp_relocalization` 会把已经转换到 `odom` 的先验地图发布为 `/cloud_pcd`，
+RViz 再通过 `map -> odom` 显示，避免把雷达里程计坐标误标成 `map`。
+
 ### 仿真建图
 
 ```bash
@@ -254,30 +229,73 @@ scripts/simulation.sh map rmul_2025
 
 ```bash
 cd ~/guganav
-source install/setup.bash
-ros2 launch guga_bringup reality_launch.py
+scripts/reality.sh nav
+# 等价的原始入口
+# source install/setup.bash
+# ros2 launch guga_bringup reality_launch.py
 ```
+
+实车导航模式同样默认显示先验点云：
+
+```bash
+scripts/reality.sh nav floor2
+```
+
+导航时可通过 `show_prior_pcd:=False` 关闭；建图模式始终强制关闭。也可通过
+`prior_pcd_file:=/path/to/map.pcd` 指定其他 PCD。
 
 ### 实车建图
 
 ```bash
 cd ~/guganav
-scripts/map.sh
+scripts/reality.sh map
 ```
 
 ### 导航与决策联调
 
 ```bash
 cd ~/guganav
-scripts/nav_decision.sh
+scripts/reality.sh nav use_decision:=true
 ```
 
 ### 保存地图
 
+建图结束后用 `map_saver` 保存到 `src/guga_bringup/map/reality/`：
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f src/guga_bringup/map/reality/<world>
+```
+
+Point-LIO 的点云会在 `Ctrl-C` 正常退出时自动保存。导航模式默认**只有在 GICP 进入
+LOST 后才开始累积**：`small_gicp_relocalization` 以 1 Hz 在 `gicp_lost`
+（`std_msgs/Bool`，`true` 表示 LOST）发布状态，Point-LIO 收到 `true` 后才会开启保存。
+
+- 实车导航：保存到 `src/guga_bringup/pcd/reality/<world>.pcd`，与启动时加载的
+  先验地图同名，**会覆盖该先验地图**；首次使用前建议先备份。正常定位、从未 LOST
+  时不会覆盖。
+- 实车建图、仿真导航/建图：保存到
+  `src/guga_localization/point_lio/PCD/scans_<时间戳>.pcd`；其中导航模式同样需要
+  LOST 触发，建图模式从启动即保存。
+
+可通过 `pcd_save:=False` 关闭（例如长时间运行、不想占用内存时），实车导航也可用
+`pcd_save_path:=/path/to/xxx.pcd` 自定义输出路径。传入
+`pcd_save_require_lost:=False` 可恢复“启动即保存”的旧行为：
+
+```bash
+scripts/reality.sh nav floor2 pcd_save:=False
+scripts/simulation.sh nav rmul_2025 pcd_save:=False
+scripts/reality.sh nav floor2 pcd_save_require_lost:=False
+```
+
+### 在线调参
+
 ```bash
 cd ~/guganav
-scripts/save_map.sh
+scripts/paramview.sh            # 默认 controller_server 的 FollowPath（mppi 参数表）
+scripts/paramview.sh --profile pid --mode simulation
 ```
+
+参数表在 `scripts/paramview/params_list/`，保存时写回 `src/guga_bringup/config/` 的三层 yaml。
 
 ## Point-LIO
 
@@ -305,6 +323,11 @@ ros2 launch point_lio point_lio.launch.py \
 内部流程和已知问题见
 [`src/guga_localization/point_lio/ARCHITECTURE.md`](src/guga_localization/point_lio/ARCHITECTURE.md)。
 
+`registered_scan` 带有可配置的 odom 系 Z 向滤波
+（`output_frame.z_filter.{enable,min_z,max_z}`）；该滤波只作用于供感知和定位使用的
+项目约定点云，不改变 Point-LIO 原始 `cloud_registered`。PCD 保存也会使用同一组
+odom 高度阈值筛选点，但保存的 PCD 坐标仍保持在 Point-LIO 的 IMU body 世界系。
+
 常用 launch 参数：
 
 | 参数 | 说明 |
@@ -315,6 +338,10 @@ ros2 launch point_lio point_lio.launch.py \
 | `use_communication:=True|False` | 是否启动串口通信 |
 | `use_ui:=True|False` | 是否启动 UI |
 | `use_robot_state_pub:=True|False` | 是否启动 robot_state_publisher |
+| `pcd_save:=True|False` | 是否在导航/建图退出时保存累积 PCD（默认 True） |
+| `pcd_save_path:=/path/x.pcd` | 实车导航 PCD 输出路径（默认 `pcd/reality/<world>.pcd`） |
+| `pcd_save_trigger_topic:=gicp_lost` | 导航 PCD 保存的 LOST 触发话题 |
+| `pcd_save_require_lost:=True|False` | 是否等待 LOST 后再保存（默认 True；False 启动即保存） |
 
 ## 测试与检查
 
@@ -326,6 +353,7 @@ scripts/pre-commit/run_pid_tests.sh
 scripts/pre-commit/run_simple_decision_tests.sh
 scripts/pre-commit/run_jps_tests.sh
 scripts/pre-commit/run_mppi_tests.sh
+scripts/pre-commit/run_nonrotating_tests.sh
 ```
 
 手动运行 colcon 测试：

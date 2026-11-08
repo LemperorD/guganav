@@ -16,7 +16,28 @@ SMBU PolarBear Team robot description package for RoboMaster 2025.
 
 - [simulation_robot](./resource/xmacro/simulation_robot.sdf.xmacro)
 
-    搭载云台相机 industrial_camera 和激光雷达 rplidar_a2 和 Livox mid360，其中相机与 gimbal_pitch 轴固连，mid360 倾斜侧放与 chassis 固连。
+    仿真继续加载自己的机器人描述，保持现有模型和关节关系不变。模型中的
+    `front_mid360` 安装值与实车一致；Point-LIO、`scan_to_sensor_frame` 和
+    small_gicp 通过显式外参统一坐标系，不再通过替换仿真模型来对齐 TF。
+
+    仿真安装尺寸以 `buaa2026_sentry_robot` 为准：`base_footprint -> chassis`
+    高度为 0.123 m；`chassis -> front_mid360` 的 xyz 为 `[0.225, 0, 0.107]` m，
+    rpy 为 `[-10, 0, -90]` 度。合成后的雷达高度为 0.230 m。
+    云台 yaw/pitch 安装高度分别为 0.026/0.355 m。
+
+    MID360 模型中的点云原点与 `front_mid360` 重合，IMU 位置对应实车
+    `extrinsic_T = [-0.011, -0.02329, 0.04412]`（LiDAR 到 IMU）。
+    仿真 Point-LIO 的重力方向也与实车配置一致，按仿真 IMU 单位归一到
+    9.81 m/s²；`acc_norm` 仍为 9.81，实车为 1.0，不能直接复制该单位参数。
+
+    修改模型后需重启 Gazebo，并重新生成配套 PCD 和栅格地图。
+    旧安装配置生成的地图不会自动转换。重新安装资源与启动建图：
+
+    ```bash
+    colcon build --symlink-install --packages-select pb2025_robot_description guga_bringup
+    source install/setup.bash
+    scripts/simulation.sh map rmul_2026
+    ```
 
     ![sentry](https://raw.githubusercontent.com/LihanChen2004/picx-images-hosting/master/sentry_description.1sf3yc69kr.webp)
 

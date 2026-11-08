@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
 
   const guga_common::Point3d lidar_position{0.0, 0.0, 0.0};
   const bool ghost_mode = ghost_frame >= 0;
-  const auto frame = makeFrame(ghost_mode);  // 幽灵场景下含 4.1 m 方块
+  const auto frame = makeFrame(ghost_mode);      // 幽灵场景下含 4.1 m 方块
   const auto frame_no_ghost = makeFrame(false);  // 方块消失后的帧
   pcl::PointCloud<pcl::PointXYZI> collected;
 

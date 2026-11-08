@@ -4,4 +4,9 @@
 	    <description>An enhanced back_up action that move toward free space.</description>
 	  </class>
 	</library>
+	<library path="pb_escape_obstacle_layer_behavior">
+	  <class name="pb_nav2_behaviors/EscapeObstacleLayer" type="pb_nav2_behaviors::EscapeObstacleLayer" base_class_type="nav2_core::Behavior">
+	    <description>Move away from the inflated obstacle layer until the robot is out of cost >= 253, with geometry-driven distance instead of a fixed backup distance.</description>
+	  </class>
+	</library>
 </class_libraries>

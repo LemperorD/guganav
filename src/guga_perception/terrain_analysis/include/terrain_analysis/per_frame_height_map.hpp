@@ -2,7 +2,7 @@
 
 #include "terrain_analysis/config.hpp"
 #include "terrain_analysis/grid.hpp"
-#include "guga_common/geometry.hpp"
+#include "geometry.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

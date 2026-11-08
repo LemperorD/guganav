@@ -111,6 +111,14 @@ install(DIRECTORY include/
   DESTINATION include/
 )
 
+# 方法级 HTML 文档（可选）：先在包根执行 doxygen doxygen/Doxyfile 生成 doxygen/html/，
+# 再构建时安装到 share/nav2_mppi_controller/doxygen/html，便于用 ros2 pkg prefix 定位后打开。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/doxygen/html")
+  install(DIRECTORY doxygen/html
+    DESTINATION share/${PROJECT_NAME}/doxygen
+  )
+endif()
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   find_package(ament_cmake_gtest REQUIRED)
