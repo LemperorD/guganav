@@ -1,7 +1,15 @@
 #include <behaviortree_cpp/basic_types.h>
-#include "rmul_decision/condition_node/IsRevivedAndDead.hpp"
+#include "rmul_decision/condition_node/IsRevival.hpp"
 IsRevival::IsRevival(const std::string& name, const BT::NodeConfig& config)
     : BT::ConditionNode(name, config) {
+  node_ = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
+  // 订阅 HP 话题
+  hp_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
+      "/HP", rclcpp::QoS(10),
+      [this](const std_msgs::msg::Int32::SharedPtr msg) {
+        hp_.store(msg->data);
+        hp_received_.store(true);
+      });
 }
 
 BT::PortsList IsRevival::providedPorts() {
@@ -9,11 +17,14 @@ BT::PortsList IsRevival::providedPorts() {
 }
 
 BT::NodeStatus IsRevival::tick() {
-  int hp = -1;
   int sign = 0;
-  if (!getInput("HP", hp)) {
-    throw BT::RuntimeError("Missing input [HP]");
+  if (!hp_received_.load()) {
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 3000,
+                         "Waiting for HP message...");
+    return BT::NodeStatus::FAILURE;
   }
+
+  int hp = hp_.load();
   if (!getInput("HP_sign", sign)) {
     throw BT::RuntimeError("Missing input [HP]");
   }

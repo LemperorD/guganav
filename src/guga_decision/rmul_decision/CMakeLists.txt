@@ -10,6 +10,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -18,9 +19,11 @@ add_library(decision_node
   src/condition_node/checkTime.cpp
   src/condition_node/IsOccupationsafe.cpp
   src/condition_node/IsRevival.cpp
+  src/condition_node/IsGameStart.cpp
   src/action_node/changelowerstate.cpp
   src/action_node/changehigherstate.cpp
   src/action_node/GotoPoints.cpp
+  src/main.cpp
 )
 target_include_directories(decision_node PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -28,6 +31,7 @@ target_include_directories(decision_node PUBLIC
 ament_target_dependencies(decision_node
   behaviortree_cpp
   rclcpp
+  std_msgs
 )
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
