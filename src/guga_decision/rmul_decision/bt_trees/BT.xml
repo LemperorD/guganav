@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <BehaviorTree ID="Main">
+    <KeepRunningUntilFailure>
+      <ForceSuccess>
+        <Sequence>
+          <IsGameStart/>
+          <SubTree ID="SwitchState"
+                   _autoremap="true"/>
+          <Switch3 case_1="Suppress"
+                   case_2="Occupation"
+                   case_3="PushForward"
+                   variable="global_state_">
+            <SubTree ID="Suppress"
+                     _autoremap="true"/>
+            <SubTree ID="Occupation"
+                     _autoremap="true"/>
+            <SubTree ID="PushForward"
+                     _autoremap="true"/>
+          </Switch3>
+        </Sequence>
+      </ForceSuccess>
+    </KeepRunningUntilFailure>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Occupation">
+    <Sequence>
+      <CheckHP HP=""
+               destination=""/>
+      <GotoPoints destination=""/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="PushForward">
+    <Fallback>
+      <Sequence>
+        <CheckHP HP=""
+                 destination=""/>
+        <GotoPoints destination=""/>
+      </Sequence>
+      <Sequence>
+        <CheckTime Occupation_time=""
+                   HP=""
+                   destination=""/>
+        <GotoPoints destination=""/>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Suppress">
+    <Sequence>
+      <CheckHP HP=""
+               destination=""/>
+      <GotoPoints destination=""/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SwitchState">
+    <Fallback>
+      <Sequence>
+        <IsRevivedAndDead HP=""
+                          HP_sign=""/>
+        <ChangeLowerState global_state_in=""
+                          global_state_out=""/>
+      </Sequence>
+      <Sequence>
+        <IsOccupationsafe destination=""
+                          occupation_time=""/>
+        <ChangeHigherState global_state_in=""
+                           global_state_out=""/>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="ChangeHigherState"
+            editable="true">
+      <input_port name="global_state_in"/>
+      <output_port name="global_state_out"/>
+    </Action>
+    <Action ID="ChangeLowerState"
+            editable="true">
+      <input_port name="global_state_in"/>
+      <output_port name="global_state_out"/>
+    </Action>
+    <Condition ID="CheckHP"
+               editable="true">
+      <input_port name="HP"/>
+      <output_port name="destination"/>
+    </Condition>
+    <Condition ID="CheckTime"
+               editable="true">
+      <input_port name="Occupation_time"/>
+      <input_port name="HP"/>
+      <output_port name="destination"/>
+    </Condition>
+    <Action ID="GotoPoints"
+            editable="true">
+      <input_port name="destination"/>
+    </Action>
+    <Condition ID="IsGameStart"
+               editable="true"/>
+    <Condition ID="IsOccupationsafe"
+               editable="true">
+      <input_port name="destination"/>
+      <input_port name="occupation_time"/>
+    </Condition>
+    <Condition ID="IsRevivedAndDead"
+               editable="true">
+      <input_port name="HP"/>
+      <input_port name="HP_sign"/>
+    </Condition>
+  </TreeNodesModel>
+
+</root>
