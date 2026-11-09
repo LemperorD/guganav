@@ -43,7 +43,6 @@ using IVoxType =
 struct MappingParams {
   bool space_down_sample{true};
   bool propagate_at_imu_frequency{true};
-  bool use_imu_as_input{false};
   bool publish_odometry_without_downsample{false};
   int init_map_size{100};
   double filter_size_surf{0.5};
@@ -90,7 +89,8 @@ struct PublishParams {
   bool pcd_save_require_lost{false};
   std::string pcd_save_trigger_topic;
   /// 非空时按定位状态驱动 PCD 保存: 0=INITIAL, 1=FINE, 2=SUSPECT, 3=LOST。
-  /// SUSPECT 开始累积, LOST 写盘并请求重载, FINE 清空缓存。置空则退回 require_lost。
+  /// SUSPECT 开始累积, LOST 写盘并请求重载, FINE 清空缓存。置空则退回
+  /// require_lost。
   std::string pcd_save_state_topic;
   /// 先验地图重载服务 (std_srvs/Trigger), PCD 写盘完成后调用, 置空则不重载
   std::string pcd_save_reload_service;

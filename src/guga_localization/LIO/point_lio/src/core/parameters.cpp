@@ -21,8 +21,6 @@ PointLioParams readParameters(rclcpp::Node* nh) {
   try {
     params.mapping.propagate_at_imu_frequency = nh->declare_parameter<bool>(
         "prop_at_freq_of_imu", true);
-    params.mapping.use_imu_as_input = nh->declare_parameter<bool>(
-        "use_imu_as_input", false);
     params.imu.check_saturation = nh->declare_parameter<bool>("check_satu",
                                                               true);
     params.mapping.init_map_size = static_cast<int>(
@@ -157,8 +155,7 @@ PointLioParams readParameters(rclcpp::Node* nh) {
     params.publish.pcd_save_reload_service = nh->declare_parameter<std::string>(
         "pcd_save.reload_service", "");
     params.publish.pcd_save_suspect_build_delay_sec =
-        nh->declare_parameter<double>(
-            "pcd_save.suspect_build_delay_sec", 3.0);
+        nh->declare_parameter<double>("pcd_save.suspect_build_delay_sec", 3.0);
     params.lidar.lidar_time_interval = nh->declare_parameter<double>(
         "mapping.lidar_time_inte", 0.1);
 

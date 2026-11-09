@@ -77,8 +77,7 @@
  * @brief Standard Orthogonal Groups i.e.\ rotatation groups.
  */
 
-#ifndef SON_H_
-#define SON_H_
+#pragma once
 
 #include <Eigen/Geometry>
 
@@ -190,44 +189,25 @@ namespace MTK {
     using Matrix = Eigen::Matrix<scalar, 3, 3>;
     using vect_type = vect<DIM, scalar>;
 
-    constexpr static double TOLERANCE = 1e-7;
+    constexpr static double ZERO_TOLERANCE = 1e-7;
+    constexpr static double PI_TOLERANCE = 1e-3;
 
     /**
      * Construct from Eigen::Quaternion.
      * @note Non-normalized input may result result in spurious behavior.
      */
-    explicit SO3(const base& src = base::Identity()) : base(src) {
+    SO3(const base& src = base::Identity()) : base(src) {
     }
-
     /**
      * Construct from rotation matrix.
      * @note Invalid rotation matrices may lead to spurious behavior.
      */
     template <class Derived>
-    explicit SO3(const Eigen::MatrixBase<Derived>& matrix) : base(matrix) {
+    SO3(const Eigen::MatrixBase<Derived>& matrix) : base(matrix) {
     }
 
-    /**
-     * Construct from arbitrary rotation type.
-     * @note Invalid rotation matrices may lead to spurious behavior.
-     */
-    // template<class Derived>
-    // SO3(const Eigen::RotationBase<Derived, 3>& rotation) :
-    // base(rotation.derived()) {}
-
-    //! @name Manifold requirements
-
-    // SO3 operator=(const base &r) const {
-    // 	return r;
-    // }
-
-    // //! Calculate @c *this * @c r.inverse()
-    // SO3 operator*(const SO3 &r) const {
-    // 	return *this * r;
-    // }
-
     void boxplus(MTK::vectview<const scalar, DOF> vec, scalar scale = 1) {
-      SO3 delta = exp(vec, scale);
+      SO3 delta = exp(vec * scale);
       *this = *this * delta;
     }
     void boxminus(MTK::vectview<scalar, DOF> res,
@@ -328,7 +308,7 @@ namespace MTK {
       Eigen::Matrix<double, 3, 3> id_matrix3 =
           Eigen::Matrix<double, 3, 3>::Identity();
 
-      if (ang_norm <= TOLERANCE) {
+      if (ang_norm <= ZERO_TOLERANCE) {
         return id_matrix3;
       }
 
@@ -345,15 +325,31 @@ namespace MTK {
      * Calculate the inverse of @c exp.
      * Only guarantees that <code>exp(log(x)) == x </code>
      */
-    static Eigen::Vector3d log(const SO3& orient) {
-      double theta = (orient.trace() > 3.0 - 1e-6)
-                         ? 0.0
-                         : std::acos(0.5 * (orient.trace() - 1));
-      Eigen::Matrix<double, 3, 1> K(orient(2, 1) - orient(1, 2),
-                                    orient(0, 2) - orient(2, 0),
-                                    orient(1, 0) - orient(0, 1));
-      return (std::abs(theta) < 0.001) ? (0.5 * K)
-                                       : (0.5 * theta / std::sin(theta) * K);
+    static Eigen::Matrix<scalar, 3, 1> log(const SO3& orient) {
+      double theta = 0.0;
+      double trace = orient.trace();
+
+      if (trace + 1.0 < PI_TOLERANCE) {
+        Eigen::Matrix3d fixed_orient = orient + Eigen::Matrix3d::Identity();
+        Eigen::Matrix<scalar, 3, 1> column = fixed_orient.col(0);
+
+        if (column.norm() < fixed_orient.col(1).norm()) {
+          column = fixed_orient.col(1);
+        }
+        if (column.norm() < fixed_orient.col(2).norm()) {
+          column = fixed_orient.col(2);
+        }
+        return M_PI * column.normalized();
+      }
+
+      theta = (trace - 3.0 > ZERO_TOLERANCE) ? 0.0
+                                             : std::acos(0.5 * (trace - 1));
+      Eigen::Matrix<scalar, 3, 1> omega(orient(2, 1) - orient(1, 2),
+                                        orient(0, 2) - orient(2, 0),
+                                        orient(1, 0) - orient(0, 1));
+      return (std::abs(theta) < 0.001)
+                 ? (0.5 * omega)
+                 : (0.5 * theta / std::sin(theta) * omega);
     }
   };
 
@@ -371,5 +367,3 @@ namespace MTK {
   }  // namespace internal
 
 }  // namespace MTK
-
-#endif /*SON_H_*/

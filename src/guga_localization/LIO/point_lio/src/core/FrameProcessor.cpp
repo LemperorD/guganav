@@ -33,10 +33,7 @@ void FrameProcessor::setPose(geometry_msgs::msg::Pose& pose) const {
     pose.orientation.z = q.coeffs()[2];
     pose.orientation.w = q.coeffs()[3];
   };
-  if (config_.mapping.use_imu_as_input)
-    set_from_filter(filter_.input());
-  else
-    set_from_filter(filter_.output());
+  set_from_filter(filter_.output());
 }
 
 PointCloudXYZI::Ptr FrameProcessor::loadPointcloudFromPcd(
@@ -85,13 +82,9 @@ void FrameProcessor::pointBodyLidarToIMU(const PointType* pi,
   const V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu;
   if (config_.lidar.extrinsic_estimation) {
-    if (config_.mapping.use_imu_as_input) {
-      p_body_imu = filter_.input().x_.offset_R_L_I * p_body_lidar
-                   + filter_.input().x_.offset_T_L_I;
-    } else {
-      p_body_imu = filter_.output().x_.offset_R_L_I * p_body_lidar
-                   + filter_.output().x_.offset_T_L_I;
-    }
+    p_body_imu = filter_.output().x_.offset_R_L_I * p_body_lidar
+                 + filter_.output().x_.offset_T_L_I;
+
   } else {
     p_body_imu = lidar_.lidarRotation() * p_body_lidar
                  + lidar_.lidarTranslation();
@@ -158,11 +151,9 @@ void FrameProcessor::publishOdometry(
     pose.orientation.z = q.coeffs()[2];
     pose.orientation.w = q.coeffs()[3];
   };
-  if (config_.mapping.use_imu_as_input) {
-    set_pose(filter_.input());
-  } else {
-    set_pose(filter_.output());
-  }
+
+  set_pose(filter_.output());
+
   publish(state_.odom_aft_mapped);
 
   if (config_.publish.tf_enabled && publish_tf) {
@@ -186,17 +177,9 @@ bool FrameProcessor::initMapState(
   }
   lidar_.workspace().feats_down_world->resize(state_.feats_undistort->size());
   for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
-    if (config_.mapping.use_imu_as_input) {
-      lidar_.measurementModel().pointBodyToWorld(
-          &(state_.feats_undistort->points[i]),
-          &(lidar_.workspace().feats_down_world->points[i]),
-          filter_.input().x_);
-    } else {
-      lidar_.measurementModel().pointBodyToWorld(
-          &(state_.feats_undistort->points[i]),
-          &(lidar_.workspace().feats_down_world->points[i]),
-          filter_.output().x_);
-    }
+    lidar_.measurementModel().pointBodyToWorld(
+        &(state_.feats_undistort->points[i]),
+        &(lidar_.workspace().feats_down_world->points[i]), filter_.output().x_);
   }
   for (const auto& point : *lidar_.workspace().feats_down_world) {
     state_.init_feats_world->points.emplace_back(point);
@@ -305,15 +288,13 @@ bool FrameProcessor::processIteration(
     const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
     const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
         publish_tf) {
-  if (!initializeIteration(publish_map))
+  if (!initializeIteration(publish_map)) {
     return false;
-  if (config_.mapping.use_imu_as_input) {
-    processFramePoints<true>(filter_.input(), last_time_input_,
-                             filter_.inputNoise(), publish_odom, publish_tf);
-  } else {
-    processFramePoints<false>(filter_.output(), last_time_output_,
-                              filter_.outputNoise(), publish_odom, publish_tf);
   }
+
+  processFramePoints<false>(filter_.output(), last_time_output_,
+                            filter_.outputNoise(), publish_odom, publish_tf);
+
   if (!config_.mapping.publish_odometry_without_downsample) {
     publishOdometry(publish_odom, publish_tf);
   }

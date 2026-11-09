@@ -49,7 +49,7 @@ LaserMappingNode::LaserMappingNode()
     : rclcpp::Node("laserMapping"),
       processor_(imu_, stage_, lidar_, config_, state_) {
   callback_group_ = create_callback_group(
-      rclcpp::CallbackGroupType::MutuallyExclusive);
+      rclcpp::CallbackGroupType::MutuallyExclusive);  // TODO:记得考虑回调组方法
   config_ = readParameters(this);
   initializeSensors();
   initializeMappingState();
@@ -189,7 +189,7 @@ void LaserMappingNode::processIteration() {
   // 否则没有新帧时也会反复重发同一幅点云与同一条 path:
   // 既占满 CPU (每 2 ms 转换一次全分辨率点云),
   // 又让 path 消息不断累积重复位姿。
-  const bool frame_processed = processor_.processIteration(
+  const bool is_frame_processed = processor_.processIteration(
       [this](const sensor_msgs::msg::PointCloud2& msg) {
         if (pub_laser_cloud_map_) {
           pub_laser_cloud_map_->publish(msg);
@@ -208,11 +208,12 @@ void LaserMappingNode::processIteration() {
           tf_broadcaster_->sendTransform(msg);
         }
       });
-  if (!frame_processed) {
+  if (!is_frame_processed) {
     return;
   }
   publishFrameOutputs();
 }
+
 void LaserMappingNode::publishFrameOutputs() {
   if (config_.publish.path_enabled) {
     publishPath();
@@ -276,14 +277,13 @@ bool LaserMappingNode::resolveOdomExtrinsic() {
     }
   }
 
-  const Eigen::Matrix3d lidar_imu_rotation =
-      to_mat3d(config_.sensor.extrinsic_r);
-  const Eigen::Vector3d lidar_imu_translation =
-      to_vec3d(config_.sensor.extrinsic_t);
-  const Eigen::Matrix3d imu_lidar_rotation =
-      lidar_imu_rotation.transpose();
-  const Eigen::Vector3d imu_lidar_translation =
-      -imu_lidar_rotation * lidar_imu_translation;
+  const Eigen::Matrix3d lidar_imu_rotation = to_mat3d(
+      config_.sensor.extrinsic_r);
+  const Eigen::Vector3d lidar_imu_translation = to_vec3d(
+      config_.sensor.extrinsic_t);
+  const Eigen::Matrix3d imu_lidar_rotation = lidar_imu_rotation.transpose();
+  const Eigen::Vector3d imu_lidar_translation = -imu_lidar_rotation
+                                                * lidar_imu_translation;
   odom_rotation_ = base_lidar_rotation * imu_lidar_rotation;
   odom_translation_ = base_lidar_rotation * imu_lidar_translation
                       + base_lidar_translation;
@@ -502,8 +502,8 @@ void LaserMappingNode::backupPriorMap() {
     return;
   }
   const auto stamp = std::to_string(get_clock()->now().nanoseconds());
-  const auto backup = target.parent_path() /
-      (target.stem().string() + "_" + stamp + ".bak.pcd");
+  const auto backup = target.parent_path()
+                      / (target.stem().string() + "_" + stamp + ".bak.pcd");
   std::filesystem::copy_file(
       target, backup, std::filesystem::copy_options::overwrite_existing, ec);
   if (ec) {
@@ -553,17 +553,17 @@ void LaserMappingNode::maybeUpdateMapOnSuspect() {
   }
 
   const double delay = config_.publish.pcd_save_suspect_build_delay_sec;
-  const double total =
-      suspect_accum_sec_ +
-      (suspect_tracking_ ? (now - suspect_mark_).seconds() : 0.0);
+  const double total = suspect_accum_sec_
+                       + (suspect_tracking_ ? (now - suspect_mark_).seconds()
+                                            : 0.0);
   if (delay <= 0.0 || total < delay || state_.pcl_wait_save->empty()) {
     return;
   }
 
   const bool ok = mergeMapAndWrite();
   if (ok) {
-    RCLCPP_INFO(get_logger(), "可疑状态累计 %.1f s, 已更新地图 (%zu 点)",
-                total, state_.pcl_wait_save->size());
+    RCLCPP_INFO(get_logger(), "可疑状态累计 %.1f s, 已更新地图 (%zu 点)", total,
+                state_.pcl_wait_save->size());
   } else {
     RCLCPP_ERROR(get_logger(), "更新地图失败, 保留旧文件");
   }
