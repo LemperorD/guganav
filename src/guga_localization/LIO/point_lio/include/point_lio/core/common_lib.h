@@ -54,11 +54,11 @@ inline M3D to_mat3d(const std::vector<double>& v) {
   return Eigen::Map<const M3D>(v.data());
 }
 
-#define VF(a) Matrix<float, (a), 1>        ///< 动态大小单精度列向量
+#define VF(a) Matrix<float, (a), 1>  ///< 动态大小单精度列向量
 
 /** @brief 预定义的常用常量矩阵 */
-const M3D Eye3d(M3D::Identity());  ///< 3x3 单位阵 (double)
-const V3D Zero3d(0, 0, 0);         ///< 3维零向量 (double)
+const M3D IMatrix3(M3D::Identity());  ///< 3x3 单位阵 (double)
+const V3D Zero3d(0, 0, 0);            ///< 3维零向量 (double)
 
 // ==================== 工具函数 ====================
 
@@ -161,3 +161,10 @@ inline rclcpp::Time get_ros_time(double timestamp) {
   uint32_t nanosec = nanosec_d;
   return rclcpp::Time(sec, nanosec);
 }
+
+struct MeasureGroup {
+  double lidar_start_time{0.0};
+  double lidar_last_time{0.0};
+  PointCloudXYZI::Ptr lidar_measure;
+  deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_measure;
+};

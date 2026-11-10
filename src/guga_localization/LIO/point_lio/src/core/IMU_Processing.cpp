@@ -11,6 +11,7 @@
 
 #include "point_lio/core/IMU_Processing.h"
 
+#include <cmath>
 
 bool time_list(PointType& x, PointType& y) {
   return point_time_offset_ms(x) < point_time_offset_ms(y);
@@ -20,7 +21,6 @@ ImuProcessor::ImuProcessor() : logger(rclcpp::get_logger("ImuProcess")) {
 }
 
 void ImuProcessor::configure(const Params& params) {
-  imu_en = params.enabled;
   gravity_ = params.gravity;
   gravity_init_ = params.gravity_init;
   gravity_magnitude_ = params.gravity_magnitude;
@@ -37,65 +37,64 @@ void ImuProcessor::reset() {
   init_iter_num = 1;
 }
 
+void ImuProcessor::Set_init_z(Eigen::Vector3d& tmp_gravity,
+                              Eigen::Matrix3d& rot) {
+  // 比力 f = a - g, 初始状态读出来是负的加速度
+  const M3D hat_grav = -Hat(gravity_);
 
-void ImuProcessor::Set_init(Eigen::Vector3d& tmp_gravity,
-                            Eigen::Matrix3d& rot) {
+  const V3D cross = hat_grav * tmp_gravity;
+  const double cross_norm = cross.norm();
+  const double gravity_norm = gravity_.norm();
+  const double tmp_norm = tmp_gravity.norm();
 
-  M3D hat_grav;
-  hat_grav << 0.0, gravity_(2), -gravity_(1), -gravity_(2), 0.0, gravity_(0),
-      gravity_(1), -gravity_(0), 0.0;
+  const double align_sin = cross_norm / gravity_norm / tmp_norm;
+  const double align_cos = gravity_.dot(tmp_gravity) / gravity_norm / tmp_norm;
 
-
-  double align_norm = (hat_grav * tmp_gravity).norm() / gravity_.norm()
-                      / tmp_gravity.norm();
-
-
-  double align_cos = gravity_.transpose() * tmp_gravity;
-  align_cos = align_cos / gravity_.norm() / tmp_gravity.norm();
-
-  if (align_norm < 1e-6) {
-
-    if (align_cos > 1e-6) {
-      rot = Eye3d;
+  if (align_sin < TOLERANCE) {
+    if (align_cos > TOLERANCE) {
+      rot = IMatrix3;
     } else {
-      rot = -Eye3d;
+      // 两向量严格反向时绕任意垂直轴转 180 度, 避免使用反射矩阵 -I.
+      const V3D unit_gravity = gravity_ / gravity_norm;
+      V3D axis;
+
+      if (std::abs(unit_gravity.x()) <= std::abs(unit_gravity.y())
+          && std::abs(unit_gravity.x()) <= std::abs(unit_gravity.z())) {
+        axis = unit_gravity.cross(V3D::UnitX());
+      } else if (std::abs(unit_gravity.y()) <= std::abs(unit_gravity.z())) {
+        axis = unit_gravity.cross(V3D::UnitY());
+      } else {
+        axis = unit_gravity.cross(V3D::UnitZ());
+      }  // 取最小分量作为旋转轴得到最大的旋转角度基轴, 计算-180度旋转
+
+      axis.normalize();
+      rot = 2.0 * axis * axis.transpose() - IMatrix3;
     }
   } else {
-
-    V3D align_angle = hat_grav * tmp_gravity / (hat_grav * tmp_gravity).norm()
-                      * acos(align_cos);
-
+    const V3D align_angle = cross / cross_norm * std::acos(align_cos);
     rot = Exp(align_angle(0), align_angle(1), align_angle(2));
   }
 }
 
-
-void ImuProcessor::initState(state_input& input_state,
-                             state_output& output_state) {
+void ImuProcessor::initState(state_output& output_state) {
   V3D tmp_gravity;
-  if (imu_en) {
-    tmp_gravity = -mean_acc / mean_acc.norm() * gravity_magnitude_;
-  } else {
-    tmp_gravity = gravity_init_;
-  }
+
+  tmp_gravity = -mean_acc / mean_acc.norm() * gravity_magnitude_;
+
   M3D rot_init;
-  Set_init(tmp_gravity, rot_init);
-  input_state.rot = rot_init;
+  Set_init_z(tmp_gravity, rot_init);
   output_state.rot = rot_init;
   output_state.acc = -rot_init.transpose() * output_state.gravity;
 }
-
 
 void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   RCLCPP_INFO(logger, "IMU Initializing: %.1f %%",
               double(N) / MAX_INI_COUNT * 100);
   V3D cur_acc;
 
-
-  for (const auto& imu : meas.imu) {
+  for (const auto& imu : meas.imu_measure) {
     const auto& imu_acc = imu->linear_acceleration;
     cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
-
 
     mean_acc += (cur_acc - mean_acc) / N;
 
@@ -103,39 +102,25 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
   }
 }
 
-
 void ImuProcessor::process(const MeasureGroup& meas,
                            PointCloudXYZI::Ptr cur_pcl_un_,
-                           state_input& input_state,
                            state_output& output_state) {
-  if (imu_en) {
-    if (meas.imu.empty()) {
+  if (meas.imu_measure.empty()) {
+    return;
+  }
+
+  if (stage_ == Stage::Initializing) {
+    IMU_init(meas, init_iter_num);
+    if (init_iter_num <= MAX_INI_COUNT) {
       return;
     }
 
-    if (stage_ == Stage::Initializing) {
-
-      IMU_init(meas, init_iter_num);
-      if (init_iter_num <= MAX_INI_COUNT) {
-        return;
-      }
-
-      RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
-      initState(input_state, output_state);
-      stage_ = Stage::Ready;
-    }
-
-    *cur_pcl_un_ = *(meas.lidar);
-
-    // @todo: 实现 IMU 反向传播去畸变
-
-  } else {
-
-    if (stage_ == Stage::Initializing) {
-      initState(input_state, output_state);
-      stage_ = Stage::Ready;
-    }
-    *cur_pcl_un_ = *(meas.lidar);
-    return;
+    RCLCPP_INFO(logger, "IMU Initializing: %.1f %%", 100.0);
+    initState(output_state);
+    stage_ = Stage::Ready;
   }
+
+  *cur_pcl_un_ = *(meas.lidar_measure);
+
+  // @todo: 实现 IMU 反向传播去畸变
 }

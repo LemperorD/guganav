@@ -23,6 +23,13 @@
 #include "point_lio/core/Imu.h"
 class Synchronizer;
 
+/// @brief 一帧点云及其绝对起止时间。点云与时间成对存放，避免平行队列错位。
+struct LidarFrame {
+  PointCloudXYZI::Ptr cloud;
+  double start_time{0.0};
+  double end_time{0.0};
+};
+
 struct LidarWorkspace {
   PointCloudXYZI::Ptr normvec{new PointCloudXYZI(100000, 1)};
   std::vector<int> time_seq;
@@ -32,7 +39,7 @@ struct LidarWorkspace {
   std::vector<PointVector> Nearest_Points;
   IVoxType::Ptr ivox_{nullptr};
   std::bitset<100000> point_selected_surf;
-  std::vector<M3D> crossmat_list;
+  std::vector<M3D> hat_list;
   int k{0};
   int idx{-1};
   size_t feats_down_size{0};
@@ -41,11 +48,11 @@ struct LidarWorkspace {
 class LidarMeasurementModel {
 public:
   explicit LidarMeasurementModel(LidarWorkspace& workspace,
-                                 V3D& lidar_translation,
-                                 M3D& lidar_rotation)
+                                 V3D& lidar_translation, M3D& lidar_rotation)
       : workspace_(&workspace),
         lidar_translation_(&lidar_translation),
-        lidar_rotation_(&lidar_rotation) {}
+        lidar_rotation_(&lidar_rotation) {
+  }
   void configure(const LidarParams& params);
   void hModelInput(state_input& state,
                    esekfom::dyn_share_modified<double>& data) const;
@@ -65,8 +72,8 @@ private:
 
 class Lidar {
 public:
-  Lidar()
-      : measurement_model_(workspace_, lidar_t_wrt_imu_, lidar_r_wrt_imu_) {}
+  Lidar() : measurement_model_(workspace_, lidar_t_wrt_imu_, lidar_r_wrt_imu_) {
+  }
   ~Lidar() = default;
 
   using Params = LidarParams;
@@ -76,36 +83,46 @@ public:
   [[nodiscard]] LidarMeasurementModel& measurementModel() {
     return measurement_model_;
   }
-  [[nodiscard]] LidarWorkspace& workspace() { return workspace_; }
-  [[nodiscard]] const LidarWorkspace& workspace() const { return workspace_; }
+  [[nodiscard]] LidarWorkspace& workspace() {
+    return workspace_;
+  }
+  [[nodiscard]] const LidarWorkspace& workspace() const {
+    return workspace_;
+  }
   void setExtrinsics(const V3D& translation, const M3D& rotation) {
     lidar_t_wrt_imu_ = translation;
     lidar_r_wrt_imu_ = rotation;
   }
-  [[nodiscard]] const V3D& lidarTranslation() const { return lidar_t_wrt_imu_; }
-  [[nodiscard]] const M3D& lidarRotation() const { return lidar_r_wrt_imu_; }
-  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
-  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg);
+  [[nodiscard]] bool empty() const;
+  [[nodiscard]] const V3D& TranslationLidarToImu() const {
+    return lidar_t_wrt_imu_;
+  }
+  [[nodiscard]] const M3D& RotationLidarToImu() const {
+    return lidar_r_wrt_imu_;
+  }
+  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& message);
+  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& message);
 
 private:
   friend class Synchronizer;
-  [[nodiscard]] int mergeFrameCount() const { return params_.con_frame_num; }
+  [[nodiscard]] int mergeFrameCount() const {
+    return params_.con_frame_num;
+  }
   void appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
                        std::deque<double>& timestamps);
-  void appendFrame(PointCloudXYZI::Ptr points, double timestamp);
+  void appendFrame(PointCloudXYZI::Ptr pointcloud, double timestamp);
   void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
 
   Params params_;
   LidarWorkspace workspace_;
   V3D lidar_t_wrt_imu_{Zero3d};
-  M3D lidar_r_wrt_imu_{Eye3d};
+  M3D lidar_r_wrt_imu_{IMatrix3};
   LidarMeasurementModel measurement_model_;
   Preprocess preprocess_;
   PointCloudXYZI::Ptr ptr_con_{std::make_shared<PointCloudXYZI>()};
   int scan_count_{0};
   int frame_ct_{0};
-  std::deque<PointCloudXYZI::Ptr> lidar_buffer_;
-  std::deque<double> time_buffer_;
+  std::deque<LidarFrame> frame_buffer_;
   double last_timestamp_lidar_{-1.0};
   double time_con_{0.0};
 };

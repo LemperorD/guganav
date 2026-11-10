@@ -426,11 +426,11 @@ void LaserMappingNode::publishFrameWorld() {
   }
 }
 void LaserMappingNode::publishFrameBody() {
-  size_t size = state_.feats_undistort->points.size();
+  size_t size = state_.feats_origin_lidar->points.size();
   PointCloudXYZI::Ptr lasercloud_imu_body(new PointCloudXYZI(size, 1));
 
   for (std::size_t i = 0; i < size; i++) {
-    processor_.pointBodyLidarToIMU(&state_.feats_undistort->points[i],
+    processor_.pointBodyLidarToIMU(&state_.feats_origin_lidar->points[i],
                                    &lasercloud_imu_body->points[i]);
   }
 

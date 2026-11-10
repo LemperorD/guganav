@@ -15,10 +15,10 @@ void FrameProcessor::initializeFilter() {
   filter_.configure(config_.filter);
   filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());
   if (config_.lidar.extrinsic_estimation) {
-    filter_.input().x_.offset_R_L_I = lidar_.lidarRotation();
-    filter_.input().x_.offset_T_L_I = lidar_.lidarTranslation();
-    filter_.output().x_.offset_R_L_I = lidar_.lidarRotation();
-    filter_.output().x_.offset_T_L_I = lidar_.lidarTranslation();
+    filter_.input().x_.offset_R_L_I = lidar_.RotationLidarToImu();
+    filter_.input().x_.offset_T_L_I = lidar_.TranslationLidarToImu();
+    filter_.output().x_.offset_R_L_I = lidar_.RotationLidarToImu();
+    filter_.output().x_.offset_T_L_I = lidar_.TranslationLidarToImu();
   }
 }
 
@@ -57,20 +57,14 @@ void FrameProcessor::initScan() {
             << '\n';
   time_current_ = 0.0;
 
-  if (config_.imu.processor.enabled) {
-    filter_.input().x_.gravity = config_.imu.processor.gravity;
-    filter_.output().x_.gravity = config_.imu.processor.gravity;
-    imu_.discardBefore(measures_.lidar_start_time);
-  } else {
-    filter_.input().x_.gravity = config_.imu.processor.gravity;
-    filter_.output().x_.gravity = config_.imu.processor.gravity;
-    filter_.output().x_.acc = config_.imu.processor.gravity;
-    filter_.output().x_.acc *= -1;
-  }
+  filter_.input().x_.gravity = config_.imu.processor.gravity;
+  filter_.output().x_.gravity = config_.imu.processor.gravity;
+
+  imu_.discardBefore(measures_.lidar_start_time);
 }
 
 bool FrameProcessor::syncPackages() {
-  return synchronizer_.syncPackages(lidar_, imu_, measures_);
+  return Synchronizer::syncPackages(lidar_, imu_, measures_);
 }
 
 void FrameProcessor::configureSynchronizer(double lidar_time_interval) {
@@ -86,8 +80,8 @@ void FrameProcessor::pointBodyLidarToIMU(const PointType* pi,
                  + filter_.output().x_.offset_T_L_I;
 
   } else {
-    p_body_imu = lidar_.lidarRotation() * p_body_lidar
-                 + lidar_.lidarTranslation();
+    p_body_imu = lidar_.RotationLidarToImu() * p_body_lidar
+                 + lidar_.TranslationLidarToImu();
   }
   po->x = static_cast<float>(p_body_imu(0));
   po->y = static_cast<float>(p_body_imu(1));
@@ -172,17 +166,14 @@ void FrameProcessor::publishOdometry(
 
 bool FrameProcessor::initMapState(
     std::function<void(const sensor_msgs::msg::PointCloud2&)> publish) {
-  if (stage_ == PointLioStage::TRACKING) {
-    return true;
-  }
-  lidar_.workspace().feats_down_world->resize(state_.feats_undistort->size());
-  for (int i = 0; i < (int)state_.feats_undistort->size(); i++) {
+  const size_t old_size = state_.init_feats_world->size();
+  const size_t add_size = state_.feats_origin_lidar->size();
+  state_.init_feats_world->resize(old_size + add_size);
+
+  for (size_t i = 0; i < add_size; i++) {
     lidar_.measurementModel().pointBodyToWorld(
-        &(state_.feats_undistort->points[i]),
-        &(lidar_.workspace().feats_down_world->points[i]), filter_.output().x_);
-  }
-  for (const auto& point : *lidar_.workspace().feats_down_world) {
-    state_.init_feats_world->points.emplace_back(point);
+        &(state_.feats_origin_lidar->points[i]),
+        &(state_.init_feats_world->points[old_size + i]), filter_.output().x_);
   }
 
   if (state_.init_feats_world->size()
@@ -193,13 +184,15 @@ bool FrameProcessor::initMapState(
     } else {
       lidar_.workspace().ivox_->AddPoints(state_.init_feats_world->points);
     }
+
     sensor_msgs::msg::PointCloud2 map_msg;
     pcl::toROSMsg(*state_.init_feats_world, map_msg);
     map_msg.header.stamp = get_ros_time(measures_.lidar_last_time);
     map_msg.header.frame_id = "camera_init";
     publish(map_msg);
-    state_.init_feats_world.reset(new PointCloudXYZI());
+    state_.init_feats_world = std::make_shared<PointCloudXYZI>();
     stage_ = PointLioStage::TRACKING;
+
     return true;
   }
   return false;
@@ -207,31 +200,39 @@ bool FrameProcessor::initMapState(
 
 bool FrameProcessor::prepareFrame(
     std::function<void(const sensor_msgs::msg::PointCloud2&)> publish) {
-  imu_.process(measures_, state_.feats_undistort, filter_.input().x_,
-               filter_.output().x_);
+  imu_.process(measures_, state_.feats_origin_lidar, filter_.output().x_);
 
   if (imu_.needInit()) {
     stage_ = PointLioStage::INITIALIZINGIMU;
     return false;
   }
-  if (stage_ == PointLioStage::INITIALIZINGIMU) {
-    stage_ = PointLioStage::INITIALIZINGMAP;
-  }
 
-  if (!initMapState(publish)) {
-    return false;
+  switch (stage_) {
+    case PointLioStage::INITIALIZINGIMU:
+      stage_ = PointLioStage::INITIALIZINGMAP;
+      [[fallthrough]];
+
+    case PointLioStage::INITIALIZINGMAP:
+      if (!initMapState(publish)) {
+        return false;
+      }
+      break;
+
+    default:
+      break;
   }
 
   if (config_.mapping.space_down_sample) {
-    state_.downsize_filter_surf.setInputCloud(state_.feats_undistort);
+    state_.downsize_filter_surf.setInputCloud(state_.feats_origin_lidar);
     state_.downsize_filter_surf.filter(*lidar_.workspace().feats_down_body);
     sort(lidar_.workspace().feats_down_body->points.begin(),
          lidar_.workspace().feats_down_body->points.end(), time_list);
   } else {
-    lidar_.workspace().feats_down_body = measures_.lidar;
+    lidar_.workspace().feats_down_body = measures_.lidar_measure;
     sort(lidar_.workspace().feats_down_body->points.begin(),
          lidar_.workspace().feats_down_body->points.end(), time_list);
   }
+
   lidar_.workspace().time_seq = time_compressing(
       lidar_.workspace().feats_down_body);
   lidar_.workspace().feats_down_size =
@@ -241,7 +242,7 @@ bool FrameProcessor::prepareFrame(
   lidar_.workspace().feats_down_world->resize(
       lidar_.workspace().feats_down_size);
   lidar_.workspace().Nearest_Points.resize(lidar_.workspace().feats_down_size);
-  lidar_.workspace().crossmat_list.resize(lidar_.workspace().feats_down_size);
+  lidar_.workspace().hat_list.resize(lidar_.workspace().feats_down_size);
   lidar_.workspace().pbody_list.resize(lidar_.workspace().feats_down_size);
 
   preparePointMeasurements();
@@ -251,17 +252,18 @@ bool FrameProcessor::prepareFrame(
 
 void FrameProcessor::preparePointMeasurements() const {
   for (size_t i = 0; i < lidar_.workspace().feats_down_body->size(); i++) {
-    V3D point_this(lidar_.workspace().feats_down_body->points[i].x,
-                   lidar_.workspace().feats_down_body->points[i].y,
-                   lidar_.workspace().feats_down_body->points[i].z);
+    V3D point(lidar_.workspace().feats_down_body->points[i].x,
+              lidar_.workspace().feats_down_body->points[i].y,
+              lidar_.workspace().feats_down_body->points[i].z);
 
-    lidar_.workspace().pbody_list[i] = point_this;
+    lidar_.workspace().pbody_list[i] = point;
+
     if (!config_.lidar.extrinsic_estimation) {
-      point_this = lidar_.lidarRotation() * point_this
-                   + lidar_.lidarTranslation();
-      M3D point_crossmat;
-      point_crossmat << SKEW_SYM_MATRX(point_this);
-      lidar_.workspace().crossmat_list[i] = point_crossmat;
+      point = lidar_.RotationLidarToImu() * point
+              + lidar_.TranslationLidarToImu();  // p_I = ^IR_L * p_L + ^IT_L
+
+      M3D point_hat = Hat(point);
+      lidar_.workspace().hat_list[i] = point_hat;
     }
   }
 }
@@ -271,12 +273,12 @@ bool FrameProcessor::initializeIteration(
   if (!syncPackages()) {
     return false;
   }
+
   lidar_end_time_ = measures_.lidar_last_time;
 
   if (stage_ == PointLioStage::WAITINGFORDATA) {
     initScan();
-    stage_ = imu_.needInit() ? PointLioStage::INITIALIZINGIMU
-                             : PointLioStage::INITIALIZINGMAP;
+    stage_ = PointLioStage::INITIALIZINGIMU;
   }
 
   return prepareFrame(publish);
@@ -292,8 +294,8 @@ bool FrameProcessor::processIteration(
     return false;
   }
 
-  processFramePoints<false>(filter_.output(), last_time_output_,
-                            filter_.outputNoise(), publish_odom, publish_tf);
+  processFramePoints(filter_.output(), last_time_output_, filter_.outputNoise(),
+                     publish_odom, publish_tf);
 
   if (!config_.mapping.publish_odometry_without_downsample) {
     publishOdometry(publish_odom, publish_tf);
@@ -305,7 +307,7 @@ bool FrameProcessor::processIteration(
   return true;
 }
 
-template <bool ImuAsInput, typename KF>
+template <typename KF>
 void FrameProcessor::processFramePoints(
     KF& kf, double& last_time, auto& q,
     const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
@@ -331,42 +333,28 @@ void FrameProcessor::processFramePoints(
             }
           }
 
-          if constexpr (ImuAsInput) {
-            input_in_ = imu_.lastInput(config_.imu.processor.gravity_magnitude
-                                       / config_.imu.acc_norm);
-          } else {
-            const auto measurement = imu_.lastMeasurement();
-            imu_.setCurrentMeasurement(measurement);
-          }
+          const auto measurement = imu_.lastMeasurement();
+          imu_.setCurrentMeasurement(measurement);
 
           last_time = time_current_;
           time_update_last_ = time_current_;
           is_first_frame_ = false;
           break;
         }
+
         time_current_ = get_time_sec(imu_next.header.stamp);
 
-        if constexpr (ImuAsInput) {
-          double dt_cov = time_current_ - time_update_last_;
-          if (dt_cov > 0.0) {
-            time_update_last_ = get_time_sec(imu_next.header.stamp);
-          }
-          last_time = get_time_sec(imu_next.header.stamp);
-          input_in_ = imu_.nextInput(config_.imu.processor.gravity_magnitude
-                                     / config_.imu.acc_norm);
-        } else {
-          double dt = time_current_ - last_time;
-          double dt_cov = time_current_ - time_update_last_;
-          if (dt_cov > 0.0) {
-            filter_.predict(kf, dt_cov, q, input_in_, false, true);
-            time_update_last_ = time_current_;
-          }
-          filter_.predict(kf, dt, q, input_in_, true, false);
-          last_time = time_current_;
-          const auto measurement = imu_.nextMeasurement();
-          imu_.setCurrentMeasurement(measurement);
-          filter_.updateOutputImu();
+        double dt = time_current_ - last_time;
+        double dt_cov = time_current_ - time_update_last_;
+        if (dt_cov > 0.0) {
+          filter_.predict(kf, dt_cov, q, input_in_, false, true);
+          time_update_last_ = time_current_;
         }
+        filter_.predict(kf, dt, q, input_in_, true, false);
+        last_time = time_current_;
+        const auto measurement = imu_.nextMeasurement();
+        imu_.setCurrentMeasurement(measurement);
+        filter_.updateOutputImu();
 
         imu_.popAndAdvance();
         if (imu_.empty()) {
@@ -396,41 +384,16 @@ void FrameProcessor::processFramePoints(
           break;
         }
       }
-      if constexpr (ImuAsInput) {
-        input_in_ = imu_.lastInput(config_.imu.processor.gravity_magnitude
-                                   / config_.imu.acc_norm);
-      } else if (config_.imu.processor.enabled) {
-        const auto measurement = imu_.lastMeasurement();
-        imu_.setCurrentMeasurement(measurement);
-      }
+
+      const auto measurement = imu_.lastMeasurement();
+      imu_.setCurrentMeasurement(measurement);
 
       is_first_frame_ = false;
       last_time = time_current_;
       time_update_last_ = time_current_;
     }
 
-    if constexpr (ImuAsInput) {
-      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
-        imu_.popBuffer();
-        input_in_ = imu_.lastInput(config_.imu.processor.gravity_magnitude
-                                   / config_.imu.acc_norm);
-        double dt = get_time_sec(imu_last.header.stamp) - last_time;
-        double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last_;
-
-        if (dt_cov > 0.0) {
-          filter_.predict(kf, dt_cov, q, input_in_, false, true);
-          time_update_last_ = get_time_sec(imu_last.header.stamp);
-        }
-
-        filter_.predict(kf, dt, q, input_in_, true, false);
-        last_time = get_time_sec(imu_last.header.stamp);
-
-        if (imu_.empty()) {
-          break;
-        }
-        imu_.advanceCursor();
-      }
-    } else if (config_.imu.processor.enabled && !imu_.empty()) {
+    if (!imu_.empty()) {
       const bool last_imu = imu_.isSameStamp();
       while (!imu_.empty() && get_time_sec(imu_next.header.stamp) < last_time) {
         if (!last_imu) {
@@ -516,7 +479,7 @@ using OdomCallback = std::function<void(const nav_msgs::msg::Odometry&)>;
 using TfCallback =
     std::function<void(const geometry_msgs::msg::TransformStamped&)>;
 
-template void FrameProcessor::processFramePoints<true, InputKf, InputNoise>(
+template void FrameProcessor::processFramePoints<InputKf, InputNoise>(
     InputKf&, double&, InputNoise&, const OdomCallback&, const TfCallback&);
-template void FrameProcessor::processFramePoints<false, OutputKf, OutputNoise>(
+template void FrameProcessor::processFramePoints<OutputKf, OutputNoise>(
     OutputKf&, double&, OutputNoise&, const OdomCallback&, const TfCallback&);

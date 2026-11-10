@@ -71,8 +71,6 @@ PointLioParams readParameters(rclcpp::Node* nh) {
         nh->declare_parameter<double>("mapping.det_range", 300.F));
     params.lidar.preprocess.det_range = params.mapping.det_range;
 
-    params.imu.processor.enabled = nh->declare_parameter<bool>("mapping.imu_en",
-                                                               true);
     params.lidar.extrinsic_estimation = nh->declare_parameter<bool>(
         "mapping.extrinsic_est_en", true);
 

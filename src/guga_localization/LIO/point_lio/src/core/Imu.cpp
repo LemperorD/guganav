@@ -2,22 +2,22 @@
 
 #include "point_lio/core/Lidar.h"
 
-Imu::Imu() : measurement_model_(measurement_workspace_) {}
+Imu::Imu() : measurement_model_(measurement_workspace_) {
+}
 
 void ImuMeasurementModel::configure(const ImuParams& params) {
   params_ = params;
 }
 
 void ImuMeasurementModel::hModelOutput(
-    state_output& state,
-    esekfom::dyn_share_modified<double>& data) const {
+    state_output& state, esekfom::dyn_share_modified<double>& data) const {
   std::memset(data.satu_check, false, 6);
-  data.z_IMU.block<3, 1>(0, 0) =
-      workspace_.angular_velocity - state.omg - state.bg;
-  data.z_IMU.block<3, 1>(3, 0) =
-      workspace_.linear_acceleration * params_.processor.gravity_magnitude
-          / params_.acc_norm
-      - state.acc - state.ba;
+  data.z_IMU.block<3, 1>(0, 0) = workspace_.angular_velocity - state.omg
+                                 - state.bg;
+  data.z_IMU.block<3, 1>(3, 0) = workspace_.linear_acceleration
+                                     * params_.processor.gravity_magnitude
+                                     / params_.acc_norm
+                                 - state.acc - state.ba;
   data.R_IMU << params_.measurement_gyro_cov, params_.measurement_gyro_cov,
       params_.measurement_gyro_cov, params_.measurement_acc_cov,
       params_.measurement_acc_cov, params_.measurement_acc_cov;
@@ -85,24 +85,20 @@ const sensor_msgs::msg::Imu& Imu::next() const {
   return next_;
 }
 
-void Imu::loadNextFromFront() {
+void Imu::loadNext() {
   if (!buffer_.empty()) {
     next_ = *buffer_.front();
   }
 }
 
 void Imu::discardBefore(double timestamp) {
-  if (buffer_.empty()) {
-    return;
-  }
-  loadNextFromFront();
-  while (!buffer_.empty() && timestamp > get_time_sec(next_.header.stamp)) {
-    buffer_.pop_front();
-    if (buffer_.empty()) {
+  while (!buffer_.empty()) {
+    loadNext();
+    if (timestamp - get_time_sec(next_.header.stamp) < TOLERANCE) {
       return;
     }
     last_ = next_;
-    loadNextFromFront();
+    buffer_.pop_front();
   }
 }
 
@@ -119,7 +115,7 @@ void Imu::popAndAdvance() {
   }
   last_ = next_;
   buffer_.pop_front();
-  loadNextFromFront();
+  loadNext();
 }
 
 namespace {
@@ -141,7 +137,7 @@ namespace {
         msg.linear_acceleration.y, msg.linear_acceleration.z;
     return measurement;
   }
-}
+}  // namespace
 
 input_ikfom Imu::lastInput(double acc_scale) const {
   return makeInput(last_, acc_scale);
@@ -159,26 +155,26 @@ ImuMeasurement Imu::nextMeasurement() const {
   return makeMeasurement(next_);
 }
 
-bool Imu::collectUntil(double end_time, MeasureGroup& meas) {
-  if (!needInit() || buffer_.empty()) {
-    return false;
+void Imu::collectUntil(
+    double end_time, deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected) {
+  if (!needInit() || empty()) {
+    return;
   }
 
-  loadNextFromFront();
-  meas.imu.shrink_to_fit();
+  loadNext();
+  collected.shrink_to_fit();
   while (!buffer_.empty()
          && get_time_sec(buffer_.front()->header.stamp) < end_time) {
-    meas.imu.emplace_back(buffer_.front());
+    collected.emplace_back(buffer_.front());
     last_ = next_;
     buffer_.pop_front();
-    loadNextFromFront();
+    loadNext();
   }
-  return true;
 }
 
 void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
-                  state_input& input_state, state_output& output_state) {
-  processor_->process(meas, undistort, input_state, output_state);
+                  state_output& output_state) {
+  processor_->process(meas, undistort, output_state);
 }
 
 bool Imu::needInit() const {

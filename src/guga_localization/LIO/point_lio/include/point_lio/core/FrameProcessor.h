@@ -15,7 +15,6 @@
 #include "point_lio/core/Filter.h"
 #include "point_lio/core/common_lib.h"
 #include "point_lio/core/ProcessingState.h"
-#include "point_lio/core/Measurement.h"
 
 enum class PointLioStage {
   WAITINGFORDATA,
@@ -70,7 +69,7 @@ private:
   bool initializeIteration(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
 
-  template <bool ImuAsInput, typename KF>
+  template <typename KF>
   void processFramePoints(
       KF& kf, double& last_time, auto& q,
       const std::function<void(const nav_msgs::msg::Odometry&)>& publish,

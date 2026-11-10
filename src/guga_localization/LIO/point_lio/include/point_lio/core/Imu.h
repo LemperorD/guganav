@@ -5,7 +5,7 @@
 #include "point_lio/core/IMU_Processing.h"
 #include "point_lio/core/parameters.h"
 #include "point_lio/core/preprocess.h"
-#include "point_lio/core/Measurement.h"
+#include "point_lio/core/common_lib.h"
 
 struct ImuMeasurement {
   V3D angular_velocity;
@@ -20,7 +20,8 @@ struct ImuMeasurementWorkspace {
 class ImuMeasurementModel {
 public:
   explicit ImuMeasurementModel(ImuMeasurementWorkspace& workspace)
-      : workspace_(workspace) {}
+      : workspace_(workspace) {
+  }
   void configure(const ImuParams& params);
   void hModelOutput(state_output& state,
                     esekfom::dyn_share_modified<double>& data) const;
@@ -49,7 +50,7 @@ public:
   [[nodiscard]] const sensor_msgs::msg::Imu& last() const;
   [[nodiscard]] const sensor_msgs::msg::Imu& next() const;
   void popBuffer();
-  void loadNextFromFront();
+  void loadNext();
   void discardBefore(double timestamp);
   void advanceCursor();
   void popAndAdvance();
@@ -58,14 +59,16 @@ public:
   [[nodiscard]] ImuMeasurement lastMeasurement() const;
   [[nodiscard]] ImuMeasurement nextMeasurement() const;
 
-  bool collectUntil(double end_time, MeasureGroup& meas);
+  void collectUntil(double end_time,
+                    deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected);
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
-               state_input& input_state, state_output& output_state);
+               state_output& output_state);
 
   [[nodiscard]] bool needInit() const;
   [[nodiscard]] double lastTimestamp() const;
 
 private:
+  constexpr static double TOLERANCE = 1e-6;
   Params params_;
   ImuMeasurementWorkspace measurement_workspace_;
   ImuMeasurementModel measurement_model_;

@@ -17,7 +17,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <point_lio/core/common_lib.h>
-#include <point_lio/core/Measurement.h>
 
 // ==================== 预配置 ====================
 
@@ -51,7 +50,6 @@ public:
   ImuProcessor();
 
   struct Params {
-    bool enabled{true};
     V3D gravity{V3D::Zero()};
     V3D gravity_init{0.0, 0.0, -9.81};
     double gravity_magnitude{9.81};
@@ -72,7 +70,7 @@ public:
    * @param[out] pcl_un_ 处理后/去畸变后的点云
    */
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_,
-               state_input& input_state, state_output& output_state);
+               state_output& output_state);
 
   [[nodiscard]] bool needInit() const;
 
@@ -86,7 +84,7 @@ public:
    * @param tmp_gravity 估计的重力方向 (如 -mean_acc/|mean_acc|)
    * @param[out] rot 输出初始姿态旋转矩阵
    */
-  void Set_init(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
+  void Set_init_z(Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
 
   /**
    * @brief 状态级初始化 (只执行一次): 重力对齐 → 初始姿态 → KF 状态赋值
@@ -95,15 +93,17 @@ public:
    * - IMU 模式: 用累积的 mean_acc 估计重力方向
    * - 无 IMU 模式: 用配置的先验重力 gravity_init
    */
-  void initState(state_input& input_state, state_output& output_state);
+  void initState(state_output& output_state);
 
-  V3D gravity_;             ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
+  V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};
   double gravity_magnitude_{9.81};
 
   V3D mean_acc{V3D::Zero()};  ///< 平均加速度 (累积, 用于重力估计)
 
 private:
+  constexpr static double TOLERANCE = 1e-6;
+
   /**
    * @brief IMU 初始化子函数: 累积加速度和角速度的滑动平均
    *
@@ -115,8 +115,7 @@ private:
    */
   void IMU_init(const MeasureGroup& meas, int& N);
 
-  int init_iter_num = 1;      ///< 初始化迭代计数 (当前累积帧数)
-  bool imu_en{true};          ///< 是否启用 IMU
+  int init_iter_num = 1;  ///< 初始化迭代计数 (当前累积帧数)
   Stage stage_{Stage::Initializing};
-  rclcpp::Logger logger;      ///< ROS2 日志器
+  rclcpp::Logger logger;  ///< ROS2 日志器
 };

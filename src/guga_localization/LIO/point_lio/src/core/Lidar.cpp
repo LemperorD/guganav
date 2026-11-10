@@ -9,22 +9,36 @@
 
 #include <algorithm>
 
+namespace {
+  /// @brief 计算一帧点云的绝对结束时间：起始时间加上帧内最大时间偏移。
+  double frameEndTime(const PointCloudXYZI::Ptr& cloud, double start_time,
+                      double fallback_interval) {
+    if (cloud == nullptr || cloud->points.empty()) {
+      return start_time + fallback_interval;
+    }
+    const auto max_point = std::max_element(
+        cloud->points.begin(), cloud->points.end(),
+        [](const auto& lhs, const auto& rhs) {
+          return point_time_offset_ms(lhs) < point_time_offset_ms(rhs);
+        });
+    return start_time + point_time_offset_ms(*max_point) / 1000.0;
+  }
+}  // namespace
+
 void LidarMeasurementModel::configure(const LidarParams& params) {
   params_ = params;
 }
 
-
-
+bool Lidar::empty() const {
+  return frame_buffer_.empty();
+}
 
 void LidarMeasurementModel::hModelInput(
-    state_input& s,
-    esekfom::dyn_share_modified<double>& ekfom_data) const {
+    state_input& s, esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;
   pabcd.setZero();
-  (*workspace_).normvec->resize(
-      (*workspace_).time_seq[(*workspace_).k]);
+  (*workspace_).normvec->resize((*workspace_).time_seq[(*workspace_).k]);
   int effect_num_k = 0;
-
 
   for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
     PointType& point_body_j =
@@ -32,34 +46,26 @@ void LidarMeasurementModel::hModelInput(
     PointType& point_world_j =
         (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1];
 
-
     this->pointBodyToWorld(&point_body_j, &point_world_j, s);
 
-    V3D p_body =
-        (*workspace_).pbody_list[(*workspace_).idx + j + 1];
+    V3D p_body = (*workspace_).pbody_list[(*workspace_).idx + j + 1];
     double p_norm = p_body.norm();
     {
       auto& points_near =
           (*workspace_).Nearest_Points[(*workspace_).idx + j + 1];
 
-
-      (*workspace_).ivox_->GetClosestPoint(point_world_j, points_near,
-                                           NUM_MATCH_POINTS);
+      (*workspace_)
+          .ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
-
         (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
       } else {
         (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
 
-
         if (esti_plane(pabcd, points_near, params_.plane_threshold)) {
-
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
                            + pabcd(2) * point_world_j.z + pabcd(3));
-
-
 
           if (p_norm > params_.match_threshold * pd2 * pd2) {
             (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = true;
@@ -75,12 +81,10 @@ void LidarMeasurementModel::hModelInput(
     }
   }
 
-
   if (effect_num_k == 0) {
     ekfom_data.valid = false;
     return;
   }
-
 
   ekfom_data.M_Noise = params_.point_covariance;
   ekfom_data.h_x.resize(effect_num_k, 12);
@@ -90,71 +94,60 @@ void LidarMeasurementModel::hModelInput(
 
   for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
     if ((*workspace_).point_selected_surf[(*workspace_).idx + j + 1]) {
-
       V3D norm_vec((*workspace_).normvec->points[j].x,
                    (*workspace_).normvec->points[j].y,
                    (*workspace_).normvec->points[j].z);
 
       if (params_.extrinsic_estimation) {
-
         V3D p_body = (*workspace_).pbody_list[(*workspace_).idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
 
-        p_crossmat << SKEW_SYM_MATRX(p_body);
-
+        p_crossmat = Hat(p_body);
 
         V3D point_imu = s.offset_R_L_I * p_body + s.offset_T_L_I;
 
-        p_imu_crossmat << SKEW_SYM_MATRX(point_imu);
+        p_imu_crossmat = Hat(point_imu);
 
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(p_imu_crossmat * C);
-        V3D B(p_crossmat * s.offset_R_L_I.transpose()
-              * C);
-
+        V3D B(p_crossmat * s.offset_R_L_I.transpose() * C);
 
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), B.transpose(), C.transpose();
       } else {
-
-        M3D point_crossmat =
-            (*workspace_)
-                .crossmat_list[(*workspace_).idx + j
-                               + 1];
+        M3D point_crossmat = (*workspace_).hat_list[(*workspace_).idx + j + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
-
 
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
 
-
-      ekfom_data.z(m) =
-          (-norm_vec(0)
-           * (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1]
-                 .x)
-          - (norm_vec(1)
-             * (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1]
-                   .y)
-          - (norm_vec(2)
-             * (*workspace_).feats_down_world->points[(*workspace_).idx + j + 1]
-                   .z)
-          - (*workspace_).normvec->points[j].intensity;
+      ekfom_data.z(
+          m) = (-norm_vec(0)
+                * (*workspace_)
+                      .feats_down_world->points[(*workspace_).idx + j + 1]
+                      .x)
+               - (norm_vec(1)
+                  * (*workspace_)
+                        .feats_down_world->points[(*workspace_).idx + j + 1]
+                        .y)
+               - (norm_vec(2)
+                  * (*workspace_)
+                        .feats_down_world->points[(*workspace_).idx + j + 1]
+                        .z)
+               - (*workspace_).normvec->points[j].intensity;
       m++;
     }
   }
 }
 
-
 void LidarMeasurementModel::hModelOutput(
-    state_output& s,
-    esekfom::dyn_share_modified<double>& ekfom_data) const {
+    state_output& s, esekfom::dyn_share_modified<double>& ekfom_data) const {
   VF(4) pabcd;
   pabcd.setZero();
   (*workspace_).normvec->resize((*workspace_).time_seq[(*workspace_).k]);
   int effect_num_k = 0;
-
 
   for (int j = 0; j < (*workspace_).time_seq[(*workspace_).k]; j++) {
     PointType& point_body_j =
@@ -168,8 +161,8 @@ void LidarMeasurementModel::hModelOutput(
       auto& points_near =
           (*workspace_).Nearest_Points[(*workspace_).idx + j + 1];
 
-      (*workspace_).ivox_->GetClosestPoint(point_world_j, points_near,
-                                           NUM_MATCH_POINTS);
+      (*workspace_)
+          .ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);
 
       if ((points_near.size() < NUM_MATCH_POINTS)) {
         (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = false;
@@ -179,7 +172,6 @@ void LidarMeasurementModel::hModelOutput(
           float pd2 = fabs(pabcd(0) * point_world_j.x
                            + pabcd(1) * point_world_j.y
                            + pabcd(2) * point_world_j.z + pabcd(3));
-
 
           if (p_norm > params_.match_threshold * pd2 * pd2) {
             (*workspace_).point_selected_surf[(*workspace_).idx + j + 1] = true;
@@ -199,7 +191,6 @@ void LidarMeasurementModel::hModelOutput(
     return;
   }
 
-
   ekfom_data.M_Noise = params_.point_covariance;
   ekfom_data.h_x.resize(effect_num_k, 12);
   ekfom_data.h_x = Eigen::MatrixXd::Zero(effect_num_k, 12);
@@ -214,41 +205,40 @@ void LidarMeasurementModel::hModelOutput(
       if (params_.extrinsic_estimation) {
         V3D p_body = (*workspace_).pbody_list[(*workspace_).idx + j + 1];
         M3D p_crossmat, p_imu_crossmat;
-        p_crossmat << SKEW_SYM_MATRX(p_body);
+        p_crossmat = Hat(p_body);
         V3D point_imu = s.offset_R_L_I * p_body + s.offset_T_L_I;
-        p_imu_crossmat << SKEW_SYM_MATRX(point_imu);
+        p_imu_crossmat = Hat(point_imu);
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(p_imu_crossmat * C);
         V3D B(p_crossmat * s.offset_R_L_I.transpose() * C);
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), B.transpose(), C.transpose();
       } else {
-        M3D point_crossmat =
-            (*workspace_).crossmat_list[(*workspace_).idx + j + 1];
+        M3D point_crossmat = (*workspace_).hat_list[(*workspace_).idx + j + 1];
         V3D C(s.rot.transpose() * norm_vec);
         V3D A(point_crossmat * C);
         ekfom_data.h_x.block<1, 12>(m, 0) << norm_vec.transpose(),
             A.transpose(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
       }
-      ekfom_data.z(m) = -norm_vec(0)
-                            * (*workspace_).feats_down_world
-                                  ->points[(*workspace_).idx + j + 1]
-                                  .x
-                        - norm_vec(1)
-                              * (*workspace_).feats_down_world
-                                    ->points[(*workspace_).idx + j + 1]
-                                    .y
-                        - norm_vec(2)
-                              * (*workspace_).feats_down_world
-                                    ->points[(*workspace_).idx + j + 1]
-                                    .z
-                        - (*workspace_).normvec->points[j].intensity;
+      ekfom_data.z(
+          m) = -norm_vec(0)
+                   * (*workspace_)
+                         .feats_down_world->points[(*workspace_).idx + j + 1]
+                         .x
+               - norm_vec(1)
+                     * (*workspace_)
+                           .feats_down_world->points[(*workspace_).idx + j + 1]
+                           .y
+               - norm_vec(2)
+                     * (*workspace_)
+                           .feats_down_world->points[(*workspace_).idx + j + 1]
+                           .z
+               - (*workspace_).normvec->points[j].intensity;
 
       m++;
     }
   }
 }
-
 
 void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
                                              const state_input& state) const {
@@ -256,17 +246,11 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
 
   V3D p_global;
   if (params_.extrinsic_estimation) {
-
-
     p_global = state.rot * (state.offset_R_L_I * p_body + state.offset_T_L_I)
                + state.pos;
 
   } else {
-
-
-    p_global = state.rot
-                   * ((*lidar_rotation_) * p_body
-                      + (*lidar_translation_))
+    p_global = state.rot * ((*lidar_rotation_) * p_body + (*lidar_translation_))
                + state.pos;
   }
 
@@ -284,9 +268,7 @@ void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
     p_global = state.rot * (state.offset_R_L_I * p_body + state.offset_T_L_I)
                + state.pos;
   } else {
-    p_global = state.rot
-                   * ((*lidar_rotation_) * p_body
-                      + (*lidar_translation_))
+    p_global = state.rot * ((*lidar_rotation_) * p_body + (*lidar_translation_))
                + state.pos;
   }
   po->x = p_global(0);
@@ -310,8 +292,7 @@ void Lidar::configure(const Params& params) {
 
 void Lidar::reset() {
   ptr_con_->clear();
-  lidar_buffer_.clear();
-  time_buffer_.clear();
+  frame_buffer_.clear();
   scan_count_ = 0;
   frame_ct_ = 0;
   last_timestamp_lidar_ = -1.0;
@@ -321,16 +302,23 @@ void Lidar::reset() {
 void Lidar::appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
                             std::deque<double>& timestamps) {
   while (!frames.empty() && !timestamps.empty()) {
-    lidar_buffer_.emplace_back(frames.front());
+    const double start_time = timestamps.front() / 1000.0;
+    const double end_time = frameEndTime(frames.front(), start_time,
+                                         params_.lidar_time_interval);
+    frame_buffer_.emplace_back(LidarFrame{.cloud = std::move(frames.front()),
+                                          .start_time = start_time,
+                                          .end_time = end_time});
     frames.pop_front();
-    time_buffer_.emplace_back(timestamps.front() / 1000.0);
     timestamps.pop_front();
   }
 }
 
-void Lidar::appendFrame(PointCloudXYZI::Ptr points, double timestamp) {
-  lidar_buffer_.emplace_back(std::move(points));
-  time_buffer_.emplace_back(timestamp);
+void Lidar::appendFrame(PointCloudXYZI::Ptr pointcloud, double timestamp) {
+  const double end_time = frameEndTime(pointcloud, timestamp,
+                                       params_.lidar_time_interval);
+  frame_buffer_.emplace_back(LidarFrame{.cloud = std::move(pointcloud),
+                                        .start_time = timestamp,
+                                        .end_time = end_time});
 }
 
 void Lidar::appendMergedFrame(const PointCloudXYZI::Ptr& points,
@@ -348,8 +336,11 @@ void Lidar::appendMergedFrame(const PointCloudXYZI::Ptr& points,
     ++frame_ct_;
     return;
   }
-  lidar_buffer_.emplace_back(std::make_shared<PointCloudXYZI>(*ptr_con_));
-  time_buffer_.emplace_back(time_con_);
+  frame_buffer_.emplace_back(
+      LidarFrame{.cloud = std::make_shared<PointCloudXYZI>(*ptr_con_),
+                 .start_time = time_con_,
+                 .end_time = frameEndTime(ptr_con_, time_con_,
+                                          params_.lidar_time_interval)});
   ptr_con_->clear();
   frame_ct_ = 0;
 }
@@ -358,10 +349,12 @@ void Lidar::onStandardPcl(
     const sensor_msgs::msg::PointCloud2::SharedPtr& message) {
   ++scan_count_;
   const double timestamp = rclcpp::Time(message->header.stamp).seconds();
+
   if (timestamp < last_timestamp_lidar_) {
     RCLCPP_ERROR(rclcpp::get_logger("Lidar"), "lidar loop back");
     return;
   }
+
   last_timestamp_lidar_ = timestamp;
 
   const int type = params_.preprocess.lidar_type;
@@ -374,6 +367,7 @@ void Lidar::onStandardPcl(
     appendCutFrames(frames, timestamps);
     return;
   }
+
   auto points = std::make_shared<PointCloudXYZI>(20000, 1);
   preprocess_.process(message, points);
   if (params_.con_frame) {
