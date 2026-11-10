@@ -57,7 +57,7 @@ namespace esekfom {
     T M_Noise;
     Eigen::Matrix<T, Eigen::Dynamic, 1> z;
     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> h_x;
-    Eigen::Matrix<T, 6, 1> z_IMU;
+    Eigen::Matrix<T, 6, 1> residual_IMU;
     Eigen::Matrix<T, 6, 1> R_IMU;
     bool satu_check[6];
   };
@@ -238,19 +238,25 @@ namespace esekfom {
     }
 
     void update_iterated_dyn_share_IMU() {
+      // IMU 量测更新: 把 IMU 读数当作量测, 修正状态里的角速度、加速度与零偏.
+      // 量测方程: ω_m = ω + b_g + n_g, a_m = a + b_a + n_a.
+      // 状态下标: omg = 15..17, acc = 18..20, bg = 24..26, ba = 27..29.
+      // 量测对 omg/acc 与 bg/ba 的雅可比都是单位阵, 所以 H 只在四块上非零.
       dyn_share_modified<Scalar> dyn_share;
       for (int i = 0; i < maximum_iter; i++) {
         dyn_share.valid = true;
-        h_dyn_share_modified_2(x_, dyn_share);
+        h_dyn_share_modified_2(x_, dyn_share);  // 填 z_IMU(6 维残差) 与饱和标志
 
-        Matrix<Scalar, 6, 1> z = dyn_share.z_IMU;
+        Matrix<Scalar, 6, 1> residual = dyn_share.residual_IMU;
 
-        Matrix<double, 30, 6> PHT;
-        Matrix<double, 6, 30> HP;
-        Matrix<double, 6, 6> HPHT;
+        Matrix<double, 30, 6> PHT;  // P H^T
+        Matrix<double, 6, 30> HP;   // H P
+        Matrix<double, 6, 6> HPHT;  // H P H^T + R
         PHT.setZero();
         HP.setZero();
         HPHT.setZero();
+        // l_ = 0..2 对应角速度, l_ = 3..5 对应加速度;
+        // 15 + l_ 依次指向 omg/acc, 24 + l_ 依次指向 bg/ba.
         for (int l_ = 0; l_ < 6; l_++) {
           if (!dyn_share.satu_check[l_]) {
             PHT.col(l_) = P_.col(15 + l_) + P_.col(24 + l_);
@@ -261,16 +267,16 @@ namespace esekfom {
           if (!dyn_share.satu_check[l_]) {
             HPHT.col(l_) = HP.col(15 + l_) + HP.col(24 + l_);
           }
-          HPHT(l_, l_) += dyn_share.R_IMU(l_);  //, l);
+          HPHT(l_, l_) += dyn_share.R_IMU(l_);  // 叠加量测噪声
         }
-        Eigen::Matrix<double, 30, 6> K = PHT * HPHT.inverse();
+        Eigen::Matrix<double, 30, 6> K =
+            PHT * HPHT.inverse();  // K = hat{P} H^T S^-1 = (H P H^T + R)^-1
 
-        Matrix<Scalar, StateDof, 1> dx_ = K * z;
+        Matrix<Scalar, StateDof, 1> dx_o = K * residual;  // 状态修正量
 
-        P_ -= K * HP;
-        x_.boxplus(dx_);
+        P_ -= K * HP;      // P = P - K H P
+        x_.boxplus(dx_o);  // 在流形上叠加修正量
       }
-      return;
     }
 
     void change_x(state& input_state) {

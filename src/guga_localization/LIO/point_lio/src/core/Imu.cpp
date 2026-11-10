@@ -12,12 +12,12 @@ void ImuMeasurementModel::configure(const ImuParams& params) {
 void ImuMeasurementModel::hModelOutput(
     state_output& state, esekfom::dyn_share_modified<double>& data) const {
   std::memset(data.satu_check, false, 6);
-  data.z_IMU.block<3, 1>(0, 0) = workspace_.angular_velocity - state.omg
-                                 - state.bg;
-  data.z_IMU.block<3, 1>(3, 0) = workspace_.linear_acceleration
-                                     * params_.processor.gravity_magnitude
-                                     / params_.acc_norm
-                                 - state.acc - state.ba;
+  data.residual_IMU.block<3, 1>(0, 0) = workspace_.angular_velocity - state.omg
+                                        - state.bg;
+  data.residual_IMU.block<3, 1>(
+      3, 0) = workspace_.linear_acceleration
+                  * params_.processor.gravity_magnitude / params_.acc_norm
+              - state.acc - state.ba;
   data.R_IMU << params_.measurement_gyro_cov, params_.measurement_gyro_cov,
       params_.measurement_gyro_cov, params_.measurement_acc_cov,
       params_.measurement_acc_cov, params_.measurement_acc_cov;
@@ -29,12 +29,12 @@ void ImuMeasurementModel::hModelOutput(
     if (std::abs(workspace_.angular_velocity(axis))
         >= 0.99 * params_.saturation_gyro) {
       data.satu_check[axis] = true;
-      data.z_IMU(axis) = 0.0;
+      data.residual_IMU(axis) = 0.0;
     }
     if (std::abs(workspace_.linear_acceleration(axis))
         >= 0.99 * params_.saturation_acc) {
       data.satu_check[axis + 3] = true;
-      data.z_IMU(axis + 3) = 0.0;
+      data.residual_IMU(axis + 3) = 0.0;
     }
   }
 }
