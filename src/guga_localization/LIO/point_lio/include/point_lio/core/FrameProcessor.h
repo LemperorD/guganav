@@ -47,9 +47,7 @@ private:
   double lidar_end_time_{0.0};
   bool is_first_frame_{true};
   double time_update_last_{0.0};
-  double last_time_input_{0.0};
   double last_time_output_{0.0};
-  input_ikfom input_in_;
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);

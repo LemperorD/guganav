@@ -15,8 +15,6 @@ void FrameProcessor::initializeFilter() {
   filter_.configure(config_.filter);
   filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());
   if (config_.lidar.extrinsic_estimation) {
-    filter_.input().x_.offset_R_L_I = lidar_.RotationLidarToImu();
-    filter_.input().x_.offset_T_L_I = lidar_.TranslationLidarToImu();
     filter_.output().x_.offset_R_L_I = lidar_.RotationLidarToImu();
     filter_.output().x_.offset_T_L_I = lidar_.TranslationLidarToImu();
   }
@@ -57,7 +55,6 @@ void FrameProcessor::initScan() {
             << '\n';
   time_current_ = 0.0;
 
-  filter_.input().x_.gravity = config_.imu.processor.gravity;
   filter_.output().x_.gravity = config_.imu.processor.gravity;
 
   imu_.discardBefore(measures_.lidar_start_time);
@@ -315,6 +312,8 @@ void FrameProcessor::processFramePoints(
         publish_tf) {
   const auto& imu_last = imu_.last();
   const auto& imu_next = imu_.next();
+  const double acc_scale =
+      config_.imu.processor.gravity_magnitude / config_.imu.acc_norm;
   if (lidar_.workspace().time_seq.empty()) {
     if (!imu_.empty()) {
       imu_.advanceCursor();
@@ -345,12 +344,15 @@ void FrameProcessor::processFramePoints(
         time_current_ = get_time_sec(imu_next.header.stamp);
 
         double dt = time_current_ - last_time;
-        double dt_cov = time_current_ - time_update_last_;
-        if (dt_cov > 0.0) {
-          filter_.predict(kf, dt_cov, q, input_in_, false, true);
+        double dt_cov = time_current_ - time_update_last_;  //?
+        const auto imu_input = imu_.lastInput(acc_scale);
+
+        if (dt_cov > 0) {
+          filter_.predict(kf, dt_cov, q, imu_input, false, true);
           time_update_last_ = time_current_;
         }
-        filter_.predict(kf, dt, q, input_in_, true, false);
+
+        filter_.predict(kf, dt, q, imu_input, true, false);
         last_time = time_current_;
         const auto measurement = imu_.nextMeasurement();
         imu_.setCurrentMeasurement(measurement);
@@ -413,12 +415,13 @@ void FrameProcessor::processFramePoints(
 
         const double imu_time = get_time_sec(imu_next.header.stamp);
         double dt = imu_time - last_time;
-        filter_.predict(kf, dt, q, input_in_, true, false);
+        const auto imu_input = imu_.lastInput(acc_scale);
+        filter_.predict(kf, dt, q, imu_input, true, false);
         last_time = imu_time;
 
         double dt_cov = imu_time - time_update_last_;
         if (dt_cov > 0.0) {
-          filter_.predict(kf, dt_cov, q, input_in_, false, true);
+          filter_.predict(kf, dt_cov, q, imu_input, false, true);
           time_update_last_ = imu_time;
           filter_.updateOutputImu();
         }
@@ -427,14 +430,15 @@ void FrameProcessor::processFramePoints(
     }
 
     double dt = time_current_ - last_time;
+    const auto imu_input = imu_.lastInput(acc_scale);
     if (!config_.mapping.propagate_at_imu_frequency) {
       double dt_cov = time_current_ - time_update_last_;
       if (dt_cov > 0.0) {
-        filter_.predict(kf, dt_cov, q, input_in_, false, true);
+        filter_.predict(kf, dt_cov, q, imu_input, false, true);
         time_update_last_ = time_current_;
       }
     }
-    filter_.predict(kf, dt, q, input_in_, true, false);
+    filter_.predict(kf, dt, q, imu_input, true, false);
     last_time = time_current_;
 
     if (lidar_.workspace().feats_down_size < 1) {
@@ -471,15 +475,11 @@ void FrameProcessor::processFramePoints(
   }
 }
 
-using InputKf = esekfom::esekf<state_input, 24, input_ikfom, state_input, 0>;
 using OutputKf = esekfom::esekf<state_output, 30, input_ikfom, state_output, 0>;
-using InputNoise = Eigen::Matrix<double, 24, 24>;
 using OutputNoise = Eigen::Matrix<double, 30, 30>;
 using OdomCallback = std::function<void(const nav_msgs::msg::Odometry&)>;
 using TfCallback =
     std::function<void(const geometry_msgs::msg::TransformStamped&)>;
 
-template void FrameProcessor::processFramePoints<InputKf, InputNoise>(
-    InputKf&, double&, InputNoise&, const OdomCallback&, const TfCallback&);
 template void FrameProcessor::processFramePoints<OutputKf, OutputNoise>(
     OutputKf&, double&, OutputNoise&, const OdomCallback&, const TfCallback&);

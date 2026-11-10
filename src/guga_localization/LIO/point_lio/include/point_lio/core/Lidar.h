@@ -54,12 +54,8 @@ public:
         lidar_rotation_(&lidar_rotation) {
   }
   void configure(const LidarParams& params);
-  void hModelInput(state_input& state,
-                   esekfom::dyn_share_modified<double>& data) const;
   void hModelOutput(state_output& state,
                     esekfom::dyn_share_modified<double>& data) const;
-  void pointBodyToWorld(PointType const* input, PointType* output,
-                        const state_input& state) const;
   void pointBodyToWorld(PointType const* input, PointType* output,
                         const state_output& state) const;
 
