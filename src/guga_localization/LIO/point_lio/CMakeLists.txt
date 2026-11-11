@@ -49,10 +49,10 @@ add_executable(pointlio_mapping
   src/core/preprocess.cpp
   src/core/Lidar.cpp
   src/core/Synchronizer.cpp
-  src/core/Filter.cpp
   src/core/IMU_Processing.cpp
   src/core/Imu.cpp
   src/core/FrameProcessor.cpp
+  src/core/ManifoldEskf.cpp
 )
 
 ament_target_dependencies(pointlio_mapping

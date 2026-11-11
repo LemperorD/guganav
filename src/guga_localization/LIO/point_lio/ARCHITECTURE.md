@@ -35,14 +35,14 @@ Point-LIO 是一个 **高带宽激光惯性里程计 (LiDAR-Inertial Odometry)**
 - **多雷达支持**: Livox Avia/Horizon/Mid-360, Velodyne VLP-16, Ouster OS1-64, 禾赛 XT32
 - **先验地图模式**: 支持加载预构建 PCD 地图进行重定位 (RM25_SMBU_auto_sentry 分支新增)
 
-| 指标 | 值 |
-|------|-----|
-| 状态维度 | 24 (input) / 30 (output) |
-| 最高里程计频率 | 4-8 kHz (受限于点频) |
-| 最大角速度 | ~75 rad/s (测试值) |
-| 地图数据结构 | iVox 增量体素 |
-| 量测模型 | 点到 IMLS 平面距离 |
-| C++ 标准 | C++17 |
+| 指标           | 值                       |
+| -------------- | ------------------------ |
+| 状态维度       | 24 (input) / 30 (output) |
+| 最高里程计频率 | 4-8 kHz (受限于点频)     |
+| 最大角速度     | ~75 rad/s (测试值)       |
+| 地图数据结构   | iVox 增量体素            |
+| 量测模型       | 点到 IMLS 平面距离       |
+| C++ 标准       | C++17                    |
 
 ---
 
@@ -111,14 +111,14 @@ Point-LIO 是一个 **高带宽激光惯性里程计 (LiDAR-Inertial Odometry)**
 
 ### 架构分层
 
-| 层 | 模块 | 职责 |
-|----|------|------|
-| **数据接入** | `li_initialization` | 传感器回调、同步、缓冲区管理 |
-| **预处理** | `preprocess` / `IMU_Processing` | 点云特征提取、时间戳计算、IMU初始化 |
-| **状态估计** | `Estimator` + IKFoM | ESKF 预测/更新、量测模型、雅可比 |
-| **地图管理** | `ivox` | 增量体素地图、近邻搜索 |
-| **输出** | `laserMapping` (main) | 发布里程计/路径/点云/TF、日志 |
-| **配置** | `parameters` | YAML参数解析、全局变量 |
+| 层           | 模块                            | 职责                                |
+| ------------ | ------------------------------- | ----------------------------------- |
+| **数据接入** | `li_initialization`             | 传感器回调、同步、缓冲区管理        |
+| **预处理**   | `preprocess` / `IMU_Processing` | 点云特征提取、时间戳计算、IMU初始化 |
+| **状态估计** | `Estimator` + IKFoM             | ESKF 预测/更新、量测模型、雅可比    |
+| **地图管理** | `ivox`                          | 增量体素地图、近邻搜索              |
+| **输出**     | `laserMapping` (main)           | 发布里程计/路径/点云/TF、日志       |
+| **配置**     | `parameters`                    | YAML参数解析、全局变量              |
 
 ---
 
@@ -191,46 +191,46 @@ publish_frame_body()    ← 发布 IMU 系点云
 
 ### 4.1 核心源码 (`src/`)
 
-| 文件 | 行数 | 角色 | 关键内容 |
-|------|------|------|---------|
-| `laserMapping.cpp` | 1196 | **主入口** | `main()`, 发布函数, 地图初始化/增量, 日志 |
-| `parameters.cpp` | 413 | 参数配置 | `readParameters()`, 全局变量定义, 协方差重置 |
-| `parameters.h` | 210 | 参数声明 | 所有全局 `extern` 变量 (120+), 函数声明 |
-| `Estimator.cpp` | 614 | ESKF 核心 | 过程噪声 Q, f(x,u), df/dx, h_model, pointBodyToWorld |
-| `Estimator.h` | 232 | ESKF 声明 | 量测变量, 10个函数声明 |
-| `preprocess.cpp` | 1058 | 点云预处理 | 4种 handler, give_feature, plane_judge, edge_jump_judge |
-| `preprocess.h` | 319 | 预处理声明 | Preprocess类, 枚举, orgtype结构, 雷达原生点结构 |
-| `li_initialization.cpp` | 378 | 传感器同步 | 3种回调, sync_packages, 合帧/切帧 |
-| `li_initialization.h` | 148 | 同步声明 | 缓冲区, 互斥变量, 调试数组 |
-| `IMU_Processing.cpp` | 190 | IMU 处理 | IMU_init (滑动平均), Set_init (重力对齐), Process |
-| `IMU_Processing.h` | 126 | IMU 声明 | ImuProcess类 |
+| 文件                    | 行数 | 角色       | 关键内容                                                |
+| ----------------------- | ---- | ---------- | ------------------------------------------------------- |
+| `laserMapping.cpp`      | 1196 | **主入口** | `main()`, 发布函数, 地图初始化/增量, 日志               |
+| `parameters.cpp`        | 413  | 参数配置   | `readParameters()`, 全局变量定义, 协方差重置            |
+| `parameters.h`          | 210  | 参数声明   | 所有全局 `extern` 变量 (120+), 函数声明                 |
+| `Estimator.cpp`         | 614  | ESKF 核心  | 过程噪声 Q, f(x,u), df/dx, h_model, pointBodyToWorld    |
+| `Estimator.h`           | 232  | ESKF 声明  | 量测变量, 10个函数声明                                  |
+| `preprocess.cpp`        | 1058 | 点云预处理 | 4种 handler, give_feature, plane_judge, edge_jump_judge |
+| `preprocess.h`          | 319  | 预处理声明 | Preprocess类, 枚举, orgtype结构, 雷达原生点结构         |
+| `li_initialization.cpp` | 378  | 传感器同步 | 3种回调, sync_packages, 合帧/切帧                       |
+| `li_initialization.h`   | 148  | 同步声明   | 缓冲区, 互斥变量, 调试数组                              |
+| `IMU_Processing.cpp`    | 190  | IMU 处理   | IMU_init (滑动平均), Set_init (重力对齐), Process       |
+| `IMU_Processing.h`      | 126  | IMU 声明   | ImuProcess类                                            |
 
 ### 4.2 公共头文件 (`include/`)
 
-| 文件 | 行数 | 角色 |
-|------|------|------|
-| `common_lib.h` | 345 | 公共类型: 流形定义、常量、宏、MeasureGroup、平面估计工具函数 |
-| `so3_math.h` | 219 | SO(3) 数学: Exp, Log, 反对称矩阵, 欧拉角, 右雅可比逆 |
+| 文件           | 行数 | 角色                                                         |
+| -------------- | ---- | ------------------------------------------------------------ |
+| `common_lib.h` | 345  | 公共类型: 流形定义、常量、宏、MeasureGroup、平面估计工具函数 |
+| `so3_math.h`   | 219  | SO(3) 数学: Exp, Log, 反对称矩阵, 欧拉角, 右雅可比逆         |
 
 ### 4.3 第三方头文件 (`include/`)
 
-| 目录/文件 | 行数 | 来源 | 说明 |
-|-----------|------|------|------|
-| `IKFoM/` | ~3000 | HKU-MARS | 流形上的不变卡尔曼滤波模板库 (header-only) |
-| `ivox/` | ~1500 | Faster-LIO | 增量体素地图 (Hilbert曲线, iVox3D) |
-| `matplotlibcpp.h` | 2659 | lava/matplotlib-cpp | C++ matplotlib 绑定 (调试绘图用, 实际未使用) |
+| 目录/文件         | 行数  | 来源                | 说明                                         |
+| ----------------- | ----- | ------------------- | -------------------------------------------- |
+| `IKFoM/`          | ~3000 | HKU-MARS            | 流形上的不变卡尔曼滤波模板库 (header-only)   |
+| `ivox/`           | ~1500 | Faster-LIO          | 增量体素地图 (Hilbert曲线, iVox3D)           |
+| `matplotlibcpp.h` | 2659  | lava/matplotlib-cpp | C++ matplotlib 绑定 (调试绘图用, 实际未使用) |
 
 ### 4.4 配置文件
 
-| 文件 | 说明 |
-|------|------|
-| `config/mid360.yaml` | Mid-360 配置 (默认) |
-| `config/avia.yaml` | Avia 配置 |
-| `config/horizon.yaml` | Horizon 配置 |
-| `config/velody16.yaml` | Velodyne VLP-16 配置 |
-| `config/ouster64.yaml` | Ouster OS1-64 配置 |
-| `launch/point_lio.launch.py` | ROS2 launch 文件 |
-| `rviz_cfg/loam_livox.rviz` | RViz2 可视化配置 |
+| 文件                         | 说明                 |
+| ---------------------------- | -------------------- |
+| `config/mid360.yaml`         | Mid-360 配置 (默认)  |
+| `config/avia.yaml`           | Avia 配置            |
+| `config/horizon.yaml`        | Horizon 配置         |
+| `config/velody16.yaml`       | Velodyne VLP-16 配置 |
+| `config/ouster64.yaml`       | Ouster OS1-64 配置   |
+| `launch/point_lio.launch.py` | ROS2 launch 文件     |
+| `rviz_cfg/loam_livox.rviz`   | RViz2 可视化配置     |
 
 ---
 
@@ -240,16 +240,16 @@ publish_frame_body()    ← 发布 IMU 系点云
 
 **状态空间** (以 input 模式 24 维为例):
 
-| 索引 | 变量 | 含义 | 维度 |
-|------|------|------|------|
-| 0:3 | pos | 位置 (世界系) | 3 |
-| 3:6 | rot | 姿态 SO(3) | 3 |
-| 6:9 | offset_R_L_I | LiDAR→IMU 外参旋转 | 3 |
-| 9:12 | offset_T_L_I | LiDAR→IMU 外参平移 | 3 |
-| 12:15 | vel | 速度 (世界系) | 3 |
-| 15:18 | bg | 陀螺仪零偏 | 3 |
-| 18:21 | ba | 加速度计零偏 | 3 |
-| 21:24 | gravity | 重力向量 (世界系) | 3 |
+| 索引  | 变量         | 含义               | 维度 |
+| ----- | ------------ | ------------------ | ---- |
+| 0:3   | pos          | 位置 (世界系)      | 3    |
+| 3:6   | rot          | 姿态 SO(3)         | 3    |
+| 6:9   | offset_R_L_I | LiDAR→IMU 外参旋转 | 3    |
+| 9:12  | offset_T_L_I | LiDAR→IMU 外参平移 | 3    |
+| 12:15 | vel          | 速度 (世界系)      | 3    |
+| 15:18 | bg           | 陀螺仪零偏         | 3    |
+| 18:21 | ba           | 加速度计零偏       | 3    |
+| 21:24 | gravity      | 重力向量 (世界系)  | 3    |
 
 **动力学模型** (input 模式):
 
@@ -325,25 +325,25 @@ z_IMU[3:6] = a_meas * G/acc_norm - (acc + ba)  (加速度残差)
 `laserMapping.cpp` / `Estimator.cpp` 中的 `[Workflow N]` 注释对应 Point-LIO 论文
 Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法流程:
 
-| 标记 | 伪代码步骤 | 代码位置 |
-|------|-----------|----------|
-| `[Workflow 1]` | ① 状态传播 (9)(10) | `processFramePoints`: 各 `kf.predict()` 调用前 (laserMapping.cpp ~L589/L667) |
-| `[Workflow 2]` | ② 如果是激光雷达点 | `processFramePoints` 列1: `time_seq` 非空时的逐时间组循环 (~L624) |
-| `[Workflow 3]` | ③ 点量测准备 (协方差变换) | `prepare_point_measurements()` (~L1006); 注: 本实现用标量 `laser_point_cov`, 逐点协方差变换未启用 |
-| `[Workflow 4]` | ④ 判断是否存在平面对应 | `update_iterated_dyn_share_modified()` 调用前 (~L777); 内部 `h_model_*` 做近邻搜索/平面拟合/马氏检验 |
-| `[Workflow 5]` | ⑤ 计算 r, H, D (12)(13) | 同上调用; 残差/雅可比/噪声在 `h_model_*` 内计算 (Estimator.cpp) |
-| `[Workflow 6]` | ⑥ 状态更新 (20)(21) | 同上调用; `x_.boxplus(K·z)` 在 esekfom.hpp `update_iterated_dyn_share_modified` 内 |
-| `[Workflow 7]` | ⑦ 协方差更新 (23)(24) | 同上调用; `P_ -= K·H·P_` 在 esekfom.hpp 内 |
-| `[Workflow 8]` | ⑧ 更新状态变换点加入地图 | 更新后的 `pointBodyToWorld` 循环 (~L812); 入库在 `MapIncremental` (~L1026) |
-| `[Workflow 9]` | ⑨ 否则 (无对应→跳过更新) | `if (!update_iterated_dyn_share_modified()) continue;` (~L782) |
-| `[Workflow 10]` | ⑩ 将点 p 加入地图 | `MapIncremental` 中 `Nearest_Points` 为空的分支 (~L241) |
-| `[Workflow 12]` | ⑫ 否则如果 IMU 测量 | `processFramePoints` 列2: `time_seq` 为空时的 IMU-only 分支 (~L537) |
+| 标记            | 伪代码步骤                | 代码位置                                                                                                                         |
+| --------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `[Workflow 1]`  | ① 状态传播 (9)(10)        | `processFramePoints`: 各 `kf.predict()` 调用前 (laserMapping.cpp ~L589/L667)                                                     |
+| `[Workflow 2]`  | ② 如果是激光雷达点        | `processFramePoints` 列1: `time_seq` 非空时的逐时间组循环 (~L624)                                                                |
+| `[Workflow 3]`  | ③ 点量测准备 (协方差变换) | `prepare_point_measurements()` (~L1006); 注: 本实现用标量 `laser_point_cov`, 逐点协方差变换未启用                                |
+| `[Workflow 4]`  | ④ 判断是否存在平面对应    | `update_iterated_dyn_share_modified()` 调用前 (~L777); 内部 `h_model_*` 做近邻搜索/平面拟合/马氏检验                             |
+| `[Workflow 5]`  | ⑤ 计算 r, H, D (12)(13)   | 同上调用; 残差/雅可比/噪声在 `h_model_*` 内计算 (Estimator.cpp)                                                                  |
+| `[Workflow 6]`  | ⑥ 状态更新 (20)(21)       | 同上调用; `x_.boxplus(K·z)` 在 esekfom.hpp `update_iterated_dyn_share_modified` 内                                               |
+| `[Workflow 7]`  | ⑦ 协方差更新 (23)(24)     | 同上调用; `P_ -= K·H·P_` 在 esekfom.hpp 内                                                                                       |
+| `[Workflow 8]`  | ⑧ 更新状态变换点加入地图  | 更新后的 `pointBodyToWorld` 循环 (~L812); 入库在 `MapIncremental` (~L1026)                                                       |
+| `[Workflow 9]`  | ⑨ 否则 (无对应→跳过更新)  | `if (!update_iterated_dyn_share_modified()) continue;` (~L782)                                                                   |
+| `[Workflow 10]` | ⑩ 将点 p 加入地图         | `MapIncremental` 中 `Nearest_Points` 为空的分支 (~L241)                                                                          |
+| `[Workflow 12]` | ⑫ 否则如果 IMU 测量       | `processFramePoints` 列2: `time_seq` 为空时的 IMU-only 分支 (~L537)                                                              |
 | `[Workflow 13]` | ⑬ 如果无饱和度 (a_m, ω_m) | `h_model_IMU_output` 内 `check_satu` 逐轴判断 (Estimator.cpp ~L542); 调用点见两处 `update_iterated_dyn_share_IMU()` (~L605/L735) |
-| `[Workflow 14]` | ⑭ 计算 r, H, D (14)(15) | `h_model_IMU_output` 残差/量测噪声 (Estimator.cpp ~L529) |
-| `[Workflow 15]` | ⑮ 状态更新 (20)(21) | `update_iterated_dyn_share_IMU` 内 `x_.boxplus(K·z_IMU)` (esekfom.hpp) |
-| `[Workflow 16]` | ⑯ 协方差更新 (23)(24) | `update_iterated_dyn_share_IMU` 内 `P_ -= K·HP` (esekfom.hpp) |
-| `[Workflow 17]` | ⑰ 否则 (饱和→跳过) | `satu_check` 为真的轴不参与增益/协方差计算 (esekfom.hpp); 残差置零在 `h_model_IMU_output` (~L543) |
-| `[Workflow 18]` | ⑱ 算法末尾 (输出) | 帧末 `publish_odometry()` 发布 x_{k+1}/P_{k+1} (~L1020) |
+| `[Workflow 14]` | ⑭ 计算 r, H, D (14)(15)   | `h_model_IMU_output` 残差/量测噪声 (Estimator.cpp ~L529)                                                                         |
+| `[Workflow 15]` | ⑮ 状态更新 (20)(21)       | `update_iterated_dyn_share_IMU` 内 `x_.boxplus(K·z_IMU)` (esekfom.hpp)                                                           |
+| `[Workflow 16]` | ⑯ 协方差更新 (23)(24)     | `update_iterated_dyn_share_IMU` 内 `P_ -= K·HP` (esekfom.hpp)                                                                    |
+| `[Workflow 17]` | ⑰ 否则 (饱和→跳过)        | `satu_check` 为真的轴不参与增益/协方差计算 (esekfom.hpp); 残差置零在 `h_model_IMU_output` (~L543)                                |
+| `[Workflow 18]` | ⑱ 算法末尾 (输出)         | 帧末 `publish_odometry()` 发布 x_{k+1}/P_{k+1} (~L1020)                                                                          |
 
 说明:
 - 步骤 ⑪ (LiDAR 分支的结束 `否则`) 无对应代码, 故无标记。
@@ -397,15 +397,15 @@ Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法�
 
 ## 7. 两种 EKF 模式对比
 
-| 维度 | input 模式 | output 模式 |
-|------|-----------|------------|
-| 状态维度 | 24 | 30 |
-| 过程噪声维度 | 12 (ng, na, nbg, nba) | 15 (+ vel噪声) |
-| 量测模型数 | 1 (激光点面) | 2 (激光点面 + IMU伪量测) |
-| 角速度/加速度 | 来自 IMU 测量 (去零偏) | 来自状态估计 |
-| 状态导数 | d(vel)/dt = R·(a_meas-ba) + g | d(vel)/dt = R·acc + g |
-| 适用场景 | IMU 质量好、同步精确 | IMU 可能饱和、需要估计角速度/加速度 |
-| 推荐场景 | 常规使用 | 高动态/IMU 易饱和的场景 |
+| 维度          | input 模式                    | output 模式                         |
+| ------------- | ----------------------------- | ----------------------------------- |
+| 状态维度      | 24                            | 30                                  |
+| 过程噪声维度  | 12 (ng, na, nbg, nba)         | 15 (+ vel噪声)                      |
+| 量测模型数    | 1 (激光点面)                  | 2 (激光点面 + IMU伪量测)            |
+| 角速度/加速度 | 来自 IMU 测量 (去零偏)        | 来自状态估计                        |
+| 状态导数      | d(vel)/dt = R·(a_meas-ba) + g | d(vel)/dt = R·acc + g               |
+| 适用场景      | IMU 质量好、同步精确          | IMU 可能饱和、需要估计角速度/加速度 |
+| 推荐场景      | 常规使用                      | 高动态/IMU 易饱和的场景             |
 
 ### 7.1 两种模式的状态转移矩阵差异
 
@@ -425,14 +425,14 @@ Algorithm 1 (18 步伪代码) 的步骤编号，用于在代码中追溯算法�
 
 项目使用大量全局变量进行模块间数据共享 (无封装):
 
-| 类别 | 数量 | 声明位置 | 定义位置 |
-|------|------|---------|---------|
-| 配置参数 | ~60 | `parameters.h` | `parameters.cpp` |
-| 状态变量 | ~20 | `parameters.h` | `parameters.cpp` |
-| 点云缓存 | ~10 | `Estimator.h` | `Estimator.cpp` |
-| EKF 实例 | 2 | `common_lib.h` | `Estimator.cpp` |
-| 量测数据 | ~15 | `Estimator.h` | `Estimator.cpp` |
-| 同步缓冲区 | ~15 | `li_initialization.h` | `li_initialization.cpp` |
+| 类别       | 数量 | 声明位置              | 定义位置                |
+| ---------- | ---- | --------------------- | ----------------------- |
+| 配置参数   | ~60  | `parameters.h`        | `parameters.cpp`        |
+| 状态变量   | ~20  | `parameters.h`        | `parameters.cpp`        |
+| 点云缓存   | ~10  | `Estimator.h`         | `Estimator.cpp`         |
+| EKF 实例   | 2    | `common_lib.h`        | `Estimator.cpp`         |
+| 量测数据   | ~15  | `Estimator.h`         | `Estimator.cpp`         |
+| 同步缓冲区 | ~15  | `li_initialization.h` | `li_initialization.cpp` |
 
 ### 8.2 关键全局变量
 
@@ -457,7 +457,6 @@ ros__parameters:
 │   ├── prop_at_freq_of_imu    # 按IMU频率传播
 │   ├── check_satu             # IMU饱和检测
 │   ├── space_down_sample      # 二次空间降采样
-│   ├── imu_en                 # 是否启用IMU
 │   └── extrinsic_est_en       # 是否在线估计外参
 │
 ├── common
@@ -506,23 +505,23 @@ ros__parameters:
 
 ### 10.1 代码质量问题
 
-| 问题 | 位置 | 描述 |
-|------|------|------|
-| **全局变量泛滥** | 全项目 | 120+ 全局变量，无封装，模块间隐式依赖 |
-| **全局 EKF 实例** | `common_lib.h`/`Estimator.cpp` | `kf_input`/`kf_output` 为全局单例，无法多实例 |
-| **宏误用风险** | `common_lib.h` | `VEC_FROM_ARRAY` 等宏展开可能产生未定义行为 |
-| **硬编码数组大小** | `Estimator.cpp` | `point_selected_surf[100000]` 固定大小 |
-| **重复代码** | `Estimator.cpp` | `h_model_input` 和 `h_model_output` 近乎完全相同 |
-| **重复代码** | `laserMapping.cpp` | input/output 模式的主循环分支高度重复 |
-| **重复代码** | `li_initialization.cpp` | `standard_pcl_cbk` 和 `livox_pcl_cbk` 大部分逻辑相同 |
-| **未使用代码** | 多处 | 被注释的代码块、未使用的变量 (`depth_feats_world`, `s_plot2`, `s_plot3`) |
-| **头文件污染** | `parameters.h` | 包含 `<Python.h>` 但不使用，引入了大量无关依赖 |
-| **命名不一致** | 多处 | `laserMapping` vs `pointlio_mapping`, `lidar` vs `lidar` |
-| **魔数** | `preprocess.cpp` | 大量硬编码的经验参数 (如 `group_size=8`, `p2l_ratio=225`) |
-| **处处理函数过长** | `laserMapping.cpp` | `main()` 函数 ~400 行，难以理解和测试 |
-| **线程安全** | `li_initialization.cpp` | `mtx_buffer` 定义了但从未使用 (已注释) |
-| **IMU 去畸变缺失** | `IMU_Processing.cpp` | `Process()` 仅复制原始点云，未实现反向传播去畸变 |
-| **`using namespace std`** | 多个头文件 | 头文件中使用会污染所有包含方的命名空间 |
+| 问题                      | 位置                           | 描述                                                                     |
+| ------------------------- | ------------------------------ | ------------------------------------------------------------------------ |
+| **全局变量泛滥**          | 全项目                         | 120+ 全局变量，无封装，模块间隐式依赖                                    |
+| **全局 EKF 实例**         | `common_lib.h`/`Estimator.cpp` | `kf_input`/`kf_output` 为全局单例，无法多实例                            |
+| **宏误用风险**            | `common_lib.h`                 | `VEC_FROM_ARRAY` 等宏展开可能产生未定义行为                              |
+| **硬编码数组大小**        | `Estimator.cpp`                | `point_selected_surf[100000]` 固定大小                                   |
+| **重复代码**              | `Estimator.cpp`                | `h_model_input` 和 `h_model_output` 近乎完全相同                         |
+| **重复代码**              | `laserMapping.cpp`             | input/output 模式的主循环分支高度重复                                    |
+| **重复代码**              | `li_initialization.cpp`        | `standard_pcl_cbk` 和 `livox_pcl_cbk` 大部分逻辑相同                     |
+| **未使用代码**            | 多处                           | 被注释的代码块、未使用的变量 (`depth_feats_world`, `s_plot2`, `s_plot3`) |
+| **头文件污染**            | `parameters.h`                 | 包含 `<Python.h>` 但不使用，引入了大量无关依赖                           |
+| **命名不一致**            | 多处                           | `laserMapping` vs `pointlio_mapping`, `lidar` vs `lidar`                 |
+| **魔数**                  | `preprocess.cpp`               | 大量硬编码的经验参数 (如 `group_size=8`, `p2l_ratio=225`)                |
+| **处处理函数过长**        | `laserMapping.cpp`             | `main()` 函数 ~400 行，难以理解和测试                                    |
+| **线程安全**              | `li_initialization.cpp`        | `mtx_buffer` 定义了但从未使用 (已注释)                                   |
+| **IMU 去畸变缺失**        | `IMU_Processing.cpp`           | `Process()` 仅复制原始点云，未实现反向传播去畸变                         |
+| **`using namespace std`** | 多个头文件                     | 头文件中使用会污染所有包含方的命名空间                                   |
 
 ### 10.2 架构改进方向
 
@@ -576,16 +575,16 @@ ros__parameters:
 
 ### 10.3 重构优先级建议
 
-| 优先级 | 方向 | 收益 | 风险 |
-|--------|------|------|------|
-| 🔴 高 | 消除全局变量, 引入 Context 类 | 可测试性, 可维护性 | 需要仔细处理数据流 |
-| 🔴 高 | 拆分 `laserMapping.cpp` | 可读性 | 低 (纯提取) |
-| 🔴 高 | 合并重复的量测模型代码 | 减少50%重复 | 需验证等价性 |
-| 🟡 中 | 清理未使用代码和头文件 | 编译速度, 清晰度 | 低 |
-| 🟡 中 | 参数结构化管理 | 可配置性 | 需更新 YAML schema |
-| 🟢 低 | 实现 IMU 去畸变 | 精度提升 | 需验证算法 |
-| 🟢 低 | 添加单元测试 | 回归保护 | 需搭建测试框架 |
-| 🟢 低 | CMake 清理 | 构建简洁 | 低 |
+| 优先级 | 方向                          | 收益               | 风险               |
+| ------ | ----------------------------- | ------------------ | ------------------ |
+| 🔴 高   | 消除全局变量, 引入 Context 类 | 可测试性, 可维护性 | 需要仔细处理数据流 |
+| 🔴 高   | 拆分 `laserMapping.cpp`       | 可读性             | 低 (纯提取)        |
+| 🔴 高   | 合并重复的量测模型代码        | 减少50%重复        | 需验证等价性       |
+| 🟡 中   | 清理未使用代码和头文件        | 编译速度, 清晰度   | 低                 |
+| 🟡 中   | 参数结构化管理                | 可配置性           | 需更新 YAML schema |
+| 🟢 低   | 实现 IMU 去畸变               | 精度提升           | 需验证算法         |
+| 🟢 低   | 添加单元测试                  | 回归保护           | 需搭建测试框架     |
+| 🟢 低   | CMake 清理                    | 构建简洁           | 低                 |
 
 ---
 
@@ -600,11 +599,11 @@ ros__parameters:
 
 ### 11.2 Vendor 依赖 (源码内嵌)
 
-| 库 | 路径 | 来源 | 许可证 |
-|----|------|------|--------|
-| **IKFoM** | `include/IKFoM/` | [HKU-MARS/IKFoM](https://github.com/hku-mars/IKFoM) | GPLv3 |
-| **iVox** | `include/ivox/` | [gaoxiang12/faster-lio](https://github.com/gaoxiang12/faster-lio) (Faster-LIO) | BSD |
-| **matplotlib-cpp** | `include/matplotlibcpp.h` | [lava/matplotlib-cpp](https://github.com/lava/matplotlib-cpp) | MIT |
+| 库                 | 路径                      | 来源                                                                           | 许可证 |
+| ------------------ | ------------------------- | ------------------------------------------------------------------------------ | ------ |
+| **IKFoM**          | `include/IKFoM/`          | [HKU-MARS/IKFoM](https://github.com/hku-mars/IKFoM)                            | GPLv3  |
+| **iVox**           | `include/ivox/`           | [gaoxiang12/faster-lio](https://github.com/gaoxiang12/faster-lio) (Faster-LIO) | BSD    |
+| **matplotlib-cpp** | `include/matplotlibcpp.h` | [lava/matplotlib-cpp](https://github.com/lava/matplotlib-cpp)                  | MIT    |
 
 ### 11.3 ROS2 包依赖
 
@@ -617,11 +616,11 @@ ros__parameters:
 
 ### A. 坐标帧约定
 
-| 帧名 | 含义 | 说明 |
-|------|------|------|
+| 帧名          | 含义                | 说明                        |
+| ------------- | ------------------- | --------------------------- |
 | `camera_init` | 世界坐标系 (初始帧) | 第一帧 LiDAR 位姿定义的原点 |
-| `body` | IMU 本体坐标系 | 里程计输出的子帧 |
-| `aft_mapped` | 建图后位姿 | TF 发布的目标帧 |
+| `body`        | IMU 本体坐标系      | 里程计输出的子帧            |
+| `aft_mapped`  | 建图后位姿          | TF 发布的目标帧             |
 
 ### B. curvature 域的复用
 
@@ -633,14 +632,14 @@ ros__parameters:
 
 ### C. 关键默认值速查
 
-| 参数 | 默认值 | 含义 |
-|------|--------|------|
-| `MAX_INI_COUNT` | 100 | IMU 初始化帧数 |
-| `NUM_MATCH_POINTS` | 5 | 平面拟合近邻数 |
-| `match_s` | 81 | 马氏距离阈值 (≈9²) |
-| `plane_thr` | 0.05 | 平面一致性阈值 |
-| `filter_size_surf_min` | 0.5m | 点云降采样分辨率 |
-| `filter_size_map_min` | 0.5m | 地图降采样分辨率 |
-| `ivox_grid_resolution` | 2.0m (Mid360) / 0.2m (默认) | iVox 体素边长 |
-| `laser_point_cov` | 0.01 | 量测噪声方差 |
-| `G_m_s2` | 9.81 | 重力加速度 |
+| 参数                   | 默认值                      | 含义               |
+| ---------------------- | --------------------------- | ------------------ |
+| `MAX_INI_COUNT`        | 100                         | IMU 初始化帧数     |
+| `NUM_MATCH_POINTS`     | 5                           | 平面拟合近邻数     |
+| `match_s`              | 81                          | 马氏距离阈值 (≈9²) |
+| `plane_thr`            | 0.05                        | 平面一致性阈值     |
+| `filter_size_surf_min` | 0.5m                        | 点云降采样分辨率   |
+| `filter_size_map_min`  | 0.5m                        | 地图降采样分辨率   |
+| `ivox_grid_resolution` | 2.0m (Mid360) / 0.2m (默认) | iVox 体素边长      |
+| `laser_point_cov`      | 0.01                        | 量测噪声方差       |
+| `G_m_s2`               | 9.81                        | 重力加速度         |

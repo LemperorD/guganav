@@ -53,8 +53,8 @@ point_lio:
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
       acc_norm: 1.0 # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
       lidar_meas_cov: 0.01 # 0.001
-      acc_cov_output: 500.0
-      gyr_cov_output: 1000.0
+      acc_cov_output: 100.0
+      gyr_cov_output: 50.0
       b_acc_cov: 0.0001
       b_gyr_cov: 0.0001
       imu_meas_acc_cov: 0.1
