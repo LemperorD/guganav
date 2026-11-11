@@ -4,13 +4,19 @@
     <KeepRunningUntilFailure>
       <ForceSuccess>
         <Sequence>
-          <IsGameStart/>
+          <Ros2Input HP="{HP}"
+                     ammo="{ammo}"
+                     game_progress="{game_progress}"
+                     robot_x="{robot_x}"
+                     robot_y="{robot_y}"
+                     pose_valid="{pose_valid}"/>
+          <IsGameStart game_progress="{game_progress}"/>
           <SubTree ID="SwitchState"
                    _autoremap="true"/>
           <Switch3 case_1="Suppress"
                    case_2="Occupation"
                    case_3="PushForward"
-                   variable="global_state_">
+                   variable="{global_state_}">
             <SubTree ID="Suppress"
                      _autoremap="true"/>
             <SubTree ID="Occupation"
@@ -25,49 +31,49 @@
 
   <BehaviorTree ID="Occupation">
     <Sequence>
-      <CheckHP HP=""
-               destination=""/>
-      <GotoPoints destination=""/>
+      <CheckHP HP="{HP}"
+               strategy_mode="{global_state_}"
+               destination="{destination}"/>
+      <GotoPoints destination="{destination}"/>
     </Sequence>
   </BehaviorTree>
 
   <BehaviorTree ID="PushForward">
     <Fallback>
       <Sequence>
-        <CheckHP HP=""
-                 destination=""/>
-        <GotoPoints destination=""/>
+        <CheckHP HP="{HP}"
+                 strategy_mode="{global_state_}"
+                 destination="{destination}"/>
+        <GotoPoints destination="{destination}"/>
       </Sequence>
       <Sequence>
-        <CheckTime Occupation_time=""
-                   HP=""
-                   destination=""/>
-        <GotoPoints destination=""/>
+        <CheckTime stay_time="{stay_time}"
+                   destination="{destination}"/>
+        <GotoPoints destination="{destination}"/>
       </Sequence>
     </Fallback>
   </BehaviorTree>
 
   <BehaviorTree ID="Suppress">
     <Sequence>
-      <CheckHP HP=""
-               destination=""/>
-      <GotoPoints destination=""/>
+      <CheckHP HP="{HP}"
+               strategy_mode="{global_state_}"
+               destination="{destination}"/>
+      <GotoPoints destination="{destination}"/>
     </Sequence>
   </BehaviorTree>
 
   <BehaviorTree ID="SwitchState">
     <Fallback>
       <Sequence>
-        <IsRevivedAndDead HP=""
-                          HP_sign=""/>
-        <ChangeLowerState global_state_in=""
-                          global_state_out=""/>
+        <IsRevivedAndDead HP="{HP}"
+                          HP_sign="{HP_sign}"/>
+        <ChangeLowerState global_state_="{global_state_}"/>
       </Sequence>
       <Sequence>
-        <IsOccupationsafe destination=""
-                          occupation_time=""/>
-        <ChangeHigherState global_state_in=""
-                           global_state_out=""/>
+        <IsOccupationsafe destination="{destination}"
+                          occupation_time="{occupation_time}"/>
+        <ChangeHigherState global_state_="{global_state_}"/>
       </Sequence>
     </Fallback>
   </BehaviorTree>
@@ -76,41 +82,69 @@
   <TreeNodesModel>
     <Action ID="ChangeHigherState"
             editable="true">
-      <input_port name="global_state_in"/>
-      <output_port name="global_state_out"/>
+      <inout_port name="global_state_"
+                  type="string"/>
     </Action>
     <Action ID="ChangeLowerState"
             editable="true">
-      <input_port name="global_state_in"/>
-      <output_port name="global_state_out"/>
+      <inout_port name="global_state_"
+                  type="string"/>
     </Action>
     <Condition ID="CheckHP"
                editable="true">
-      <input_port name="HP"/>
-      <output_port name="destination"/>
+      <input_port name="HP"
+                  type="double"/>
+      <output_port name="destination"
+                   type="int"/>
+      <input_port name="strategy_mode"
+                  type="string"/>
     </Condition>
     <Condition ID="CheckTime"
                editable="true">
-      <input_port name="Occupation_time"/>
-      <input_port name="HP"/>
-      <output_port name="destination"/>
+      <inout_port name="destination"
+                  type="int"/>
+      <inout_port name="stay_time"
+                  type="double"/>
     </Condition>
     <Action ID="GotoPoints"
             editable="true">
-      <input_port name="destination"/>
+      <input_port name="destination"
+                  type="int"/>
     </Action>
     <Condition ID="IsGameStart"
-               editable="true"/>
+               editable="true">
+      <input_port name="game_progress"
+                  type="int"/>
+    </Condition>
     <Condition ID="IsOccupationsafe"
                editable="true">
-      <input_port name="destination"/>
-      <input_port name="occupation_time"/>
+      <input_port name="destination"
+                  type="int"/>
+      <inout_port name="occupation_time"
+                  type="double"/>
     </Condition>
     <Condition ID="IsRevivedAndDead"
                editable="true">
-      <input_port name="HP"/>
-      <input_port name="HP_sign"/>
+      <input_port name="HP"
+                  type="double"/>
+      <inout_port name="HP_sign"
+                  type="int"/>
     </Condition>
+    <Action ID="Ros2Input"
+            editable="true">
+      <output_port name="HP"
+                   type="double"/>
+      <output_port name="ammo"
+                   type="int"/>
+      <output_port name="game_progress"
+                   type="int"/>
+      <output_port name="robot_x"
+                   type="double"/>
+      <output_port name="robot_y"
+                   type="double"/>
+      <output_port name="pose_valid"
+                   type="bool"/>
+    </Action>
   </TreeNodesModel>
 
 </root>

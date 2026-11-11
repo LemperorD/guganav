@@ -8,17 +8,18 @@ PointSelector::PointSelector(const std::string& name,
 }
 
 BT::PortsList PointSelector::providedPorts() {
-  return {BT::OutputPort<int>("Destination")};
+  return {BT::InputPort<int>("destination")};
 }
 
 BT::NodeStatus PointSelector::tick() {
   int destination = 1;
-  if (!getInput("Destination", destination)) {
+  if (!getInput("destination", destination)) {
     return BT::NodeStatus::FAILURE;
   }
   navigateToPoints(destination);
 }
 
-// void NavigateToPoints(int destination){
-//     //
-// }
+void PointSelector::navigateToPoints(int destination) {
+  destination++;
+  printf("%d", destination);
+}

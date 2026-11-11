@@ -5,19 +5,16 @@ IsGameStart::IsGameStart(const std::string& name, const BT::NodeConfig& config)
 }
 
 BT::PortsList IsGameStart::providedPorts() {
-  return {BT::InputPort<int>("game_status"), BT::InputPort<int>("game_status")};
+  return {BT::InputPort<int>("game_progress")};
 }
 
 BT::NodeStatus IsGameStart::tick() {
-  int game_status = -1;
-  if (!getInput("game_status", game_status)) {
-    throw BT::RuntimeError("Missing input [game_status]");
-    if (game_status == -1) {
-      return BT::NodeStatus::FAILURE;
-    }
-    if (game_status == 4) {
-      return BT::NodeStatus::SUCCESS;
-    }
-    return BT::NodeStatus::FAILURE;
+  int game_progress = -1;
+  if (!getInput("game_progress", game_progress)) {
+    throw BT::RuntimeError("Missing input [game_progress]");
   }
+  if (game_progress == 4) {
+    return BT::NodeStatus::SUCCESS;
+  }
+  return BT::NodeStatus::FAILURE;
 }

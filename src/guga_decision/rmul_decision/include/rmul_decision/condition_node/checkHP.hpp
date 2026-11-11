@@ -12,15 +12,4 @@ public:
   static BT::PortsList providedPorts();
 
   BT::NodeStatus tick() override;
-
-private:
-  rclcpp::Node::SharedPtr node_;
-
-  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr hp_sub_;
-
-  // 保存最新 HP
-  std::atomic<int> hp_{-1};
-
-  // 是否收到过 HP 消息
-  std::atomic<bool> hp_received_{false};
 };

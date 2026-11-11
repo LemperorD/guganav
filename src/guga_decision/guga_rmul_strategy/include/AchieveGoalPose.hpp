@@ -11,7 +11,7 @@
 // 到达判定：机器人当前位置与当前目标点的距离小于等于容差，算到达。
 //
 // 四个值都在节点内部从黑板读，不声明输入端口：
-//   robot_x / robot_y  ROS2Wrapper 每个 tick 写入，map 系坐标
+//   robot_x / robot_y  Ros2Input 每个 tick 写入，map 系坐标
 //   goal_x  / goal_y   SetGoalPose 下发目标点时写入
 //
 // 读的是根黑板（rootBlackboard）而不是 config().blackboard：SetGoalPose 在
@@ -19,7 +19,7 @@
 // 自己的黑板对象，而 Blackboard::set 只写自己那一层，不会往上冒泡。统一用根
 // 黑板交换数据，才不依赖树上谁套在谁里面。
 //
-// 位置来自 TF，定位未就绪时 ROS2Wrapper 写的是 NaN。判断写成 !(距离 <= 容差)
+// 位置来自 TF，定位未就绪时 Ros2Input 写的是 NaN。判断写成 !(距离 <= 容差)
 // 而不是 距离 > 容差：NaN 参与的任何比较都为假，用后者会把"不知道在哪"判成
 // 到达，用前者则判成未到达。
 //

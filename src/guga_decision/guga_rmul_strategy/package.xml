@@ -13,6 +13,7 @@
   <depend>ament_index_cpp</depend>
   <depend>rclcpp</depend>
   <depend>guga_interfaces</depend>
+  <depend>guga_decision_common</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>tf2</depend>

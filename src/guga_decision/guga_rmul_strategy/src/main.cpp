@@ -11,10 +11,10 @@
 
 #include "CheckGreaterThan200.hpp"
 #include "CheckHpSafe.hpp"
+#include "guga_decision_common/ros2_input_node.hpp"
 #include "IsGameStart.hpp"
 #include "ShouldEngage.hpp"
 #include "ROS2Monitor.hpp"
-#include "ROS2Wrapper.hpp"
 #include "SetGoalPose.hpp"
 #include "AchieveGoalPose.hpp"
 #include "Attack.hpp"
@@ -52,10 +52,11 @@ int main(int argc, char** argv)
       return std::make_unique<SetGoalPose>(name, config, monitor);
     });
 
-  factory.registerBuilder<ROS2Wrapper>(
-    "ROS2Wrapper",
+  factory.registerBuilder<guga_decision_common::Ros2InputNode>(
+    "Ros2Input",
     [monitor](const std::string& name, const BT::NodeConfig& config) {
-      return std::make_unique<ROS2Wrapper>(name, config, monitor);
+      return std::make_unique<guga_decision_common::Ros2InputNode>(
+        name, config, monitor);
     });
 
   factory.registerBuilder<IsGameStart>(

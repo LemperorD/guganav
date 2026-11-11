@@ -11,10 +11,11 @@ find_package(ament_cmake REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(guga_decision_common)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
-add_library(decision_node
+add_executable(rmul_decision
   src/condition_node/checkHP.cpp
   src/condition_node/checkTime.cpp
   src/condition_node/IsOccupationsafe.cpp
@@ -25,14 +26,19 @@ add_library(decision_node
   src/action_node/GotoPoints.cpp
   src/main.cpp
 )
-target_include_directories(decision_node PUBLIC
+
+target_include_directories(rmul_decision PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-ament_target_dependencies(decision_node
+target_link_libraries(rmul_decision 
+   guga_decision_common::guga_decision_bt_nodes
+) 
+ament_target_dependencies(rmul_decision
   behaviortree_cpp
   rclcpp
   std_msgs
 )
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

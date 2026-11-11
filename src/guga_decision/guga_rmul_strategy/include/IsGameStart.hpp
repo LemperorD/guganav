@@ -37,7 +37,7 @@ public:
   {
     const auto progress = getInput<int>("game_progress");
     if (!progress) {
-      // 键不存在说明 ROS2Wrapper 还没跑过或端口没接，属于接线问题。
+      // 键不存在说明 Ros2Input 还没跑过或端口没接，属于接线问题。
       // 按"所有其他情况为失败"处理，但打一条 ERROR，免得看起来像"比赛还没开始"。
       if (node_) {
         RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 5000,

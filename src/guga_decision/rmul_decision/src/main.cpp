@@ -12,11 +12,20 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/utilities.hpp>
 #include "behaviortree_cpp/bt_factory.h"
-
+#include <guga_decision_common/decision_input_hub.hpp>
+#include <guga_decision_common/ros2_input_node.hpp>
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  auto node_ = std::make_shared<rclcpp::Node>("decision_node");
+  auto blackboard = BT::Blackboard::create();
+  auto input_hub = std::make_shared<guga_decision_common::DecisionInputHub>(
+      "rmul_decision_input");
   BT::BehaviorTreeFactory factory;
+  factory.registerBuilder<guga_decision_common::Ros2InputNode>(
+      "Ros2Input",
+      [input_hub](const std::string& name, const BT::NodeConfig& config) {
+        return std::make_unique<guga_decision_common::Ros2InputNode>(
+            name, config, input_hub);
+      });
   factory.registerNodeType<ChangeHigherState>("ChangeHigherState");
   factory.registerNodeType<ChangeLowerState>("ChangeLowerState");
   factory.registerNodeType<CheckHP>("CheckHP");
@@ -25,11 +34,9 @@ int main(int argc, char** argv) {
   factory.registerNodeType<IsOccupationsafe>("IsOccupationsafe");
   factory.registerNodeType<IsRevival>("IsRevivedAndDead");
   factory.registerNodeType<PointSelector>("GotoPoints");
-  auto blackboard = BT::Blackboard::create();
-  blackboard->set<rclcpp::Node::SharedPtr>("node", node_);
   auto tree = factory.createTreeFromFile("../bt_trees/BT.xml", blackboard);
   rclcpp::executors::MultiThreadedExecutor executor;
-  executor.add_node(node_);
+  executor.add_node(input_hub);
   std::thread spin_thread([&executor]() { executor.spin(); });
   tree.tickWhileRunning();
   executor.cancel();

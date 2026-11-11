@@ -7,16 +7,15 @@ CheckTime::CheckTime(const std::string& name, const BT::NodeConfig& config)
 }
 
 BT::PortsList CheckTime::providedPorts() {
-  return {BT::InputPort<int>("Destination"), BT::InputPort<double>("stay_time"),
-          BT::OutputPort<int>("Destination"),
-          BT::OutputPort<double>("stay_time")};
+  return {BT::BidirectionalPort<int>("destination"),
+          BT::BidirectionalPort<double>("stay_time")};
 }
 
 BT::NodeStatus CheckTime::tick() {
   int destination = -1;
   double stay_time = 0;
-  if (!getInput("Destination", destination)) {
-    throw BT::RuntimeError("Missing input [Destination]");
+  if (!getInput("destination", destination)) {
+    throw BT::RuntimeError("Missing input [destination]");
   }
   if (!getInput("stay_time", stay_time)) {
     throw BT::RuntimeError("Missing input [stay_time]");
@@ -31,7 +30,7 @@ BT::NodeStatus CheckTime::tick() {
       destination = 3;
       stay_time = 0;
       setOutput("stay_time", stay_time);
-      setOutput("Destination", destination);
+      setOutput("destination", destination);
       return BT::NodeStatus::SUCCESS;
     }
   } else if (destination == 3) {
@@ -45,7 +44,7 @@ BT::NodeStatus CheckTime::tick() {
       destination = 4;
       stay_time = 0;
       setOutput("stay_time", stay_time);
-      setOutput("Destination", destination);
+      setOutput("destination", destination);
       return BT::NodeStatus::SUCCESS;
     }
   }

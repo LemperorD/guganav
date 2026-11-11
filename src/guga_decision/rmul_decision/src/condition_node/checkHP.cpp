@@ -1,39 +1,55 @@
 #include "rmul_decision/condition_node/checkHP.hpp"
+#include <behaviortree_cpp/basic_types.h>
+#include <string>
 using namespace rmul_decision;
+
+namespace {
+  StrategyMode parseStrategyMode(const std::string& value) {
+    if (value == "Suppress") {
+      return StrategyMode::SUPPRESS;
+    }
+    if (value == "Occupation") {
+      return StrategyMode::OCCUPATION;
+    }
+    if (value == "PushForward") {
+      return StrategyMode::PUSHFORWARD;
+    }
+    return StrategyMode::UNKNOWN;
+  }
+}  // namespace
+
 CheckHP::CheckHP(const std::string& name, const BT::NodeConfig& config)
     : BT::ConditionNode(name, config) {
-  node_ = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
-  // 订阅 HP 话题
-  hp_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
-      "/HP", rclcpp::QoS(10),
-      [this](const std_msgs::msg::Int32::SharedPtr msg) {
-        hp_.store(msg->data);
-        hp_received_.store(true);
-      });
 }
 
 BT::PortsList CheckHP::providedPorts() {
-  return {BT::OutputPort<int>("Destination")};
+  return {BT::InputPort<double>("HP"),
+          BT::InputPort<std::string>("strategy_mode"),
+          BT::BidirectionalPort<int>("destination")};
 }
 
 BT::NodeStatus CheckHP::tick() {
   int destination = -1;
-  StrategyMode mode = StrategyMode::UNKNOWN;
-  if (!hp_received_.load()) {
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 3000,
-                         "Waiting for HP message...");
-    return BT::NodeStatus::FAILURE;
+  std::string strategy;
+  double hp = -1;
+  if (!getInput("strategy_mode", strategy)) {
+    throw BT::RuntimeError("Missing input [strategy_mode]");
+  }
+  if (!getInput("HP", hp)) {
+    throw BT::RuntimeError("Missing input [HP]");
+  }
+  if (!getInput("destination", destination)) {
+    throw BT::RuntimeError("Missing input [destination]");
   }
 
-  int hp = hp_.load();
-  if (!getInput("StategyMode", mode)) {
-    throw BT::RuntimeError("Missing input [StategyMode]");
-  }
-
-  // 暂时模拟，后续从 RobotContext 获取
-
+  const StrategyMode mode = parseStrategyMode(strategy);
   if (hp < 0) {
     return BT::NodeStatus::FAILURE;
+  }
+  if (destination == 1 && hp < 400) {
+    destination = 1;
+    setOutput("destination", destination);
+    return BT::NodeStatus::SUCCESS;
   }
   switch (mode) {
     case StrategyMode::SUPPRESS:
@@ -62,7 +78,7 @@ BT::NodeStatus CheckHP::tick() {
   }
 
   if (destination != -1) {
-    setOutput("Destination", destination);
+    setOutput("destination", destination);
   }
   return BT::NodeStatus::SUCCESS;
 }

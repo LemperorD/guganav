@@ -50,10 +50,29 @@
 
   <BehaviorTree ID="MainLoop">
     <ReactiveSequence>
-      <ROS2Wrapper/>
+      <Ros2Input HP="{HP}"
+                 maximum_hp="{maximum_hp}"
+                 ammo="{ammo}"
+                 heat="{heat}"
+                 heat_limit="{heat_limit}"
+                 cooling_value="{cooling_value}"
+                 hp_deduced="{hp_deduced}"
+                 enemy_count="{enemy_count}"
+                 game_progress="{game_progress}"
+                 stage_remain_time="{stage_remain_time}"
+                 rfid_supply="{rfid_supply}"
+                 rfid_center="{rfid_center}"
+                 robot_x="{robot_x}"
+                 robot_y="{robot_y}"
+                 robot_yaw="{robot_yaw}"
+                 pose_valid="{pose_valid}"
+                 robot_status_received="{robot_status_received}"
+                 game_status_received="{game_status_received}"
+                 rfid_status_received="{rfid_status_received}"
+                 vision_received="{vision_received}"/>
       <PublishStop/>
       <!-- 赛前开关：比赛阶段连续为"比赛中"满 1 秒才放行，之前整棵树不动，
-           只有 ROS2Wrapper 与 PublishStop 照常跑（数据要刷新、开关要维持）。 -->
+           只有 Ros2Input 与 PublishStop 照常跑（数据要刷新、开关要维持）。 -->
       <IsGameStart game_progress="{game_progress}"
                    hold_sec="1.0"/>
       <SubTree ID="Decide"
@@ -161,8 +180,49 @@
     </Action>
     <Action ID="PublishStop"
             editable="true"/>
-    <Action ID="ROS2Wrapper"
-            editable="true"/>
+    <Action ID="Ros2Input"
+            editable="true">
+      <output_port name="HP"
+                   type="double"/>
+      <output_port name="maximum_hp"
+                   type="double"/>
+      <output_port name="ammo"
+                   type="int"/>
+      <output_port name="heat"
+                   type="int"/>
+      <output_port name="heat_limit"
+                   type="int"/>
+      <output_port name="cooling_value"
+                   type="int"/>
+      <output_port name="hp_deduced"
+                   type="bool"/>
+      <output_port name="enemy_count"
+                   type="int"/>
+      <output_port name="game_progress"
+                   type="int"/>
+      <output_port name="stage_remain_time"
+                   type="int"/>
+      <output_port name="rfid_supply"
+                   type="bool"/>
+      <output_port name="rfid_center"
+                   type="bool"/>
+      <output_port name="robot_x"
+                   type="double"/>
+      <output_port name="robot_y"
+                   type="double"/>
+      <output_port name="robot_yaw"
+                   type="double"/>
+      <output_port name="pose_valid"
+                   type="bool"/>
+      <output_port name="robot_status_received"
+                   type="bool"/>
+      <output_port name="game_status_received"
+                   type="bool"/>
+      <output_port name="rfid_status_received"
+                   type="bool"/>
+      <output_port name="vision_received"
+                   type="bool"/>
+    </Action>
     <Condition ID="RfidArrived"
                editable="true">
       <input_port name="rfid"

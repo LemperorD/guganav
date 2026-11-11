@@ -1,29 +1,25 @@
 #include "rmul_decision/action_node/changelowerstate.hpp"
 #include <behaviortree_cpp/basic_types.h>
-using namespace rmul_decision;
+#include <string>
 ChangeLowerState::ChangeLowerState(const std::string& name,
                                    const BT::NodeConfig& config)
     : BT::SyncActionNode(name, config) {
 }
 
 BT::PortsList ChangeLowerState::providedPorts() {
-  return {BT::InputPort<StrategyMode>("global_state_in"),
-          BT::OutputPort<StrategyMode>("global_state_out")};
+  return {BT::BidirectionalPort<std::string>("global_state_")};
 }
 
 BT::NodeStatus ChangeLowerState::tick() {
-  StrategyMode global_state_in = StrategyMode::UNKNOWN;
-  StrategyMode global_state_out = StrategyMode::UNKNOWN;
-  if (!getInput("global_state_in", global_state_in)) {
-    throw BT::RuntimeError("Missing input [StategyMode]");
+  std::string global_state;
+  if (!getInput("global_state_", global_state)) {
+    return BT::NodeStatus::FAILURE;
   }
-  if (global_state_in == StrategyMode::SUPPRESS) {
-    global_state_out = StrategyMode::OCCUPATION;
-  } else if (global_state_in == StrategyMode::OCCUPATION) {
-    global_state_out = StrategyMode::PUSHFORWARD;
-  } else {
-    global_state_out = global_state_in;
+  if (global_state == "Suppress") {
+    global_state = "Occupation";
+  } else if (global_state == "Occupation") {
+    global_state = "PushForward";
   }
-  setOutput("global_state_out", global_state_out);
+  setOutput("global_state_", global_state);
   return BT::NodeStatus::SUCCESS;
 }

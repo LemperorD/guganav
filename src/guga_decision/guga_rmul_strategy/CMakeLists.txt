@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(guga_interfaces REQUIRED)
+find_package(guga_decision_common REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 # 定位：查 map -> base_footprint 的变换，用于判断是否到达目标点。
@@ -51,10 +52,12 @@ target_include_directories(rmul_strategy_node PRIVATE
 )
 target_link_libraries(rmul_strategy_node
   ${BT_CPP_LIBRARY}
+  guga_decision_common::guga_decision_bt_nodes
 )
 ament_target_dependencies(rmul_strategy_node
   rclcpp
   guga_interfaces
+  guga_decision_common
   geometry_msgs
   std_msgs
   ament_index_cpp

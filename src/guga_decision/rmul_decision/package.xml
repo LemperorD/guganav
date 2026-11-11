@@ -14,6 +14,7 @@
   <depend>behaviortree_cpp</depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>guga_decision_common</depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

@@ -2,6 +2,18 @@
 
 决策模块，实现哨兵在ul/uc战场上的行为决策
 
+## 公共输入层
+
+`guga_decision_common` 提供三套候选方案共用的 ROS 输入缓存：
+
+- `DecisionInputHub` 统一订阅机器人状态、比赛状态、RFID 和视觉汇总，并查询
+  `map -> base_footprint` 位姿。
+- `Ros2InputNode` 将输入写入行为树输出端口，节点不绑定固定黑板键。
+
+行为树方案应只创建一个 `DecisionInputHub`，多个 BT 输入节点共享同一实例，
+避免重复订阅。当前 `guga_rmul_strategy` 已接入，其余候选方案可按
+[guga_decision_common/README.md](guga_decision_common/README.md) 中的示例接入。
+
 ## 待办
 
 ### 接入导航系统

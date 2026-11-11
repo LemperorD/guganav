@@ -8,16 +8,15 @@ IsOccupationsafe::IsOccupationsafe(const std::string& name,
 }
 
 BT::PortsList IsOccupationsafe::providedPorts() {
-  return {BT::InputPort<int>("Destination"),
-          BT::InputPort<int>("occupation_time"),
-          BT::OutputPort("occupation_time")};
+  return {BT::InputPort<int>("destination"),
+          BT::BidirectionalPort<double>("occupation_time")};
 }
 
 BT::NodeStatus IsOccupationsafe::tick() {
   int destination = 1;
   double occupation_time = 0;
 
-  if (!getInput("Destination", destination)) {
+  if (!getInput("destination", destination)) {
     throw BT::RuntimeError("Missing input [destination]");
   }
   if (!getInput("occupation_time", occupation_time)) {
