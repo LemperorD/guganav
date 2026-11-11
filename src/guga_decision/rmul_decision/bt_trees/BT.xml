@@ -34,7 +34,8 @@
       <CheckHP HP="{HP}"
                strategy_mode="{global_state_}"
                destination="{destination}"/>
-      <GotoPoints destination="{destination}"/>
+      <GotoPoints destination="{destination}"
+                  strategy_mode="{global_state_}"/>
     </Sequence>
   </BehaviorTree>
 
@@ -44,12 +45,14 @@
         <CheckHP HP="{HP}"
                  strategy_mode="{global_state_}"
                  destination="{destination}"/>
-        <GotoPoints destination="{destination}"/>
+        <GotoPoints destination="{destination}"
+                    strategy_mode="{global_state_}"/>
       </Sequence>
       <Sequence>
         <CheckTime stay_time="{stay_time}"
                    destination="{destination}"/>
-        <GotoPoints destination="{destination}"/>
+        <GotoPoints destination="{destination}"
+                    strategy_mode="{global_state_}"/>
       </Sequence>
     </Fallback>
   </BehaviorTree>
@@ -59,7 +62,8 @@
       <CheckHP HP="{HP}"
                strategy_mode="{global_state_}"
                destination="{destination}"/>
-      <GotoPoints destination="{destination}"/>
+      <GotoPoints destination="{destination}"
+                  strategy_mode="{global_state_}"/>
     </Sequence>
   </BehaviorTree>
 
@@ -110,6 +114,17 @@
             editable="true">
       <input_port name="destination"
                   type="int"/>
+      <input_port name="strategy_mode"
+                  type="string"/>
+      <input_port name="tolerance"
+                  type="double"
+                  default="0.15"/>
+      <input_port name="route_x"
+                  type="std::vector&lt;double&gt;"/>
+      <input_port name="route_y"
+                  type="std::vector&lt;double&gt;"/>
+      <input_port name="route_yaw"
+                  type="std::vector&lt;double&gt;"/>
     </Action>
     <Condition ID="IsGameStart"
                editable="true">

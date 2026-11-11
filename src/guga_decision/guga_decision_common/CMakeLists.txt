@@ -33,6 +33,8 @@ find_library(BT_CPP_LIBRARY
 
 add_library(guga_decision_common SHARED
   src/decision_input_hub.cpp
+  src/goal_controller.cpp
+  src/waypoint_navigator.cpp
 )
 target_include_directories(guga_decision_common PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -70,6 +72,16 @@ install(TARGETS guga_decision_common guga_decision_bt_nodes
 install(DIRECTORY include/
   DESTINATION include
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_waypoint_navigator
+    test/test_waypoint_navigator.cpp
+  )
+  target_link_libraries(test_waypoint_navigator
+    guga_decision_common
+  )
+endif()
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(

@@ -13,12 +13,17 @@
 #include <rclcpp/utilities.hpp>
 #include "behaviortree_cpp/bt_factory.h"
 #include <guga_decision_common/decision_input_hub.hpp>
+#include <guga_decision_common/goal_controller.hpp>
 #include <guga_decision_common/ros2_input_node.hpp>
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto blackboard = BT::Blackboard::create();
   auto input_hub = std::make_shared<guga_decision_common::DecisionInputHub>(
       "rmul_decision_input");
+  const std::string goal_topic = input_hub->declare_parameter<std::string>(
+      "goal_pose_topic", "goal_pose");
+  auto goal_controller = std::make_shared<guga_decision_common::GoalController>(
+      *input_hub, goal_topic, input_hub->frameId());
   BT::BehaviorTreeFactory factory;
   factory.registerBuilder<guga_decision_common::Ros2InputNode>(
       "Ros2Input",
@@ -33,7 +38,12 @@ int main(int argc, char** argv) {
   factory.registerNodeType<IsGameStart>("IsGameStart");
   factory.registerNodeType<IsOccupationsafe>("IsOccupationsafe");
   factory.registerNodeType<IsRevival>("IsRevivedAndDead");
-  factory.registerNodeType<PointSelector>("GotoPoints");
+  factory.registerBuilder<PointSelector>(
+      "GotoPoints", [input_hub, goal_controller](const std::string& name,
+                                                 const BT::NodeConfig& config) {
+        return std::make_unique<PointSelector>(name, config, input_hub,
+                                               goal_controller);
+      });
   auto tree = factory.createTreeFromFile("../bt_trees/BT.xml", blackboard);
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(input_hub);
