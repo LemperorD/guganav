@@ -70,7 +70,7 @@ public:
    * @param[out] pcl_un_ 处理后/去畸变后的点云
    */
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr pcl_un_,
-               state_output& output_state);
+               State& output_state);
 
   [[nodiscard]] bool needInit() const;
 
@@ -93,7 +93,7 @@ public:
    * - IMU 模式: 用累积的 mean_acc 估计重力方向
    * - 无 IMU 模式: 用配置的先验重力 gravity_init
    */
-  void initState(state_output& output_state);
+  void initState(State& output_state);
 
   V3D gravity_;  ///< 先验重力向量 (世界坐标系, 从 YAML 读取)
   V3D gravity_init_{0.0, 0.0, -9.81};

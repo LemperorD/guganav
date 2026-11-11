@@ -19,6 +19,7 @@ bool Synchronizer::syncPackages(
     return false;
   }
 
+  measurement.imu_measure.clear();
   imu.collectUntil(frame.end_time, measurement.imu_measure);
   lidar.frame_buffer_.pop_front();
   return true;

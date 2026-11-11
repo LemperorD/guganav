@@ -27,10 +27,10 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
-#include <point_lio/core/StateTypes.h>
 #include <Eigen/Eigen>
 #include <sensor_msgs/msg/imu.hpp>
 #include <point_lio/core/PointTypes.h>
+#include <point_lio/core/so3_math.h>
 
 using namespace std;
 using namespace Eigen;
@@ -60,6 +60,49 @@ inline M3D to_mat3d(const std::vector<double>& v) {
 const M3D IMatrix3(M3D::Identity());  ///< 3x3 单位阵 (double)
 const V3D Zero3d(0, 0, 0);            ///< 3维零向量 (double)
 
+// 30 维误差的流形状态, 顺序: rot, pos, vel, bg, ba, gravity, omg, acc,
+// offset_R, offset_T.
+struct State {
+  M3D rot = M3D::Identity();
+  V3D pos = V3D::Zero();
+  V3D vel = V3D::Zero();
+  V3D bg = V3D::Zero();
+  V3D ba = V3D::Zero();
+  V3D gravity = V3D(0.0, 0.0, -9.81);
+  V3D omg = V3D::Zero();
+  V3D acc = V3D::Zero();
+  M3D offset_R_L_I = M3D::Identity();
+  V3D offset_T_L_I = V3D::Zero();
+
+  void boxplus(const Eigen::Matrix<double, 30, 1>& d) {
+    rot = rot * Exp(d.segment<3>(0));
+    pos += d.segment<3>(3);
+    vel += d.segment<3>(6);
+    bg += d.segment<3>(9);
+    ba += d.segment<3>(12);
+    gravity += d.segment<3>(15);
+    omg += d.segment<3>(18);
+    acc += d.segment<3>(21);
+    offset_R_L_I = offset_R_L_I * Exp(d.segment<3>(24));
+    offset_T_L_I += d.segment<3>(27);
+  }
+
+  void boxminus(Eigen::Matrix<double, 30, 1>& d, const State& other) const {
+    d.segment<3>(0) = Log(other.rot.transpose() * rot);
+    d.segment<3>(3) = pos - other.pos;
+    d.segment<3>(6) = vel - other.vel;
+    d.segment<3>(9) = bg - other.bg;
+    d.segment<3>(12) = ba - other.ba;
+    d.segment<3>(15) = gravity - other.gravity;
+    d.segment<3>(18) = omg - other.omg;
+    d.segment<3>(21) = acc - other.acc;
+    d.segment<3>(24) = Log(other.offset_R_L_I.transpose() * offset_R_L_I);
+    d.segment<3>(27) = offset_T_L_I - other.offset_T_L_I;
+  }
+};
+
+using state_output = State;
+
 // ==================== 工具函数 ====================
 
 /**
@@ -81,6 +124,9 @@ inline std::vector<int> time_compressing(
   int points_size = point_cloud->points.size();
   int j = 0;
   std::vector<int> time_seq;
+  if (points_size == 0) {
+    return time_seq;
+  }
   time_seq.reserve(points_size);
   for (int i = 0; i < points_size - 1; i++) {
     j++;

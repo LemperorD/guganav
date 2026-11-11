@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <memory>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -12,7 +13,6 @@
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Synchronizer.h"
-#include "point_lio/core/Filter.h"
 #include "point_lio/core/common_lib.h"
 #include "point_lio/core/ProcessingState.h"
 
@@ -23,10 +23,13 @@ enum class PointLioStage {
   TRACKING
 };
 
+class ManifoldEskf;
+
 class FrameProcessor {
 public:
   FrameProcessor(Imu& imu, PointLioStage& stage_, Lidar& lidar,
                  const PointLioParams& config, MainLoopState& state);
+  ~FrameProcessor();
   void initialize();
   void setPose(geometry_msgs::msg::Pose& pose) const;
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
@@ -67,19 +70,21 @@ private:
   bool initializeIteration(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
 
-  template <typename KF>
-  void processFramePoints(
-      KF& kf, double& last_time, auto& q,
+  void processFramePoints2(
+      MeasureGroup& meas, double& last_time,
       const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
       const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
           publish_tf);
 
   Imu& imu_;
   Lidar& lidar_;
-  Filter filter_;
+  std::unique_ptr<ManifoldEskf> manifold_;
   MeasureGroup measures_;
   PointLioStage& stage_;
   MainLoopState& state_;
   const PointLioParams& config_;
   Synchronizer synchronizer_;
+
+  sensor_msgs::msg::Imu last;
+  sensor_msgs::msg::Imu next;
 };

@@ -76,7 +76,7 @@ void ImuProcessor::Set_init_z(Eigen::Vector3d& tmp_gravity,
   }
 }
 
-void ImuProcessor::initState(state_output& output_state) {
+void ImuProcessor::initState(State& output_state) {
   V3D tmp_gravity;
 
   tmp_gravity = -mean_acc / mean_acc.norm() * gravity_magnitude_;
@@ -104,7 +104,7 @@ void ImuProcessor::IMU_init(const MeasureGroup& meas, int& N) {
 
 void ImuProcessor::process(const MeasureGroup& meas,
                            PointCloudXYZI::Ptr cur_pcl_un_,
-                           state_output& output_state) {
+                           State& output_state) {
   if (meas.imu_measure.empty()) {
     return;
   }

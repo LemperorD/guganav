@@ -1,37 +1,60 @@
+#include <array>
+#include <cmath>
+#include <limits>
+
 #include "point_lio/core/FrameProcessor.h"
 #include "point_lio/core/Synchronizer.h"
+#include "point_lio/core/ManifoldEskf.h"
 
 FrameProcessor::FrameProcessor(Imu& imu, PointLioStage& stage, Lidar& lidar,
                                const PointLioParams& config,
                                MainLoopState& state)
-    : imu_(imu), stage_(stage), lidar_(lidar), config_(config), state_(state) {
+    : imu_(imu),
+      stage_(stage),
+      lidar_(lidar),
+      config_(config),
+      state_(state),
+      manifold_(std::make_unique<ManifoldEskf>()) {
 }
+
+FrameProcessor::~FrameProcessor() = default;
 
 void FrameProcessor::initialize() {
   initializeFilter();
 }
 
 void FrameProcessor::initializeFilter() {
-  filter_.configure(config_.filter);
-  filter_.initialize(lidar_.measurementModel(), imu_.measurementModel());
+  manifold_->configureNoise(config_.lidar.point_covariance,
+                            config_.imu.measurement_acc_cov,
+                            config_.imu.measurement_gyro_cov);
+  manifold_->configureProcessNoise(
+      config_.filter.gyr_cov_output, config_.filter.acc_cov_output,
+      config_.filter.b_gyr_cov, config_.filter.b_acc_cov);
+  Matrix<double, 30, 30> P = Matrix<double, 30, 30>::Identity() * 0.01;
+  P.block<3, 3>(18, 18) = config_.filter.gyr_cov_output * Matrix3d::Identity();
+  P.block<3, 3>(21, 21) = config_.filter.acc_cov_output * Matrix3d::Identity();
+  P.block<3, 3>(9, 9) = config_.filter.b_gyr_cov * Matrix3d::Identity();
+  P.block<3, 3>(12, 12) = config_.filter.b_acc_cov * Matrix3d::Identity();
+  manifold_->setInitialCovariance(P);
+
+  manifold_->configureFixedExtrinsic(lidar_.RotationLidarToImu(),
+                                     lidar_.TranslationLidarToImu());
   if (config_.lidar.extrinsic_estimation) {
-    filter_.output().x_.offset_R_L_I = lidar_.RotationLidarToImu();
-    filter_.output().x_.offset_T_L_I = lidar_.TranslationLidarToImu();
+    manifold_->mutable_x().offset_R_L_I = lidar_.RotationLidarToImu();
+    manifold_->mutable_x().offset_T_L_I = lidar_.TranslationLidarToImu();
   }
 }
 
 void FrameProcessor::setPose(geometry_msgs::msg::Pose& pose) const {
-  const auto set_from_filter = [&](const auto& kf) {
-    pose.position.x = kf.x_.pos(0);
-    pose.position.y = kf.x_.pos(1);
-    pose.position.z = kf.x_.pos(2);
-    Eigen::Quaterniond q(kf.x_.rot);
-    pose.orientation.x = q.coeffs()[0];
-    pose.orientation.y = q.coeffs()[1];
-    pose.orientation.z = q.coeffs()[2];
-    pose.orientation.w = q.coeffs()[3];
-  };
-  set_from_filter(filter_.output());
+  const auto& state = manifold_->get_x();
+  pose.position.x = state.pos(0);
+  pose.position.y = state.pos(1);
+  pose.position.z = state.pos(2);
+  Eigen::Quaterniond q(state.rot);
+  pose.orientation.x = q.coeffs()[0];
+  pose.orientation.y = q.coeffs()[1];
+  pose.orientation.z = q.coeffs()[2];
+  pose.orientation.w = q.coeffs()[3];
 }
 
 PointCloudXYZI::Ptr FrameProcessor::loadPointcloudFromPcd(
@@ -55,7 +78,7 @@ void FrameProcessor::initScan() {
             << '\n';
   time_current_ = 0.0;
 
-  filter_.output().x_.gravity = config_.imu.processor.gravity;
+  manifold_->mutable_x().gravity = config_.imu.processor.gravity;
 
   imu_.discardBefore(measures_.lidar_start_time);
 }
@@ -73,8 +96,8 @@ void FrameProcessor::pointBodyLidarToIMU(const PointType* pi,
   const V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu;
   if (config_.lidar.extrinsic_estimation) {
-    p_body_imu = filter_.output().x_.offset_R_L_I * p_body_lidar
-                 + filter_.output().x_.offset_T_L_I;
+    const auto& state = manifold_->get_x();
+    p_body_imu = state.offset_R_L_I * p_body_lidar + state.offset_T_L_I;
 
   } else {
     p_body_imu = lidar_.RotationLidarToImu() * p_body_lidar
@@ -131,19 +154,19 @@ void FrameProcessor::publishOdometry(
       config_.mapping.publish_odometry_without_downsample ? time_current_
                                                           : lidar_end_time_);
 
-  auto set_pose = [&](const auto& kf) {
+  auto set_pose = [&](const State& state) {
     auto& pose = state_.odom_aft_mapped.pose.pose;
-    pose.position.x = kf.x_.pos(0);
-    pose.position.y = kf.x_.pos(1);
-    pose.position.z = kf.x_.pos(2);
-    Eigen::Quaterniond q(kf.x_.rot);
+    pose.position.x = state.pos(0);
+    pose.position.y = state.pos(1);
+    pose.position.z = state.pos(2);
+    Eigen::Quaterniond q(state.rot);
     pose.orientation.x = q.coeffs()[0];
     pose.orientation.y = q.coeffs()[1];
     pose.orientation.z = q.coeffs()[2];
     pose.orientation.w = q.coeffs()[3];
   };
 
-  set_pose(filter_.output());
+  set_pose(manifold_->toStateOutput());
 
   publish(state_.odom_aft_mapped);
 
@@ -170,7 +193,8 @@ bool FrameProcessor::initMapState(
   for (size_t i = 0; i < add_size; i++) {
     lidar_.measurementModel().pointBodyToWorld(
         &(state_.feats_origin_lidar->points[i]),
-        &(state_.init_feats_world->points[old_size + i]), filter_.output().x_);
+        &(state_.init_feats_world->points[old_size + i]),
+        manifold_->toStateOutput());
   }
 
   if (state_.init_feats_world->size()
@@ -197,7 +221,9 @@ bool FrameProcessor::initMapState(
 
 bool FrameProcessor::prepareFrame(
     std::function<void(const sensor_msgs::msg::PointCloud2&)> publish) {
-  imu_.process(measures_, state_.feats_origin_lidar, filter_.output().x_);
+  State state = manifold_->toStateOutput();
+  imu_.process(measures_, state_.feats_origin_lidar, state);
+  manifold_->setFromStateOutput(state);
 
   if (imu_.needInit()) {
     stage_ = PointLioStage::INITIALIZINGIMU;
@@ -291,8 +317,7 @@ bool FrameProcessor::processIteration(
     return false;
   }
 
-  processFramePoints(filter_.output(), last_time_output_, filter_.outputNoise(),
-                     publish_odom, publish_tf);
+  processFramePoints2(measures_, last_time_output_, publish_odom, publish_tf);
 
   if (!config_.mapping.publish_odometry_without_downsample) {
     publishOdometry(publish_odom, publish_tf);
@@ -304,182 +329,113 @@ bool FrameProcessor::processIteration(
   return true;
 }
 
-template <typename KF>
-void FrameProcessor::processFramePoints(
-    KF& kf, double& last_time, auto& q,
+void FrameProcessor::processFramePoints2(
+    MeasureGroup& meas, double& last_time,
     const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
     const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
         publish_tf) {
-  const auto& imu_last = imu_.last();
-  const auto& imu_next = imu_.next();
-  const double acc_scale =
-      config_.imu.processor.gravity_magnitude / config_.imu.acc_norm;
-  if (lidar_.workspace().time_seq.empty()) {
-    if (!imu_.empty()) {
-      imu_.advanceCursor();
+  const double acc_scale = config_.imu.processor.gravity_magnitude
+                           / config_.imu.acc_norm;
+  const size_t imu_count = meas.imu_measure.size();
+  const size_t group_count = lidar_.workspace().time_seq.size();
 
-      while (get_time_sec(imu_next.header.stamp) > time_current_
-             && (get_time_sec(imu_next.header.stamp)
-                 < measures_.lidar_start_time
-                       + config_.lidar.lidar_time_interval)) {
-        if (is_first_frame_) {
-          while (get_time_sec(imu_next.header.stamp)
-                 < measures_.lidar_start_time
-                       + config_.lidar.lidar_time_interval) {
-            imu_.popAndAdvance();
-            if (imu_.empty()) {
-              break;
-            }
-          }
-
-          const auto measurement = imu_.lastMeasurement();
-          imu_.setCurrentMeasurement(measurement);
-
-          last_time = time_current_;
-          time_update_last_ = time_current_;
-          is_first_frame_ = false;
-          break;
-        }
-
-        time_current_ = get_time_sec(imu_next.header.stamp);
-
-        double dt = time_current_ - last_time;
-        double dt_cov = time_current_ - time_update_last_;  //?
-        const auto imu_input = imu_.lastInput(acc_scale);
-
-        if (dt_cov > 0) {
-          filter_.predict(kf, dt_cov, q, imu_input, false, true);
-          time_update_last_ = time_current_;
-        }
-
-        filter_.predict(kf, dt, q, imu_input, true, false);
-        last_time = time_current_;
-        const auto measurement = imu_.nextMeasurement();
-        imu_.setCurrentMeasurement(measurement);
-        filter_.updateOutputImu();
-
-        imu_.popAndAdvance();
-        if (imu_.empty()) {
-          break;
-        }
-      }
-    }
+  if (imu_count == 0 && is_first_frame_) {
     return;
   }
 
-  double pcl_beg_time = measures_.lidar_start_time;
-  lidar_.workspace().idx = -1;
-  for (lidar_.workspace().k = 0;
-       lidar_.workspace().k < (int)lidar_.workspace().time_seq.size();
-       lidar_.workspace().k++) {
-    PointType& point_body =
-        lidar_.workspace()
-            .feats_down_body
-            ->points[lidar_.workspace().idx
-                     + lidar_.workspace().time_seq[lidar_.workspace().k]];
-    const double point_offset_ms = point_time_offset_ms(point_body);
-    time_current_ = (point_offset_ms / 1000.0) + pcl_beg_time;
-    if (is_first_frame_) {
-      while (time_current_ > get_time_sec(imu_next.header.stamp)) {
-        imu_.popAndAdvance();
-        if (imu_.empty()) {
-          break;
+  if (is_first_frame_) {
+    last_time = meas.lidar_start_time;
+    time_update_last_ = meas.lidar_start_time;
+    manifold_->setStartTime(meas.lidar_start_time);
+    is_first_frame_ = false;
+  }
+
+  size_t imu_idx = 0;
+  size_t group_idx = 0;
+  int point_offset = 0;
+
+  while (imu_idx < imu_count || group_idx < group_count) {
+    const double imu_time = imu_idx < imu_count
+                                ? get_time_sec(
+                                      meas.imu_measure[imu_idx]->header.stamp)
+                                : std::numeric_limits<double>::infinity();
+    const double lidar_time =
+        group_idx < group_count
+            ? meas.lidar_start_time
+                  + point_time_offset_ms(
+                        lidar_.workspace()
+                            .feats_down_body->points[point_offset])
+                        / 1000.0
+            : std::numeric_limits<double>::infinity();
+
+    if (imu_time <= lidar_time) {
+      time_current_ = imu_time;
+      const auto& imu_msg = *meas.imu_measure[imu_idx];
+      imu_.setCurrentMeasurement(makeMeasurement(imu_msg));
+
+      if (!manifold_->propagateImu(imu_time)) {
+        ++imu_idx;
+        continue;
+      }
+      const auto& state = manifold_->get_x_predict();
+      Matrix<double, 6, 1> r_I;
+      r_I.segment<3>(0) = Eigen::Vector3d(imu_msg.angular_velocity.x,
+                                          imu_msg.angular_velocity.y,
+                                          imu_msg.angular_velocity.z)
+                          - (state.omg + state.bg);
+      r_I.segment<3>(3) = Eigen::Vector3d(imu_msg.linear_acceleration.x,
+                                          imu_msg.linear_acceleration.y,
+                                          imu_msg.linear_acceleration.z)
+                              * acc_scale
+                          - (state.acc + state.ba);
+
+      std::array<bool, 6> saturated{};
+      if (config_.imu.check_saturation) {
+        const double gyro[3] = {imu_msg.angular_velocity.x,
+                                imu_msg.angular_velocity.y,
+                                imu_msg.angular_velocity.z};
+        const double acc[3] = {imu_msg.linear_acceleration.x,
+                               imu_msg.linear_acceleration.y,
+                               imu_msg.linear_acceleration.z};
+        for (int axis = 0; axis < 3; ++axis) {
+          if (std::abs(gyro[axis]) >= 0.99 * config_.imu.saturation_gyro) {
+            saturated[axis] = true;
+            r_I(axis) = 0.0;
+          }
+          if (std::abs(acc[axis]) >= 0.99 * config_.imu.saturation_acc) {
+            saturated[axis + 3] = true;
+            r_I(axis + 3) = 0.0;
+          }
         }
       }
-
-      const auto measurement = imu_.lastMeasurement();
-      imu_.setCurrentMeasurement(measurement);
-
-      is_first_frame_ = false;
+      manifold_->setImuResidual(r_I);
+      manifold_->applyImuUpdate(saturated);
+      last_time = imu_time;
+      ++imu_idx;
+    } else {
+      time_current_ = lidar_time;
+      if (!manifold_->propagateLidar(time_current_)) {
+        point_offset += lidar_.workspace().time_seq[group_idx];
+        ++group_idx;
+        continue;
+      }
+      const int effect_num = manifold_->updateLidar(
+          lidar_.workspace(), config_.lidar, group_idx, point_offset);
+      if (effect_num == 0) {
+        manifold_->commitPrediction();
+        point_offset += lidar_.workspace().time_seq[group_idx];
+        ++group_idx;
+        continue;
+      }
+      manifold_->applyLidarUpdate();
+      manifold_->updateWorldPoints(lidar_.workspace(), config_.lidar, group_idx,
+                                   point_offset);
       last_time = time_current_;
-      time_update_last_ = time_current_;
-    }
-
-    if (!imu_.empty()) {
-      const bool last_imu = imu_.isSameStamp();
-      while (!imu_.empty() && get_time_sec(imu_next.header.stamp) < last_time) {
-        if (!last_imu) {
-          imu_.advanceCursor();
-          break;
-        }
-        imu_.popAndAdvance();
-        if (imu_.empty()) {
-          break;
-        }
+      if (config_.mapping.publish_odometry_without_downsample) {
+        publishOdometry(publish, publish_tf);
       }
-
-      while (!imu_.empty()
-             && time_current_ > get_time_sec(imu_next.header.stamp)) {
-        const auto measurement = imu_.nextMeasurement();
-        imu_.setCurrentMeasurement(measurement);
-
-        const double imu_time = get_time_sec(imu_next.header.stamp);
-        double dt = imu_time - last_time;
-        const auto imu_input = imu_.lastInput(acc_scale);
-        filter_.predict(kf, dt, q, imu_input, true, false);
-        last_time = imu_time;
-
-        double dt_cov = imu_time - time_update_last_;
-        if (dt_cov > 0.0) {
-          filter_.predict(kf, dt_cov, q, imu_input, false, true);
-          time_update_last_ = imu_time;
-          filter_.updateOutputImu();
-        }
-        imu_.popAndAdvance();
-      }
+      point_offset += lidar_.workspace().time_seq[group_idx];
+      ++group_idx;
     }
-
-    double dt = time_current_ - last_time;
-    const auto imu_input = imu_.lastInput(acc_scale);
-    if (!config_.mapping.propagate_at_imu_frequency) {
-      double dt_cov = time_current_ - time_update_last_;
-      if (dt_cov > 0.0) {
-        filter_.predict(kf, dt_cov, q, imu_input, false, true);
-        time_update_last_ = time_current_;
-      }
-    }
-    filter_.predict(kf, dt, q, imu_input, true, false);
-    last_time = time_current_;
-
-    if (lidar_.workspace().feats_down_size < 1) {
-      RCLCPP_WARN(rclcpp::get_logger("laserMapping"),
-                  "No point, skip this scan!\n");
-      lidar_.workspace().idx +=
-          lidar_.workspace().time_seq[lidar_.workspace().k];
-      continue;
-    }
-
-    if (!filter_.updateLidar(kf)) {
-      lidar_.workspace().idx =
-          lidar_.workspace().idx
-          + lidar_.workspace().time_seq[lidar_.workspace().k];
-      continue;
-    }
-    if (config_.mapping.publish_odometry_without_downsample) {
-      publishOdometry(publish, publish_tf);
-    }
-
-    for (int j = 0; j < lidar_.workspace().time_seq[lidar_.workspace().k];
-         j++) {
-      PointType& point_body_j =
-          lidar_.workspace()
-              .feats_down_body->points[lidar_.workspace().idx + j + 1];
-      PointType& point_world_j =
-          lidar_.workspace()
-              .feats_down_world->points[lidar_.workspace().idx + j + 1];
-      lidar_.measurementModel().pointBodyToWorld(&point_body_j, &point_world_j,
-                                                 kf.x_);
-    }
-
-    lidar_.workspace().idx += lidar_.workspace().time_seq[lidar_.workspace().k];
   }
 }
-
-using OutputKf = esekfom::esekf<state_output, 30, input_ikfom, state_output, 0>;
-using OutputNoise = Eigen::Matrix<double, 30, 30>;
-using OdomCallback = std::function<void(const nav_msgs::msg::Odometry&)>;
-using TfCallback =
-    std::function<void(const geometry_msgs::msg::TransformStamped&)>;
-
-template void FrameProcessor::processFramePoints<OutputKf, OutputNoise>(
-    OutputKf&, double&, OutputNoise&, const OdomCallback&, const TfCallback&);

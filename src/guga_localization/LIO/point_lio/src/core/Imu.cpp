@@ -9,36 +9,6 @@ void ImuMeasurementModel::configure(const ImuParams& params) {
   params_ = params;
 }
 
-void ImuMeasurementModel::hModelOutput(
-    state_output& state, esekfom::dyn_share_modified<double>& data) const {
-  std::memset(data.satu_check, false, 6);
-  data.residual_IMU.block<3, 1>(0, 0) = workspace_.angular_velocity - state.omg
-                                        - state.bg;
-  data.residual_IMU.block<3, 1>(
-      3, 0) = workspace_.linear_acceleration
-                  * params_.processor.gravity_magnitude / params_.acc_norm
-              - state.acc - state.ba;
-  data.R_IMU << params_.measurement_gyro_cov, params_.measurement_gyro_cov,
-      params_.measurement_gyro_cov, params_.measurement_acc_cov,
-      params_.measurement_acc_cov, params_.measurement_acc_cov;
-
-  if (!params_.check_saturation) {
-    return;
-  }
-  for (int axis = 0; axis < 3; ++axis) {
-    if (std::abs(workspace_.angular_velocity(axis))
-        >= 0.99 * params_.saturation_gyro) {
-      data.satu_check[axis] = true;
-      data.residual_IMU(axis) = 0.0;
-    }
-    if (std::abs(workspace_.linear_acceleration(axis))
-        >= 0.99 * params_.saturation_acc) {
-      data.satu_check[axis + 3] = true;
-      data.residual_IMU(axis + 3) = 0.0;
-    }
-  }
-}
-
 void Imu::configure(const Params& params) {
   params_ = params;
   processor_->configure(params.processor);
@@ -118,35 +88,6 @@ void Imu::popAndAdvance() {
   loadNext();
 }
 
-namespace {
-  input_ikfom makeInput(const sensor_msgs::msg::Imu& msg, double acc_scale) {
-    input_ikfom input;
-    input.gyro << msg.angular_velocity.x, msg.angular_velocity.y,
-        msg.angular_velocity.z;
-    input.acc << msg.linear_acceleration.x, msg.linear_acceleration.y,
-        msg.linear_acceleration.z;
-    input.acc *= acc_scale;
-    return input;
-  }
-
-  ImuMeasurement makeMeasurement(const sensor_msgs::msg::Imu& msg) {
-    ImuMeasurement measurement;
-    measurement.angular_velocity << msg.angular_velocity.x,
-        msg.angular_velocity.y, msg.angular_velocity.z;
-    measurement.linear_acceleration << msg.linear_acceleration.x,
-        msg.linear_acceleration.y, msg.linear_acceleration.z;
-    return measurement;
-  }
-}  // namespace
-
-input_ikfom Imu::lastInput(double acc_scale) const {
-  return makeInput(last_, acc_scale);
-}
-
-input_ikfom Imu::nextInput(double acc_scale) const {
-  return makeInput(next_, acc_scale);
-}
-
 ImuMeasurement Imu::lastMeasurement() const {
   return makeMeasurement(last_);
 }
@@ -157,7 +98,7 @@ ImuMeasurement Imu::nextMeasurement() const {
 
 void Imu::collectUntil(
     double end_time, deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected) {
-  if (!needInit() || empty()) {
+  if (empty()) {
     return;
   }
 
@@ -173,7 +114,7 @@ void Imu::collectUntil(
 }
 
 void Imu::process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
-                  state_output& output_state) {
+                  State& output_state) {
   processor_->process(meas, undistort, output_state);
 }
 

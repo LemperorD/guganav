@@ -12,6 +12,15 @@ struct ImuMeasurement {
   V3D linear_acceleration;
 };
 
+inline ImuMeasurement makeMeasurement(const sensor_msgs::msg::Imu& msg) {
+  ImuMeasurement measurement;
+  measurement.angular_velocity << msg.angular_velocity.x,
+      msg.angular_velocity.y, msg.angular_velocity.z;
+  measurement.linear_acceleration << msg.linear_acceleration.x,
+      msg.linear_acceleration.y, msg.linear_acceleration.z;
+  return measurement;
+}
+
 struct ImuMeasurementWorkspace {
   V3D angular_velocity{V3D::Zero()};
   V3D linear_acceleration{V3D::Zero()};
@@ -23,8 +32,6 @@ public:
       : workspace_(workspace) {
   }
   void configure(const ImuParams& params);
-  void hModelOutput(state_output& state,
-                    esekfom::dyn_share_modified<double>& data) const;
 
 private:
   ImuParams params_;
@@ -54,15 +61,13 @@ public:
   void discardBefore(double timestamp);
   void advanceCursor();
   void popAndAdvance();
-  [[nodiscard]] input_ikfom lastInput(double acc_scale) const;
-  [[nodiscard]] input_ikfom nextInput(double acc_scale) const;
   [[nodiscard]] ImuMeasurement lastMeasurement() const;
   [[nodiscard]] ImuMeasurement nextMeasurement() const;
 
   void collectUntil(double end_time,
                     deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected);
   void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
-               state_output& output_state);
+               State& output_state);
 
   [[nodiscard]] bool needInit() const;
   [[nodiscard]] double lastTimestamp() const;

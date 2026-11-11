@@ -17,7 +17,6 @@
 #include "std_srvs/srv/trigger.hpp"
 
 #include "point_lio/core/Lidar.h"
-#include "point_lio/core/Filter.h"
 #include "point_lio/core/FrameProcessor.h"
 #include "point_lio/core/ProcessingState.h"
 
