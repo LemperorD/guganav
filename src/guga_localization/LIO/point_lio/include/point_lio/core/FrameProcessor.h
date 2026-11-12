@@ -10,6 +10,7 @@
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Synchronizer.h"
@@ -32,6 +33,8 @@ public:
   ~FrameProcessor();
   void initialize();
   void setPose(geometry_msgs::msg::Pose& pose) const;
+  void setDebugPublisher(
+      rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub);
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
   void configureSynchronizer(double lidar_time_interval);
   /// 处理一帧; 返回 true 表示本帧确实被处理 (据此决定是否发布输出)
@@ -44,6 +47,9 @@ public:
   [[nodiscard]] double lidarEndTime() const {
     return lidar_end_time_;
   }
+  [[nodiscard]] const PointCloudXYZI::Ptr& currentLidarOrigin() const;
+  /// 当前帧降采样后的世界系点云, 供发布与 PCD 保存使用
+  [[nodiscard]] const PointCloudXYZI::Ptr& currentDownsampledWorld() const;
 
 private:
   double time_current_{0.0};
@@ -51,13 +57,13 @@ private:
   bool is_first_frame_{true};
   double time_update_last_{0.0};
   double last_time_output_{0.0};
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_pub_;
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
   void initializeFilter();
   bool syncPackages();
   void initScan();
-  void preparePointMeasurements() const;
   void mapIncremental() const;
   bool initMapState(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
@@ -70,7 +76,7 @@ private:
   bool initializeIteration(
       std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
 
-  void processFramePoints2(
+  void processFramePoints(
       MeasureGroup& meas, double& last_time,
       const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
       const std::function<void(const geometry_msgs::msg::TransformStamped&)>&

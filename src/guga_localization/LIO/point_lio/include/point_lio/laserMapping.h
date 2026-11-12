@@ -13,6 +13,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "std_msgs/msg/u_int8.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
@@ -145,6 +146,8 @@ private:
       pub_laser_cloud_map_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_aft_mapped_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr
+      debug_state_pub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   // ==================== 项目约定输出 (原 loam_interface) ====================

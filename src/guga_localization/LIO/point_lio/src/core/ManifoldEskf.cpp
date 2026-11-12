@@ -7,21 +7,21 @@ using namespace Eigen;
 
 namespace {
 
-using Vector30 = Eigen::Matrix<double, 30, 1>;
-using Matrix30 = Eigen::Matrix<double, 30, 30>;
-using Matrix3d = Eigen::Matrix3d;
+  using Vector30 = Eigen::Matrix<double, 30, 1>;
+  using Matrix30 = Eigen::Matrix<double, 30, 30>;
+  using Matrix3d = Eigen::Matrix3d;
 
-// 按论文 J 的导数定义实现的右雅可比, 首阶 I - 0.5[d]x.
-Matrix3d rightJacobian(const Eigen::Vector3d& d) {
-  const double theta = d.norm();
-  const Matrix3d K = Hat(d);
-  if (theta < 1e-8) {
-    return Matrix3d::Identity() - 0.5 * K;
+  // 按论文 J 的导数定义实现的右雅可比, 首阶 I - 0.5[d]x.
+  Matrix3d rightJacobian(const Eigen::Vector3d& d) {
+    const double theta = d.norm();
+    const Matrix3d K = Hat(d);
+    if (theta < 1e-8) {
+      return Matrix3d::Identity() - 0.5 * K;
+    }
+    const double a = (1.0 - std::cos(theta)) / (theta * theta);
+    const double b = (theta - std::sin(theta)) / (theta * theta * theta);
+    return Matrix3d::Identity() - a * K + b * K * K;
   }
-  const double a = (1.0 - std::cos(theta)) / (theta * theta);
-  const double b = (theta - std::sin(theta)) / (theta * theta * theta);
-  return Matrix3d::Identity() - a * K + b * K * K;
-}
 
 }  // namespace
 
@@ -35,9 +35,7 @@ ManifoldEskf::ManifoldEskf() {
 
   H_I.setZero();
   H_I.block<3, 3>(0, 18) = Matrix3d::Identity();  // 角速度对 omega
-  H_I.block<3, 3>(0, 9) = Matrix3d::Identity();   // 角速度对 bg
   H_I.block<3, 3>(3, 21) = Matrix3d::Identity();  // 加速度对 acc
-  H_I.block<3, 3>(3, 12) = Matrix3d::Identity();  // 加速度对 ba
   D_I = Matrix<double, 6, 6>::Identity();
 
   Q_.setZero();
@@ -45,7 +43,6 @@ ManifoldEskf::ManifoldEskf() {
   Q_.block<3, 3>(3, 3) = 1e-2 * Matrix3d::Identity();  // w_a
   Q_.block<3, 3>(6, 6) = 1e-6 * Matrix3d::Identity();  // n_bg
   Q_.block<3, 3>(9, 9) = 1e-4 * Matrix3d::Identity();  // n_ba
-
   R_I = 1e-2 * Matrix<double, 6, 6>::Identity();
 }
 
@@ -81,19 +78,16 @@ void ManifoldEskf::setStartTime(double t) {
   last_time_ = t;
 }
 
-void ManifoldEskf::setLidarResidual(const Eigen::VectorXd& r) {
-  r_L = r;
-}
-
 void ManifoldEskf::setImuResidual(const Eigen::Matrix<double, 6, 1>& r) {
   r_I = r;
 }
 
-Vector30 ManifoldEskf::f_(const State& x_, const State&) const {
+Vector30 ManifoldEskf::f_(const State& x_, const V3D& omega,
+                          const V3D& acc) const {
   Vector30 d = Vector30::Zero();
-  d.segment<3>(0) = x_.omg;
+  d.segment<3>(0) = omega;
   d.segment<3>(3) = x_.vel;
-  d.segment<3>(6) = x_.rot * x_.acc + x_.gravity;
+  d.segment<3>(6) = x_.rot * (acc - x_.ba) + x_.gravity;
   return d;
 }
 
@@ -102,8 +96,8 @@ Matrix30 ManifoldEskf::F_x(const State& x_, const double dt) const {
   d.block<3, 3>(0, 0) = Exp(-dt * x_.omg);
   d.block<3, 3>(0, 18) = dt * Matrix3d::Identity();
   d.block<3, 3>(3, 6) = dt * Matrix3d::Identity();
-  d.block<3, 3>(6, 0) = -dt * x_.rot * Hat(x_.acc);
-  d.block<3, 3>(6, 15) = dt * Matrix3d::Identity();
+  const V3D acc_bias = x_.acc - x_.ba;
+  d.block<3, 3>(6, 0) = -dt * x_.rot * Hat(acc_bias);
   d.block<3, 3>(6, 21) = dt * x_.rot;
   return d;
 }
@@ -125,40 +119,48 @@ void ManifoldEskf::pointBodyToWorld(PointType const* pi, PointType* po,
   po->intensity = pi->intensity;
 }
 
-int ManifoldEskf::updateLidar(LidarWorkspace& workspace,
-                              const LidarParams& params, int group_idx,
-                              int point_offset) {
-  const int group_size = workspace.time_seq[group_idx];
+int ManifoldEskf::updateLidar(MeasureGroup& meas, const LidarParams& params,
+                              int group_idx, int point_offset) {
+  const int group_size = meas.time_seq[group_idx];
   VF(4) pabcd;
   pabcd.setZero();
-  workspace.normvec->resize(group_size);
+  normvec_->resize(group_size);
+  const size_t total = meas.feats_down_body->points.size();
+  nearest_points_.resize(total);
+  pbody_list_.resize(total);
   int effect_num = 0;
 
   for (int j = 0; j < group_size; ++j) {
     const int index = point_offset + j;
-    PointType& point_body = workspace.feats_down_body->points[index];
-    PointType& point_world = workspace.feats_down_world->points[index];
+    PointType& point_body = meas.feats_down_body->points[index];
+    PointType& point_world = meas.feats_down_world->points[index];
     pointBodyToWorld(&point_body, &point_world, params, x_predict);
-    const Eigen::Vector3d p_body = workspace.pbody_list[index];
+
+    const Eigen::Vector3d p_lidar(point_body.x, point_body.y, point_body.z);
+    pbody_list_[index] =
+        params.extrinsic_estimation
+            ? x_predict.offset_R_L_I * p_lidar + x_predict.offset_T_L_I
+            : R_LI_fixed_ * p_lidar + t_LI_fixed_;
+    const Eigen::Vector3d p_body = pbody_list_[index];
     const double p_norm = p_body.norm();
 
-    auto& points_near = workspace.Nearest_Points[index];
-    workspace.ivox_->GetClosestPoint(point_world, points_near, NUM_MATCH_POINTS);
+    auto& points_near = nearest_points_[index];
+    map_->GetClosestPoint(point_world, points_near, NUM_MATCH_POINTS);
 
     if (points_near.size() < NUM_MATCH_POINTS) {
-      workspace.point_selected_surf[index] = false;
+      point_selected_surf_[index] = false;
     } else {
-      workspace.point_selected_surf[index] = false;
+      point_selected_surf_[index] = false;
       if (esti_plane(pabcd, points_near, params.plane_threshold)) {
         const double pd2 =
             std::fabs(pabcd(0) * point_world.x + pabcd(1) * point_world.y
                       + pabcd(2) * point_world.z + pabcd(3));
         if (p_norm > params.match_threshold * pd2 * pd2) {
-          workspace.point_selected_surf[index] = true;
-          workspace.normvec->points[j].x = pabcd(0);
-          workspace.normvec->points[j].y = pabcd(1);
-          workspace.normvec->points[j].z = pabcd(2);
-          workspace.normvec->points[j].intensity = pabcd(3);
+          point_selected_surf_[index] = true;
+          normvec_->points[j].x = pabcd(0);
+          normvec_->points[j].y = pabcd(1);
+          normvec_->points[j].z = pabcd(2);
+          normvec_->points[j].intensity = pabcd(3);
           ++effect_num;
         }
       }
@@ -177,63 +179,67 @@ int ManifoldEskf::updateLidar(LidarWorkspace& workspace,
 
   for (int j = 0; j < group_size; ++j) {
     const int index = point_offset + j;
-    if (!workspace.point_selected_surf[index]) {
+    if (!point_selected_surf_[index]) {
       continue;
     }
-    const Eigen::Vector3d norm_vec(workspace.normvec->points[j].x,
-                                   workspace.normvec->points[j].y,
-                                   workspace.normvec->points[j].z);
+    const Eigen::Vector3d norm_vec(normvec_->points[j].x,
+                                   normvec_->points[j].y,
+                                   normvec_->points[j].z);
 
     if (params.extrinsic_estimation) {
-      const Eigen::Vector3d p_body = workspace.pbody_list[index];
-      const Eigen::Vector3d point_imu =
-          x_predict.offset_R_L_I * p_body + x_predict.offset_T_L_I;
+      const Eigen::Vector3d point_imu = pbody_list_[index];
+      const Eigen::Vector3d p_lidar(
+          meas.feats_down_body->points[index].x,
+          meas.feats_down_body->points[index].y,
+          meas.feats_down_body->points[index].z);
       const Eigen::Vector3d C = x_predict.rot.transpose() * norm_vec;
       const Eigen::Vector3d A = Hat(point_imu) * C;
       const Eigen::Vector3d B =
-          Hat(p_body) * x_predict.offset_R_L_I.transpose() * C;
+          Hat(p_lidar) * x_predict.offset_R_L_I.transpose() * C;
       H_L.block<1, 3>(m, 3) = norm_vec.transpose();
       H_L.block<1, 3>(m, 0) = A.transpose();
       H_L.block<1, 3>(m, 24) = B.transpose();
       H_L.block<1, 3>(m, 27) = C.transpose();
     } else {
-      const Eigen::Vector3d p_body = workspace.pbody_list[index];
-      const Eigen::Vector3d point_imu = R_LI_fixed_ * p_body + t_LI_fixed_;
+      const Eigen::Vector3d point_imu = pbody_list_[index];
       const Eigen::Vector3d C = x_predict.rot.transpose() * norm_vec;
       const Eigen::Vector3d A = Hat(point_imu) * C;
       H_L.block<1, 3>(m, 3) = norm_vec.transpose();
       H_L.block<1, 3>(m, 0) = A.transpose();
     }
 
-    r_L(m) = -norm_vec(0) * workspace.feats_down_world->points[index].x
-             - norm_vec(1) * workspace.feats_down_world->points[index].y
-             - norm_vec(2) * workspace.feats_down_world->points[index].z
-             - workspace.normvec->points[j].intensity;
+    r_L(m) = -norm_vec(0) * meas.feats_down_world->points[index].x
+             - norm_vec(1) * meas.feats_down_world->points[index].y
+             - norm_vec(2) * meas.feats_down_world->points[index].z
+             - normvec_->points[j].intensity;
+    // 限制单点残差, 避免错误的平面拟合把位置一次拉飞.
+    r_L(m) = std::clamp(r_L(m), -0.5, 0.5);
     ++m;
   }
   return effect_num;
 }
 
-void ManifoldEskf::updateWorldPoints(LidarWorkspace& workspace,
+void ManifoldEskf::updateWorldPoints(MeasureGroup& meas,
                                      const LidarParams& params, int group_idx,
                                      int point_offset) {
-  const int group_size = workspace.time_seq[group_idx];
+  const int group_size = meas.time_seq[group_idx];
   for (int j = 0; j < group_size; ++j) {
     const int index = point_offset + j;
-    PointType& point_body = workspace.feats_down_body->points[index];
-    PointType& point_world = workspace.feats_down_world->points[index];
+    PointType& point_body = meas.feats_down_body->points[index];
+    PointType& point_world = meas.feats_down_world->points[index];
     pointBodyToWorld(&point_body, &point_world, params, x_);
   }
 }
 
-bool ManifoldEskf::propagateLidar(double lidar_time) {
+bool ManifoldEskf::stateTransform(double lidar_time, const V3D& omega,
+                                  const V3D& acc) {
   const State zero_input{};
   const double dt = lidar_time - last_time_;
   if (dt < 0.0) {
     return false;
   }
   x_predict = x_;
-  const Vector30 delta = dt * f_(x_, zero_input);
+  const Vector30 delta = dt * f_(x_, omega, acc);
   x_predict.boxplus(delta);
   P_predict = F_x(x_, dt) * P_ * F_x(x_, dt).transpose()
               + F_w_ * Q_ * F_w_.transpose() * dt;
@@ -253,8 +259,8 @@ void ManifoldEskf::applyLidarUpdate() {
 
   const Matrix3d R_delta = x_predict.rot.transpose() * x_.rot;
   const Eigen::Vector3d theta = Log(R_delta);
-  const Eigen::Vector3d theta_ext =
-      Log(x_predict.offset_R_L_I.transpose() * x_.offset_R_L_I);
+  const Eigen::Vector3d theta_ext = Log(x_predict.offset_R_L_I.transpose()
+                                        * x_.offset_R_L_I);
 
   J = I;
   J.block<3, 3>(0, 0) = rightJacobian(theta);
@@ -266,21 +272,6 @@ void ManifoldEskf::applyLidarUpdate() {
 void ManifoldEskf::commitPrediction() {
   x_ = x_predict;
   P_ = P_predict;
-}
-
-bool ManifoldEskf::propagateImu(double imu_time) {
-  const State zero_input{};
-  const double dt = imu_time - last_time_;
-  if (dt < 0.0) {
-    return false;
-  }
-  x_predict = x_;
-  const Vector30 delta = dt * f_(x_, zero_input);
-  x_predict.boxplus(delta);
-  P_predict = F_x(x_, dt) * P_ * F_x(x_, dt).transpose()
-              + F_w_ * Q_ * F_w_.transpose() * dt;
-  last_time_ = imu_time;
-  return true;
 }
 
 void ManifoldEskf::applyImuUpdate(const std::array<bool, 6>& saturated) {
@@ -301,24 +292,14 @@ void ManifoldEskf::applyImuUpdate(const std::array<bool, 6>& saturated) {
 
   const Matrix3d R_delta = x_predict.rot.transpose() * x_.rot;
   const Eigen::Vector3d theta = Log(R_delta);
-  const Eigen::Vector3d theta_ext =
-      Log(x_predict.offset_R_L_I.transpose() * x_.offset_R_L_I);
+  const Eigen::Vector3d theta_ext = Log(x_predict.offset_R_L_I.transpose()
+                                        * x_.offset_R_L_I);
 
   J = I;
   J.block<3, 3>(0, 0) = rightJacobian(theta);
   J.block<3, 3>(24, 24) = rightJacobian(theta_ext);
 
   P_ = J * P_bias * J.transpose();
-}
-
-void ManifoldEskf::Kalman_filter(double lidar_time, double imu_time) {
-  if (lidar_time < imu_time) {
-    propagateLidar(lidar_time);
-    applyLidarUpdate();
-  } else {
-    propagateImu(imu_time);
-    applyImuUpdate();
-  }
 }
 
 State& ManifoldEskf::mutable_x() {
@@ -333,14 +314,6 @@ const State& ManifoldEskf::get_x_predict() const {
   return x_predict;
 }
 
-const Eigen::Matrix<double, 30, 30>& ManifoldEskf::get_P() const {
-  return P_;
-}
-
 state_output ManifoldEskf::toStateOutput() const {
   return x_;
-}
-
-void ManifoldEskf::setFromStateOutput(const state_output& s) {
-  x_ = s;
 }

@@ -30,27 +30,10 @@ struct LidarFrame {
   double end_time{0.0};
 };
 
-struct LidarWorkspace {
-  PointCloudXYZI::Ptr normvec{new PointCloudXYZI(100000, 1)};
-  std::vector<int> time_seq;
-  PointCloudXYZI::Ptr feats_down_body{new PointCloudXYZI(10000, 1)};
-  PointCloudXYZI::Ptr feats_down_world{new PointCloudXYZI(10000, 1)};
-  std::vector<V3D> pbody_list;
-  std::vector<PointVector> Nearest_Points;
-  IVoxType::Ptr ivox_{nullptr};
-  std::bitset<100000> point_selected_surf;
-  std::vector<M3D> hat_list;
-  int k{0};
-  int idx{-1};
-  size_t feats_down_size{0};
-};
-
 class LidarMeasurementModel {
 public:
-  explicit LidarMeasurementModel(LidarWorkspace& workspace,
-                                 V3D& lidar_translation, M3D& lidar_rotation)
-      : workspace_(&workspace),
-        lidar_translation_(&lidar_translation),
+  explicit LidarMeasurementModel(V3D& lidar_translation, M3D& lidar_rotation)
+      : lidar_translation_(&lidar_translation),
         lidar_rotation_(&lidar_rotation) {
   }
   void configure(const LidarParams& params);
@@ -59,14 +42,13 @@ public:
 
 private:
   LidarParams params_;
-  LidarWorkspace* workspace_;
   V3D* lidar_translation_;
   M3D* lidar_rotation_;
 };
 
 class Lidar {
 public:
-  Lidar() : measurement_model_(workspace_, lidar_t_wrt_imu_, lidar_r_wrt_imu_) {
+  Lidar() : measurement_model_(lidar_t_wrt_imu_, lidar_r_wrt_imu_) {
   }
   ~Lidar() = default;
 
@@ -77,11 +59,11 @@ public:
   [[nodiscard]] LidarMeasurementModel& measurementModel() {
     return measurement_model_;
   }
-  [[nodiscard]] LidarWorkspace& workspace() {
-    return workspace_;
+  [[nodiscard]] IVoxType::Ptr& ivox() {
+    return ivox_;
   }
-  [[nodiscard]] const LidarWorkspace& workspace() const {
-    return workspace_;
+  [[nodiscard]] const IVoxType::Ptr& ivox() const {
+    return ivox_;
   }
   void setExtrinsics(const V3D& translation, const M3D& rotation) {
     lidar_t_wrt_imu_ = translation;
@@ -108,7 +90,7 @@ private:
   void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
 
   Params params_;
-  LidarWorkspace workspace_;
+  IVoxType::Ptr ivox_{nullptr};
   V3D lidar_t_wrt_imu_{Zero3d};
   M3D lidar_r_wrt_imu_{IMatrix3};
   LidarMeasurementModel measurement_model_;

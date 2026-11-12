@@ -70,7 +70,8 @@ Eigen::Matrix<typename Derived::Scalar, 3, 1> Log(
   using T = typename Derived::Scalar;
   const T cos_theta = std::clamp((R.trace() - T(1)) * T(0.5), T(-1), T(1));
   const T theta = std::acos(cos_theta);
-  const Eigen::Matrix<T, 3, 1> vee(R(2, 1), R(0, 2), R(1, 0));
+  const Eigen::Matrix<T, 3, 1> vee(R(2, 1) - R(1, 2), R(0, 2) - R(2, 0),
+                                   R(1, 0) - R(0, 1));
   if (theta < T(1e-8)) {
     return T(0.5) * vee;
   }
@@ -159,6 +160,9 @@ using state_output = State;
  * @param point_cloud 输入点云 (point time offset = 时间偏移，单位 ms)
  * @return 每组包含的点数序列
  */
+/// @brief 按点时间偏移升序排序的谓词.
+bool time_list(PointType& x, PointType& y);
+
 inline std::vector<int> time_compressing(
     const PointCloudXYZI::Ptr& point_cloud) {
   int points_size = point_cloud->points.size();
@@ -251,6 +255,18 @@ inline rclcpp::Time get_ros_time(double timestamp) {
 struct MeasureGroup {
   double lidar_start_time{0.0};
   double lidar_last_time{0.0};
-  PointCloudXYZI::Ptr lidar_measure;
+  PointCloudXYZI::Ptr lidar_measure_origin;
   deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_measure;
+  /// 本帧降采样后的点云 (IMU 系), 随量测一起传递
+  PointCloudXYZI::Ptr feats_down_body{
+      std::make_shared<PointCloudXYZI>(10000, 1)};
+  /// 本帧降采样后的世界系点云, 由 ESKF 迭代写入
+  PointCloudXYZI::Ptr feats_down_world{
+      std::make_shared<PointCloudXYZI>(10000, 1)};
+  /// 本帧降采样点数
+  std::size_t feats_down_size{0};
+  /// 已成功传播并生成世界系坐标的点数, 地图更新只处理这一段
+  std::size_t processed_size{0};
+  /// 按时间偏移分段后每段的点数, 与 feats_down_body 的排序结果对应
+  std::vector<int> time_seq;
 };

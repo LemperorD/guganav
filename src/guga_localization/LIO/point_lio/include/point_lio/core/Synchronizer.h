@@ -14,4 +14,5 @@ public:
 
 private:
   double lidar_time_interval_{0.1};
+  constexpr static double TIME_TOLERANCE{0.5};
 };

@@ -19,8 +19,21 @@ FrameProcessor::FrameProcessor(Imu& imu, PointLioStage& stage, Lidar& lidar,
 
 FrameProcessor::~FrameProcessor() = default;
 
+const PointCloudXYZI::Ptr& FrameProcessor::currentLidarOrigin() const {
+  return measures_.lidar_measure_origin;
+}
+
+const PointCloudXYZI::Ptr& FrameProcessor::currentDownsampledWorld() const {
+  return measures_.feats_down_world;
+}
+
 void FrameProcessor::initialize() {
   initializeFilter();
+}
+
+void FrameProcessor::setDebugPublisher(
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub) {
+  debug_pub_ = std::move(pub);
 }
 
 void FrameProcessor::initializeFilter() {
@@ -35,10 +48,17 @@ void FrameProcessor::initializeFilter() {
   P.block<3, 3>(21, 21) = config_.filter.acc_cov_output * Matrix3d::Identity();
   P.block<3, 3>(9, 9) = config_.filter.b_gyr_cov * Matrix3d::Identity();
   P.block<3, 3>(12, 12) = config_.filter.b_acc_cov * Matrix3d::Identity();
+  // 重力由静止初始化确定, 固定不估计, 避免与加速度零偏混在一起发散.
+  P.middleRows<3>(15).setZero();
+  P.middleCols<3>(15).setZero();
+  // 加速度零偏同样固定, 避免点面匹配的错误残差通过 vel 把它拉偏.
+  P.middleRows<3>(12).setZero();
+  P.middleCols<3>(12).setZero();
   manifold_->setInitialCovariance(P);
 
   manifold_->configureFixedExtrinsic(lidar_.RotationLidarToImu(),
                                      lidar_.TranslationLidarToImu());
+  manifold_->setMap(lidar_.ivox());
   if (config_.lidar.extrinsic_estimation) {
     manifold_->mutable_x().offset_R_L_I = lidar_.RotationLidarToImu();
     manifold_->mutable_x().offset_T_L_I = lidar_.TranslationLidarToImu();
@@ -111,16 +131,16 @@ void FrameProcessor::pointBodyLidarToIMU(const PointType* pi,
 
 void FrameProcessor::mapIncremental() const {
   PointVector points_to_add;
-  const auto cur_pts = lidar_.workspace().feats_down_world->size();
+  const auto cur_pts = measures_.processed_size;
+  const auto& nearest = manifold_->nearestPoints();
   points_to_add.reserve(cur_pts);
   for (std::size_t i = 0; i < cur_pts; ++i) {
-    const PointType& point_world =
-        lidar_.workspace().feats_down_world->points[i];
-    if (lidar_.workspace().Nearest_Points[i].empty()) {
+    const PointType& point_world = measures_.feats_down_world->points[i];
+    if (nearest.empty() || nearest[i].empty()) {
       points_to_add.emplace_back(point_world);
       continue;
     }
-    const auto& points_near = lidar_.workspace().Nearest_Points[i];
+    const auto& points_near = nearest[i];
     const Eigen::Vector3f center =
         ((point_world.getVector3fMap() / config_.mapping.filter_size_map)
              .array()
@@ -141,7 +161,7 @@ void FrameProcessor::mapIncremental() const {
       points_to_add.emplace_back(point_world);
     }
   }
-  lidar_.workspace().ivox_->AddPoints(points_to_add);
+  lidar_.ivox()->AddPoints(points_to_add);
 }
 
 void FrameProcessor::publishOdometry(
@@ -187,12 +207,12 @@ void FrameProcessor::publishOdometry(
 bool FrameProcessor::initMapState(
     std::function<void(const sensor_msgs::msg::PointCloud2&)> publish) {
   const size_t old_size = state_.init_feats_world->size();
-  const size_t add_size = state_.feats_origin_lidar->size();
+  const size_t add_size = measures_.lidar_measure_origin->size();
   state_.init_feats_world->resize(old_size + add_size);
 
   for (size_t i = 0; i < add_size; i++) {
     lidar_.measurementModel().pointBodyToWorld(
-        &(state_.feats_origin_lidar->points[i]),
+        &(measures_.lidar_measure_origin->points[i]),
         &(state_.init_feats_world->points[old_size + i]),
         manifold_->toStateOutput());
   }
@@ -201,9 +221,9 @@ bool FrameProcessor::initMapState(
       >= (size_t)config_.mapping.init_map_size) {
     if (config_.sensor.enable_prior_map) {
       auto map_cloud = loadPointcloudFromPcd(config_.sensor.prior_map_path);
-      lidar_.workspace().ivox_->AddPoints(map_cloud->points);
+      lidar_.ivox()->AddPoints(map_cloud->points);
     } else {
-      lidar_.workspace().ivox_->AddPoints(state_.init_feats_world->points);
+      lidar_.ivox()->AddPoints(state_.init_feats_world->points);
     }
 
     sensor_msgs::msg::PointCloud2 map_msg;
@@ -221,9 +241,7 @@ bool FrameProcessor::initMapState(
 
 bool FrameProcessor::prepareFrame(
     std::function<void(const sensor_msgs::msg::PointCloud2&)> publish) {
-  State state = manifold_->toStateOutput();
-  imu_.process(measures_, state_.feats_origin_lidar, state);
-  manifold_->setFromStateOutput(state);
+  imu_.process(measures_, manifold_->mutable_x());
 
   if (imu_.needInit()) {
     stage_ = PointLioStage::INITIALIZINGIMU;
@@ -246,49 +264,21 @@ bool FrameProcessor::prepareFrame(
   }
 
   if (config_.mapping.space_down_sample) {
-    state_.downsize_filter_surf.setInputCloud(state_.feats_origin_lidar);
-    state_.downsize_filter_surf.filter(*lidar_.workspace().feats_down_body);
-    sort(lidar_.workspace().feats_down_body->points.begin(),
-         lidar_.workspace().feats_down_body->points.end(), time_list);
+    state_.downsize_filter_surf.setInputCloud(measures_.lidar_measure_origin);
+    state_.downsize_filter_surf.filter(*measures_.feats_down_body);
+    sort(measures_.feats_down_body->points.begin(),
+         measures_.feats_down_body->points.end(), time_list);
   } else {
-    lidar_.workspace().feats_down_body = measures_.lidar_measure;
-    sort(lidar_.workspace().feats_down_body->points.begin(),
-         lidar_.workspace().feats_down_body->points.end(), time_list);
+    measures_.feats_down_body = measures_.lidar_measure_origin;
+    sort(measures_.feats_down_body->points.begin(),
+         measures_.feats_down_body->points.end(), time_list);
   }
 
-  lidar_.workspace().time_seq = time_compressing(
-      lidar_.workspace().feats_down_body);
-  lidar_.workspace().feats_down_size =
-      lidar_.workspace().feats_down_body->points.size();
-
-  lidar_.workspace().normvec->resize(lidar_.workspace().feats_down_size);
-  lidar_.workspace().feats_down_world->resize(
-      lidar_.workspace().feats_down_size);
-  lidar_.workspace().Nearest_Points.resize(lidar_.workspace().feats_down_size);
-  lidar_.workspace().hat_list.resize(lidar_.workspace().feats_down_size);
-  lidar_.workspace().pbody_list.resize(lidar_.workspace().feats_down_size);
-
-  preparePointMeasurements();
+  measures_.time_seq = time_compressing(measures_.feats_down_body);
+  measures_.feats_down_size = measures_.feats_down_body->points.size();
+  measures_.feats_down_world->resize(measures_.feats_down_size);
 
   return true;
-}
-
-void FrameProcessor::preparePointMeasurements() const {
-  for (size_t i = 0; i < lidar_.workspace().feats_down_body->size(); i++) {
-    V3D point(lidar_.workspace().feats_down_body->points[i].x,
-              lidar_.workspace().feats_down_body->points[i].y,
-              lidar_.workspace().feats_down_body->points[i].z);
-
-    lidar_.workspace().pbody_list[i] = point;
-
-    if (!config_.lidar.extrinsic_estimation) {
-      point = lidar_.RotationLidarToImu() * point
-              + lidar_.TranslationLidarToImu();  // p_I = ^IR_L * p_L + ^IT_L
-
-      M3D point_hat = Hat(point);
-      lidar_.workspace().hat_list[i] = point_hat;
-    }
-  }
 }
 
 bool FrameProcessor::initializeIteration(
@@ -317,19 +307,19 @@ bool FrameProcessor::processIteration(
     return false;
   }
 
-  processFramePoints2(measures_, last_time_output_, publish_odom, publish_tf);
+  processFramePoints(measures_, last_time_output_, publish_odom, publish_tf);
 
   if (!config_.mapping.publish_odometry_without_downsample) {
     publishOdometry(publish_odom, publish_tf);
   }
-  if (lidar_.workspace().feats_down_size > 4
+  if (measures_.feats_down_size > 4
       && (!config_.sensor.enable_prior_map || ++state_.sleep_time > 200)) {
     mapIncremental();
   }
   return true;
 }
 
-void FrameProcessor::processFramePoints2(
+void FrameProcessor::processFramePoints(
     MeasureGroup& meas, double& last_time,
     const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
     const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
@@ -337,7 +327,7 @@ void FrameProcessor::processFramePoints2(
   const double acc_scale = config_.imu.processor.gravity_magnitude
                            / config_.imu.acc_norm;
   const size_t imu_count = meas.imu_measure.size();
-  const size_t group_count = lidar_.workspace().time_seq.size();
+  const size_t group_count = measures_.time_seq.size();
 
   if (imu_count == 0 && is_first_frame_) {
     return;
@@ -363,8 +353,7 @@ void FrameProcessor::processFramePoints2(
         group_idx < group_count
             ? meas.lidar_start_time
                   + point_time_offset_ms(
-                        lidar_.workspace()
-                            .feats_down_body->points[point_offset])
+                        measures_.feats_down_body->points[point_offset])
                         / 1000.0
             : std::numeric_limits<double>::infinity();
 
@@ -372,22 +361,28 @@ void FrameProcessor::processFramePoints2(
       time_current_ = imu_time;
       const auto& imu_msg = *meas.imu_measure[imu_idx];
       imu_.setCurrentMeasurement(makeMeasurement(imu_msg));
+      const V3D omega(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y,
+                      imu_msg.angular_velocity.z);
+      const V3D acc_meas(imu_msg.linear_acceleration.x * acc_scale,
+                         imu_msg.linear_acceleration.y * acc_scale,
+                         imu_msg.linear_acceleration.z * acc_scale);
 
-      if (!manifold_->propagateImu(imu_time)) {
+      if (!manifold_->stateTransform(imu_time, omega, acc_meas)) {
         ++imu_idx;
         continue;
       }
+
       const auto& state = manifold_->get_x_predict();
       Matrix<double, 6, 1> r_I;
       r_I.segment<3>(0) = Eigen::Vector3d(imu_msg.angular_velocity.x,
                                           imu_msg.angular_velocity.y,
                                           imu_msg.angular_velocity.z)
-                          - (state.omg + state.bg);
+                          - state.omg;
       r_I.segment<3>(3) = Eigen::Vector3d(imu_msg.linear_acceleration.x,
                                           imu_msg.linear_acceleration.y,
                                           imu_msg.linear_acceleration.z)
                               * acc_scale
-                          - (state.acc + state.ba);
+                          - state.acc;
 
       std::array<bool, 6> saturated{};
       if (config_.imu.check_saturation) {
@@ -408,33 +403,47 @@ void FrameProcessor::processFramePoints2(
           }
         }
       }
+
       manifold_->setImuResidual(r_I);
       manifold_->applyImuUpdate(saturated);
+      static int dbg_count = 0;
+      if (debug_pub_ && ++dbg_count % 50 == 0) {
+        const auto& s = manifold_->get_x();
+        std_msgs::msg::Float64MultiArray msg;
+        msg.data = {s.omg(0), s.omg(1), s.omg(2), s.bg(0), s.bg(1), s.bg(2),
+                    s.acc(0), s.acc(1), s.acc(2), s.ba(0), s.ba(1), s.ba(2),
+                    s.vel(0), s.vel(1), s.vel(2)};
+        debug_pub_->publish(msg);
+      }
       last_time = imu_time;
       ++imu_idx;
     } else {
       time_current_ = lidar_time;
-      if (!manifold_->propagateLidar(time_current_)) {
-        point_offset += lidar_.workspace().time_seq[group_idx];
+      if (!manifold_->stateTransform(time_current_, manifold_->get_x().omg,
+                                     manifold_->get_x().acc)) {
+        point_offset += measures_.time_seq[group_idx];
         ++group_idx;
         continue;
       }
       const int effect_num = manifold_->updateLidar(
-          lidar_.workspace(), config_.lidar, group_idx, point_offset);
+          measures_, config_.lidar, group_idx, point_offset);
       if (effect_num == 0) {
         manifold_->commitPrediction();
-        point_offset += lidar_.workspace().time_seq[group_idx];
+        measures_.processed_size =
+            point_offset + measures_.time_seq[group_idx];
+        point_offset += measures_.time_seq[group_idx];
         ++group_idx;
         continue;
       }
       manifold_->applyLidarUpdate();
-      manifold_->updateWorldPoints(lidar_.workspace(), config_.lidar, group_idx,
+      manifold_->updateWorldPoints(measures_, config_.lidar, group_idx,
                                    point_offset);
+      measures_.processed_size = point_offset + measures_.time_seq[group_idx];
       last_time = time_current_;
       if (config_.mapping.publish_odometry_without_downsample) {
         publishOdometry(publish, publish_tf);
       }
-      point_offset += lidar_.workspace().time_seq[group_idx];
+      point_offset += measures_.time_seq[group_idx];
       ++group_idx;
     }
   }

@@ -30,6 +30,7 @@ def generate_launch_description():
     use_ui = LaunchConfiguration("use_ui")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_path = LaunchConfiguration("pcd_save_path")
     pcd_save_require_lost = LaunchConfiguration("pcd_save_require_lost")
     pcd_save_trigger_topic = LaunchConfiguration("pcd_save_trigger_topic")
     # ── 导航参数分层：planner/controller 选择 → 三个参数文件（base/controller/planner）──
@@ -227,6 +228,19 @@ def generate_launch_description():
         description="Save accumulated scans to point_lio/PCD on shutdown in both modes",
     )
 
+    declare_pcd_save_path_cmd = DeclareLaunchArgument(
+        "pcd_save_path",
+        default_value=[
+            TextSubstitution(text=os.path.join(bringup_dir, "pcd", "simulation", "")),
+            world,
+            TextSubstitution(text=".pcd"),
+        ],
+        description=(
+            "Navigation-mode PCD output path; defaults to the prior map path "
+            "pcd/simulation/<world>.pcd and overwrites it on shutdown"
+        ),
+    )
+
     declare_pcd_save_trigger_topic_cmd = DeclareLaunchArgument(
         "pcd_save_trigger_topic",
         default_value="gicp_lost",
@@ -277,6 +291,7 @@ def generate_launch_description():
             "prior_pcd_file": prior_pcd_file,
             "show_prior_pcd": show_prior_pcd,
             "pcd_save": pcd_save,
+            "pcd_save_path": pcd_save_path,
             "pcd_save_require_lost": pcd_save_require_lost,
             "pcd_save_trigger_topic": pcd_save_trigger_topic,
             "use_sim_time": use_sim_time,
@@ -319,6 +334,7 @@ def generate_launch_description():
     ld.add_action(declare_use_ui_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_path_cmd)
     ld.add_action(declare_pcd_save_trigger_topic_cmd)
     ld.add_action(declare_pcd_save_require_lost_cmd)
     ld.add_action(declare_use_respawn_cmd)

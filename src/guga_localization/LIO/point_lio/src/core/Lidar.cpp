@@ -99,16 +99,19 @@ void Lidar::appendMergedFrame(const PointCloudXYZI::Ptr& points,
   if (frame_ct_ == 0) {
     time_con_ = timestamp;
   }
+
+  for (auto point : points->points) {
+    set_point_time_offset_ms(
+        point, point_time_offset_ms(point)
+                   + static_cast<float>((timestamp - time_con_) * 1000.0));
+    ptr_con_->push_back(point);
+  }
+  ++frame_ct_;
+
   if (frame_ct_ < mergeFrameCount()) {
-    for (auto point : points->points) {
-      set_point_time_offset_ms(
-          point, point_time_offset_ms(point)
-                     + static_cast<float>((timestamp - time_con_) * 1000.0));
-      ptr_con_->push_back(point);
-    }
-    ++frame_ct_;
     return;
   }
+
   frame_buffer_.emplace_back(
       LidarFrame{.cloud = std::make_shared<PointCloudXYZI>(*ptr_con_),
                  .start_time = time_con_,

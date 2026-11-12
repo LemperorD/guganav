@@ -22,7 +22,6 @@
 
 #include <ivox/ivox3d.h>
 
-#include "point_lio/core/IMU_Processing.h"
 #include "point_lio/core/preprocess.h"
 
 namespace rclcpp {
@@ -65,8 +64,14 @@ struct FilterParams {
   double b_acc_cov{0.0001};
 };
 
+struct ImuProcessorParams {
+  Eigen::Vector3d gravity{Eigen::Vector3d::Zero()};
+  Eigen::Vector3d gravity_init{0.0, 0.0, -9.81};
+  double gravity_magnitude{9.81};
+};
+
 struct ImuParams {
-  ImuProcessor::Params processor;
+  ImuProcessorParams processor;
   double timestamp_offset{0.0};
   bool check_saturation{true};
   double saturation_acc{3.0};

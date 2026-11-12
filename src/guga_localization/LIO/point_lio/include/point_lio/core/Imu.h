@@ -2,10 +2,9 @@
 
 #include <deque>
 
-#include "point_lio/core/IMU_Processing.h"
+#include "point_lio/core/common_lib.h"
 #include "point_lio/core/parameters.h"
 #include "point_lio/core/preprocess.h"
-#include "point_lio/core/common_lib.h"
 
 struct ImuMeasurement {
   V3D angular_velocity;
@@ -43,6 +42,8 @@ public:
   Imu();
   using Params = ImuParams;
 
+  enum class Stage { Initializing, Ready };
+
   void configure(const Params& params);
   void reset();
   [[nodiscard]] ImuMeasurementModel& measurementModel() {
@@ -66,14 +67,21 @@ public:
 
   void collectUntil(double end_time,
                     deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected);
-  void process(const MeasureGroup& meas, PointCloudXYZI::Ptr& undistort,
-               State& output_state);
+  void process(const MeasureGroup& meas, State& output_state);
 
   [[nodiscard]] bool needInit() const;
   [[nodiscard]] double lastTimestamp() const;
 
 private:
+  constexpr static int kMaxInitCount = 100;
   constexpr static double TOLERANCE = 1e-6;
+  /// 角速度低于该阈值时判定为静止, 只累积静止样本估计零偏.
+  constexpr static double kStaticGyroThreshold = 0.1;
+
+  void IMU_init(const MeasureGroup& meas, int& N);
+  void initState(State& state);
+  void Set_init_z(const Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
+
   Params params_;
   ImuMeasurementWorkspace measurement_workspace_;
   ImuMeasurementModel measurement_model_;
@@ -81,6 +89,14 @@ private:
   sensor_msgs::msg::Imu last_;
   sensor_msgs::msg::Imu next_;
   double last_timestamp_ = -1.0;
-  shared_ptr<ImuProcessor> processor_ =
-      std::make_shared<ImuProcessor>();  ///< IMU 处理模块
+
+  Stage stage_{Stage::Initializing};
+  int init_iter_num_{1};
+  V3D mean_acc_{V3D::Zero()};
+  V3D mean_gyr_{V3D::Zero()};
+  int static_count_{0};
+  V3D gravity_{V3D::Zero()};
+  V3D gravity_init_{0.0, 0.0, -9.81};
+  double gravity_magnitude_{9.81};
+  rclcpp::Logger logger_;
 };

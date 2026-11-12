@@ -54,11 +54,15 @@ LaserMappingNode::LaserMappingNode()
   initializeSensors();
   initializeMappingState();
   processor_.initialize();
+  debug_state_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>(
+      "/point_lio/debug_state", 10);
+  processor_.setDebugPublisher(debug_state_pub_);
   initializeRos2Interfaces();
   processing_timer_ = create_wall_timer(
       std::chrono::milliseconds(2), [this]() { processIteration(); },
       callback_group_);
 }
+
 void LaserMappingNode::initializeSensors() {
   lidar_.configure(config_.lidar);
   processor_.configureSynchronizer(config_.lidar.lidar_time_interval);
@@ -69,10 +73,9 @@ void LaserMappingNode::initializeSensors() {
 
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 }
+
 void LaserMappingNode::initializeMappingState() {
-  lidar_.workspace().ivox_ = std::make_shared<IVoxType>(
-      config_.mapping.ivox_options);
-  lidar_.workspace().point_selected_surf.set();
+  lidar_.ivox() = std::make_shared<IVoxType>(config_.mapping.ivox_options);
 
   lidar_.setExtrinsics(to_vec3d(config_.sensor.extrinsic_t),
                        to_mat3d(config_.sensor.extrinsic_r));
@@ -317,8 +320,8 @@ void LaserMappingNode::publishProjectOutputs() {
   if (pub_registered_scan_ && config_.publish.scan_enabled) {
     // 与 loam_interface 一致: 整幅世界系点云左乘安装变换后标 odom
     PointCloudXYZI::Ptr cloud_odom(new PointCloudXYZI);
-    cloud_odom->reserve(lidar_.workspace().feats_down_world->size());
-    for (const auto& p : lidar_.workspace().feats_down_world->points) {
+    cloud_odom->reserve(processor_.currentDownsampledWorld()->size());
+    for (const auto& p : processor_.currentDownsampledWorld()->points) {
       const Eigen::Vector3d pw(p.x, p.y, p.z);
       if (!pointPassesOdomZFilter(pw)) {
         continue;
@@ -377,7 +380,7 @@ void LaserMappingNode::setPosestamp(T& out) {
 void LaserMappingNode::publishFrameWorld() {
   if (config_.publish.scan_enabled) {
     sensor_msgs::msg::PointCloud2 laser_cloud_msg;
-    pcl::toROSMsg(*lidar_.workspace().feats_down_world, laser_cloud_msg);
+    pcl::toROSMsg(*processor_.currentDownsampledWorld(), laser_cloud_msg);
 
     laser_cloud_msg.header.stamp = get_ros_time(processor_.lidarEndTime());
     laser_cloud_msg.header.frame_id = "camera_init";
@@ -398,14 +401,14 @@ void LaserMappingNode::publishFrameWorld() {
     if (!resolveOdomExtrinsic()) {
       return;
     }
-    for (const auto& point : lidar_.workspace().feats_down_world->points) {
+    for (const auto& point : processor_.currentDownsampledWorld()->points) {
       const Eigen::Vector3d point_world(point.x, point.y, point.z);
       if (pointPassesOdomZFilter(point_world)) {
         state_.pcl_wait_save->push_back(point);
       }
     }
   } else {
-    *state_.pcl_wait_save += *lidar_.workspace().feats_down_world;
+    *state_.pcl_wait_save += *processor_.currentDownsampledWorld();
   }
 
   pcd_scan_count_++;
@@ -426,11 +429,12 @@ void LaserMappingNode::publishFrameWorld() {
   }
 }
 void LaserMappingNode::publishFrameBody() {
-  size_t size = state_.feats_origin_lidar->points.size();
+  const auto& origin = processor_.currentLidarOrigin();
+  size_t size = origin->points.size();
   PointCloudXYZI::Ptr lasercloud_imu_body(new PointCloudXYZI(size, 1));
 
   for (std::size_t i = 0; i < size; i++) {
-    processor_.pointBodyLidarToIMU(&state_.feats_origin_lidar->points[i],
+    processor_.pointBodyLidarToIMU(&origin->points[i],
                                    &lasercloud_imu_body->points[i]);
   }
 

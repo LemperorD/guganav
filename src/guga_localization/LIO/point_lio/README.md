@@ -26,15 +26,15 @@ ros2 launch point_lio point_lio.launch.py rviz:=False
 （初始 IMU 姿态，`camera_init`）下；另一组是项目约定输出，已换算到与底盘对齐的
 `odom` 系。
 
-| 话题 | 类型 | 坐标系 | 说明 |
-|------|------|--------|------|
-| `aft_mapped_to_init` | `nav_msgs/Odometry` | `camera_init` | 上游里程计，`child_frame_id` 为 `body` |
-| `cloud_registered` | `sensor_msgs/PointCloud2` | `camera_init` | 降采样后的世界系点云 |
-| `cloud_registered_body` | `sensor_msgs/PointCloud2` | `body` | 机体系点云，由 `publish.scan_bodyframe_pub_en` 控制 |
-| `Laser_map` | `sensor_msgs/PointCloud2` | `camera_init` | 建图初期的累积点云 |
-| `path` | `nav_msgs/Path` | `camera_init` | 轨迹，由 `publish.path_en` 控制 |
-| `registered_scan` | `sensor_msgs/PointCloud2` | `odom` | 项目约定：点云左乘安装变换后发布 |
-| `lidar_odometry` | `nav_msgs/Odometry` | `odom` | 项目约定：位姿左乘安装变换，`child_frame_id` 为 `front_mid360` |
+| 话题                    | 类型                      | 坐标系        | 说明                                                           |
+| ----------------------- | ------------------------- | ------------- | -------------------------------------------------------------- |
+| `aft_mapped_to_init`    | `nav_msgs/Odometry`       | `camera_init` | 上游里程计，`child_frame_id` 为 `body`                         |
+| `cloud_registered`      | `sensor_msgs/PointCloud2` | `camera_init` | 降采样后的世界系点云                                           |
+| `cloud_registered_body` | `sensor_msgs/PointCloud2` | `body`        | 机体系点云，由 `publish.scan_bodyframe_pub_en` 控制            |
+| `Laser_map`             | `sensor_msgs/PointCloud2` | `camera_init` | 建图初期的累积点云                                             |
+| `path`                  | `nav_msgs/Path`           | `camera_init` | 轨迹，由 `publish.path_en` 控制                                |
+| `registered_scan`       | `sensor_msgs/PointCloud2` | `odom`        | 项目约定：点云左乘安装变换后发布                               |
+| `lidar_odometry`        | `nav_msgs/Odometry`       | `odom`        | 项目约定：位姿左乘安装变换，`child_frame_id` 为 `front_mid360` |
 
 `registered_scan` 与 `lidar_odometry` 供 `terrain_analysis`、
 `small_gicp_relocalization`、`scan_to_sensor_frame` 使用。这部分换算原先由独立节点
