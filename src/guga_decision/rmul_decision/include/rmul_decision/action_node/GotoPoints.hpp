@@ -39,7 +39,7 @@ private:
 
   // 坐标由点位配置填充；一个数组可以包含多个航点。
   std::vector<std::pair<double, double>> point_1_{
-      {0.0, 0.0}
+      {5.0, 0.0}
   };
   std::vector<std::pair<double, double>> point_2_{
       {2.0, 1.0}

@@ -11,8 +11,17 @@
 - `Ros2InputNode` 将输入写入行为树输出端口，节点不绑定固定黑板键。
 
 行为树方案应只创建一个 `DecisionInputHub`，多个 BT 输入节点共享同一实例，
-避免重复订阅。当前 `guga_rmul_strategy` 已接入，其余候选方案可按
+避免重复订阅。当前 `guga_rmul_strategy` 与 `rmul_decision` 已接入，其余候选方案可按
 [guga_decision_common/README.md](guga_decision_common/README.md) 中的示例接入。
+
+`scripts/btview.sh` 默认启动 `rmul_decision`，并同时拉起 `fake_msg_source` 和
+行为树 Web 界面；联调时用 `scripts/tune_fake_source.sh` 在另一个终端修改血量、
+比赛阶段和 RFID 等假裁判数据。需要对照旧策略时传
+`--decision guga_rmul_strategy`。
+
+Gazebo/Nav2 已经运行时，用 `scripts/btview.sh --simulation` 接入。该模式不再
+发布假位姿，而是按 `/red_standard_robot1` 命名空间启动行为树，并把假裁判源隔离
+在 `/fake_ref`，避免和 Gazebo 的 TF 冲突。
 
 ## 待办
 

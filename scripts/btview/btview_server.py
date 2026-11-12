@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""行为树 Web UI 的服务端：一边 tail 执行记录，一边转发假数据源的参数。
+"""行为树 Web UI 的服务端：一边 tail 执行记录，一边转发黑板和假数据源参数。
 
 数据来源是决策节点写出的 .btlog（BT.CPP v4 的 FileLogger2 格式）。选它而不是
 自己发 ROS 话题，是因为 C++ 侧只需两行就能启用，而解析逻辑已经在
@@ -20,6 +20,8 @@ btlog_view.py 里写好了。
     服务器 -> 浏览器
         {"type":"tree"}                    树结构，连接时发一次
         {"type":"tick"}                    每完成一次 tick 发一条
+        {"type":"blackboard"}              决策节点黑板变量快照
+        {"type":"node_status"}             每 tick 的节点状态心跳
         {"type":"params"}                  假数据源参数，定期刷新
         {"type":"result","ok":bool,"msg"}  参数写入的反馈
     浏览器 -> 服务器
@@ -43,6 +45,9 @@ from btlog_view import build_tree, summarize, tick_marker  # noqa: E402
 STATUS_NAMES = {0: "IDLE", 1: "RUNNING", 2: "SUCCESS", 3: "FAILURE"}
 MAGIC = b"BTCPP4-FileLogger2"
 HEADER_LEN = len(MAGIC) + 1 + 4
+# 稳定 RUNNING 的树可能很久都不产生下一次状态变化，不能一直等下一个 tick
+# 边界才提交当前事件；文件安静一小段时间后就认为本轮已经写完。
+TICK_QUIET_SEC = 0.6
 
 # 假数据源的可调参数：名称、类型、说明。与 fake_msg_source_node.cpp 里的声明对应。
 SOURCE_PARAMS = [
@@ -67,6 +72,22 @@ SOURCE_PARAMS = [
     ("sim_speed", "double", "假机器人速度 m/s（0 = 钉住不动）"),
 ]
 
+# C++ 决策节点通过 /btview/blackboard 发送 key/value；这里补上展示顺序、
+# 类型说明和中文名。未知 key 仍会显示在列表末尾，方便以后直接加黑板变量。
+BLACKBOARD_FIELDS = [
+    ("game_progress", "integer", "比赛阶段（4 = 比赛中）"),
+    ("HP", "double", "当前血量"),
+    ("destination", "integer", "当前目标点编号"),
+    ("global_state_", "string", "当前策略状态"),
+    ("occupation_time", "double", "占点计时起点（秒，0 = 未开始）"),
+    ("stay_time", "double", "停留计时起点（秒，0 = 未开始）"),
+    ("HP_sign", "integer", "复活检测标志"),
+    ("ammo", "integer", "允许发弹量"),
+    ("robot_x", "double", "机器人 map 系 x"),
+    ("robot_y", "double", "机器人 map 系 y"),
+    ("pose_valid", "bool", "定位位姿是否有效"),
+]
+
 
 class BtLogTailer:
     """增量读取 .btlog，按 tick 切分。
@@ -82,6 +103,7 @@ class BtLogTailer:
         self.rec_offset = None
         self.parsed = 0
         self.pending = []
+        self.pending_updated_at = None
         self.tick_index = 0
         # 切分 tick 的两个边界节点（根节点与它的第一个孩子）及其上次状态，
         # 规则与 btlog_view.split_ticks 一致：见那里的说明。
@@ -129,8 +151,6 @@ class BtLogTailer:
 
         body = data[self.rec_offset :]
         total = len(body) // 9
-        if total == self.parsed:
-            return []
 
         finished = []
         for i in range(self.parsed, total):
@@ -149,8 +169,23 @@ class BtLogTailer:
                     finished.append(self._finish(self.pending))
                     self.pending = []
             self.pending.append((ts, uid, status))
+            self.pending_updated_at = time.monotonic()
         self.parsed = total
+        finished.extend(self._flush_quiet_tick())
         return finished
+
+    def _flush_quiet_tick(self):
+        """文件不再增长时提交当前 tick，避免稳定 RUNNING 永远不显示首轮结果。"""
+        if not self.pending or self.pending_updated_at is None:
+            return []
+        if time.monotonic() - self.pending_updated_at < TICK_QUIET_SEC:
+            return []
+        if all(uid == self.entry_uid for _ts, uid, _status in self.pending):
+            return []
+        tick = self._finish(self.pending)
+        self.pending = []
+        self.pending_updated_at = None
+        return [tick]
 
     def _finish(self, tick):
         self.tick_index += 1
@@ -206,8 +241,14 @@ def _parse_bool(text):
     raise ValueError(f"值不是布尔量（用 true/false 或 1/0）: {text}")
 
 
-class SourceBridge:
-    """读写假数据源参数的 ROS 2 侧封装。
+def _shown_blackboard_value(kind, value):
+    if kind == "bool":
+        return "true" if str(value).strip().lower() in ("1", "true") else "false"
+    return value
+
+
+class RosBridge:
+    """读写假数据源参数，并订阅决策黑板快照的 ROS 2 侧封装。
 
     rclpy 在专用线程上 spin，主线程只投递请求再轮询 future——这样 asyncio 的
     事件循环不会被阻塞，也不需要在两处各自 spin。
@@ -215,6 +256,7 @@ class SourceBridge:
 
     def __init__(self, target_node):
         import rclpy
+        from diagnostic_msgs.msg import DiagnosticArray
         from rclpy.node import Node
         from rcl_interfaces.srv import GetParameters, SetParameters
 
@@ -228,10 +270,37 @@ class SourceBridge:
         self.node = Node("btview_server")
         self.get_cli = self.node.create_client(GetParameters, f"{target_node}/get_parameters")
         self.set_cli = self.node.create_client(SetParameters, f"{target_node}/set_parameters")
+        self._blackboard_lock = threading.Lock()
+        self._blackboard = None
+        self._node_status_seq = 0
+        self._node_status = None
+        self.blackboard_sub = self.node.create_subscription(
+            DiagnosticArray, "/btview/blackboard", self._on_blackboard, 10
+        )
+        self.node_status_sub = self.node.create_subscription(
+            DiagnosticArray, "/btview/node_status", self._on_node_status, 10
+        )
 
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
+
+    def _on_blackboard(self, message):
+        values = {}
+        for status in message.status:
+            for item in status.values:
+                values[item.key] = item.value
+        with self._blackboard_lock:
+            self._blackboard = values
+
+    def _on_node_status(self, message):
+        values = {}
+        for status in message.status:
+            for item in status.values:
+                values[item.key] = item.value
+        with self._blackboard_lock:
+            self._node_status = values
+            self._node_status_seq += 1
 
     def _spin(self):
         while not self._stop.is_set():
@@ -303,6 +372,43 @@ class SourceBridge:
         reason = "; ".join(r.reason for r in res.results if r.reason)
         return ok, reason or ("已写入" if ok else "写入被拒绝")
 
+    def read_blackboard(self):
+        """返回按固定顺序排列的黑板变量；还没收到快照时返回 None。"""
+        with self._blackboard_lock:
+            raw = dict(self._blackboard) if self._blackboard is not None else None
+        if raw is None:
+            return None
+
+        items = []
+        known = set()
+        for name, kind, desc in BLACKBOARD_FIELDS:
+            if name not in raw:
+                continue
+            known.add(name)
+            items.append({
+                "name": name,
+                "kind": kind,
+                "desc": desc,
+                "value": _shown_blackboard_value(kind, raw[name]),
+            })
+        for name, value in raw.items():
+            if name in known:
+                continue
+            items.append({
+                "name": name,
+                "kind": "string",
+                "desc": name,
+                "value": value,
+            })
+        return items
+
+    def read_node_status(self):
+        """返回最新节点状态心跳；内容没更新时 seq 不变。"""
+        with self._blackboard_lock:
+            if self._node_status is None:
+                return None
+            return self._node_status_seq, dict(self._node_status)
+
     def shutdown(self):
         self._stop.set()
         # spin 线程要先收回来再拆节点：先关 rclpy 的话，线程可能还停在
@@ -325,13 +431,16 @@ class BtViewServer:
         self.poll_interval = poll_interval
         self.clients = set()
         self.last_params = None
+        self.last_blackboard = None
+        self.last_node_status = None
+        self.last_node_status_seq = 0
         # 最近几次 tick 留一份：轮询是增量的，页面晚连上来就再也收不到已经解析过
         # 的 tick，界面上会一直空着，直到下一个 tick 边界。留一份补发给新连接。
         self.recent = deque(maxlen=history)
         try:
-            self.source = SourceBridge(source_node)
+            self.source = RosBridge(source_node)
         except Exception as exc:
-            print(f"参数桥接未启用: {exc}", file=sys.stderr)
+            print(f"黑板/参数桥接未启用: {exc}", file=sys.stderr)
             self.source = None
 
     # ---- HTTP ----
@@ -350,6 +459,10 @@ class BtViewServer:
             # 按时间顺序补发最近的 tick，前端把它当实时消息处理即可。
             for tick in self.recent:
                 await ws.send_json(tick)
+            if self.last_blackboard:
+                await ws.send_json(self.last_blackboard)
+            if self.last_node_status:
+                await ws.send_json(self.last_node_status)
             if self.last_params:
                 await ws.send_json(self.last_params)
             async for msg in ws:
@@ -388,6 +501,38 @@ class BtViewServer:
         self.last_params = {"type": "params", "items": items}
         await self.broadcast(self.last_params)
 
+    async def push_blackboard(self):
+        if not self.source:
+            return
+        items = self.source.read_blackboard()
+        if items is None:
+            return
+        payload = {"type": "blackboard", "items": items}
+        if payload == self.last_blackboard:
+            return
+        self.last_blackboard = payload
+        await self.broadcast(payload)
+
+    async def push_node_status(self):
+        if not self.source:
+            return
+        snapshot = self.source.read_node_status()
+        if snapshot is None:
+            return
+        seq, statuses = snapshot
+        if seq == self.last_node_status_seq:
+            return
+        self.last_node_status_seq = seq
+        self.last_node_status = {
+            "type": "node_status",
+            "seq": seq,
+            "items": [
+                {"uid": int(uid), "status": status}
+                for uid, status in statuses.items()
+            ],
+        }
+        await self.broadcast(self.last_node_status)
+
     async def broadcast(self, payload):
         dead = []
         for ws in self.clients:
@@ -401,6 +546,7 @@ class BtViewServer:
     async def poll_loop(self):
         sent_tree = self.tailer.nodes is not None
         last_params_at = 0.0
+        last_blackboard_at = 0.0
         while True:
             await asyncio.sleep(self.poll_interval)
             try:
@@ -419,11 +565,17 @@ class BtViewServer:
                 self.recent.append(tick)
                 await self.broadcast(tick)
 
+            await self.push_node_status()
+
             # 参数每秒刷新一次，够用又不会刷屏
             now = time.time()
             if self.clients and now - last_params_at > 1.0:
                 last_params_at = now
                 await self.push_params()
+            # 黑板跟着 tick 更新；250 ms 刷新一次，变化时按旧值去重。
+            if self.clients and now - last_blackboard_at > 0.25:
+                last_blackboard_at = now
+                await self.push_blackboard()
 
 
 def main():

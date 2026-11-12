@@ -14,6 +14,8 @@ set -euo pipefail
 #   scripts/tune_fake_source.sh ammo <value> [node]          # 快捷：改允许发弹量
 #   scripts/tune_fake_source.sh heat <value> [node]          # 快捷：改当前枪管热量
 #   scripts/tune_fake_source.sh hit <damage> [node]          # 在现有血量上扣血
+#   scripts/tune_fake_source.sh game <progress> [node]       # 快捷：改比赛阶段
+#   scripts/tune_fake_source.sh rfid <center|supply> <bool> [node]
 #   scripts/tune_fake_source.sh show [node]                  # 显示当前取值
 #   scripts/tune_fake_source.sh dump [node]                  # 导出全部参数
 #   scripts/tune_fake_source.sh save <file> [node]           # 保存到文件
@@ -46,6 +48,8 @@ source_setup "$WS/install/setup.bash"
 
 DEFAULT_NODE="/fake_msg_source"
 
+usage() { sed -n '/^# 用法/,/^# 节点名默认/p' "$0"; }
+
 # 参数表：名称|类型|是否即时生效|说明
 PARAM_TABLE=(
   "current_hp|integer|yes|当前血量"
@@ -57,9 +61,16 @@ PARAM_TABLE=(
   "shooter_17mm_1_barrel_heat|integer|yes|当前枪管热量"
   "projectile_allowance_17mm|integer|yes|允许发弹量"
   "remaining_gold_coin|integer|yes|剩余金币"
+  "game_progress|integer|yes|比赛阶段（0 未开始、4 比赛中、5 结算）"
+  "stage_remain_time|integer|yes|当前阶段剩余时间（秒）"
+  "rfid_supply|bool|yes|己方补给区 RFID（回补给）"
+  "rfid_center|bool|yes|中心控制区 RFID（占点）"
   "publish_rate|double|no|发布频率（改动需重启节点）"
   "enemy_count|integer|yes|敌人数量（>0 即有敌）"
   "vision_rate|double|no|视觉发布频率（改动需重启节点）"
+  "robot_x|double|yes|假机器人 x（map 系）"
+  "robot_y|double|yes|假机器人 y（map 系）"
+  "sim_speed|double|yes|假机器人速度 m/s（0 = 钉住不动）"
 )
 
 param_names() {
@@ -96,14 +107,21 @@ param_value() {
     fi
   fi
 
-  # ParameterValue 的字段顺序是 type/bool_value/integer_value/double_value…，
-  # bool_value 排在整型前面，所以不能把两类放在同一个候选列表里取第一个匹配，
-  # 否则整数会被读成 False。先找整型，再找浮点。
+  # ParameterValue 中未使用的字段也会打印默认值，不能直接 grep 某个字段名。
+  # 先读 type，再取对应字段：1=bool，2=integer，3=double，4=string。
   raw=$(timeout 3 ros2 service call "${node%/}/get_parameters" \
       rcl_interfaces/srv/GetParameters "{names: ['$param']}" 2>/dev/null)
-  out=$(printf '%s' "$raw" | grep -oE "integer_value=[^,)]*" | head -n 1 | cut -d= -f2)
-  if [ -z "$out" ]; then
-    out=$(printf '%s' "$raw" | grep -oE "double_value=[^,)]*" | head -n 1 | cut -d= -f2)
+  local field value_type
+  value_type=$(printf '%s' "$raw" | grep -oE "type=[0-9]+" | head -n 1 | cut -d= -f2)
+  case "$value_type" in
+    1) field=bool_value ;;
+    2) field=integer_value ;;
+    3) field=double_value ;;
+    4) field=string_value ;;
+    *) field= ;;
+  esac
+  if [ -n "$field" ]; then
+    out=$(printf '%s' "$raw" | grep -oE "${field}=[^,)]*" | head -n 1 | cut -d= -f2)
   fi
   if [ -n "$out" ]; then
     printf '%s\n' "$out"
@@ -127,13 +145,19 @@ set_param() {
     double)
       req="{parameters: [{name: $param, value: {type: 3, double_value: $value}}]}"
       ;;
+    bool)
+      req="{parameters: [{name: $param, value: {type: 1, bool_value: $value}}]}"
+      ;;
     *)
       req="{parameters: [{name: $param, value: {type: 2, integer_value: $value}}]}"
       ;;
   esac
 
-  timeout 8 ros2 service call "${node%/}/set_parameters" \
-    rcl_interfaces/srv/SetParameters "$req" 2>/dev/null | grep -q "successful=True"
+  local response
+  # ros2 CLI 在部分环境里收到响应后仍可能超时退出；以响应内容为准。
+  response=$(timeout 8 ros2 service call "${node%/}/set_parameters" \
+    rcl_interfaces/srv/SetParameters "$req" 2>/dev/null || true)
+  grep -q "successful=True" <<<"$response"
 }
 
 # 先确认节点可达，否则逐项重试会把时间耗光
@@ -156,6 +180,17 @@ require_number() {
     echo "ERROR: $label 需要是数字，收到: $value" >&2
     exit 1
   fi
+}
+
+require_bool() {
+  local value=$1 label=$2
+  case "${value,,}" in
+    true|false) ;;
+    *)
+      echo "ERROR: $label 需要 true 或 false，收到: $value" >&2
+      exit 1
+      ;;
+  esac
 }
 
 dump_params() {
@@ -247,6 +282,10 @@ interactive_menu() {
     local value
     read -r value || break
     [ -z "$value" ] && continue
+    if [ "$(param_type "$param")" = "bool" ]; then
+      require_bool "$value" "$param"
+      value=${value,,}
+    fi
 
     if set_param "$node" "$param" "$(param_type "$param")" "$value"; then
       values[$param]=$value
@@ -269,8 +308,13 @@ case "$cmd" in
     param=${1:-}
     value=${2:-}
     node=${3:-$DEFAULT_NODE}
-    [ -n "$param" ] && [ -n "$value" ] || { sed -n '4,27p' "$0"; exit 1; }
-    require_number "$value" "$param"
+    [ -n "$param" ] && [ -n "$value" ] || { usage; exit 1; }
+    if [ "$(param_type "$param")" = "bool" ]; then
+      require_bool "$value" "$param"
+      value=${value,,}
+    else
+      require_number "$value" "$param"
+    fi
     if set_param "$node" "$param" "$(param_type "$param")" "$value"; then
       echo "==> $node $param = $value"
       param_immediate "$param" || echo "注意：该项改动需要重启节点才生效"
@@ -280,7 +324,7 @@ case "$cmd" in
     fi
     ;;
 
-  hp | ammo | heat | enemy)
+  hp | ammo | heat | enemy | game)
     # 快捷改常用字段：tune_fake_source.sh <cmd> <value> [node]
     value=${1:-}
     node=${2:-$DEFAULT_NODE}
@@ -291,8 +335,32 @@ case "$cmd" in
       ammo) param=projectile_allowance_17mm ;;
       heat) param=shooter_17mm_1_barrel_heat ;;
       enemy) param=enemy_count ;;
+      game) param=game_progress ;;
     esac
     if set_param "$node" "$param" "$(param_type "$param")" "$value"; then
+      echo "==> $node $param = $value"
+    else
+      echo "设置失败: $node $param = $value" >&2
+      exit 1
+    fi
+    ;;
+
+  rfid)
+    # tune_fake_source.sh rfid <center|supply> <true|false> [node]
+    zone=${1:-}
+    value=${2:-}
+    node=${3:-$DEFAULT_NODE}
+    case "$zone" in
+      center) param=rfid_center ;;
+      supply) param=rfid_supply ;;
+      *)
+        echo "用法: $0 rfid <center|supply> <true|false> [node]" >&2
+        exit 1
+        ;;
+    esac
+    require_bool "$value" "$param"
+    value=${value,,}
+    if set_param "$node" "$param" bool "$value"; then
       echo "==> $node $param = $value"
     else
       echo "设置失败: $node $param = $value" >&2
@@ -371,7 +439,7 @@ case "$cmd" in
     ;;
 
   *)
-    sed -n '4,27p' "$0"
+    usage
     exit 1
     ;;
 esac

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<root BTCPP_format="4">
+<root BTCPP_format="4"
+      main_tree_to_execute="Main">
   <BehaviorTree ID="Main">
     <KeepRunningUntilFailure>
       <ForceSuccess>
-        <Sequence>
+        <ReactiveSequence>
           <Ros2Input HP="{HP}"
                      ammo="{ammo}"
                      game_progress="{game_progress}"
@@ -11,8 +12,12 @@
                      robot_y="{robot_y}"
                      pose_valid="{pose_valid}"/>
           <IsGameStart game_progress="{game_progress}"/>
-          <SubTree ID="SwitchState"
-                   _autoremap="true"/>
+          <!-- 状态迁移只在条件成立时返回 SUCCESS；没有迁移的 tick 不应挡住
+               后面的行为选择，否则整棵树长期停在 SwitchState。 -->
+          <ForceSuccess>
+            <SubTree ID="SwitchState"
+                     _autoremap="true"/>
+          </ForceSuccess>
           <Switch3 case_1="Suppress"
                    case_2="Occupation"
                    case_3="PushForward"
@@ -23,48 +28,49 @@
                      _autoremap="true"/>
             <SubTree ID="PushForward"
                      _autoremap="true"/>
+            <AlwaysFailure/>
           </Switch3>
-        </Sequence>
+        </ReactiveSequence>
       </ForceSuccess>
     </KeepRunningUntilFailure>
   </BehaviorTree>
 
   <BehaviorTree ID="Occupation">
-    <Sequence>
+    <ReactiveSequence>
       <CheckHP HP="{HP}"
                strategy_mode="{global_state_}"
                destination="{destination}"/>
       <GotoPoints destination="{destination}"
                   strategy_mode="{global_state_}"/>
-    </Sequence>
+    </ReactiveSequence>
   </BehaviorTree>
 
   <BehaviorTree ID="PushForward">
-    <Fallback>
-      <Sequence>
+    <ReactiveFallback>
+      <ReactiveSequence>
         <CheckHP HP="{HP}"
                  strategy_mode="{global_state_}"
                  destination="{destination}"/>
         <GotoPoints destination="{destination}"
                     strategy_mode="{global_state_}"/>
-      </Sequence>
-      <Sequence>
+      </ReactiveSequence>
+      <ReactiveSequence>
         <CheckTime stay_time="{stay_time}"
                    destination="{destination}"/>
         <GotoPoints destination="{destination}"
                     strategy_mode="{global_state_}"/>
-      </Sequence>
-    </Fallback>
+      </ReactiveSequence>
+    </ReactiveFallback>
   </BehaviorTree>
 
   <BehaviorTree ID="Suppress">
-    <Sequence>
+    <ReactiveSequence>
       <CheckHP HP="{HP}"
                strategy_mode="{global_state_}"
                destination="{destination}"/>
       <GotoPoints destination="{destination}"
                   strategy_mode="{global_state_}"/>
-    </Sequence>
+    </ReactiveSequence>
   </BehaviorTree>
 
   <BehaviorTree ID="SwitchState">

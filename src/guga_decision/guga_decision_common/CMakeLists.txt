@@ -16,6 +16,7 @@ find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # 与 guga_rmul_strategy 保持相同的 BehaviorTree.CPP v4 定位方式。Humble 的
 # behaviortree_cpp ament 配置会把库路径解析错，因此这里直接找实际文件。
@@ -48,6 +49,7 @@ ament_target_dependencies(guga_decision_common PUBLIC
   tf2
   tf2_ros
   tf2_geometry_msgs
+  visualization_msgs
 )
 
 # BehaviorTree.CPP 只在适配层暴露，核心输入缓存本身不依赖 BT。
@@ -92,5 +94,6 @@ ament_export_dependencies(
   tf2
   tf2_ros
   tf2_geometry_msgs
+  visualization_msgs
 )
 ament_package()

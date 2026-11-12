@@ -6,6 +6,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "guga_decision_common/waypoint_navigator.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "visualization_msgs/msg/marker.hpp"
 
 namespace guga_decision_common
 {
@@ -33,6 +34,8 @@ private:
   rclcpp::Node* node_;
   std::string frame_id_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
+    marker_publisher_;
   Waypoint2D last_goal_;
   bool has_last_goal_{false};
 };

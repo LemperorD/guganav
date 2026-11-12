@@ -96,7 +96,7 @@
       padding: 8px 14px;
       border-bottom: 1px solid var(--line);
       overflow: auto;
-      max-height: 42%;
+      max-height: 34%;
     }
 
     .param {
@@ -127,6 +127,58 @@
     .param input:focus {
       outline: none;
       border-color: var(--running);
+    }
+
+    #blackboard {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      overflow: auto;
+      max-height: 32%;
+    }
+
+    .bb-var {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #2c2f3a;
+    }
+
+    .bb-var:last-child {
+      border-bottom: 0;
+    }
+
+    .bb-var .name {
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .bb-var .desc {
+      display: block;
+      color: var(--dim);
+      font-size: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bb-var .value {
+      color: var(--running);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: right;
+      max-width: 128px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty {
+      color: var(--dim);
+      font-size: 12px;
+      padding: 4px 0;
     }
 
     #current {
@@ -232,14 +284,29 @@
        结果所有边框都是灰的。 */
     .node.s-RUNNING rect {
       stroke: var(--running);
+      fill: #3b3528;
+    }
+
+    .node.s-RUNNING text {
+      fill: var(--running);
     }
 
     .node.s-SUCCESS rect {
       stroke: var(--success);
+      fill: #263b2b;
+    }
+
+    .node.s-SUCCESS text {
+      fill: var(--success);
     }
 
     .node.s-FAILURE rect {
       stroke: var(--failure);
+      fill: #422727;
+    }
+
+    .node.s-FAILURE text {
+      fill: var(--failure);
     }
 
     .node.on rect {
@@ -301,8 +368,10 @@
   <main>
     <div id="tree-wrap"><svg id="tree"></svg></div>
     <aside>
-      <h2>参数（回车提交）</h2>
+      <h2>假裁判参数（回车提交）</h2>
       <div id="params"></div>
+      <h2>决策树黑板</h2>
+      <div id="blackboard"><div class="empty">等待黑板快照…</div></div>
       <h2>最近一次 tick</h2>
       <div id="current">
         <div class="leaves" id="cur-leaves"></div>
@@ -323,6 +392,7 @@
     let connected = false;
     let tickCount = 0;
     let paramInputs = {};
+    let blackboardRows = {};
 
     const el = (id) => document.getElementById(id);
 
@@ -345,6 +415,8 @@
         const msg = JSON.parse(ev.data);
         if (msg.type === "tree") onTree(msg);
         else if (msg.type === "tick") onTick(msg);
+        else if (msg.type === "blackboard") onBlackboard(msg);
+        else if (msg.type === "node_status") onNodeStatus(msg);
         else if (msg.type === "params") onParams(msg);
         else if (msg.type === "result") toast(msg.msg, !msg.ok);
       };
@@ -391,6 +463,54 @@
     function submitParam(name, value) {
       if (!ws || ws.readyState !== WebSocket.OPEN) { toast("未连接", true); return; }
       ws.send(JSON.stringify({ type: "set_param", name: name, value: value }));
+    }
+
+    // ---------- 决策树黑板 ----------
+    function onBlackboard(msg) {
+      const box = el("blackboard");
+      if (!msg.items.length) {
+        box.innerHTML = '<div class="empty">决策节点还没有发布黑板快照</div>';
+        blackboardRows = {};
+        return;
+      }
+
+      const empty = box.querySelector(".empty");
+      if (empty) empty.remove();
+      const seen = new Set();
+      msg.items.forEach(item => {
+        seen.add(item.name);
+        let row = blackboardRows[item.name];
+        if (!row) {
+          row = document.createElement("div");
+          row.className = "bb-var";
+          const label = document.createElement("div");
+          const name = document.createElement("span");
+          name.className = "name";
+          const desc = document.createElement("span");
+          desc.className = "desc";
+          label.appendChild(name);
+          label.appendChild(desc);
+          const value = document.createElement("span");
+          value.className = "value";
+          row.appendChild(label);
+          row.appendChild(value);
+          box.appendChild(row);
+          row._name = name;
+          row._desc = desc;
+          row._value = value;
+          blackboardRows[item.name] = row;
+        }
+        row._name.textContent = item.name;
+        row._desc.textContent = item.desc || item.kind;
+        row._value.textContent = item.value;
+        row._value.title = `${item.name} = ${item.value}`;
+      });
+      Object.entries(blackboardRows).forEach(([name, row]) => {
+        if (!seen.has(name)) {
+          row.remove();
+          delete blackboardRows[name];
+        }
+      });
     }
 
     // ---------- 树与 tick ----------
@@ -550,25 +670,52 @@
       return status && status !== "IDLE";
     };
 
+    // FileLogger2 只在状态变化时写记录；稳定的 RUNNING 不会持续产生 tick 事件。
+    // 决策节点每 tick 另发一份完整状态快照，这里用它刷新树上的实时状态。
+    function onNodeStatus(msg) {
+      tickCount = Math.max(tickCount, msg.seq || 0);
+      el("n-ticks").textContent = tickCount;
+      const live = {};
+      msg.items.forEach(item => {
+        live[item.uid] = item.status;
+      });
+      Object.entries(nodes).forEach(([uid, node]) => {
+        const status = live[uid];
+        if (status === "RUNNING") {
+          node.status = "RUNNING";
+          node.sticky = true;
+        } else if (status === "SUCCESS" || status === "FAILURE" || status === "UNKNOWN") {
+          node.sticky = false;
+          node.status = status;
+        } else {
+          node.sticky = false;
+          // 心跳里的 IDLE 是 tick 结束后的复位结果，不能覆盖事件回放得到的
+          // SUCCESS/FAILURE，否则 SwitchState 这类瞬时节点只剩 ForceSuccess 亮。
+          // 真正的清理发生在新一轮 tick 开始时。
+        }
+      });
+      draw();
+    }
+
     function onTick(tick) {
-      tickCount += 1;
+      tickCount = Math.max(tickCount, tick.index);
       el("n-ticks").textContent = tickCount;
       el("n-span").textContent = tick.span_us + " us";
 
-      // 每轮先清空本 tick 的状态，再取每个节点最后一个非 IDLE 状态；
-      // sticky 用来记住"还停在 RUNNING"，它不随 tick 清空。
-      Object.values(nodes).forEach(n => { n.status = null; });
-      tick.events.forEach(e => {
-        const node = nodes[e.uid];
+      // 与原来的显示方式一致：一个 tick 的事件一次性应用，只显示本轮最终
+      // 执行结果，不做逐事件等待和动画。
+      Object.values(nodes).forEach(n => {
+        n.status = null;
+        n.sticky = false;
+      });
+      tick.events.forEach(event => {
+        const node = nodes[event.uid];
         if (!node) return;
-        if (e.status === "RUNNING") {
-          node.sticky = true;
+        if (event.status === "RUNNING") {
           node.status = "RUNNING";
-        } else if (e.status !== "IDLE") {
-          // SUCCESS / FAILURE：这一轮有了终态，就不再是"停在运行中"
-          node.sticky = false;
-          node.status = e.status;
-        } else {
+          node.sticky = true;
+        } else if (event.status !== "IDLE") {
+          node.status = event.status;
           node.sticky = false;
         }
       });
@@ -583,7 +730,8 @@
           `<span class="s-${l.status}">${l.status}</span>`;
         leaves.appendChild(row);
       });
-      el("cur-path").textContent = tick.path.length ? tick.path.join(" > ") : "（无子行为树）";
+      el("cur-path").textContent =
+        tick.path.length ? tick.path.join(" > ") : "（无子行为树）";
 
       const row = document.createElement("div");
       row.className = "row";

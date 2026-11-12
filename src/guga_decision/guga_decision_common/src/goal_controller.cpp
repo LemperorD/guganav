@@ -15,6 +15,10 @@ GoalController::GoalController(
 {
   publisher_ = node.create_publisher<geometry_msgs::msg::PoseStamped>(
     topic, rclcpp::SensorDataQoS());
+  // 单独发布 RViz Marker，避免为了可视化而重复发布 goal_pose。Transient Local
+  // 让 RViz 在目标已经发出后才启动时，也能收到最近一次目标。
+  marker_publisher_ = node.create_publisher<visualization_msgs::msg::Marker>(
+    topic + "_marker", rclcpp::QoS(1).reliable().transient_local());
 }
 
 bool GoalController::sendGoal(const Waypoint2D& goal, bool force)
@@ -48,6 +52,23 @@ bool GoalController::sendGoal(const Waypoint2D& goal, bool force)
   message.pose.orientation.z = orientation.z();
   message.pose.orientation.w = orientation.w();
   publisher_->publish(message);
+
+  visualization_msgs::msg::Marker marker;
+  marker.header = message.header;
+  marker.ns = "decision_goal";
+  marker.id = 0;
+  marker.type = visualization_msgs::msg::Marker::ARROW;
+  marker.action = visualization_msgs::msg::Marker::ADD;
+  marker.pose = message.pose;
+  marker.pose.position.z = 0.25;
+  marker.scale.x = 0.80;
+  marker.scale.y = 0.16;
+  marker.scale.z = 0.22;
+  marker.color.r = 0.10F;
+  marker.color.g = 0.85F;
+  marker.color.b = 1.00F;
+  marker.color.a = 1.00F;
+  marker_publisher_->publish(marker);
 
   last_goal_ = goal;
   has_last_goal_ = true;

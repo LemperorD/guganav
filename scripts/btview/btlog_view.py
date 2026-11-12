@@ -298,10 +298,16 @@ def main():
 
     xml_text, _time_base, records = parse_btlog(args.logfile)
     nodes, roots = build_tree(xml_text)
-    entry_root = roots.get(args.main_tree)
+    entry_tree = args.main_tree
+    entry_root = roots.get(entry_tree)
     if entry_root is None:
-        # 找不到入口树时退回"出现过的最小 uid"，至少还能切出东西来。
-        entry_root = min(nodes) if nodes else None
+        # 不同决策包的主树名不一定是 MainLoop。日志 XML 按实例化顺序排，
+        # 入口树是 uid 最小的那棵，找不到指定名时按这个规则回退。
+        candidates = {name: uid for name, uid in roots.items() if uid is not None}
+        entry_tree = min(candidates, key=candidates.get) if candidates else args.main_tree
+        entry_root = candidates.get(entry_tree)
+        if entry_root is not None:
+            print(f"入口树 {args.main_tree} 不存在，自动使用 {entry_tree}", file=sys.stderr)
     ticks = split_ticks(records, entry_root, tick_marker(nodes, entry_root))
     color = not args.no_color and sys.stdout.isatty()
 
@@ -320,7 +326,7 @@ def main():
     print()
 
     print("=== 树结构 ===")
-    print_tree(nodes, roots, color, args.main_tree)
+    print_tree(nodes, roots, color, entry_tree)
 
     if args.tree_only:
         return

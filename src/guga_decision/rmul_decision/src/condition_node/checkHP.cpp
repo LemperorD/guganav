@@ -57,6 +57,8 @@ BT::NodeStatus CheckHP::tick() {
         destination = 5;
       } else if (hp > 90) {
         destination = 4;
+      } else {
+        destination = 1;
       }
       break;
     case StrategyMode::OCCUPATION:
@@ -64,6 +66,8 @@ BT::NodeStatus CheckHP::tick() {
         destination = 4;
       } else if (hp > 90) {
         destination = 3;
+      } else {
+        destination = 1;
       }
       break;
     case StrategyMode::PUSHFORWARD:
