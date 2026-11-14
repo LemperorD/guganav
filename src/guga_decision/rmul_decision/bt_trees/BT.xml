@@ -122,9 +122,6 @@
                   type="int"/>
       <input_port name="strategy_mode"
                   type="string"/>
-      <input_port name="tolerance"
-                  type="double"
-                  default="0.15"/>
       <input_port name="route_x"
                   type="std::vector&lt;double&gt;"/>
       <input_port name="route_y"

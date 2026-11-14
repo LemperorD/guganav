@@ -194,10 +194,15 @@ int main(int argc, char** argv) {
       "rmul_decision_input");
   blackboard->set<rclcpp::Node::SharedPtr>(
       "node", std::static_pointer_cast<rclcpp::Node>(input_hub));
-  const std::string goal_topic = input_hub->declare_parameter<std::string>(
-      "goal_pose_topic", "goal_pose");
+  const std::string navigate_to_pose_action =
+      input_hub->declare_parameter<std::string>(
+          "navigate_to_pose_action", "navigate_to_pose");
+  const std::string goal_marker_topic =
+      input_hub->declare_parameter<std::string>(
+          "goal_pose_marker_topic", "goal_pose_marker");
   auto goal_controller = std::make_shared<guga_decision_common::GoalController>(
-      *input_hub, goal_topic, input_hub->frameId());
+      *input_hub, navigate_to_pose_action, input_hub->frameId(),
+      goal_marker_topic);
   BT::BehaviorTreeFactory factory;
   factory.registerBuilder<guga_decision_common::Ros2InputNode>(
       "Ros2Input",

@@ -13,7 +13,9 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(guga_decision_common REQUIRED)
 # uncomment the following section in order to fill in
@@ -41,7 +43,9 @@ ament_target_dependencies(rmul_decision
   ament_index_cpp
   behaviortree_cpp
   diagnostic_msgs
+  nav2_msgs
   rclcpp
+  rclcpp_action
   std_msgs
 )
 

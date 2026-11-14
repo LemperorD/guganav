@@ -14,6 +14,8 @@ find_package(guga_interfaces REQUIRED)
 # 假位姿：发 odometry 话题与 odom -> base_footprint 变换，决策节点据此判断是否到达。
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 add_executable(fake_msg_source_node
@@ -25,6 +27,8 @@ ament_target_dependencies(fake_msg_source_node
   guga_interfaces
   nav_msgs
   geometry_msgs
+  nav2_msgs
+  rclcpp_action
   tf2_ros
 )
 

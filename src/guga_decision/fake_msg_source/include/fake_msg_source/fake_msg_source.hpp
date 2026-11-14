@@ -2,12 +2,15 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "guga_interfaces/msg/game_status.hpp"
@@ -22,7 +25,8 @@
 //   /referee/rfid_status    RFID 增益点状态（"到家/占点"是否真的到了）
 //   /referee/game_status    比赛状态（阶段与剩余时间）
 //   vision/info             视觉汇总（看见几个敌人）
-//   odometry + TF           假位姿：odom -> base_footprint 随动，map -> odom 静态单位变换
+//   odometry + TF           可选假位姿（publish_pose=true）：odom -> base_footprint
+//                           随动，map -> odom 静态单位变换
 //
 // 裁判两路用绝对话题名，与实车 serial_driver_node 发布的名称一致；视觉与位姿不是
 // 裁判数据，实车侧用的是相对名，所以这里也保持相对名。
@@ -50,14 +54,23 @@ private:
   using VisionInfoMsg = guga_interfaces::msg::VisionInfo;
   using OdometryMsg = nav_msgs::msg::Odometry;
   using PoseStampedMsg = geometry_msgs::msg::PoseStamped;
+  using NavigateToPose = nav2_msgs::action::NavigateToPose;
+  using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateToPose>;
 
   void publish_robot_status();
   void publish_rfid_status();
   void publish_game_status();
   void publish_vision_info();
   void publish_pose();
-  // 朝最近一次收到的 goal_pose 走一步；速度 0 表示不动，位置完全由参数决定。
-  void step_pose(double dt);
+  // 朝最近一次收到的目标走一步；返回是否已经到点。
+  bool step_pose(double dt);
+  rclcpp_action::GoalResponse handle_action_goal(
+    const rclcpp_action::GoalUUID& uuid,
+    std::shared_ptr<const NavigateToPose::Goal> goal);
+  rclcpp_action::CancelResponse handle_action_cancel(
+    const std::shared_ptr<GoalHandle> goal_handle);
+  void handle_action_accepted(const std::shared_ptr<GoalHandle> goal_handle);
+  void finish_active_goal();
   rcl_interfaces::msg::SetParametersResult on_parameters_changed(
     const std::vector<rclcpp::Parameter>& params);
 
@@ -90,6 +103,7 @@ private:
   rclcpp::TimerBase::SharedPtr status_timer_;
   rclcpp::TimerBase::SharedPtr vision_timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_;
+  rclcpp_action::Server<NavigateToPose>::SharedPtr navigate_action_server_;
 
   // 用来判断血量是否下降，进而填 is_hp_deduced
   std::uint16_t last_hp_{0};
@@ -98,4 +112,6 @@ private:
   double goal_x_{0.0};
   double goal_y_{0.0};
   bool has_goal_{false};
+  std::mutex goal_mutex_;
+  std::shared_ptr<GoalHandle> active_goal_;
 };

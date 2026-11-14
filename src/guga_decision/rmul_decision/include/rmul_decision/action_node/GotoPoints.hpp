@@ -36,6 +36,10 @@ private:
   std::shared_ptr<guga_decision_common::DecisionInputHub> input_hub_;
   std::shared_ptr<guga_decision_common::GoalController> goal_controller_;
   guga_decision_common::WaypointNavigator navigator_;
+  std::optional<int> active_destination_;
+  std::optional<std::string> active_strategy_;
+  std::optional<int> completed_destination_;
+  std::optional<std::string> completed_strategy_;
 
   // 坐标由点位配置填充；一个数组可以包含多个航点。
   std::vector<std::pair<double, double>> point_1_{
@@ -66,6 +70,6 @@ private:
   std::vector<std::pair<double, double>> tunnel_5_{
       {1.0,  0.2},
       {3.3,  0.2},
-      {5.0, -1.5}
+      {8.0, -1.6}
   };
 };

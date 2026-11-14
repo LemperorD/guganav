@@ -199,6 +199,7 @@ if [[ "$SIMULATION" -eq 1 ]]; then
     "$SOURCE_BIN" --ros-args \
     -r __ns:="$FAKE_REF_NAMESPACE" \
     -p use_sim_time:=true \
+    -p publish_pose:=false \
     -p publish_map_to_odom:=false \
     -p vision_topic:="$NAV_NAMESPACE/vision/info"
 else

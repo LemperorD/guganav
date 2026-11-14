@@ -71,6 +71,9 @@ PARAM_TABLE=(
   "robot_x|double|yes|假机器人 x（map 系）"
   "robot_y|double|yes|假机器人 y（map 系）"
   "sim_speed|double|yes|假机器人速度 m/s（0 = 钉住不动）"
+  "publish_pose|bool|yes|发布假 odom 与 TF（仿真/实车应关闭）"
+  "publish_map_to_odom|bool|no|发布静态 map -> odom（改动需重启节点）"
+  "navigate_to_pose_action|string|no|模拟 NavigateToPose action 名（改动需重启节点）"
 )
 
 param_names() {

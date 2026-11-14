@@ -1,6 +1,5 @@
 #include "rmul_decision/action_node/GotoPoints.hpp"
 
-#include <cmath>
 #include <utility>
 
 namespace {
@@ -30,6 +29,10 @@ PointSelector::PointSelector(
       goal_controller_(std::move(goal_controller)),
       navigator_([this](const guga_decision_common::Waypoint2D& waypoint) {
         return goal_controller_ && goal_controller_->sendGoal(waypoint, true);
+      }, [this]() {
+        if (goal_controller_) {
+          goal_controller_->cancelGoal();
+        }
       }) {
 }
 
@@ -37,7 +40,6 @@ BT::PortsList PointSelector::providedPorts() {
   return {
       BT::InputPort<int>("destination"),
       BT::InputPort<std::string>("strategy_mode"),
-      BT::InputPort<double>("tolerance", 0.25, "到达航点的距离容差"),
       BT::InputPort<std::vector<double>>("route_x", "绝对航点 x 数组"),
       BT::InputPort<std::vector<double>>("route_y", "绝对航点 y 数组"),
       BT::InputPort<std::vector<double>>("route_yaw", "绝对航点 yaw 数组"),
@@ -56,36 +58,54 @@ BT::NodeStatus PointSelector::onStart() {
     return BT::NodeStatus::FAILURE;
   }
 
+  // KeepRunningUntilFailure 会在 GotoPoints 成功后重启整棵树。同一个 destination
+  // 和策略已经完整走完后，只返回 SUCCESS，不重新发布第一个航点，让最终目标保留
+  // 在 goal_controller 和 Marker 中；destination/策略变化时才启动新路线。
+  if (completed_destination_ == destination &&
+      completed_strategy_ == strategy) {
+    return BT::NodeStatus::SUCCESS;
+  }
+  active_destination_ = destination;
+  active_strategy_ = strategy;
+
   auto route = routeFromPorts();
   if (!route) {
     route = buildRoute(destination, strategy);
   }
-  return toBtStatus(navigator_.start(std::move(*route)));
+  const auto status = navigator_.start(std::move(*route));
+  if (status == guga_decision_common::WaypointNavigatorStatus::SUCCEEDED) {
+    completed_destination_ = active_destination_;
+    completed_strategy_ = active_strategy_;
+  }
+  return toBtStatus(status);
 }
 
 BT::NodeStatus PointSelector::onRunning() {
-  if (!input_hub_) {
+  if (!goal_controller_) {
     return BT::NodeStatus::FAILURE;
   }
-
-  const auto current = navigator_.currentWaypoint();
-  if (!current) {
+  if (!navigator_.running()) {
     return toBtStatus(navigator_.status());
   }
 
-  double robot_x = 0.0;
-  double robot_y = 0.0;
-  double robot_yaw = 0.0;
-  if (!input_hub_->lookupRobotPose(robot_x, robot_y, robot_yaw)) {
-    return BT::NodeStatus::RUNNING;
+  switch (goal_controller_->pollResult()) {
+    case guga_decision_common::NavigationResult::SUCCEEDED: {
+      const auto status = navigator_.update(true);
+      if (status == guga_decision_common::WaypointNavigatorStatus::SUCCEEDED) {
+        completed_destination_ = active_destination_;
+        completed_strategy_ = active_strategy_;
+      }
+      return toBtStatus(status);
+    }
+    case guga_decision_common::NavigationResult::FAILED:
+    case guga_decision_common::NavigationResult::CANCELED:
+      navigator_.halt();
+      return BT::NodeStatus::FAILURE;
+    case guga_decision_common::NavigationResult::NONE:
+    case guga_decision_common::NavigationResult::PENDING:
+    default:
+      return BT::NodeStatus::RUNNING;
   }
-
-  double tolerance = 0.25;
-  getInput("tolerance", tolerance);
-  const bool arrived = std::hypot(robot_x - current->x, robot_y - current->y)
-                       <= tolerance;
-
-  return toBtStatus(navigator_.update(arrived));
 }
 
 void PointSelector::onHalted() {

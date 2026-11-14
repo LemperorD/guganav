@@ -86,14 +86,16 @@ scripts/tune_fake_source.sh restore /tmp/ref.yaml   # 恢复
 5 结算）。默认就是 4，否则树上"比赛开始满 1 秒才放行"的开关会把整棵树挡住；改成 0
 再改回 4 就能看到它重新计时。
 
-假数据源还给出假位姿：发 `odometry` 话题和 `odom -> base_footprint` 变换，
-外加一条静态的 `map -> odom`。`sim_speed` 不为 0 时机器人朝决策节点发出的
-`goal_pose` 走（默认 0.2 m/s），所以 `btview.sh` 起来之后能看到"未到达 → 每个
-周期重发目标 → 进入 20 cm → 已到达 → 进占点分支"这一整条路径，不需要额外的
+假数据源还可以提供模拟的 `NavigateToPose` action：决策节点发送 action goal 后，
+假机器人按 `sim_speed`（默认 0.2 m/s）移动，到点后返回 action success。需要观察
+位姿时可同时打开假 `odometry` 和 `odom -> base_footprint`/`map -> odom` TF。
+所以 `btview.sh` 起来之后能看到"发送 goal → 行进 → result success → 下一个航点"
+这一整条路径，不需要额外的
 `static_transform_publisher`。把 `sim_speed` 改成 0，位置就固定由 `robot_x`、
 `robot_y` 决定，用来手试两条分支。只在不开仿真、不接实车时用：真机上
 `odom -> base_footprint` 由驱动发布、`map -> odom` 由定位发布，同时跑会争同一个
-变换（`publish_map_to_odom` 置 false 可以只让假数据源发前者）。
+变换。`publish_pose=false` 会同时关闭假 odom 与两段 TF；`scripts/btview.sh
+--simulation` 已默认关闭，避免与 Gazebo/Nav2 的真实 TF 冲突。
 
 ## 行为树可视化
 
@@ -138,7 +140,7 @@ scripts/btview.sh --simulation
 ```
 
 `--simulation` 默认把行为树放入 `/red_standard_robot1`，与 Nav2 使用同一套
-`goal_pose`、TF 和速度话题。假裁判源放在独立的 `/fake_ref` 命名空间，只提供
+`NavigateToPose` action、TF 和速度话题。假裁判源放在独立的 `/fake_ref` 命名空间，只提供
 `/referee/*` 数据，不发布会与 Gazebo 冲突的假位姿。该模式会自动启用
 `use_sim_time`。仿真命名空间不同时显式传入：
 

@@ -76,6 +76,8 @@ FakeMsgSource::FakeMsgSource()
     declare_parameter<std::string>("odom_topic", "odometry");
   const std::string goal_pose_topic =
     declare_parameter<std::string>("goal_pose_topic", "goal_pose");
+  const std::string navigate_to_pose_action =
+    declare_parameter<std::string>("navigate_to_pose_action", "navigate_to_pose");
   declare_parameter<std::string>("map_frame", "map");
   declare_parameter<std::string>("odom_frame", "odom");
   declare_parameter<std::string>("base_frame", "base_footprint");
@@ -87,6 +89,7 @@ FakeMsgSource::FakeMsgSource()
   // 默认取小值是为了配合可视化：界面每完成一次 tick 才刷新一次光条，机器人一个
   // tick 走的距离必须明显小于巡逻方框的边长（0.5 m），否则看到的路径总是落后的。
   declare_parameter<double>("sim_speed", 0.2);
+  declare_parameter<bool>("publish_pose", true);
   declare_parameter<bool>("publish_map_to_odom", true);
 
   param_callback_ = add_on_set_parameters_callback(
@@ -113,6 +116,22 @@ FakeMsgSource::FakeMsgSource()
       has_goal_ = true;
     });
 
+  // 非仿真联调时提供与 Nav2 同名的 action 接口，让 rmul_decision 可以使用真实的
+  // NavigateToPose result 推进航点。仿真模式节点位于 /fake_ref 下，不会抢占 Nav2。
+  navigate_action_server_ = rclcpp_action::create_server<NavigateToPose>(
+    this, navigate_to_pose_action,
+    [this](
+      const rclcpp_action::GoalUUID& uuid,
+      std::shared_ptr<const NavigateToPose::Goal> goal) {
+      return handle_action_goal(uuid, std::move(goal));
+    },
+    [this](const std::shared_ptr<GoalHandle> goal_handle) {
+      return handle_action_cancel(goal_handle);
+    },
+    [this](const std::shared_ptr<GoalHandle> goal_handle) {
+      handle_action_accepted(goal_handle);
+    });
+
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*this);
   static_tf_broadcaster_ =
     std::make_shared<tf2_ros::StaticTransformBroadcaster>(*this);
@@ -124,7 +143,7 @@ FakeMsgSource::FakeMsgSource()
   const double eff_vision_rate = (vision_rate > 0.0) ? vision_rate : kDefaultVisionRate;
 
   // map -> odom 是静态的，发一次就够（latched）。
-  if (param_bool("publish_map_to_odom")) {
+  if (param_bool("publish_pose") && param_bool("publish_map_to_odom")) {
     geometry_msgs::msg::TransformStamped tf_map_odom;
     tf_map_odom.header.stamp = now();
     tf_map_odom.header.frame_id = param_str("map_frame");
@@ -138,11 +157,16 @@ FakeMsgSource::FakeMsgSource()
   status_timer_ = create_wall_timer(
     std::chrono::duration<double>(1.0 / eff_status_rate),
     [this, eff_status_rate]() {
-      step_pose(1.0 / eff_status_rate);
       publish_robot_status();
       publish_rfid_status();
       publish_game_status();
-      publish_pose();
+      if (param_bool("publish_pose")) {
+        const bool arrived = step_pose(1.0 / eff_status_rate);
+        publish_pose();
+        if (arrived) {
+          finish_active_goal();
+        }
+      }
     });
   vision_timer_ = create_wall_timer(
     std::chrono::duration<double>(1.0 / eff_vision_rate),
@@ -150,19 +174,25 @@ FakeMsgSource::FakeMsgSource()
 
   RCLCPP_INFO(
     get_logger(),
-    "假数据源已启动：%s @ %.1f Hz，%s @ %.1f Hz，%s @ %.1f Hz，%s @ %.1f Hz，ID %ld，"
+    "假数据源已启动：%s @ %.1f Hz，%s @ %.1f Hz，%s @ %.1f Hz，ID %ld，"
     "HP %u/%ld，enemy_count %ld，RFID 补给区=%d 控制区=%d",
     status_topic.c_str(), eff_status_rate, rfid_topic.c_str(), eff_status_rate,
-    vision_topic.c_str(), eff_vision_rate, odom_topic.c_str(), eff_status_rate,
+    vision_topic.c_str(), eff_vision_rate,
     param_int("robot_id"), last_hp_, param_int("maximum_hp"),
     param_int("enemy_count"), param_bool("rfid_supply"), param_bool("rfid_center"));
-  RCLCPP_INFO(
-    get_logger(),
-    "假位姿：%s -> %s，%s -> %s（%s），起点 (%.2f, %.2f)，速度 %.2f m/s",
-    param_str("odom_frame").c_str(), param_str("base_frame").c_str(),
-    param_str("map_frame").c_str(), param_str("odom_frame").c_str(),
-    param_bool("publish_map_to_odom") ? "静态单位变换" : "不再发布，由真实定位负责",
-    param_double("robot_x"), param_double("robot_y"), param_double("sim_speed"));
+  if (param_bool("publish_pose")) {
+    RCLCPP_INFO(
+      get_logger(),
+      "假位姿：%s -> %s，%s -> %s（%s），起点 (%.2f, %.2f)，速度 %.2f m/s",
+      param_str("odom_frame").c_str(), param_str("base_frame").c_str(),
+      param_str("map_frame").c_str(), param_str("odom_frame").c_str(),
+      param_bool("publish_map_to_odom") ? "静态单位变换" : "不再发布，由真实定位负责",
+      param_double("robot_x"), param_double("robot_y"), param_double("sim_speed"));
+  } else {
+    RCLCPP_INFO(
+      get_logger(),
+      "假位姿与 TF 已关闭，使用仿真/实车提供的 odometry 与 TF");
+  }
 }
 
 rcl_interfaces::msg::SetParametersResult FakeMsgSource::on_parameters_changed(
@@ -186,12 +216,12 @@ rcl_interfaces::msg::SetParametersResult FakeMsgSource::on_parameters_changed(
   return result;
 }
 
-void FakeMsgSource::step_pose(double dt)
+bool FakeMsgSource::step_pose(double dt)
 {
   const double speed = param_double("sim_speed");
   if (speed <= 0.0 || !has_goal_) {
     // 速度 0：机器人钉在参数给的位置上，用来手试"未到达/已到达"两条分支。
-    return;
+    return false;
   }
 
   double x = param_double("robot_x");
@@ -200,11 +230,13 @@ void FakeMsgSource::step_pose(double dt)
   const double dy = goal_y_ - y;
   const double distance = std::hypot(dx, dy);
   const double step = speed * dt;
+  bool arrived = false;
 
   if (distance <= step) {
     // 一步能跨过就直接落到目标点上，免得在目标点附近来回抖。
     x = goal_x_;
     y = goal_y_;
+    arrived = true;
   } else {
     x += dx / distance * step;
     y += dy / distance * step;
@@ -215,6 +247,56 @@ void FakeMsgSource::step_pose(double dt)
     rclcpp::Parameter("robot_y", y),
     rclcpp::Parameter("robot_yaw", std::atan2(dy, dx)),
   });
+  return arrived;
+}
+
+rclcpp_action::GoalResponse FakeMsgSource::handle_action_goal(
+  const rclcpp_action::GoalUUID&,
+  std::shared_ptr<const NavigateToPose::Goal> goal)
+{
+  if (!goal ||
+      !std::isfinite(goal->pose.pose.position.x) ||
+      !std::isfinite(goal->pose.pose.position.y))
+  {
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+  return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+}
+
+rclcpp_action::CancelResponse FakeMsgSource::handle_action_cancel(
+  const std::shared_ptr<GoalHandle> goal_handle)
+{
+  std::lock_guard<std::mutex> lock(goal_mutex_);
+  active_goal_.reset();
+  has_goal_ = false;
+  if (goal_handle) {
+    goal_handle->canceled(std::make_shared<NavigateToPose::Result>());
+  }
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
+
+void FakeMsgSource::handle_action_accepted(
+  const std::shared_ptr<GoalHandle> goal_handle)
+{
+  std::lock_guard<std::mutex> lock(goal_mutex_);
+  active_goal_ = goal_handle;
+  goal_x_ = goal_handle->get_goal()->pose.pose.position.x;
+  goal_y_ = goal_handle->get_goal()->pose.pose.position.y;
+  has_goal_ = true;
+}
+
+void FakeMsgSource::finish_active_goal()
+{
+  std::shared_ptr<GoalHandle> goal_handle;
+  {
+    std::lock_guard<std::mutex> lock(goal_mutex_);
+    goal_handle = std::move(active_goal_);
+    active_goal_.reset();
+    has_goal_ = false;
+  }
+  if (goal_handle) {
+    goal_handle->succeed(std::make_shared<NavigateToPose::Result>());
+  }
 }
 
 void FakeMsgSource::publish_pose()
