@@ -29,10 +29,11 @@
                     <specular>0.5 0.5 0.5</specular>
                 </material>
             </visual>
-            <collision name="light_bar_collision">
+            <!-- 低矮通道测试：暂时关闭尾部血量显示条碰撞，保留 light_bar_visual。 -->
+            <!-- <collision name="light_bar_collision">
                 <pose>0 0 0.06 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.05" y="0.28" z="0.04"/>
-            </collision>
+            </collision> -->
         </link>
     </xmacro_define_block>
 </sdf>

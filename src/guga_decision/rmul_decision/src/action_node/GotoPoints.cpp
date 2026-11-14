@@ -3,65 +3,56 @@
 #include <cmath>
 #include <utility>
 
-namespace
-{
+namespace {
 
-BT::NodeStatus toBtStatus(
-  guga_decision_common::WaypointNavigatorStatus status)
-{
-  switch (status) {
-    case guga_decision_common::WaypointNavigatorStatus::RUNNING:
-      return BT::NodeStatus::RUNNING;
-    case guga_decision_common::WaypointNavigatorStatus::SUCCEEDED:
-      return BT::NodeStatus::SUCCESS;
-    case guga_decision_common::WaypointNavigatorStatus::FAILED:
-    case guga_decision_common::WaypointNavigatorStatus::IDLE:
-    default:
-      return BT::NodeStatus::FAILURE;
+  BT::NodeStatus toBtStatus(
+      guga_decision_common::WaypointNavigatorStatus status) {
+    switch (status) {
+      case guga_decision_common::WaypointNavigatorStatus::RUNNING:
+        return BT::NodeStatus::RUNNING;
+      case guga_decision_common::WaypointNavigatorStatus::SUCCEEDED:
+        return BT::NodeStatus::SUCCESS;
+      case guga_decision_common::WaypointNavigatorStatus::FAILED:
+      case guga_decision_common::WaypointNavigatorStatus::IDLE:
+      default:
+        return BT::NodeStatus::FAILURE;
+    }
   }
-}
 
 }  // namespace
 
 PointSelector::PointSelector(
-  const std::string& name,
-  const BT::NodeConfig& config,
-  std::shared_ptr<guga_decision_common::DecisionInputHub> input_hub,
-  std::shared_ptr<guga_decision_common::GoalController> goal_controller)
-: BT::StatefulActionNode(name, config),
-  input_hub_(std::move(input_hub)),
-  goal_controller_(std::move(goal_controller)),
-  navigator_(
-    [this](const guga_decision_common::Waypoint2D& waypoint) {
-      return goal_controller_ &&
-             goal_controller_->sendGoal(waypoint, true);
-    })
-{
+    const std::string& name, const BT::NodeConfig& config,
+    std::shared_ptr<guga_decision_common::DecisionInputHub> input_hub,
+    std::shared_ptr<guga_decision_common::GoalController> goal_controller)
+    : BT::StatefulActionNode(name, config),
+      input_hub_(std::move(input_hub)),
+      goal_controller_(std::move(goal_controller)),
+      navigator_([this](const guga_decision_common::Waypoint2D& waypoint) {
+        return goal_controller_ && goal_controller_->sendGoal(waypoint, true);
+      }) {
 }
 
-BT::PortsList PointSelector::providedPorts()
-{
+BT::PortsList PointSelector::providedPorts() {
   return {
-    BT::InputPort<int>("destination"),
-    BT::InputPort<std::string>("strategy_mode"),
-    BT::InputPort<double>("tolerance", 0.15, "到达航点的距离容差"),
-    BT::InputPort<std::vector<double>>("route_x", "绝对航点 x 数组"),
-    BT::InputPort<std::vector<double>>("route_y", "绝对航点 y 数组"),
-    BT::InputPort<std::vector<double>>("route_yaw", "绝对航点 yaw 数组"),
+      BT::InputPort<int>("destination"),
+      BT::InputPort<std::string>("strategy_mode"),
+      BT::InputPort<double>("tolerance", 0.25, "到达航点的距离容差"),
+      BT::InputPort<std::vector<double>>("route_x", "绝对航点 x 数组"),
+      BT::InputPort<std::vector<double>>("route_y", "绝对航点 y 数组"),
+      BT::InputPort<std::vector<double>>("route_yaw", "绝对航点 yaw 数组"),
   };
 }
 
-BT::NodeStatus PointSelector::onStart()
-{
+BT::NodeStatus PointSelector::onStart() {
   if (!input_hub_ || !goal_controller_) {
     return BT::NodeStatus::FAILURE;
   }
 
   int destination = 0;
   std::string strategy;
-  if (!getInput("destination", destination) ||
-      !getInput("strategy_mode", strategy))
-  {
+  if (!getInput("destination", destination)
+      || !getInput("strategy_mode", strategy)) {
     return BT::NodeStatus::FAILURE;
   }
 
@@ -72,8 +63,7 @@ BT::NodeStatus PointSelector::onStart()
   return toBtStatus(navigator_.start(std::move(*route)));
 }
 
-BT::NodeStatus PointSelector::onRunning()
-{
+BT::NodeStatus PointSelector::onRunning() {
   if (!input_hub_) {
     return BT::NodeStatus::FAILURE;
   }
@@ -90,22 +80,20 @@ BT::NodeStatus PointSelector::onRunning()
     return BT::NodeStatus::RUNNING;
   }
 
-  double tolerance = 0.15;
+  double tolerance = 0.25;
   getInput("tolerance", tolerance);
-  const bool arrived =
-    std::hypot(robot_x - current->x, robot_y - current->y) <= tolerance;
+  const bool arrived = std::hypot(robot_x - current->x, robot_y - current->y)
+                       <= tolerance;
 
   return toBtStatus(navigator_.update(arrived));
 }
 
-void PointSelector::onHalted()
-{
+void PointSelector::onHalted() {
   navigator_.halt();
 }
 
 std::vector<guga_decision_common::Waypoint2D> PointSelector::buildRoute(
-  int destination, const std::string& strategy) const
-{
+    int destination, const std::string& strategy) const {
   const std::vector<std::pair<double, double>>* points = nullptr;
   const std::vector<std::pair<double, double>>* tunnel = nullptr;
 
@@ -136,12 +124,12 @@ std::vector<guga_decision_common::Waypoint2D> PointSelector::buildRoute(
   if (strategy == "Suppress" && tunnel && !tunnel->empty()) {
     return toRoute(*tunnel);
   }
-  return points ? toRoute(*points) : std::vector<guga_decision_common::Waypoint2D>{};
+  return points ? toRoute(*points)
+                : std::vector<guga_decision_common::Waypoint2D>{};
 }
 
 std::optional<std::vector<guga_decision_common::Waypoint2D>>
-PointSelector::routeFromPorts()
-{
+PointSelector::routeFromPorts() {
   std::vector<double> xs;
   std::vector<double> ys;
   std::vector<double> yaws;
@@ -155,10 +143,8 @@ PointSelector::routeFromPorts()
     return std::vector<guga_decision_common::Waypoint2D>{};
   }
 
-  if (static_cast<bool>(getInput("route_yaw", yaws)) &&
-      !yaws.empty() &&
-      yaws.size() != xs.size())
-  {
+  if (static_cast<bool>(getInput("route_yaw", yaws)) && !yaws.empty()
+      && yaws.size() != xs.size()) {
     return std::vector<guga_decision_common::Waypoint2D>{};
   }
 
@@ -166,17 +152,16 @@ PointSelector::routeFromPorts()
   route.reserve(xs.size());
   for (std::size_t i = 0; i < xs.size(); ++i) {
     route.push_back({
-      xs[i],
-      ys[i],
-      yaws.empty() ? 0.0 : yaws[i],
+        xs[i],
+        ys[i],
+        yaws.empty() ? 0.0 : yaws[i],
     });
   }
   return route;
 }
 
 std::vector<guga_decision_common::Waypoint2D> PointSelector::toRoute(
-  const std::vector<std::pair<double, double>>& points)
-{
+    const std::vector<std::pair<double, double>>& points) {
   std::vector<guga_decision_common::Waypoint2D> route;
   route.reserve(points.size());
   for (const auto& [x, y] : points) {

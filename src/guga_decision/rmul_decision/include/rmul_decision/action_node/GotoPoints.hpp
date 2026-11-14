@@ -39,33 +39,33 @@ private:
 
   // 坐标由点位配置填充；一个数组可以包含多个航点。
   std::vector<std::pair<double, double>> point_1_{
-      {5.0, 0.0}
+      {0.0, 0.0}
   };
   std::vector<std::pair<double, double>> point_2_{
-      {2.0, 1.0}
+      {0.7, -4.0}
   };
   std::vector<std::pair<double, double>> point_3_{
-      {4.0, 2.0}
+      {2.7, -4.7}
   };
   std::vector<std::pair<double, double>> point_4_{
-      {2.0, 5.0}
+      {5.6, -2.8}
   };
   std::vector<std::pair<double, double>> point_5_{
-      {-1.0, 6.0}
+      {5.0, -1.5}
   };
   std::vector<std::pair<double, double>> tunnel_1_{
-      {-1.0, 2.5},
-      {-1.0, 0.5},
-      { 0.0, 0.0}
+      {3.3, 0.2},
+      {1.0, 0.2},
+      {0.0, 0.0}
   };
   std::vector<std::pair<double, double>> tunnel_4_{
-      {-1.0, 0.5},
-      {-1.0, 2.5},
-      { 2.0, 5.0}
+      {1.0,  0.2},
+      {3.3,  0.2},
+      {5.6, -2.8}
   };
   std::vector<std::pair<double, double>> tunnel_5_{
-      {-1.0, 0.5},
-      {-1.0, 2.5},
-      {-1.0, 6.0}
+      {1.0,  0.2},
+      {3.3,  0.2},
+      {5.0, -1.5}
   };
 };
