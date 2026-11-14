@@ -22,7 +22,7 @@
 
 #include <ivox/ivox3d.h>
 
-#include "point_lio/core/preprocess.h"
+#include "point_lio/preprocess.h"
 
 namespace rclcpp {
   class Node;
@@ -84,8 +84,7 @@ struct ImuParams {
 struct PublishParams {
   bool path_enabled{true};
   bool scan_enabled{true};
-  bool scan_body_enabled{true};
-  bool tf_enabled{true};
+  bool debug_state_enabled{false};
   bool pcd_save_enabled{false};
   int pcd_save_interval{-1};
   /// 非空时保存到该绝对路径；为空时沿用 PCD/scans_<时间戳>.pcd
@@ -117,13 +116,12 @@ struct SensorParams {
 struct LidarParams {
   PreprocessParams preprocess;
   int lidar_type{AVIA};
-  bool con_frame{false};
+  /// 0: 单帧直通, 1: 切帧, 2: 合帧
+  int frame_mode{0};
   int con_frame_num{1};
-  bool cut_frame{false};
   int cut_frame_num{1};
   double cut_frame_interval{0.1};
   double lidar_time_interval{0.1};
-  bool extrinsic_estimation{true};
   double point_covariance{0.1};
   double match_threshold{81.0};
   float plane_threshold{0.05F};
@@ -148,7 +146,6 @@ struct ScanZFilterParams {
  * 统一使用与底盘对齐的 odom 系。这个结构描述 body/安装变换与输出话题名。
  */
 struct OutputFrameParams {
-  bool enabled{true};
   std::string odom_frame{"odom"};
   std::string lidar_frame{"front_mid360"};
   std::string base_frame{"base_footprint"};

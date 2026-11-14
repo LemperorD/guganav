@@ -27,10 +27,10 @@ point_lio:
     common:
       lid_topic: "livox/lidar"
       imu_topic: "livox/imu"
-      con_frame: False # True: if you need to combine several LiDAR frames into one
-      con_frame_num: 1 # the number of frames combined
-      cut_frame: False # True: if you need to cut one LiDAR frame into several subframes
-      cut_frame_time_interval: 0.05 # should be integral fraction of 1 / LiDAR frequency
+      # 0: 单帧直通, 1: 切帧, 2: 合帧
+      frame_mode: 0
+      con_frame_num: 1 # 合帧模式下的合并帧数
+      cut_frame_time_interval: 0.05 # 切帧模式下子帧的时间间隔
       time_diff_lidar_to_imu: 0.0 # Time offset between LiDAR and IMU calibrated by other algorithms, e.g., LI-Init (find in Readme)
 
     prior_pcd:
@@ -46,7 +46,6 @@ point_lio:
       blind: 0.5
 
     mapping:
-      extrinsic_est_en: False # for aggressive motion, set this variable False
       imu_time_inte: 0.005 # = 1 / frequency of IMU
       lidar_time_inte: 0.02 # = 1 / lidar frame rate（驱动 publish_freq=50 Hz）
       satu_acc: 4.0 # the saturation value of IMU's acceleration. not related to the units
@@ -75,7 +74,6 @@ point_lio:
     publish:
       path_en: False # False: close the path output
       scan_publish_en: True # False: close all the point cloud output
-      scan_bodyframe_pub_en: False # True: output the point cloud scans in IMU-body-frame
       tf_send_en: False # True: send transform from 'camera_init' to 'aft_mapped'
 
     output_frame:
@@ -132,7 +130,7 @@ scan_to_sensor_frame:
         0.984807753,
       ]
     robot_base_frame: "base_footprint"
-    zero_base_z: True # 临时平地模式: 锁 odom->base_footprint 的 z=0, 屏蔽 point_lio 的 z 漂移; 测完关掉
+    zero_base_z: False # False: 保留 point_lio 输出的 z; True: 把 odom->base_footprint 的 z 锁在 0
 
 terrain_analysis:
   ros__parameters:

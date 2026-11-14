@@ -361,7 +361,14 @@ behavior_server:
     cycle_frequency: 10.0
 
     behavior_plugins:
-      ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait", "escape_obstacle_layer"]
+      [
+        "spin",
+        "backup",
+        "drive_on_heading",
+        "assisted_teleop",
+        "wait",
+        "escape_obstacle_layer",
+      ]
 
     spin:
       plugin: "nav2_behaviors/Spin"
@@ -452,4 +459,4 @@ velocity_smoother:
 nonrotating_vel_transform:
   ros__parameters:
     initial_chassis_mode: 1 # 1 = littleTES，启动即自旋
-    init_spin_speed: 1.0 # 未收到 cmd_spin 前的固定自旋角速度 (rad/s)
+    init_spin_speed: 2.0 # 未收到 cmd_spin 前的固定自旋角速度 (rad/s)

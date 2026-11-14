@@ -1,3 +1,10 @@
+/**
+ * @file FrameProcessor.h
+ * @brief 帧调度类声明.
+ *
+ * 负责一帧的完整流程: 配时间、传播、量测更新、地图增量与结果写回.
+ */
+
 #pragma once
 #include <functional>
 #include <memory>
@@ -6,7 +13,6 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_ros/transform_broadcaster.h>
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -15,7 +21,7 @@
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Synchronizer.h"
 #include "point_lio/core/common_lib.h"
-#include "point_lio/core/ProcessingState.h"
+#include "point_lio/core/DataHandler.h"
 
 enum class PointLioStage {
   WAITINGFORDATA,
@@ -28,22 +34,19 @@ class ManifoldEskf;
 
 class FrameProcessor {
 public:
-  FrameProcessor(Imu& imu, PointLioStage& stage_, Lidar& lidar,
-                 const PointLioParams& config, MainLoopState& state);
+  FrameProcessor(PointLioStage& stage_, DataHandler& data_handler,
+                 MainLoopState& state);
+  void onLidarFrame(PointCloudXYZI::Ptr points, double timestamp);
+  void onImu(const ImuMeasurement& measurement, double timestamp);
+  void onLidarFrames(std::deque<PointCloudXYZI::Ptr>& frames,
+                     std::deque<double>& timestamps);
   ~FrameProcessor();
   void initialize();
   void setPose(geometry_msgs::msg::Pose& pose) const;
-  void setDebugPublisher(
-      rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub);
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
-  void configureSynchronizer(double lidar_time_interval);
+  void configure(double lidar_time_interval);
   /// 处理一帧; 返回 true 表示本帧确实被处理 (据此决定是否发布输出)
-  [[nodiscard]] bool processIteration(
-      const std::function<void(const sensor_msgs::msg::PointCloud2&)>&
-          publish_map,
-      const std::function<void(const nav_msgs::msg::Odometry&)>& publish_odom,
-      const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
-          publish_tf);
+  [[nodiscard]] bool processIteration();
   [[nodiscard]] double lidarEndTime() const {
     return lidar_end_time_;
   }
@@ -57,7 +60,8 @@ private:
   bool is_first_frame_{true};
   double time_update_last_{0.0};
   double last_time_output_{0.0};
-  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_pub_;
+  int startup_frames_{0};
+  DataHandler& data_handler_;
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
@@ -65,30 +69,21 @@ private:
   bool syncPackages();
   void initScan();
   void mapIncremental() const;
-  bool initMapState(
-      std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
-  void publishOdometry(
-      const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
-      const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
-          publish_tf);
-  bool prepareFrame(
-      std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
-  bool initializeIteration(
-      std::function<void(const sensor_msgs::msg::PointCloud2&)> publish);
+  bool initMapState();
+  void publishOdometry();
+  bool prepareFrame();
+  bool initializeIteration();
 
-  void processFramePoints(
-      MeasureGroup& meas, double& last_time,
-      const std::function<void(const nav_msgs::msg::Odometry&)>& publish,
-      const std::function<void(const geometry_msgs::msg::TransformStamped&)>&
-          publish_tf);
+  void processFramePoints(MeasureGroup& meas, double& last_time);
 
-  Imu& imu_;
-  Lidar& lidar_;
+  Imu imu_;
+  Lidar lidar_;
   std::unique_ptr<ManifoldEskf> manifold_;
   MeasureGroup measures_;
+  FilterOutput& output_ = data_handler_.getFilterOutput();
   PointLioStage& stage_;
   MainLoopState& state_;
-  const PointLioParams& config_;
+  const PointLioParams& config_ = data_handler_.config;
   Synchronizer synchronizer_;
 
   sensor_msgs::msg::Imu last;

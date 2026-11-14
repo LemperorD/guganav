@@ -1,3 +1,10 @@
+/**
+ * @file PointTypes.h
+ * @brief PCL 点类型别名.
+ *
+ * 定义 PointType 与 PointCloudXYZI, 供全项目统一使用.
+ */
+
 #pragma once
 
 #include <vector>

@@ -23,10 +23,10 @@ point_lio:
     common:
       imu_topic: "livox/imu"
       lid_topic: "velodyne_points"
-      con_frame: False # True: if you need to combine several LiDAR frames into one
-      con_frame_num: 1 # the number of frames combined
-      cut_frame: False # True: if you need to cut one LiDAR frame into several subframes
-      cut_frame_time_interval: 0.05 # should be integral fraction of 1 / LiDAR frequency
+      # 0: 单帧直通, 1: 切帧, 2: 合帧
+      frame_mode: 0
+      con_frame_num: 1 # 合帧模式下的合并帧数
+      cut_frame_time_interval: 0.05 # 切帧模式下子帧的时间间隔
       time_diff_lidar_to_imu: 0.0 # Time offset between LiDAR and IMU calibrated by other algorithms, e.g., LI-Init (find in Readme)
 
     prior_pcd:
@@ -42,7 +42,6 @@ point_lio:
       blind: 0.5
 
     mapping:
-      extrinsic_est_en: False # for aggressive motion, set this variable False
       imu_time_inte: 0.005 # = 1 / frequency of IMU
       lidar_time_inte: 0.1
       satu_acc: 30.0 # the saturation value of IMU's acceleration. not related to the units
@@ -53,8 +52,8 @@ point_lio:
       gyr_cov_output: 1000.0
       b_acc_cov: 0.0001
       b_gyr_cov: 0.0001
-      imu_meas_acc_cov: 0.1
-      imu_meas_omg_cov: 0.1
+      imu_meas_acc_cov: 10.0
+      imu_meas_omg_cov: 1.0
       gyr_cov_input: 0.01 # for IMU as input model
       acc_cov_input: 0.1 # for IMU as input model
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
@@ -72,10 +71,9 @@ point_lio:
       publish_odometry_without_downsample: True
 
     publish:
-      path_en: False # False: close the path output
+      path_en: True # False: close the path output
       scan_publish_en: True # False: close all the point cloud output
-      scan_bodyframe_pub_en: False # True: output the point cloud scans in IMU-body-frame
-      tf_send_en: False # True: send transform from 'camera_init' to 'aft_mapped'
+      debug_state_en: True # True: 发布 /point_lio/debug_state 供调试
 
     output_frame:
       # Point-LIO camera_init 是 IMU body 系；该变换由模型 base<-lidar 与
@@ -135,7 +133,7 @@ scan_to_sensor_frame:
     min_odometry_dt: 0.001
     max_linear_velocity: 10.0
     max_angular_velocity: 20.0
-    zero_base_z: True # 临时平地模式: 锁 odom->base_footprint 的 z=0, 屏蔽 point_lio 的 z 漂移; 测完关掉
+    zero_base_z: False # False: 保留 point_lio 输出的 z; True: 把 odom->base_footprint 的 z 锁在 0
 
 terrain_analysis:
   ros__parameters:

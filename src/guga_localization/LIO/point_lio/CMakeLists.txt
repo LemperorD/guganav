@@ -44,14 +44,21 @@ link_directories(
 
 # Declare a ROS2 executable
 add_executable(pointlio_mapping
-  src/laserMapping.cpp
-  src/core/parameters.cpp
-  src/core/preprocess.cpp
+  src/OdomProcessor.cpp
+  src/preprocess.cpp
+
   src/core/Lidar.cpp
   src/core/Synchronizer.cpp
   src/core/Imu.cpp
   src/core/FrameProcessor.cpp
   src/core/ManifoldEskf.cpp
+
+  src/pcd/PriorMapManager.cpp
+
+  src/ros2/laserMapping.cpp
+  src/ros2/pub/ProjectOutputPublisher.cpp
+  src/ros2/pub/FramePublisher.cpp
+  src/ros2/sub/SensorSubscriptions.cpp
 )
 
 ament_target_dependencies(pointlio_mapping

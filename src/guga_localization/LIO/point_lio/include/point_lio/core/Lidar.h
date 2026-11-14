@@ -18,7 +18,7 @@
 
 #include <bitset>
 #include <memory>
-#include "point_lio/core/preprocess.h"
+#include "point_lio/preprocess.h"
 #include "point_lio/core/common_lib.h"
 #include "point_lio/core/Imu.h"
 class Synchronizer;
@@ -55,7 +55,6 @@ public:
   using Params = LidarParams;
 
   void configure(const Params& params);
-  void reset();
   [[nodiscard]] LidarMeasurementModel& measurementModel() {
     return measurement_model_;
   }
@@ -76,25 +75,24 @@ public:
   [[nodiscard]] const M3D& RotationLidarToImu() const {
     return lidar_r_wrt_imu_;
   }
-  void onStandardPcl(const sensor_msgs::msg::PointCloud2::SharedPtr& message);
-  void onLivoxPcl(const livox_ros_driver2::msg::CustomMsg::SharedPtr& message);
 
 private:
   friend class Synchronizer;
+  friend class FrameProcessor;
   [[nodiscard]] int mergeFrameCount() const {
-    return params_.con_frame_num;
+    return params_->con_frame_num;
   }
-  void appendCutFrames(std::deque<PointCloudXYZI::Ptr>& frames,
-                       std::deque<double>& timestamps);
+  void append(PointCloudXYZI::Ptr points, double timestamp);
+  void appendFrames(std::deque<PointCloudXYZI::Ptr>& frames,
+                    std::deque<double>& timestamps);
   void appendFrame(PointCloudXYZI::Ptr pointcloud, double timestamp);
   void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
 
-  Params params_;
+  const Params* params_{nullptr};
   IVoxType::Ptr ivox_{nullptr};
   V3D lidar_t_wrt_imu_{Zero3d};
   M3D lidar_r_wrt_imu_{IMatrix3};
   LidarMeasurementModel measurement_model_;
-  Preprocess preprocess_;
   PointCloudXYZI::Ptr ptr_con_{std::make_shared<PointCloudXYZI>()};
   int scan_count_{0};
   int frame_ct_{0};

@@ -101,8 +101,7 @@ inline M3D to_mat3d(const std::vector<double>& v) {
 const M3D IMatrix3(M3D::Identity());  ///< 3x3 单位阵 (double)
 const V3D Zero3d(0, 0, 0);            ///< 3维零向量 (double)
 
-// 30 维误差的流形状态, 顺序: rot, pos, vel, bg, ba, gravity, omg, acc,
-// offset_R, offset_T.
+/// 24 维状态: 旋转、位置、速度、陀螺零偏、加速度零偏、重力、角速度、加速度.
 struct State {
   M3D rot = M3D::Identity();
   V3D pos = V3D::Zero();
@@ -110,35 +109,29 @@ struct State {
   V3D bg = V3D::Zero();
   V3D ba = V3D::Zero();
   V3D gravity = V3D(0.0, 0.0, -9.81);
-  V3D omg = V3D::Zero();
+  V3D omega = V3D::Zero();
   V3D acc = V3D::Zero();
-  M3D offset_R_L_I = M3D::Identity();
-  V3D offset_T_L_I = V3D::Zero();
 
-  void boxplus(const Eigen::Matrix<double, 30, 1>& d) {
+  void boxplus(const Eigen::Matrix<double, 24, 1>& d) {
     rot = rot * Exp(d.segment<3>(0));
     pos += d.segment<3>(3);
     vel += d.segment<3>(6);
     bg += d.segment<3>(9);
     ba += d.segment<3>(12);
     gravity += d.segment<3>(15);
-    omg += d.segment<3>(18);
+    omega += d.segment<3>(18);
     acc += d.segment<3>(21);
-    offset_R_L_I = offset_R_L_I * Exp(d.segment<3>(24));
-    offset_T_L_I += d.segment<3>(27);
   }
 
-  void boxminus(Eigen::Matrix<double, 30, 1>& d, const State& other) const {
+  void boxminus(Eigen::Matrix<double, 24, 1>& d, const State& other) const {
     d.segment<3>(0) = Log(other.rot.transpose() * rot);
     d.segment<3>(3) = pos - other.pos;
     d.segment<3>(6) = vel - other.vel;
     d.segment<3>(9) = bg - other.bg;
     d.segment<3>(12) = ba - other.ba;
     d.segment<3>(15) = gravity - other.gravity;
-    d.segment<3>(18) = omg - other.omg;
+    d.segment<3>(18) = omega - other.omega;
     d.segment<3>(21) = acc - other.acc;
-    d.segment<3>(24) = Log(other.offset_R_L_I.transpose() * offset_R_L_I);
-    d.segment<3>(27) = offset_T_L_I - other.offset_T_L_I;
   }
 };
 
@@ -252,21 +245,46 @@ inline rclcpp::Time get_ros_time(double timestamp) {
   return rclcpp::Time(sec, nanosec);
 }
 
+struct ImuMeasurement {
+  V3D angular_velocity;
+  V3D linear_acceleration;
+};
+
+struct ImuSample {
+  ImuMeasurement measurement;
+  double timestamp{0.0};
+};
+
+/// Synchronizer 产出的输入, Filter 只读.
 struct MeasureGroup {
   double lidar_start_time{0.0};
   double lidar_last_time{0.0};
   PointCloudXYZI::Ptr lidar_measure_origin;
-  deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_measure;
+  deque<ImuSample> imu_measure;
   /// 本帧降采样后的点云 (IMU 系), 随量测一起传递
   PointCloudXYZI::Ptr feats_down_body{
       std::make_shared<PointCloudXYZI>(10000, 1)};
+  /// 本帧降采样点数
+  std::size_t feats_down_size{0};
+  /// 按时间偏移分段后每段的点数, 与 feats_down_body 的排序结果对应
+  std::vector<int> time_seq;
+};
+
+/// Filter 产出的结果, 供发布与地图更新使用.
+struct FilterOutput {
   /// 本帧降采样后的世界系点云, 由 ESKF 迭代写入
   PointCloudXYZI::Ptr feats_down_world{
       std::make_shared<PointCloudXYZI>(10000, 1)};
-  /// 本帧降采样点数
-  std::size_t feats_down_size{0};
+  /// 当前状态, 由 ESKF 更新
+  State state;
   /// 已成功传播并生成世界系坐标的点数, 地图更新只处理这一段
   std::size_t processed_size{0};
-  /// 按时间偏移分段后每段的点数, 与 feats_down_body 的排序结果对应
-  std::vector<int> time_seq;
+};
+
+struct MainLoopState {
+  int sleep_time = 0;
+  pcl::VoxelGrid<PointType> downsize_filter_surf;
+  nav_msgs::msg::Odometry odom_aft_mapped;
+  PointCloudXYZI::Ptr init_feats_world = std::make_shared<PointCloudXYZI>();
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };

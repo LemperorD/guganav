@@ -1,15 +1,17 @@
+/**
+ * @file Imu.h
+ * @brief IMU 样本缓冲与静态初始化.
+ *
+ * 接收纯数据样本, 维护时间顺序, 在静止段估计零偏与初始姿态.
+ */
+
 #pragma once
 
 #include <deque>
 
 #include "point_lio/core/common_lib.h"
 #include "point_lio/core/parameters.h"
-#include "point_lio/core/preprocess.h"
-
-struct ImuMeasurement {
-  V3D angular_velocity;
-  V3D linear_acceleration;
-};
+#include "point_lio/preprocess.h"
 
 inline ImuMeasurement makeMeasurement(const sensor_msgs::msg::Imu& msg) {
   ImuMeasurement measurement;
@@ -45,28 +47,19 @@ public:
   enum class Stage { Initializing, Ready };
 
   void configure(const Params& params);
-  void reset();
   [[nodiscard]] ImuMeasurementModel& measurementModel() {
     return measurement_model_;
   }
   void setCurrentMeasurement(const ImuMeasurement& measurement);
 
-  void onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
+  void append(const ImuMeasurement& measurement, double timestamp);
 
   [[nodiscard]] bool empty() const;
-  [[nodiscard]] bool isSameStamp() const;
-  [[nodiscard]] const sensor_msgs::msg::Imu& last() const;
-  [[nodiscard]] const sensor_msgs::msg::Imu& next() const;
-  void popBuffer();
+  [[nodiscard]] const ImuSample& next() const;
   void loadNext();
   void discardBefore(double timestamp);
-  void advanceCursor();
-  void popAndAdvance();
-  [[nodiscard]] ImuMeasurement lastMeasurement() const;
-  [[nodiscard]] ImuMeasurement nextMeasurement() const;
 
-  void collectUntil(double end_time,
-                    deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected);
+  void collectUntil(double end_time, deque<ImuSample>& collected);
   void process(const MeasureGroup& meas, State& output_state);
 
   [[nodiscard]] bool needInit() const;
@@ -82,12 +75,12 @@ private:
   void initState(State& state);
   void Set_init_z(const Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
 
-  Params params_;
+  const Params* params_{nullptr};
   ImuMeasurementWorkspace measurement_workspace_;
   ImuMeasurementModel measurement_model_;
-  std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> buffer_;
-  sensor_msgs::msg::Imu last_;
-  sensor_msgs::msg::Imu next_;
+  std::deque<ImuSample> buffer_;
+  ImuSample last_;
+  ImuSample next_;
   double last_timestamp_ = -1.0;
 
   Stage stage_{Stage::Initializing};

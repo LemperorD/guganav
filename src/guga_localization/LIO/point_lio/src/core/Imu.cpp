@@ -18,11 +18,11 @@ void ImuMeasurementModel::configure(const ImuParams& params) {
 }
 
 void Imu::configure(const Params& params) {
-  params_ = params;
+  params_ = &params;
   gravity_ = params.processor.gravity;
   gravity_init_ = params.processor.gravity_init;
   gravity_magnitude_ = params.processor.gravity_magnitude;
-  measurement_model_.configure(params_);
+  measurement_model_.configure(params);
 }
 
 void Imu::setCurrentMeasurement(const ImuMeasurement& measurement) {
@@ -30,55 +30,33 @@ void Imu::setCurrentMeasurement(const ImuMeasurement& measurement) {
   measurement_workspace_.linear_acceleration = measurement.linear_acceleration;
 }
 
-void Imu::reset() {
-  buffer_.clear();
-  last_ = sensor_msgs::msg::Imu{};
-  next_ = sensor_msgs::msg::Imu{};
-  last_timestamp_ = -1.0;
-  stage_ = Stage::Initializing;
-  init_iter_num_ = 1;
-  mean_acc_ = V3D::Zero();
-  mean_gyr_ = V3D::Zero();
-  static_count_ = 0;
-}
-
-void Imu::onMessage(const sensor_msgs::msg::Imu::ConstSharedPtr& msg_in) {
-  auto msg = std::make_shared<sensor_msgs::msg::Imu>(*msg_in);
-  msg->header.stamp = get_ros_time(get_time_sec(msg_in->header.stamp)
-                                   + params_.timestamp_offset);
-
-  const double timestamp = get_time_sec(msg->header.stamp);
-  if (timestamp < last_timestamp_) {
-    RCLCPP_ERROR(rclcpp::get_logger("Imu"), "imu loop back, clear deque");
+void Imu::append(const ImuMeasurement& measurement, double timestamp) {
+  const double adjusted = timestamp + params_->timestamp_offset;
+  if (adjusted < last_timestamp_) {
     return;
   }
-
-  buffer_.emplace_back(std::move(msg));
-  last_timestamp_ = timestamp;
+  buffer_.push_back(ImuSample{measurement, adjusted});
+  last_timestamp_ = adjusted;
 }
 
 bool Imu::empty() const {
   return buffer_.empty();
 }
 
-const sensor_msgs::msg::Imu& Imu::last() const {
-  return last_;
-}
-
-const sensor_msgs::msg::Imu& Imu::next() const {
+const ImuSample& Imu::next() const {
   return next_;
 }
 
 void Imu::loadNext() {
   if (!buffer_.empty()) {
-    next_ = *buffer_.front();
+    next_ = buffer_.front();
   }
 }
 
 void Imu::discardBefore(double timestamp) {
   while (!buffer_.empty()) {
     loadNext();
-    if (timestamp - get_time_sec(next_.header.stamp) < TOLERANCE) {
+    if (timestamp - next_.timestamp < TOLERANCE) {
       return;
     }
     last_ = next_;
@@ -86,41 +64,15 @@ void Imu::discardBefore(double timestamp) {
   }
 }
 
-void Imu::advanceCursor() {
-  if (!buffer_.empty()) {
-    last_ = next_;
-    next_ = *buffer_.front();
-  }
-}
-
-void Imu::popAndAdvance() {
-  if (buffer_.empty()) {
-    return;
-  }
-  last_ = next_;
-  buffer_.pop_front();
-  loadNext();
-}
-
-ImuMeasurement Imu::lastMeasurement() const {
-  return makeMeasurement(last_);
-}
-
-ImuMeasurement Imu::nextMeasurement() const {
-  return makeMeasurement(next_);
-}
-
-void Imu::collectUntil(
-    double end_time, deque<sensor_msgs::msg::Imu::ConstSharedPtr>& collected) {
+void Imu::collectUntil(double end_time, deque<ImuSample>& collected) {
   if (empty()) {
     return;
   }
 
   loadNext();
   collected.shrink_to_fit();
-  while (!buffer_.empty()
-         && get_time_sec(buffer_.front()->header.stamp) < end_time) {
-    collected.emplace_back(buffer_.front());
+  while (!buffer_.empty() && buffer_.front().timestamp < end_time) {
+    collected.push_back(buffer_.front());
     last_ = next_;
     buffer_.pop_front();
     loadNext();
@@ -150,10 +102,10 @@ void Imu::IMU_init(const MeasureGroup& meas, int& N) {
   V3D cur_acc, cur_gyr;
 
   for (const auto& imu : meas.imu_measure) {
-    const auto& imu_acc = imu->linear_acceleration;
-    const auto& imu_gyr = imu->angular_velocity;
-    cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
-    cur_gyr << imu_gyr.x, imu_gyr.y, imu_gyr.z;
+    const auto& imu_acc = imu.measurement.linear_acceleration;
+    const auto& imu_gyr = imu.measurement.angular_velocity;
+    cur_acc = imu_acc;
+    cur_gyr = imu_gyr;
 
     // 只累积静止样本. 旋转中的角速度当成零偏, 会把真实旋转吸收掉.
     if (cur_gyr.norm() < kStaticGyroThreshold) {
@@ -184,8 +136,7 @@ void Imu::initState(State& state) {
   state.ba = V3D::Zero();
 }
 
-void Imu::Set_init_z(const Eigen::Vector3d& tmp_gravity,
-                     Eigen::Matrix3d& rot) {
+void Imu::Set_init_z(const Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot) {
   const M3D hat_grav = -Hat(gravity_);
 
   const V3D cross = hat_grav * tmp_gravity;
@@ -228,13 +179,4 @@ bool Imu::needInit() const {
 
 double Imu::lastTimestamp() const {
   return last_timestamp_;
-}
-
-bool Imu::isSameStamp() const {
-  return get_time_sec(next_.header.stamp)
-         == get_time_sec(buffer_.front()->header.stamp);
-}
-
-void Imu::popBuffer() {
-  buffer_.pop_front();
 }

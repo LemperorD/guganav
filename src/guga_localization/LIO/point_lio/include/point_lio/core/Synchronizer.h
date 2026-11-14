@@ -1,3 +1,10 @@
+/**
+ * @file Synchronizer.h
+ * @brief 雷达与 IMU 的配时间.
+ *
+ * 从两路缓冲中取出同一时间段的数据, 填入 MeasureGroup.
+ */
+
 #pragma once
 
 #include "point_lio/core/common_lib.h"
