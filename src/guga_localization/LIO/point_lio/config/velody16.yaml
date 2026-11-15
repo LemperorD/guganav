@@ -1,7 +1,5 @@
 /**:
     ros__parameters:
-        prop_at_freq_of_imu: True
-        use_imu_as_input: False
         check_satu: True
         init_map_size: 10
         point_filter_num: 4                                 # Options: 4, 3
@@ -22,8 +20,6 @@
             blind: 2.0
 
         mapping:
-            imu_en: True
-            extrinsic_est_en: False                         # for aggressive motion, set this variable False
             lidar_time_inte: 0.1
             satu_acc: 30.0                                  # the saturation value of IMU's acceleration. not related to the units
             satu_gyro: 35.0                                 # the saturation value of IMU's angular velocity. not related to the units
@@ -51,13 +47,9 @@
             publish_odometry_without_downsample: False
 
         publish:
-            path_en: True                                   # False: close the path output
             scan_publish_en: True                           # False: close all the point cloud output
-            scan_bodyframe_pub_en: False                    # True: output the point cloud scans in IMU-body-frame
-            tf_send_en: True                                # True: send transform from 'camera_init' to 'aft_mapped'
 
         output_frame:
-            enable: True
             z_filter:
                 enable: True
                 min_z: -0.2                                 # registered_scan 在 odom 系中的最低 Z

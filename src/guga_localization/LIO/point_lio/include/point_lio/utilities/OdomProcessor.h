@@ -2,7 +2,7 @@
  * @file OdomProcessor.h
  * @brief camera_init 到 odom 的固定变换.
  *
- * 由 base<-lidar 与 lidar->imu 外参合成, 支持参数直接给出或从 TF 查询.
+ * 由 output_frame.body_to_base_r/t 直接给出.
  */
 
 #pragma once
@@ -11,18 +11,14 @@
 
 #include <Eigen/Dense>
 #include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/buffer.h>
 
 #include "point_lio/core/parameters.h"
 
-/// camera_init 到 odom 的固定变换, 由 base<-lidar 与 lidar->imu 合成.
+/// camera_init 到 odom 的固定变换, 由 body_to_base_r/t 直接给出.
 class OdomProcessor {
 public:
-  /// 解析安装变换: 优先用参数, 否则查一次 TF.
-  bool resolve(const OutputFrameParams& out, const tf2_ros::Buffer* buffer,
-               const rclcpp::Logger& logger, rclcpp::Clock& clock,
-               const std::vector<double>& lidar_r,
-               const std::vector<double>& lidar_t);
+  /// 解析安装变换: 只读 output_frame.body_to_base_r/t.
+  bool resolve(const OutputFrameParams& out, const rclcpp::Logger& logger);
 
   [[nodiscard]] bool ready() const {
     return ready_;

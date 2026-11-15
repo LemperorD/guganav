@@ -89,8 +89,6 @@ void LaserMappingNode::startProcessing() {
 
 void LaserMappingNode::initializeParameters() {
   try {
-    config_.mapping.propagate_at_imu_frequency = this->declare_parameter<bool>(
-        "prop_at_freq_of_imu", true);
     config_.imu.check_saturation = this->declare_parameter<bool>("check_satu",
                                                                  true);
     config_.mapping.init_map_size = static_cast<int>(
@@ -128,8 +126,6 @@ void LaserMappingNode::initializeParameters() {
         "mapping.lidar_meas_cov", 0.1);
     config_.filter.acc_cov_input = this->declare_parameter<double>(
         "mapping.acc_cov_input", 0.1);
-    config_.filter.vel_cov = this->declare_parameter<double>("mapping.vel_cov",
-                                                             20);
     config_.filter.gyr_cov_input = this->declare_parameter<double>(
         "mapping.gyr_cov_input", 0.1);
     config_.filter.gyr_cov_output = this->declare_parameter<double>(
@@ -238,25 +234,12 @@ void LaserMappingNode::initializeParameters() {
                    config_.output_frame.z_filter.max_z);
       config_.output_frame.z_filter.enabled = false;
     }
-    config_.output_frame.lidar_to_base_t =
-        this->declare_parameter<std::vector<double>>(
-            "output_frame.lidar_to_base_t", std::vector<double>());
-    config_.output_frame.lidar_to_base_r =
-        this->declare_parameter<std::vector<double>>(
-            "output_frame.lidar_to_base_r", std::vector<double>());
     config_.output_frame.body_to_base_t =
         this->declare_parameter<std::vector<double>>(
             "output_frame.body_to_base_t", std::vector<double>());
     config_.output_frame.body_to_base_r =
         this->declare_parameter<std::vector<double>>(
             "output_frame.body_to_base_r", std::vector<double>());
-    config_.output_frame.body_to_base_from_params =
-        config_.output_frame.body_to_base_t.size() == 3
-        && config_.output_frame.body_to_base_r.size() == 9;
-    config_.output_frame.extrinsic_from_params =
-        config_.output_frame.lidar_to_base_t.size() == 3
-        && config_.output_frame.lidar_to_base_r.size() == 9;
-
     config_.mapping.ivox_options.resolution_ = static_cast<float>(
         this->declare_parameter<double>("mapping.ivox_grid_resolution", 0.2));
     const int ivox_nearby_type = static_cast<int>(
@@ -291,14 +274,6 @@ void LaserMappingNode::initializeRos2Interfaces() {
   if (config_.publish.debug_state_enabled) {
     debug_state_pub_ = create_publisher<std_msgs::msg::String>(
         "/point_lio/debug_state", 10);
-  }
-
-  // 项目约定输出 (原 loam_interface 的职责): 同一个 odom 系下的点云与里程计
-  // PCD 保存也依赖 odom 系 Z 滤波, 因此 scan 未发布时也可能需要 TF。
-  if (!config_.output_frame.body_to_base_from_params
-      && !config_.output_frame.extrinsic_from_params) {
-    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
-    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   }
 
   project_publisher_.configure(this, config_.output_frame, &odom_projector_);
@@ -375,17 +350,13 @@ nav_msgs::msg::Odometry LaserMappingNode::buildOdometry() const {
 
 void LaserMappingNode::publishFrameOutputs() {
   if (config_.output_frame.z_filter.enabled && prior_map_.active()) {
-    odom_projector_.resolve(
-        config_.output_frame, tf_buffer_.get(), get_logger(), *get_clock(),
-        config_.sensor.extrinsic_r, config_.sensor.extrinsic_t);
+    odom_projector_.resolve(config_.output_frame, get_logger());
   }
   if (config_.publish.scan_enabled || prior_map_.active()) {
     publishFrameWorld();
   }
   if (!odom_projector_.ready()
-      && !odom_projector_.resolve(
-          config_.output_frame, tf_buffer_.get(), get_logger(), *get_clock(),
-          config_.sensor.extrinsic_r, config_.sensor.extrinsic_t)) {
+      && !odom_projector_.resolve(config_.output_frame, get_logger())) {
     return;
   }
   if (config_.publish.scan_enabled || data_handler_.odometry_valid) {

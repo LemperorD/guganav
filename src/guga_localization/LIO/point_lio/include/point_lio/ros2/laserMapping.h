@@ -12,8 +12,6 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
 #include <rclcpp/rclcpp.hpp>
 
 #include "nav_msgs/msg/odometry.hpp"
@@ -107,7 +105,5 @@ private:
   // ==================== 项目约定输出 (原 loam_interface) ====================
   /// 与底盘对齐的 odom 系下的点云, 供 terrain_analysis / small_gicp /
   /// scan_to_sensor_frame 使用
-  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   /// 最近一帧里程计 (雷达里程计系), 供换算到 odom 系后发布
 };

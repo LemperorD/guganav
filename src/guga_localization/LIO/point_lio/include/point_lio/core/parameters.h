@@ -40,7 +40,6 @@ using IVoxType =
 #endif
 
 struct MappingParams {
-  bool propagate_at_imu_frequency{true};
   bool publish_odometry_without_downsample{false};
   int init_map_size{100};
   double filter_size_surf{0.5};
@@ -56,7 +55,6 @@ struct CommonParams {
 struct FilterParams {
   double acc_cov_input{0.1};
   double gyr_cov_input{0.1};
-  double vel_cov{20.0};
   double gyr_cov_output{0.1};
   double acc_cov_output{0.1};
   double b_gyr_cov{0.0001};
@@ -151,14 +149,8 @@ struct OutputFrameParams {
   std::string lidar_odometry_topic{"lidar_odometry"};
   ScanZFilterParams z_filter;
   /// Point-LIO 的 camera_init/body 到 base 的显式变换。
-  bool body_to_base_from_params{false};
   std::vector<double> body_to_base_t;
   std::vector<double> body_to_base_r;
-  /// 非零表示由参数显式给出安装变换; 否则启动时从 TF 查 base_frame <-
-  /// lidar_frame
-  bool extrinsic_from_params{false};
-  std::vector<double> lidar_to_base_t;
-  std::vector<double> lidar_to_base_r;
 };
 
 struct PointLioParams {

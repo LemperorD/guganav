@@ -14,26 +14,18 @@ livox_ros_driver2:
 
 point_lio:
   ros__parameters:
-    prop_at_freq_of_imu: True
     check_satu: True
     init_map_size: 10
     point_filter_num: 4 # Options: 8, 3
     filter_size_surf: 0.5 # Options: 0.5, 0.3, 0.2, 0.15, 0.1
     filter_size_map: 0.5 # Options: 0.5, 0.3, 0.15, 0.1
     ivox_nearby_type: 6 # Options: 0, 6, 18, 26
-    runtime_pos_log_enable: False # Option: True
 
     common:
       lid_topic: "livox/lidar"
       imu_topic: "livox/imu"
 
       time_diff_lidar_to_imu: 0.0 # Time offset between LiDAR and IMU calibrated by other algorithms, e.g., LI-Init (find in Readme)
-
-    prior_pcd:
-      enable: False
-      # NOTE: `prior_pcd_map_path` will be provided in the launch file
-      # prior_pcd_map_path: ""
-      init_pose: [0.0, 0.0, 0.0]
 
     preprocess:
       lidar_type: 1 # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR
@@ -42,7 +34,6 @@ point_lio:
       blind: 0.5
 
     mapping:
-      imu_time_inte: 0.005 # = 1 / frequency of IMU
       lidar_time_inte: 0.02 # = 1 / lidar frame rate（驱动 publish_freq=50 Hz）
       satu_acc: 4.0 # the saturation value of IMU's acceleration. not related to the units
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
@@ -68,9 +59,7 @@ point_lio:
       publish_odometry_without_downsample: True
 
     publish:
-      path_en: False # False: close the path output
       scan_publish_en: True # False: close all the point cloud output
-      tf_send_en: False # True: send transform from 'camera_init' to 'aft_mapped'
 
     output_frame:
       # Point-LIO camera_init 是 IMU body 系；该变换由模型 base<-lidar 与
