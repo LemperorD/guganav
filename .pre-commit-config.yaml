@@ -52,3 +52,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/guga_transform/nonrotating_vel_transform/.*|scripts/pre-commit/run_nonrotating_tests\.sh)$
+
+      - id: test-point-lio
+        name: test point_lio
+        entry: scripts/pre-commit/run_point_lio_tests.sh
+        language: system
+        pass_filenames: false
+        files: ^(src/guga_localization/LIO/point_lio/.*|scripts/pre-commit/run_point_lio_tests\.sh)$

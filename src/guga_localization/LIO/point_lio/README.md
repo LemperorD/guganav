@@ -1,8 +1,11 @@
 # point_LIO
 
 LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡尔曼滤波, 逐点更新小车的位姿, 同时将点云更新至 odometry 坐标系下并下采样, 以供后续节点使用, 是整个导航系统的开端.
+*guganav特供: 目前与 gicp 联动以实现在线建图.
 
 ## 架构
+![point_LIO 架构](../../../../docs/img/pointLIO_dataflow.svg)
+
 ![point_LIO 主架构：数据流](../../../../docs/img/pointLIO_data.svg)
 ![point_LIO 主架构：逻辑流](../../../../docs/img/pointLIO_logic.svg)
 
@@ -44,9 +47,52 @@ LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡�
 
 ## 输出
 
+| 话题                     | 类型                      | 坐标系        | 发布者                            | 说明                                                           |
+| ------------------------ | ------------------------- | ------------- | --------------------------------- | -------------------------------------------------------------- |
+| `cloud_registered`       | `sensor_msgs/PointCloud2` | `camera_init` | `FramePublisher::publishWorld`    | 当前帧配准后的世界系点云，未经 `body_to_base` 投影             |
+| `Laser_map`              | `sensor_msgs/PointCloud2` | `camera_init` | `FramePublisher::publishMap`      | 标定阶段累积的初始地图，只发布一次                             |
+| `registered_scan`        | `sensor_msgs/PointCloud2` | `odom`        | `ProjectOutputPublisher::publish` | 经 `body_to_base_r/t` 投影并按 `z_filter` 带通滤波，供导航使用 |
+| `lidar_odometry`         | `nav_msgs/Odometry`       | `odom`        | `ProjectOutputPublisher::publish` | 投影后的位姿，`child_frame_id` 为 `lidar_frame`                |
+| `/point_lio/debug_state` | `std_msgs/String`         | 无            | `laserMapping.cpp`                | 打开 `publish.debug_state_en` 时发布状态向量文本               |
+
+`cloud_registered` 和 `Laser_map` 在 `camera_init` 系，`registered_scan` 和 `lidar_odometry` 在 `odom` 系。两套坐标系的差别是启动时由 `output_frame.body_to_base_r/t` 给出的固定变换。
 
 ## 文件
 
+头文件在 `include/point_lio/` 下按层组织。
+
+### 节点层 `ros2/`
+
+- `laserMapping.h`：节点类，负责参数、订阅发布注册、标定与主循环的驱动。
+- `sub/SensorSubscriptions.h`：IMU 与雷达订阅，把 ROS 消息转成内部类型后交给 `FrameProcessor`。
+- `pub/FramePublisher.h`：`camera_init` 系的点云与初始地图发布。
+- `pub/ProjectOutputPublisher.h`：投影到 `odom` 系后发布点云与里程计。
+- `ros_time.h`：秒到 `rclcpp::Time` 的转换。
+
+### 调度层 `core/`
+
+- `FrameProcessor.h`：帧调度，对外只有 `calibrate`（标定）和 `processIteration`（跟踪）两个入口。
+- `Synchronizer.h`：按雷达帧结束时间从 IMU 队列取样本，组装 `MeasureGroup`。
+- `DataHandler.h`：跨模块数据仓库，保存配置、滤波器状态、里程计与初始地图点云。
+
+### 滤波器 `core/`
+
+- `ManifoldEskf.h`：24 维流形 ESKF，含 `initState`、`imuUpdate`、`lidarUpdate` 三个入口。
+- `Imu.h`：IMU 样本缓冲与静止段统计，输出 `ImuInitEstimate`。
+- `Lidar.h`：雷达帧缓冲、帧结束时间计算、雷达相对 IMU 的外参。
+- `PointTypes.h`：点类型与时间偏移的读写。
+
+### 工具层 `utilities/`
+
+- `preprocess.h`：多型号雷达的点云预处理，以及 `processImu` 的 IMU 消息转换。
+- `common_lib.h`：`State`、`MeasureGroup`、`ImuSample`、`FilterOutput` 等公共类型。
+- `OdomProcessor.h`：`body_to_base` 固定变换，把 `camera_init` 系结果投影到 `base` 系。
+
+### 参数与可选模块
+
+- `core/parameters.h`：所有参数结构体。
+- `pcd/PriorMapManager.h`：先验地图累积与重载，由 GICP 定位状态驱动。
+- `ivox/`：iVox 增量地图，第三方实现。
 
 ## 参数
 
@@ -142,3 +188,26 @@ LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡�
 | `pcd_save.suspect_build_delay_sec`             | double | 3.0   | SUSPECT 累计多久后增量更新并重载             |
 
 ## 测试
+
+`test/` 下是 gtest 单元测试，覆盖 `OdomProcessor` 的变换解析和 `ManifoldEskf::initState` 的重力对齐。
+
+```bash
+colcon build --packages-select point_lio --cmake-args -DBUILD_TESTING=ON
+colcon test --packages-select point_lio
+```
+
+两个测试目标，共六个用例：
+
+- `OdomProcessor.ResolveFromParams`：合法的 9 元和 3 元数组能解析出正确的旋转与平移。
+- `OdomProcessor.FillOrderIsRowMajor`：确认 `<<` 按行填充，前三个数对应旋转矩阵第一行。
+- `OdomProcessor.MissingParamsRejected`：数组长度不对时 `resolve` 返回 `false`。
+- `EskfInit.NoStaticSamplesKeepsIdentity`：没有静止样本时旋转为单位阵、加速度取重力反方向。
+- `EskfInit.LevelStaticAlignsGravity`：水平静止时旋转接近单位阵、零偏取均值。
+- `EskfInit.TiltedStaticAlignsGravityDirection`：倾斜静止时旋转把机体测得的重力方向转到世界系。
+
+`test_odom_processor` 只调用 `rclcpp::get_logger`，不初始化节点，不需要可写的 `~/.ros`。其他会创建节点的测试（例如 `terrain_analysis` 的集成测试）在只读 `$HOME` 的沙箱里需要把 `ROS_HOME` 指到可写目录：
+
+```bash
+export ROS_HOME=$(mktemp -d)
+export ROS_LOG_DIR=$ROS_HOME/log
+```

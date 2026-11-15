@@ -42,8 +42,8 @@ link_directories(
   ${PCL_LIBRARY_DIRS}
 )
 
-# Declare a ROS2 executable
-add_executable(pointlio_mapping
+# Core library: 算法与调度, 不含节点层
+add_library(point_lio_core STATIC
   src/utilities/OdomProcessor.cpp
   src/utilities/preprocess.cpp
 
@@ -54,7 +54,25 @@ add_executable(pointlio_mapping
   src/core/ManifoldEskf.cpp
 
   src/pcd/PriorMapManager.cpp
+)
 
+ament_target_dependencies(point_lio_core
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  sensor_msgs
+  std_msgs
+  std_srvs
+  pcl_ros
+  pcl_conversions
+  tf2_ros
+  livox_ros_driver2
+)
+
+target_link_libraries(point_lio_core ${PCL_LIBRARIES})
+
+# ROS2 executable: 节点层
+add_executable(pointlio_mapping
   src/ros2/laserMapping.cpp
   src/ros2/pub/ProjectOutputPublisher.cpp
   src/ros2/pub/FramePublisher.cpp
@@ -74,7 +92,27 @@ ament_target_dependencies(pointlio_mapping
   livox_ros_driver2
 )
 
-target_link_libraries(pointlio_mapping ${PCL_LIBRARIES})
+target_link_libraries(pointlio_mapping point_lio_core ${PCL_LIBRARIES})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_odom_processor test/test_odom_processor.cpp)
+  target_link_libraries(test_odom_processor point_lio_core ${PCL_LIBRARIES})
+  ament_target_dependencies(test_odom_processor
+    rclcpp
+    pcl_ros
+    pcl_conversions
+  )
+
+  ament_add_gtest(test_eskf_init test/test_eskf_init.cpp)
+  target_link_libraries(test_eskf_init point_lio_core ${PCL_LIBRARIES})
+  ament_target_dependencies(test_eskf_init
+    rclcpp
+    pcl_ros
+    pcl_conversions
+  )
+endif()
 
 # Install the executable
 install(TARGETS
