@@ -47,21 +47,25 @@ point_lio:
       satu_acc: 30.0 # the saturation value of IMU's acceleration. not related to the units
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
       acc_norm: 9.81 # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
-      lidar_meas_cov: 0.01 # 降低雷达更新增益, 避免错误残差把 vel 拉飞
-      acc_cov_output: 500.0
-      gyr_cov_output: 1000.0
+      lidar_meas_cov: 0.1 # 降低雷达更新增益, 避免错误残差把 vel 拉飞
+      acc_cov_output: 50.0
+      gyr_cov_output: 100.0
       b_acc_cov: 0.0001
       b_gyr_cov: 0.0001
-      imu_meas_acc_cov: 10.0
+      imu_meas_acc_cov: 20.0
       imu_meas_omg_cov: 1.0
-      gyr_cov_input: 0.01 # for IMU as input model
-      acc_cov_input: 0.1 # for IMU as input model
+      # 比力模长应始终 >= g; 起步瞬间仿真器会给出模长掉到 1 甚至 0.5 的
+      # 坏点。模长低于 g - 1.0 的样本直接丢弃; <=0 关闭
+      imu_acc_spike_thresh: 1.0
+      # 模长上限 (m/s²), 挡掉向上跳的坏点; <=0 关闭
+      imu_acc_spike_max: 15.0
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 10.0
       ivox_grid_resolution: 0.5
       # simulation_robot.sdf.xmacro 中 livox 的 roll = -pi/18 = -10 度,
-      # IMU 与雷达同姿态; 世界重力在 IMU 系为 Rx(10 度) * (0, 0, -9.81).
-      gravity: [0.0, 1.703, -9.66]
+      # IMU 与雷达同姿态; 该姿态下 IMU 系的比力方向为 (0, 1.703, -9.66),
+      # 仅作为 gravity_init 的参考值; 传播用的 gravity 是世界系竖直。
+      gravity: [0.0, 0.0, -9.81]
       gravity_init: [0.0, 1.703, -9.66]
       # 与实车一致的 LiDAR -> IMU 外参；仿真传感器位置见 mid360/model.sdf.xmacro。
       extrinsic_T: [-0.011, -0.02329, 0.04412]
@@ -76,21 +80,11 @@ point_lio:
       debug_state_en: True # True: 发布 /point_lio/debug_state 供调试
 
     output_frame:
-      # Point-LIO camera_init 是 IMU body 系；该变换由模型 base<-lidar 与
-      # Point-LIO 的 LiDAR->IMU 外参合成，不能直接使用 base<-lidar。
+      # gravity 已改成世界系竖直 (0,0,-9.81)，初始化时 Set_init_z 会把 IMU 的
+      # -10 度安装俯仰吸收进 rot_init（camera_init 变成重力对齐系），所以这里
+      # 只保留安装航向 Rz(-90 度)，不能再乘 Rx(-10 度)，否则俯仰会算两遍。
       body_to_base_t: [0.240274815, -0.011, 0.182506016]
-      body_to_base_r:
-        [
-          0.0,
-          0.984807753,
-          0.173648178,
-          -1.0,
-          0.0,
-          0.0,
-          0.0,
-          -0.173648178,
-          0.984807753,
-        ]
+      body_to_base_r: [0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
       z_filter:
         enable: False
         min_z: -0.2 # registered_scan 在 odom 系中的最低 Z
@@ -179,17 +173,20 @@ small_gicp_relocalization:
     robot_base_frame: "gimbal_yaw"
     lidar_frame: "front_mid360"
     body_to_base_t: [0.240274815, -0.011, 0.182506016]
+    # 先验 PCD 存的是 camera_init 系。该旋转要与 Point-LIO 的
+    # output_frame.body_to_base_r 一致: gravity 改成世界系竖直后,
+    # -10 度安装俯仰已由 rot_init 吸收, 这里只保留航向 Rz(-90)。
     body_to_base_r:
       [
         0.0,
-        0.984807753,
-        0.173648178,
+        1.0,
+        0.0,
         -1.0,
         0.0,
         0.0,
         0.0,
-        -0.173648178,
-        0.984807753,
+        0.0,
+        1.0,
       ]
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # [x, y, z, roll, pitch, yaw]
     # 定位状态话题 (std_msgs/UInt8), 供 Point-LIO 驱动 PCD 保存与先验地图重载

@@ -1,6 +1,8 @@
 <?xml version="1.0" ?>
 <sdf version="1.7">
     <world name="default">
+    <!-- 世界重力显式写出, 与 Point-LIO 的 gravity / acc_norm (9.81) 保持一致 -->
+    <gravity>0 0 -9.81</gravity>
         <!-- Physics -->
         <plugin
             filename="libignition-gazebo-physics-system.so"

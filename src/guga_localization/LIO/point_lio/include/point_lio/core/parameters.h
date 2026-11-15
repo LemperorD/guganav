@@ -77,6 +77,13 @@ struct ImuParams {
   double saturation_acc{3.0};
   double saturation_gyro{35.0};
   double acc_norm{1.0};
+  /// 比力模长应始终 >= g (任何线性加速度都只会让它变大)。模长低于
+  /// g - 该值 (m/s²) 的样本视为坏点丢弃; <=0 关闭。仿真器起步瞬间会出现
+  /// 这种样本, 置 1.0 可挡掉。
+  double acc_spike_thresh{0.0};
+  /// 比力模长上限 (m/s²)。超过该值的样本同样丢弃, 用于挡掉大幅向上的
+  /// 坏点; <=0 关闭。
+  double acc_spike_max{0.0};
   double measurement_acc_cov{0.1};
   double measurement_gyro_cov{0.1};
 };

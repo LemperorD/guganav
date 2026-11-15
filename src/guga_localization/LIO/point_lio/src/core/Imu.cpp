@@ -32,7 +32,9 @@ void Imu::setCurrentMeasurement(const ImuMeasurement& measurement) {
 
 void Imu::append(const ImuMeasurement& measurement, double timestamp) {
   const double adjusted = timestamp + params_->timestamp_offset;
-  if (adjusted < last_timestamp_) {
+  // <= 而不是 <: 桥接偶尔会发出时间戳完全相同的两条消息, 保留第一条,
+  // 后面的丢掉, 避免滤波器按 dt=0 积分。
+  if (adjusted <= last_timestamp_) {
     return;
   }
   buffer_.push_back(ImuSample{measurement, adjusted});

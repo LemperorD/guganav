@@ -318,6 +318,22 @@ void FrameProcessor::processFramePoints(MeasureGroup& meas, double& last_time) {
       const V3D omega = imu_msg.angular_velocity;
       const V3D acc_meas = imu_msg.linear_acceleration * acc_scale;
 
+      // 比力模长应始终 >= g: 任何线性加速度都只会把它变大。模长低于
+      // g - 阈值的样本在物理上不可能, 是仿真器加速度通道的坏点; 模长超过
+      // 上限的同样丢弃。两类坏点都会被积分成垂直速度。
+      const double acc_norm = acc_meas.norm();
+      const bool below_floor =
+          config_.imu.acc_spike_thresh > 0.0
+          && acc_norm < config_.imu.processor.gravity_magnitude
+                            - config_.imu.acc_spike_thresh;
+      const bool above_ceiling =
+          config_.imu.acc_spike_max > 0.0
+          && acc_norm > config_.imu.acc_spike_max;
+      if (below_floor || above_ceiling) {
+        ++imu_idx;
+        continue;
+      }
+
       if (!manifold_->stateTransform(imu_time, omega, acc_meas)) {
         ++imu_idx;
         continue;

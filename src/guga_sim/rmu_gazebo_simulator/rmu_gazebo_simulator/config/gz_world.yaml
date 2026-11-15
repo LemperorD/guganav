@@ -1,7 +1,6 @@
 world: "rmul_2026"
 
 robots:
-
   rmul_2024:
     - name: "red_standard_robot1"
       color: "red"
@@ -78,18 +77,20 @@ robots:
       yaw: "3.14"
 
   rmul_2026:
+    # 场地在 (-4.8, 3.5) 一带的地面在 z=0.5，抬高 2 cm 让轮子落稳，
+    # 避免生成时和平台面互相嵌入。
     - name: "red_standard_robot1"
       color: "red"
       x_pose: "-4.8"
       y_pose: "3.5"
-      z_pose: "0.50"
+      z_pose: "0.55"
       yaw: "0.0"
 
     - name: "blue_standard_robot1"
       color: "blue"
       x_pose: "4.8"
       y_pose: "-3.5"
-      z_pose: "0.50"
+      z_pose: "0.55"
       yaw: "3.14"
   rmul_2027:
     - name: "red_standard_robot1"

@@ -259,6 +259,7 @@ def generate_launch_description():
                     "params_file": params_file,
                     "base_params_file": base_params_file,
                     "pcd_save": pcd_save,
+                    "pcd_save_path": pcd_save_path,
                 }.items(),
             ),
             IncludeLaunchDescription(

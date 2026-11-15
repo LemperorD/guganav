@@ -549,12 +549,28 @@ if is_true "$show_prior_pcd"; then
   echo "RViz topic: /cloud_pcd (PointCloud2, frame map)"
 fi
 
+# 建图模式直接把 PCD 写到源码树。默认路径取自 install 的 share 目录,
+# 若该 world 还没有软链接, 文件会落在 install 里, 和先验图分家。
+pcd_save_args=()
+if is_true "$slam"; then
+  has_pcd_path=0
+  for arg in "${launch_args[@]}"; do
+    case "$arg" in
+      pcd_save_path:=*) has_pcd_path=1 ;;
+    esac
+  done
+  if [ "$has_pcd_path" -eq 0 ]; then
+    pcd_save_args=("pcd_save_path:=$WS/src/guga_bringup/pcd/simulation/${world}.pcd")
+  fi
+fi
+
 install_simulation_cleanup_traps
 set +e
 ros2 launch guga_bringup simulation_launch.py \
   world:="$world" \
   slam:="$slam" \
   show_prior_pcd:="$show_prior_pcd" \
+  ${pcd_save_args[@]+"${pcd_save_args[@]}"} \
   "${launch_args[@]}"
 launch_status=$?
 set -e

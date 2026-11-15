@@ -54,6 +54,7 @@ LaserMappingNode::LaserMappingNode()
   processor_.initialize();
 
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
+
   initializeRos2Interfaces();
 
   processing_timer_ = create_wall_timer(
@@ -119,7 +120,6 @@ void LaserMappingNode::initializeParameters() {
         this->declare_parameter<double>("mapping.det_range", 300.F));
     config_.lidar.preprocess.det_range = config_.mapping.det_range;
 
-
     config_.lidar.point_covariance = this->declare_parameter<double>(
         "mapping.lidar_meas_cov", 0.1);
     config_.filter.acc_cov_input = this->declare_parameter<double>(
@@ -140,6 +140,10 @@ void LaserMappingNode::initializeParameters() {
         "mapping.imu_meas_acc_cov", 0.1);
     config_.imu.measurement_gyro_cov = this->declare_parameter<double>(
         "mapping.imu_meas_omg_cov", 0.1);
+    config_.imu.acc_spike_thresh = this->declare_parameter<double>(
+        "mapping.imu_acc_spike_thresh", 0.0);
+    config_.imu.acc_spike_max = this->declare_parameter<double>(
+        "mapping.imu_acc_spike_max", 0.0);
 
     config_.lidar.preprocess.blind = this->declare_parameter<double>(
         "preprocess.blind", 1.0);

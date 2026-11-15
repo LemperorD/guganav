@@ -26,6 +26,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
     pcd_save = LaunchConfiguration("pcd_save")
+    pcd_save_path = LaunchConfiguration("pcd_save_path")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
@@ -83,6 +84,16 @@ def generate_launch_description():
         "pcd_save",
         default_value="True",
         description="Save accumulated scans to point_lio/PCD on shutdown in mapping mode",
+    )
+
+    declare_pcd_save_path_cmd = DeclareLaunchArgument(
+        "pcd_save_path",
+        default_value="",
+        description=(
+            "PCD output path in mapping mode; empty keeps the timestamped "
+            "point_lio/PCD default. The sim launch points it at "
+            "pcd/simulation/<world>.pcd so mapping refreshes the prior map."
+        ),
     )
 
     declare_use_respawn_cmd = DeclareLaunchArgument(
@@ -161,6 +172,12 @@ def generate_launch_description():
             configured_params,
             {"prior_pcd.enable": False},
             {"pcd_save.pcd_save_en": ParameterValue(pcd_save, value_type=bool)},
+            {"pcd_save.path": ParameterValue(pcd_save_path, value_type=str)},
+            # 建图模式没有 small_gicp, gicp_state 永远不会进入 SUSPECT/LOST。
+            # 若沿用 base.yaml 里的 state_topic, 点云不会累积, 退出时也不写盘,
+            # 所以这里显式关掉状态门控, 让 active() 恒为真。
+            {"pcd_save.state_topic": ""},
+            {"pcd_save.require_lost": False},
         ],
         arguments=["--ros-args", "--log-level", log_level],
     )
@@ -228,6 +245,7 @@ def generate_launch_description():
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_pcd_save_cmd)
+    ld.add_action(declare_pcd_save_path_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
 
