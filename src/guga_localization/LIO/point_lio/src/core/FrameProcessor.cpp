@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -34,11 +35,6 @@ void FrameProcessor::onLidarFrame(PointCloudXYZI::Ptr points,
   lidar_.append(std::move(points), timestamp);
 }
 
-void FrameProcessor::onLidarFrames(std::deque<PointCloudXYZI::Ptr>& frames,
-                                   std::deque<double>& timestamps) {
-  lidar_.appendFrames(frames, timestamps);
-}
-
 void FrameProcessor::initialize() {
   lidar_.configure(config_.lidar);
   imu_.configure(config_.imu);
@@ -54,39 +50,20 @@ void FrameProcessor::initialize() {
                         lidar_.TranslationLidarToImu());
 }
 
-void FrameProcessor::setPose(geometry_msgs::msg::Pose& pose) const {
-  const auto& state = manifold_->get_x();
-  pose.position.x = state.pos(0);
-  pose.position.y = state.pos(1);
-  pose.position.z = state.pos(2);
-  Eigen::Quaterniond q(state.rot);
-  pose.orientation.x = q.coeffs()[0];
-  pose.orientation.y = q.coeffs()[1];
-  pose.orientation.z = q.coeffs()[2];
-  pose.orientation.w = q.coeffs()[3];
-}
-
-PointCloudXYZI::Ptr FrameProcessor::loadPointcloudFromPcd(
-    const std::string& file_path) {
-  auto pcd_ptr = std::make_shared<PointCloudXYZI>();
-
-  if (pcl::io::loadPCDFile(file_path, *pcd_ptr) == -1) {
-    RCLCPP_ERROR(rclcpp::get_logger("laserMapping"),
-                 "Couldn't read pcd file %s", file_path.c_str());
-    return nullptr;
-  }
-
-  RCLCPP_INFO(rclcpp::get_logger("laserMapping"), "Loaded %zu points from %s",
-              pcd_ptr->size(), file_path.c_str());
-  return pcd_ptr;
-}
-
 void FrameProcessor::initScan() {
-  const auto& imu_next = imu_.next();
-  std::cout << "first imu time: " << imu_next.timestamp << '\n';
   time_current_ = 0.0;
 
-  manifold_->mutable_x().gravity = config_.imu.processor.gravity;
+  manifold_->set_gravity(config_.imu.processor.gravity);
+
+  // 首帧的 IMU 队列在 syncOneFrame 里已按帧结束时间收集, 这里再去掉
+  // 帧起点之前的样本, 避免它们进入首帧的滤波.
+  auto& imu_measure = measures_.imu_measure;
+  imu_measure.erase(
+      std::remove_if(imu_measure.begin(), imu_measure.end(),
+                     [this](const ImuSample& sample) {
+                       return sample.timestamp < measures_.lidar_start_time;
+                     }),
+      imu_measure.end());
 
   imu_.discardBefore(measures_.lidar_start_time);
 }
@@ -139,31 +116,14 @@ void FrameProcessor::mapIncremental() const {
 }
 
 void FrameProcessor::publishOdometry() {
-  state_.odom_aft_mapped.header.frame_id = "camera_init";
-  state_.odom_aft_mapped.child_frame_id = "body";
-  state_.odom_aft_mapped.header.stamp = get_ros_time(
+  data_handler_.odom_state = manifold_->toStateOutput();
+  data_handler_.odom_stamp =
       config_.mapping.publish_odometry_without_downsample ? time_current_
-                                                          : lidar_end_time_);
-
-  auto set_pose = [&](const State& state) {
-    auto& pose = state_.odom_aft_mapped.pose.pose;
-    pose.position.x = state.pos(0);
-    pose.position.y = state.pos(1);
-    pose.position.z = state.pos(2);
-    Eigen::Quaterniond q(state.rot);
-    pose.orientation.x = q.coeffs()[0];
-    pose.orientation.y = q.coeffs()[1];
-    pose.orientation.z = q.coeffs()[2];
-    pose.orientation.w = q.coeffs()[3];
-  };
-
-  set_pose(manifold_->toStateOutput());
-
-  data_handler_.odometry = state_.odom_aft_mapped;
+                                                          : lidar_end_time_;
   data_handler_.odometry_valid = true;
 }
 
-bool FrameProcessor::initMapState() {
+bool FrameProcessor::calibrateLidar() {
   const size_t old_size = state_.init_feats_world->size();
   const size_t add_size = measures_.lidar_measure_origin->size();
   state_.init_feats_world->resize(old_size + add_size);
@@ -177,18 +137,9 @@ bool FrameProcessor::initMapState() {
 
   if (state_.init_feats_world->size()
       >= (size_t)config_.mapping.init_map_size) {
-    if (config_.sensor.enable_prior_map) {
-      auto map_cloud = loadPointcloudFromPcd(config_.sensor.prior_map_path);
-      lidar_.ivox()->AddPoints(map_cloud->points);
-    } else {
-      lidar_.ivox()->AddPoints(state_.init_feats_world->points);
-    }
+    lidar_.ivox()->AddPoints(state_.init_feats_world->points);
 
-    sensor_msgs::msg::PointCloud2 map_msg;
-    pcl::toROSMsg(*state_.init_feats_world, map_msg);
-    map_msg.header.stamp = get_ros_time(measures_.lidar_last_time);
-    map_msg.header.frame_id = "camera_init";
-    data_handler_.map_cloud = map_msg;
+    data_handler_.init_map_cloud = state_.init_feats_world;
     state_.init_feats_world = std::make_shared<PointCloudXYZI>();
     stage_ = PointLioStage::TRACKING;
 
@@ -197,82 +148,80 @@ bool FrameProcessor::initMapState() {
   return false;
 }
 
-bool FrameProcessor::prepareFrame() {
-  imu_.process(measures_, manifold_->mutable_x());
-
-  if (imu_.needInit()) {
-    stage_ = PointLioStage::INITIALIZINGIMU;
-    return false;
+bool FrameProcessor::calibrateImu() {
+  if (const auto estimate = imu_.process(measures_)) {
+    manifold_->initState(*estimate, config_.imu);
   }
+  return !imu_.needInit();
+}
 
-  switch (stage_) {
-    case PointLioStage::INITIALIZINGIMU:
-      stage_ = PointLioStage::INITIALIZINGMAP;
-      [[fallthrough]];
-
-    case PointLioStage::INITIALIZINGMAP:
-      if (!initMapState()) {
-        return false;
-      }
-      break;
-
-    default:
-      break;
-  }
-
-  if (config_.mapping.space_down_sample) {
-    state_.downsize_filter_surf.setInputCloud(measures_.lidar_measure_origin);
-    state_.downsize_filter_surf.filter(*measures_.feats_down_body);
-    sort(measures_.feats_down_body->points.begin(),
-         measures_.feats_down_body->points.end(), time_list);
-  } else {
-    measures_.feats_down_body = measures_.lidar_measure_origin;
-    sort(measures_.feats_down_body->points.begin(),
-         measures_.feats_down_body->points.end(), time_list);
-  }
+void FrameProcessor::prepareFrameData() {
+  state_.downsize_filter_surf.setInputCloud(measures_.lidar_measure_origin);
+  state_.downsize_filter_surf.filter(*measures_.feats_down_body);
+  sort(measures_.feats_down_body->points.begin(),
+       measures_.feats_down_body->points.end(), time_list);
 
   measures_.time_seq = time_compressing(measures_.feats_down_body);
   measures_.feats_down_size = measures_.feats_down_body->points.size();
   output_.feats_down_world->resize(measures_.feats_down_size);
-
-  return true;
+  // 新一帧的处理进度从零开始, 避免传播失败时把上一帧的进度带给
+  // mapIncremental, 造成对 feats_down_world 的越界读.
+  output_.processed_size = 0;
 }
 
-bool FrameProcessor::initializeIteration() {
+bool FrameProcessor::syncOneFrame() {
   if (!Synchronizer::syncPackages(lidar_, imu_, measures_)) {
     return false;
   }
-
   lidar_end_time_ = measures_.lidar_last_time;
+  return true;
+}
+
+bool FrameProcessor::calibrate() {
+  if (!syncOneFrame()) {
+    return false;
+  }
 
   if (stage_ == PointLioStage::WAITINGFORDATA) {
     initScan();
     stage_ = PointLioStage::INITIALIZINGIMU;
   }
 
-  return prepareFrame();
+  if (stage_ == PointLioStage::INITIALIZINGIMU) {
+    if (!calibrateImu()) {
+      return false;
+    }
+    stage_ = PointLioStage::INITIALIZINGMAP;
+  }
+
+  if (stage_ == PointLioStage::INITIALIZINGMAP) {
+    if (!calibrateLidar()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool FrameProcessor::processIteration() {
-  if (!initializeIteration()) {
+  if (!syncOneFrame()) {
     return false;
   }
 
+  prepareFrameData();
   processFramePoints(measures_);
 
   if (!config_.mapping.publish_odometry_without_downsample) {
     publishOdometry();
   }
-  if (measures_.feats_down_size > 4
-      && (!config_.sensor.enable_prior_map || ++state_.sleep_time > 200)) {
+
+  if (measures_.feats_down_size > 4) {
     mapIncremental();
   }
   return true;
 }
 
 void FrameProcessor::processFramePoints(MeasureGroup& meas) {
-  const double acc_scale = config_.imu.processor.gravity_magnitude
-                           / config_.imu.acc_norm;
   const size_t imu_count = meas.imu_measure.size();
   const size_t group_count = meas.time_seq.size();
 
@@ -304,25 +253,7 @@ void FrameProcessor::processFramePoints(MeasureGroup& meas) {
 
     if (imu_time <= lidar_time) {
       time_current_ = imu_time;
-      const auto& sample = meas.imu_measure[imu_idx].measurement;
-      const V3D acc_meas = sample.linear_acceleration * acc_scale;
-
-      // 比力模长应始终 >= g: 任何线性加速度都只会把它变大。模长低于
-      // g - 阈值的样本在物理上不可能, 是仿真器加速度通道的坏点; 模长超过
-      // 上限的同样丢弃。两类坏点都会被积分成垂直速度。
-      const double acc_norm = acc_meas.norm();
-      const bool below_floor = config_.imu.acc_spike_thresh > 0.0
-                               && acc_norm
-                                      < config_.imu.processor.gravity_magnitude
-                                            - config_.imu.acc_spike_thresh;
-      const bool above_ceiling = config_.imu.acc_spike_max > 0.0
-                                 && acc_norm > config_.imu.acc_spike_max;
-      if (below_floor || above_ceiling) {
-        ++imu_idx;
-        continue;
-      }
-
-      if (!manifold_->imuUpdate(sample, imu_time, config_.imu, acc_scale)) {
+      if (!manifold_->imuUpdate(meas.imu_measure[imu_idx], config_.imu)) {
         ++imu_idx;
         continue;
       }

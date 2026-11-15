@@ -14,7 +14,6 @@
  * 3. 降采样 (每隔 point_filter_num 取1点)
  * 4. 特征提取 — 区分平面点和边缘点 (机械式雷达)
  * 5. 时间戳提取/计算 (PCL curvature 字段存储 ms 单位偏移时间)
- * 6. 切帧/合帧支持 (cut_frame / con_frame)
  *
  * 编码规范遵循 **模式 A** (函数式数据流),
  * 参数由 parameters.cpp 的 readParameters() 统一设置。
@@ -52,12 +51,6 @@ struct PreprocessParams {
 };
 
 // ==================== 时间排序谓词 ====================
-
-/**
- * @brief 按点时间偏移升序排序 (切帧使用)
- */
-bool time_list_cut_frame(const PointType& x, const PointType& y);
-
 // ==================== 各雷达原生点结构 (PCL注册) ====================
 namespace velodyne_ros {
   struct EIGEN_ALIGN16 Point {
@@ -125,7 +118,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
  *
  * 提供统一的预处理接口:
  * - process(msg, pcl_out): 标准处理 (特征提取/滤波/降采样)
- * - process_cut_frame_livox/process_cut_frame_pcl2: 切帧处理
  *
  * 内部根据 lidar_type 分发到不同的私有 handler:
  * - avia_handler: 处理 Livox 非重复扫描
@@ -135,29 +127,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
  */
 class Preprocess {
 public:
-  /**
-   * @brief Livox 切帧处理: 将一帧非重复扫描切分为多个子帧
-   * @param msg Livox 点云消息
-   * @param[out] pcl_out 输出的子帧点云队列
-   * @param[out] time_lidar 各子帧的时间戳 (ms)
-   * @param required_frame_num 需要切分的子帧数
-   * @param scan_count 已接收帧数 (前5帧不切分)
-   */
-  void processCutFrameLivox(
-      const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
-      deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,
-      int required_frame_num, int scan_count);
-
-  /**
-   * @brief 标准雷达切帧处理 (Velodyne/Ouster/Hesai)
-   * @see process_cut_frame_livox
-   */
-  constexpr static int MAX_LINE_NUM = 128;
-  void processCutFramePCL2(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
-                           deque<PointCloudXYZI::Ptr>& pcl_out,
-                           deque<double>& time_lidar, int required_frame_num,
-                           int scan_count);
-
   /** @brief Livox 雷达标准处理 (输入 Livox CustomMsg) */
   void process(const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
                PointCloudXYZI::Ptr& pcl_out);

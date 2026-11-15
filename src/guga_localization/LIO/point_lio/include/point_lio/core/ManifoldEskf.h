@@ -8,6 +8,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 
 #include <Eigen/Dense>
 
@@ -53,10 +54,9 @@ public:
                          const LidarParams& params, int group_idx,
                          int point_offset);
 
-  // 处理一个 IMU 样本: 传播到该时刻并做 IMU 量测更新.
-  // 返回 false 表示传播被拒绝, 该样本不参与更新.
-  bool imuUpdate(const ImuMeasurement& measurement, double imu_time,
-                 const ImuParams& params, double acc_scale);
+  // 处理一个 IMU 样本: 单位归一、坏点过滤、传播、残差与饱和检查、更新.
+  // 返回 false 表示该样本被丢弃或传播被拒绝.
+  bool imuUpdate(const ImuSample& sample, const ImuParams& params);
 
   // 处理一组 LiDAR 量测: 传播到该段时刻并做量测更新.
   // allow_update 为 false 时只提交预测 (启动阶段).
@@ -65,12 +65,15 @@ public:
                   const LidarParams& params, int group_idx, int point_offset,
                   bool allow_update);
 
+  // 用静止段统计初始化状态: 重力对齐与零偏设定.
+  void initState(const ImuInitEstimate& estimate, const ImuParams& params);
+
   // 状态访问.
-  State& mutable_x();
-  const State& get_x() const;
-  const State& get_x_predict() const;
-  state_output toStateOutput() const;
-  const std::vector<PointVector>& nearestPoints() const {
+  void set_gravity(Eigen::Vector3d gravity);
+  [[nodiscard]] const State& get_x() const;
+  [[nodiscard]] const State& get_x_predict() const;
+  [[nodiscard]] state_output toStateOutput() const;
+  [[nodiscard]] const std::vector<PointVector>& nearestPoints() const {
     return nearest_points_;
   }
 
@@ -80,6 +83,9 @@ private:
   Eigen::Matrix<double, 24, 24> F_x(const State& x_, double dt) const;
   void pointBodyToWorld(PointType const* pi, PointType* po,
                         const LidarParams& params, const State& state) const;
+
+  void setInitialRotation(const V3D& tmp_gravity, M3D& rot);
+  constexpr static double kAlignTolerance = 1e-6;
 
   double last_time_{0.0};
 
@@ -128,7 +134,7 @@ private:
   PointCloudXYZI::Ptr feats_down_world_ = std::make_shared<PointCloudXYZI>();
   PointCloudXYZI::Ptr normvec_ = std::make_shared<PointCloudXYZI>();
   std::vector<PointVector> nearest_points_;
-  std::bitset<100000> point_selected_surf_;
+  std::vector<char> point_selected_surf_;
   std::vector<V3D> pbody_list_;
   IVoxType::Ptr map_{nullptr};
 };

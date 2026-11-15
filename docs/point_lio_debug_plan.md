@@ -66,7 +66,6 @@ ros2 bag play ~/bags/spin_fixed --clock \
 把 `ba` 固定为 0：
 
 ```cpp
-// FrameProcessor::initializeFilter
 P.middleRows<3>(12).setZero();
 P.middleCols<3>(12).setZero();
 

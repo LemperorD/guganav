@@ -19,16 +19,10 @@
 #include <stdexcept>
 #include <vector>
 
-#include <builtin_interfaces/msg/time.hpp>
-#include <rclcpp/time.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <nav_msgs/msg/odometry.hpp>
-#include <nav_msgs/msg/path.hpp>
 #include <Eigen/Eigen>
-#include <sensor_msgs/msg/imu.hpp>
 #include <point_lio/core/PointTypes.h>
 #include <Eigen/Core>
 
@@ -228,23 +222,6 @@ bool esti_plane(Matrix<T, 4, 1>& pca_result, const PointVector& point,
   return true;
 }
 
-/**
- * @brief ROS2 Time 消息 → 秒 (double)
- */
-inline double get_time_sec(const builtin_interfaces::msg::Time& time) {
-  return rclcpp::Time(time).seconds();
-}
-
-/**
- * @brief 秒 (double) → ROS2 Time 消息
- */
-inline rclcpp::Time get_ros_time(double timestamp) {
-  int32_t sec = std::floor(timestamp);
-  auto nanosec_d = (timestamp - std::floor(timestamp)) * 1e9;
-  uint32_t nanosec = nanosec_d;
-  return rclcpp::Time(sec, nanosec);
-}
-
 struct ImuMeasurement {
   V3D angular_velocity;
   V3D linear_acceleration;
@@ -253,6 +230,13 @@ struct ImuMeasurement {
 struct ImuSample {
   ImuMeasurement measurement;
   double timestamp{0.0};
+};
+
+/// 静止段统计: IMU 初始化交给滤波器的输入.
+struct ImuInitEstimate {
+  int static_count{0};
+  V3D mean_acc{V3D::Zero()};
+  V3D mean_gyr{V3D::Zero()};
 };
 
 /// Synchronizer 产出的输入, Filter 只读.
@@ -284,9 +268,7 @@ struct FilterOutput {
 };
 
 struct MainLoopState {
-  int sleep_time = 0;
   pcl::VoxelGrid<PointType> downsize_filter_surf;
-  nav_msgs::msg::Odometry odom_aft_mapped;
   PointCloudXYZI::Ptr init_feats_world = std::make_shared<PointCloudXYZI>();
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };

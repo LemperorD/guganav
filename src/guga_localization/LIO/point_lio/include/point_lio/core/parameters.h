@@ -40,7 +40,6 @@ using IVoxType =
 #endif
 
 struct MappingParams {
-  bool space_down_sample{true};
   bool propagate_at_imu_frequency{true};
   bool publish_odometry_without_downsample{false};
   int init_map_size{100};
@@ -115,19 +114,11 @@ struct SensorParams {
   std::vector<double> extrinsic_t;
   std::vector<double> extrinsic_r;
   double lidar_to_imu_time{0.0};
-  bool enable_prior_map{false};
-  std::string prior_map_path;
-  std::vector<double> initial_pose;
 };
 
 struct LidarParams {
   PreprocessParams preprocess;
   int lidar_type{AVIA};
-  /// 0: 单帧直通, 1: 切帧, 2: 合帧
-  int frame_mode{0};
-  int con_frame_num{1};
-  int cut_frame_num{1};
-  double cut_frame_interval{0.1};
   double lidar_time_interval{0.1};
   double point_covariance{0.1};
   double match_threshold{81.0};

@@ -41,6 +41,7 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | 脚本                     | 用途                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |
 | `scripts/colconBuild.sh` | 使用 Release 配置执行 `colcon build`，并导出 `compile_commands.json`。 |
+| `scripts/ci/merge_compile_commands.py` | 把各包的编译数据库合并成工作区级别的 `compile_commands.json`，供 clangd 使用；只构建部分包之后运行一次。 |
 | `scripts/ci/env_humble.sh` | 加载 ROS Humble 和 acados 环境变量，供本地构建与 CI 复用。 |
 | `scripts/ci/install_deps_humble.sh` | 安装并校验 ROS Humble 公开依赖、固定版本的 small_gicp/acados、acados t_renderer、Pangolin 和 xmacro。 |
 

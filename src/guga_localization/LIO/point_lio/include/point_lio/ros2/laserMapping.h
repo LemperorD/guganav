@@ -41,8 +41,15 @@ public:
   LaserMappingNode();
   ~LaserMappingNode() override;
 
+  /** @brief 启动定时器之前阻塞完成 IMU 重力对齐与初始地图构建 */
+  void runCalibration();
+  /** @brief 标定完成后启动 500 Hz 处理定时器 */
+  void startProcessing();
+
 private:
   void processIteration();
+  /// 把滤波器的纯状态转成 ROS 里程计消息
+  [[nodiscard]] nav_msgs::msg::Odometry buildOdometry() const;
 
   void initializeParameters();
   void initializeRos2Interfaces();
@@ -85,7 +92,6 @@ private:
   DataHandler data_handler_;
   PointLioParams& config_ = data_handler_.config;
   PointLioStage stage_{PointLioStage::WAITINGFORDATA};
-  PointLioStage prev_stage_{PointLioStage::WAITINGFORDATA};
   MainLoopState state_;  ///< 主循环状态
   FramePublisher frame_publisher_;
   OdomProcessor odom_projector_;

@@ -1,329 +1,137 @@
-# Point-LIO
+# point_LIO
 
-## 本仓库适配
+LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡尔曼滤波, 逐点更新小车的位姿, 同时将点云更新至 odometry 坐标系下并下采样, 以供后续节点使用, 是整个导航系统的开端.
 
-本包是 `guganav` 中的 ROS 2 Humble Point-LIO 实现，构建目标为
-`pointlio_mapping`。从工作空间根目录构建并启动：
+## 架构
+![point_LIO 主架构：数据流](../../../../docs/img/pointLIO_data.svg)
+![point_LIO 主架构：逻辑流](../../../../docs/img/pointLIO_logic.svg)
+
+启动节点为`src/guga_localization/LIO/point_lio/src/ros2/laserMapping.cpp`,
+1. 构造节点类时, 注册 yaml 参数, 将其通过 datahandler 类分发至各类中, 之后完成 ros2 publisher 与 subscription 的注册.
+2. 完成全局初始化后,进行标定: 先通过 imu 与重力来初始化标定z轴的方向, 然后累积点云进行初始化点云的发布.
+3. 准备工作就绪,开始循环: 获取imu/雷达数据 -> 卡尔曼滤波更新传播 -> 发布所需数据
+
+
+## 数据流
+
+```
+point_lio (雷达里程计系)
+  │
+  └─ 内部左乘安装变换 (base <- lidar), 换到 odom 系
+     │
+     └─(lidar_odometry)──── terrain_analysis
+        (registered_scan)    │
+                             ├─(terrain_map)─────────── local_costmap / global_costmap
+                             │                          (obstacle_layer, pb_nav2_plugins)
+                             │                          └ SLAM 模式：pointcloud_to_laserscan
+                             │                            → slam_toolbox (map)
+                             └─(terrain_returns_current) local_costmap / global_costmap
+                                                        (obstacle_layer, 只做清除)
+```
+
+## 输入
+
+| 来源包/节点               | Topic                    | 消息类型                  | QoS                     |
+| ------------------------- | ------------------------ | ------------------------- | ----------------------- |
+| `serial_driver`           | `/livox/imu`             | `nav_msgs/Odometry`       | rclcpp::SensorDataQoS() |
+| `serial_driver`           | `/livox/lidar`(实车)     | `sensor_msgs/PointCloud2` | rclcpp::SensorDataQoS() |
+| `ign_sim_pointcloud_tool` | `/velodyne_points`(实车) | `sensor_msgs/PointCloud2` | rclcpp::SensorDataQoS() |
+
+## 输出
+
+| 节点               | Topic                     | 类型                      | 坐标系 | 下游订阅者                                              | 用途                                           |
+| ------------------ | ------------------------- | ------------------------- | ------ | ------------------------------------------------------- | ---------------------------------------------- |
+| `terrain_analysis` | `terrain_map`             | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` 的 `obstacle_layer`                     | 标记源（`intensity` 为距局部地面的高度）       |
+|                    |                           |                           |        | `global_costmap` 的 `obstacle_layer`                    | 标记与清除源                                   |
+|                    |                           |                           |        | `pointcloud_to_laserscan`（仅 SLAM 模式）               | 按 `intensity` 0.1~2.0 过滤后交给 slam_toolbox |
+| `terrain_analysis` | `terrain_returns_current` | `sensor_msgs/PointCloud2` | `odom` | `local_costmap` 与 `global_costmap` 的 `obstacle_layer` | 清除源（`intensity` 恒 0，无高度语义）         |
+
+`terrain_map` 与 `terrain_returns_current` 都由 `terrain_analysis` 发布，坐标系都是 `odom`，下游都是 `pb_nav2_costmap_2d::ObstacleLayerLocal`：前者供标记，后者只供清除。曾在 R2 设计里新增的 `terrain_obstacles_current`（当帧障碍云）因为没有任何消费者，已删除。
+
+## 网格参数
+
+| 网格                | 分辨率 | 尺寸  | 说明                     |
+| ------------------- | ------ | ----- | ------------------------ |
+| PersistentVoxelGrid | 1.0 m  | 21×21 | 滑动窗口，累积多帧点云   |
+| PerFrameHeightGrid  | 0.2 m  | 51×51 | 随车逐帧重建，估地面高度 |
+
+## 管线
+本节讲解各函数作用。
+
+
+| 位置                  | 函数                     | 职责                                                                                                                         |
+| --------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| terrain_analysis_node | `processOnce`            | 一帧驱动：有帧时 `update` → `collectCloud` → 后半段两条入口 → 发布；10 ms 定时器调用一次                                     |
+| persistent_voxel_map  | `receiveFrame`           | 收帧：按接收带与接收半径裁剪本帧点云，记下雷达位置与帧时刻，置待处理标记                                                     |
+| persistent_voxel_map  | `update`                 | 本帧三步编排：`rollover` → `addFrame` → `rebuildGrids`，三步共用 `receiveFrame` 记下的同一份帧输入                           |
+| persistent_voxel_map  | `rollover`               | 车体移动时滚动 terrain voxel 网格，维持以**雷达**为中心的滑动窗口                                                            |
+| persistent_voxel_map  | `addFrame`               | 本帧点云按空间位置分配到 terrain voxel 格子                                                                                  |
+| persistent_voxel_map  | `rebuildGrids`           | 逐格每帧重建：按水平 `scanVoxelSize` 0.1 / 垂直 `scanVoxelSizeZ` 0.05 下采样，每个叶只留**最新观测**点，再按接收带与年龄过滤 |
+| persistent_voxel_map  | `collectCloud`           | 取出以雷达所在格为中心 11×11 格子的累积地形点                                                                                |
+| per_frame_height_map  | `compute`                | 后半段主入口，三步串联：`estimateTerrainGround` → `computePlanarElevation` → `computeHeightMap`                              |
+| per_frame_height_map  | `estimateTerrainGround`  | 将点膨胀到 planar voxel（3×3），收集地面高度候选值                                                                           |
+| per_frame_height_map  | `computePlanarElevation` | 对每个 planar voxel 估地面高度（分位数 `quantileZ`，或最小值）                                                               |
+| per_frame_height_map  | `computeHeightMap`       | 计算每点离地高度并写入 `intensity`，生成累计障碍输出 `terrain_map`                                                           |
+| per_frame_height_map  | `computeFrameReturns`    | 由本帧点云生成当帧返回的雷达射线云 `terrain_returns_current`                                                                 |
+
+两条输出链：`terrain_map` 是累计障碍云（`intensity` = 距局部地面的高度），`terrain_returns_current` 是当帧返回的雷达射线云（`intensity` 恒 0，供代价地图射线清除）。
+
+
+
+
+
+
+## 参数
+
+参数来自 `src/guga_bringup/config/<profile>/base.yaml` 的 `terrain_analysis:` 段（实车与
+仿真各一份），由节点声明后按两半的读取范围分发给两个配置结构体。共 15 个：
+
+| 参数                | 作用                                                                 |
+| ------------------- | -------------------------------------------------------------------- |
+| `scanVoxelSize`     | 融合叶的水平尺寸（0.1 m）                                            |
+| `scanVoxelSizeZ`    | 融合叶的垂直尺寸（0.05 m）；必须比水平细，否则地面点会把矮物体点顶掉 |
+| `decayTime`         | 观测的衰减时间：超过它、又在近处之外、且未被重新观测的点会被清掉     |
+| `maxRelZ`           | 接收带的上沿（相对雷达高度）                                         |
+| `disRatioZ`         | 接收带随水平距离放宽的比例                                           |
+| `minRelZ`           | 接收带的下沿（相对雷达高度）；同一参数也是后半段障碍输出的地板       |
+| `useSorting`        | 地面高度取分位数（true）还是最低点（false）                          |
+| `quantileZ`         | `useSorting` 打开时用的分位点                                        |
+| `considerDrop`      | 打开时离地高度取绝对值，凹坑也算障碍                                 |
+| `limitGroundLift`   | 是否限制地面估计相对最低点的抬升量                                   |
+| `maxGroundLift`     | `limitGroundLift` 打开时的最大抬升量                                 |
+| `minBlockPointNum`  | 每格参与判定的最少点数                                               |
+| `minObstacleHeight` | 障碍输出下界（地面带死区，距局部地面）                               |
+| `ceilingClearance`  | 障碍输出上界（净空，距局部地面；也是唯一上界）                       |
+| `groundFloorZ`      | 地面候选的绝对高度地板（odom z），低于它的点不参与地面估计           |
+
+另外注意：`config.hpp` 里的结构体默认值只有部分是实车值——`decay_time`、`quantile_z`、
+`max_ground_lift`、`max_relative_z` 与 `base.yaml` 不同，单元测试若直接构造
+结构体，跑的是默认值而不是实车工况。
+
+
+## 测试
 
 ```bash
-source /opt/ros/humble/setup.bash
-colcon build --packages-select point_lio
-source install/setup.bash
-ros2 launch point_lio point_lio.launch.py rviz:=False
+# 单元测试（构建 terrain_analysis 包并运行其测试）
+scripts/pre-commit/run_terrain_analysis_tests.sh
+
+# 覆盖率（编译 + 运行 + gcovr 报告）
+scripts/test/test_terrain_analysis_coverage.sh
 ```
 
-启动文件默认加载 `config/mid360.yaml`。通过
-`point_lio_cfg_dir:=/absolute/path/to/config.yaml` 选择其他配置；包内提供
-`avia.yaml`、`horizon.yaml`、`mid360.yaml`、`ouster64.yaml` 和
-`velody16.yaml`。
-
-节点订阅 LiDAR 与 IMU 话题，具体名称由 YAML 的 `common.lid_topic` 与
-`common.imu_topic` 配置。
-
-### 输出
-
-发布两组话题：一组是上游 Point-LIO 原有的，位姿与点云都在雷达里程计系
-（初始 IMU 姿态，`camera_init`）下；另一组是项目约定输出，已换算到与底盘对齐的
-`odom` 系。
-
-| 话题                    | 类型                      | 坐标系        | 说明                                                           |
-| ----------------------- | ------------------------- | ------------- | -------------------------------------------------------------- |
-| `aft_mapped_to_init`    | `nav_msgs/Odometry`       | `camera_init` | 上游里程计，`child_frame_id` 为 `body`                         |
-| `cloud_registered`      | `sensor_msgs/PointCloud2` | `camera_init` | 降采样后的世界系点云                                           |
-| `cloud_registered_body` | `sensor_msgs/PointCloud2` | `body`        | 机体系点云，由 `publish.scan_bodyframe_pub_en` 控制            |
-| `Laser_map`             | `sensor_msgs/PointCloud2` | `camera_init` | 建图初期的累积点云                                             |
-| `path`                  | `nav_msgs/Path`           | `camera_init` | 轨迹，由 `publish.path_en` 控制                                |
-| `registered_scan`       | `sensor_msgs/PointCloud2` | `odom`        | 项目约定：点云左乘安装变换后发布                               |
-| `lidar_odometry`        | `nav_msgs/Odometry`       | `odom`        | 项目约定：位姿左乘安装变换，`child_frame_id` 为 `front_mid360` |
-
-`registered_scan` 与 `lidar_odometry` 供 `terrain_analysis`、
-`small_gicp_relocalization`、`scan_to_sensor_frame` 使用。这部分换算原先由独立节点
-`loam_interface` 承担，现已并入本包（该包已删除），因为从 `camera_init` 到 `odom`
-只差一个静止的安装变换，不必为此多一个节点和一次话题转发。
-
-### `output_frame` 参数
-
-```yaml
-output_frame:
-  enable: true                       # 关闭后不发布上面那两个项目约定话题
-  odom_frame: "odom"
-  lidar_frame: "front_mid360"
-  base_frame: "base_footprint"
-  registered_scan_topic: "registered_scan"
-  lidar_odometry_topic: "lidar_odometry"
-  z_filter:
-    enable: true                       # 过滤 registered_scan 和 pcd_save
-    min_z: -0.2                        # 保留 min_z <= z <= max_z
-    max_z: 1.0                         # 边界使用 odom 系的绝对 Z
-  # camera_init 原点是 IMU body，不是 lidar 原点。
-  body_to_base_t: [0.240274815, -0.011, 0.182506016]
-  body_to_base_r: [0.0, 0.984807753, 0.173648178,
-                   -1.0, 0.0, 0.0,
-                   0.0, -0.173648178, 0.984807753]
-  # 安装变换 (TF 的 base_frame <- lidar_frame)。留空表示启动阶段查一次 TF；
-  # 给出则直接用参数值, 不依赖 TF 是否就绪。
-  lidar_to_base_t: []                # [x, y, z]
-  lidar_to_base_r: []                # 行主序 3x3
-```
-
-`z_filter` 在点云换算到 `odom` 后执行，因此阈值以机器人 `odom` 系为基准，
-不是雷达局部坐标。滤波作用于 `registered_scan` 和 `pcd_save` 累积的离线 PCD；
-`cloud_registered` 与 `Laser_map` 仍保留 Point-LIO 原始输出。保存 PCD 时只使用
-odom 系 Z 值决定点是否保留，PCD 点坐标仍保持在 Point-LIO 的 IMU body 世界系。参数阈值
-需按实际地面高度和需要保留的障碍高度调整。
-
-`body_to_base_*` 由模型中的 `base_footprint <- front_mid360` 与 Point-LIO
-LiDAR→IMU 外参合成。不能直接把世界系点云乘以 `base_footprint <- front_mid360`，
-否则会漏掉 LiDAR→IMU 平移，导致先验地图相对机器人产生固定水平偏移。
-
-留空时若查不到 TF，节点会按 2 秒节流打印警告，并且**暂不发布**这两个话题，而不是用
-未初始化的变换发布错误结果。当前实车与仿真的安装变换都在 TF 里给出，因此配置中
-不必重复填写。
-
-算法流程、当前接口和重构记录见 [ARCHITECTURE.md](ARCHITECTURE.md)。
-
-下方内容来自上游 Point-LIO，保留用于算法背景与参数含义参考；其中涉及
-独立仓库目录、旧构建命令或旧 launch 文件的步骤不适用于本工作空间。
-
-> ROS2 Fork repo maintainer: [LihanChen2004](https://github.com/LihanChen2004)
-
-## Point-LIO: Robust High-Bandwidth Lidar-Inertial Odometry
-
-## Branch: RM25_SMBU_auto_sentry
-
-- Feats: Prior pcd map input
-
-## 1. Introduction
-
-<div align="center">
-    <div align="center">
-        <img src="https://github.com/hku-mars/Point-LIO/raw/master/image/toc4.png" width = 75% >
-    </div>
-    <font color=#a0a0a0 size=2>The framework and key points of the Point-LIO.</font>
-</div>
-
-**New features:**
-
-1. would not fly under degeneration.
-
-2. high odometry output frequency, 4k-8kHz.
-
-3. robust to IMU saturation and severe vibration, and other aggressive motions (75 rad/s in our test).
-
-4. no motion distortion.
-
-5. computationally efficient, robust, versatile on public datasets with general motions.
-
-6. As an odometry, Point-LIO could be used in various autonomous tasks, such as trajectory planning, control, and perception, especially in cases involving very fast ego-motions (e.g., in the presence of severe vibration and high angular or linear velocity) or requiring high-rate odometry output and mapping (e.g., for high-rate feedback control and perception).
-
-**Important notes:**
-
-A. Please make sure the IMU and LiDAR are **Synchronized**, that's important.
-
-B. Please obtain the saturation values of your used IMU (i.e., accelerator and gyroscope), and the units of the accelerator of your used IMU, then modify the .yaml file according to those settings, including values of 'satu_acc', 'satu_gyro', 'acc_norm'. That's improtant.
-
-C. The warning message "Failed to find match for field 'time'." means the timestamps of each LiDAR points are missed in the rosbag file. That is important because Point-LIO processes at the sampling time of each LiDAR point.
-
-D. We recommend to set the **extrinsic_est_en** to false if the extrinsic is given. As for the extrinsic initiallization, please refer to our recent work: [**Robust and Online LiDAR-inertial Initialization**](https://github.com/hku-mars/LiDAR_IMU_Init).
-
-E. If you want to use Point-LIO without imu, set the "imu_en" as false, and provide a predefined value of gavity in "gravity_init" as true as possible in the yaml file, and keep the "use_imu_as_input" as 0.
-
-## **1.1. Developers:**
-
-The codes of this repo are contributed by:
-[Dongjiao He (贺东娇)](https://github.com/Joanna-HE) and [Wei Xu (徐威)](https://github.com/XW-HKU)
-
-## **1.2. Related paper**
-
-
-Our paper is published on Advanced Intelligent Systems(AIS). [Point-LIO](https://onlinelibrary.wiley.com/doi/epdf/10.1002/aisy.202200459), DOI: 10.1002/aisy.202200459
-
-## **1.3. Related video**
-
-Our accompany video is available on **YouTube**.
-
-
-<div align="center">
-    <a href="https://youtu.be/oS83xUs42Uw" target="_blank"><img src="https://github.com/hku-mars/Point-LIO/raw/master/image/final.png" width=60% /></a>
-</div>
-
-## 2. What can Point-LIO do?
-
-
-### 2.1 Simultaneous LiDAR localization and mapping (SLAM) without motion distortion
-
-### 2.2 Produce high odometry output frequence and high bandwidth
-
-### 2.3 SLAM with aggressive motions even the IMU is saturated
-
-## **3. Prerequisites**
-
-### **3.1 Ubuntu and [ROS2](https://www.ros.org/)**
-
-Ubuntu >= 20.04
-
-The default from apt PCL and Eigen is enough for FAST-LIO to work normally.
-
-ROS >= Foxy (Recommend to use ROS-Humble). [ROS Installation](https://docs.ros.org/en/humble/Installation.html)
-
-```sh
-sudo apt-get install ros-$ROS_DISTRO-pcl-conversions
-```
-
-### **3.2 Eigen**
-
-### **3.2 Eigen**
-
-Following the official [Eigen installation](eigen.tuxfamily.org/index.php?title=Main_Page), or directly install Eigen by:
-
-```sh
-
-```sh
-sudo apt-get install libeigen3-dev
-```
-
-### **3.3 livox_ros_driver2**
-
-Follow [livox_ros_driver Installation](https://github.com/Livox-SDK/livox_ros_driver2).
-
-*Remarks:*
-
-- Since the Point-LIO supports Livox serials LiDAR, so the **livox_ros_driver** must be installed and **sourced** before run any Point-LIO luanch file.
-- How to source? The easiest way is add the line ` source $Livox_ros_driver2_dir$/install/setup.bash ` to the end of file ` ~/.bashrc `, where ` $Livox_ros_driver2_dir$ ` is the directory of the livox ros driver workspace (should be the ` ws_livox ` directory if you completely followed the livox official document).
-
-## 4. Build
-
-
-Clone the repository and catkin_make:
-
-```sh
-```sh
-    cd ~/$A_ROS_DIR$/src
-    git clone https://github.com/LihanChen2004/Point-LIO.git
-    cd ..
-    rosdepc install -r --from-paths src --ignore-src --rosdistro $ROS_DISTRO -
-    colcon build --symlink-install -DCMAKE_BUILD_TYPE=Release
-    source install/setup.bash # use setup.zsh if use zsh
-```
-
-- Remember to source the livox_ros_driver2 before build (follow 3.3 **livox_ros_driver**)
-- If you want to use a custom build of PCL, add the following line to ~/.bashrc
-`export PCL_ROOT={CUSTOM_PCL_PATH}`
-
-## 5. Directly run
-
-### 5.1 For Mid360
-
-Connect to your PC to Livox Mid360 LiDAR by following  [Livox-ros-driver2 installation](https://github.com/Livox-SDK/livox_ros_driver2), then
-
-```sh
-    cd ~/$Point_LIO_ROS_DIR$
-    source install/setup.bash
-    ros2 launch point_lio point_lio.launch.py
-```
-
-- For livox serials, Point-LIO only support the data collected by the ` msg_mid360_launch.py.launch ` since only its ` livox_ros_driver2/msg/CustomMsg ` data structure produces the timestamp of each LiDAR point which is very important for Point-LIO. ` rviz_mid360_launch.py ` can not produce it right now.
-
-- If you want to change the frame rate, please modify the **publish_freq** parameter in the [msg_mid360_launch.py.launch](https://github.com/Livox-SDK/livox_ros_driver2/blob/master/launch_ROS2/msg_MID360_launch.py) of [Livox-ros-driver2](https://github.com/Livox-SDK/livox_ros_driver2)
-
-### 5.2 For Livox serials with external IMU
-
-Need to setup some parameters befor run:
-
-Edit ` config/mid360.yaml ` to set the below parameters:
-
-1. LiDAR point cloud topic name: ` lid_topic `
-
-2. IMU topic name: ` imu_topic `
-
-3. Translational extrinsic: ` extrinsic_T `
-
-4. Rotational extrinsic: ` extrinsic_R ` (only support rotation matrix)
-
-    - The extrinsic parameters in Point-LIO is defined as the LiDAR's pose (position and rotation matrix) in IMU body frame (i.e. the IMU is the base frame). They can be found in the official manual.
-
-5. Saturation value of IMU's accelerator and gyroscope: `satu_acc`, `satu_gyro`
-
-6. The norm of IMU's acceleration according to unit of acceleration messages: ` acc_norm `
-
-### 5.3 For Velodyne or Ouster (Velodyne as an example)
-
-Step A: Setup before run
-
-Edit ` config/veoldy16.yaml ` to set the below parameters:
-
-1. LiDAR point cloud topic name: ` lid_topic `
-
-2. IMU topic name: ` imu_topic ` (both internal and external, 6-aixes or 9-axies are fine)
-
-3. Set the parameter `timestamp_unit` based on the unit of **time** (Velodyne) or **t** (Ouster) field in PoindCloud2 rostopic
-
-4. Line number (we tested 16, 32 and 64 line, but not tested 128 or above): ` scan_line `
-
-5. Translational extrinsic: ` extrinsic_T `
-
-6. Rotational extrinsic: ` extrinsic_R ` (only support rotation matrix)
-
-    - The extrinsic parameters in Point-LIO is defined as the LiDAR's pose (position and rotation matrix) in IMU body frame (i.e. the IMU is the base frame).
-
-7. Saturation value of IMU's accelerator and gyroscope: `satu_acc`, `satu_gyro`
-
-8. The norm of IMU's acceleration according to unit of acceleration messages: ` acc_norm `
-
-Step B: Run below
-
-```sh
-    cd ~/$Point_LIO_ROS_DIR$
-    source install/setup.bash
-    ros2 launch point_lio point_lio.launch.py rviz:=True point_lio_cfg_dir:=/path/to/Point-LIO/config/velody16.yaml
-```
-
-Step C: Run LiDAR's ros driver or play rosbag.
-
-### 5.4 PCD file save
-
-Set `pcd_save.pcd_save_en` to `true` (the bringup launches default to `pcd_save:=True`).
-All the scans (in global frame) are accumulated and saved when the node is terminated.
-By default the file is timestamped under `Point-LIO/PCD/`
-(`scans_<YYYY_MM_DD-HH_MM_SS>.pcd`). Set `pcd_save.path` to an absolute path to
-override it; the reality navigation launch uses this to write
-`guga_bringup/pcd/reality/<world>.pcd`. Set `pcd_save.require_lost` to `true`
-and `pcd_save.trigger_topic` to a `std_msgs/Bool` topic (the navigation launch
-uses `gicp_lost`) to defer saving until that topic receives `true`.
-`pcl_viewer <file>.pcd` can visualize the point clouds.
-
-*Tips for pcl_viewer:*
-
-- change what to visualize/color by pressing keyboard 1,2,3,4,5 when pcl_viewer is running.
-
-    `txt
-        1 is all random
-        2 is X values
-        3 is Y values
-        4 is Z values
-        5 is intensity
-    `
-
-## **6. Examples**
-
-The example datasets could be downloaded through [onedrive](https://connecthkuhk-my.sharepoint.com/:f:/g/personal/hdj65822_connect_hku_hk/EmRJYy4ZfAlMiIJ786ogCPoBcGQ2BAchuXjE5oJQjrQu0Q?e=igu44W). Pay attention that if you want to test on racing_drone.bag, [0.0, 9.810, 0.0] should be input in 'mapping/gravity_init' in avia.yaml, and set the 'start_in_aggressive_motion' as true in the yaml. Because this bag start from a high speed motion. And for PULSAR.bag, we change the measuring range of the gyroscope of the built-in IMU to 17.5 rad/s. Therefore, when you test on this bag, please change 'satu_gyro' to 17.5 in avia.yaml.
-
-## **6.1. Example-1: SLAM on datasets with aggressive motions where IMU is saturated**
-
-<div align="center">
-<img src="https://github.com/hku-mars/Point-LIO/raw/master/image/example1.gif"  width="40%" />
-<img src="https://github.com/hku-mars/Point-LIO/raw/master/image/example2.gif"  width="54%" />
-</div>
-
-## **6.2. Example-2: Application on FPV and PULSAR**
-
-<div align="center">
-<img src="https://github.com/hku-mars/Point-LIO/raw/master/image/example3.gif"  width="58%" />
-<img src="https://github.com/hku-mars/Point-LIO/raw/master/image/example4.gif"  width="35%" />
-</div>
-
-PULSAR is a self-rotating UAV actuated by only one motor, [PULSAR](https://github.com/hku-mars/PULSAR)
-
-## 7. Contact us
-
-If you have any questions about this work, please feel free to contact me <hdj65822ATconnect.hku.hk> and Dr. Fu Zhang <fuzhangAThku.hk> via email.
+| 输出            | 路径                                         |
+| --------------- | -------------------------------------------- |
+| Html 覆盖率报告 | `build/terrain_analysis/coverage.html`       |
+| lcov 信息       | `lcov.info`                                  |
+| 测试日志        | `build/terrain_analysis/coverage_result.ans` |
+
+当前 `terrain_analysis` 测试套件：
+
+- `test_terrain_analysis`：完整管线行为
+- `test_frame_receive`：前半段的帧输入（雷达位置与帧时刻、首帧时刻、观测时刻写进
+  intensity、越界裁剪、`update` 清待处理标记）
+- `test_algorithm`：体素、地面高程估计与边界处理
+- `test_integration`：只通过 ROS 话题驱动节点（不直接调 receiveFrame / update / compute），覆盖订阅与消息转换、逐帧数据分发、发布消息的 frame_id/stamp，以及跨帧的幽灵点清除与体素窗口滚动
+
+`estimateTerrainGround` 与 `computeHeightMap` 都经 `gridIndex(...)` 统一做越界判定；
+超出 `51×51` planar 网格的点会被忽略，避免数组越界。

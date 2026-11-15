@@ -31,13 +31,17 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "point_lio/ros2/laserMapping.h"
 #include "point_lio/core/FrameProcessor.h"
+#include "point_lio/ros2/ros_time.h"
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<LaserMappingNode>();
+  node->runCalibration();
+  node->startProcessing();
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(node->get_node_base_interface());
   executor.spin();
@@ -56,7 +60,28 @@ LaserMappingNode::LaserMappingNode()
   RCLCPP_INFO(get_logger(), "lidar_type: %d.", config_.lidar.lidar_type);
 
   initializeRos2Interfaces();
+}
 
+void LaserMappingNode::runCalibration() {
+  RCLCPP_INFO(get_logger(), "标定开始: IMU 重力对齐与初始地图");
+
+  while (rclcpp::ok() && stage_ != PointLioStage::TRACKING) {
+    rclcpp::spin_some(shared_from_this());
+    if (!processor_.calibrate()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  }
+  if (data_handler_.init_map_cloud != nullptr) {
+    sensor_msgs::msg::PointCloud2 map_msg;
+    pcl::toROSMsg(*data_handler_.init_map_cloud, map_msg);
+    map_msg.header.stamp = get_ros_time(processor_.lidarEndTime());
+    map_msg.header.frame_id = "camera_init";
+    frame_publisher_.publishMap(map_msg);
+  }
+  RCLCPP_INFO(get_logger(), "标定完成, 初始地图已发布, 进入跟踪");
+}
+
+void LaserMappingNode::startProcessing() {
   processing_timer_ = create_wall_timer(
       std::chrono::milliseconds(2), [this]() { processIteration(); },
       callback_group_);
@@ -70,8 +95,6 @@ void LaserMappingNode::initializeParameters() {
                                                                  true);
     config_.mapping.init_map_size = static_cast<int>(
         this->declare_parameter<long>("init_map_size", 100));
-    config_.mapping.space_down_sample = this->declare_parameter<bool>(
-        "space_down_sample", true);
 
     config_.imu.saturation_acc = this->declare_parameter<double>(
         "mapping.satu_acc", 3.0);
@@ -90,27 +113,8 @@ void LaserMappingNode::initializeParameters() {
     config_.sensor.imu_topic = this->declare_parameter<std::string>(
         "common.imu_topic", ".livox.imu");
 
-    config_.lidar.frame_mode = static_cast<int>(
-        this->declare_parameter<long>("common.frame_mode", 0));
-    if (config_.lidar.frame_mode < 0 || config_.lidar.frame_mode > 2) {
-      RCLCPP_WARN(get_logger(),
-                  "common.frame_mode 取值无效: %d, 已回退为 0 (单帧直通)",
-                  config_.lidar.frame_mode);
-      config_.lidar.frame_mode = 0;
-    }
-    config_.lidar.con_frame_num = static_cast<int>(
-        this->declare_parameter<long>("common.con_frame_num", 1));
-    config_.lidar.cut_frame_interval = this->declare_parameter<double>(
-        "common.cut_frame_time_interval", 0.1);
     config_.sensor.lidar_to_imu_time = this->declare_parameter<double>(
         "common.time_diff_lidar_to_imu", 0.0);
-
-    config_.sensor.enable_prior_map = this->declare_parameter<bool>(
-        "prior_pcd.enable", false);
-    config_.sensor.prior_map_path = this->declare_parameter<string>(
-        "prior_pcd.prior_pcd_map_path", "");
-    config_.sensor.initial_pose = this->declare_parameter<std::vector<double>>(
-        "prior_pcd.init_pose", std::vector<double>());
 
     config_.mapping.filter_size_surf = this->declare_parameter<double>(
         "filter_size_surf", 0.5);
@@ -280,13 +284,6 @@ void LaserMappingNode::initializeParameters() {
                                                   gravity[2]);
   }
   config_.imu.processor.gravity_magnitude = config_.common.gravity_magnitude;
-  config_.lidar.cut_frame_num = std::max(1, config_.lidar.cut_frame_num);
-  if (config_.lidar.cut_frame_interval > 0.0) {
-    config_.lidar.cut_frame_num = std::max(
-        1, static_cast<int>(std::lround(config_.lidar.lidar_time_interval
-                                        / config_.lidar.cut_frame_interval)));
-  }
-  config_.lidar.con_frame_num = std::max(1, config_.lidar.con_frame_num);
   config_.imu.timestamp_offset = config_.sensor.lidar_to_imu_time;
 }
 
@@ -336,16 +333,7 @@ void LaserMappingNode::processIteration() {
   // 否则没有新帧时也会反复重发同一幅点云与同一条 path:
   // 既占满 CPU (每 2 ms 转换一次全分辨率点云),
   // 又让 path 消息不断累积重复位姿。
-  const bool is_frame_processed = processor_.processIteration();
-
-  if (prev_stage_ == PointLioStage::INITIALIZINGMAP
-      && stage_ == PointLioStage::TRACKING) {
-    frame_publisher_.publishMap(data_handler_.map_cloud);
-  }
-
-  prev_stage_ = stage_;
-
-  if (!is_frame_processed) {
+  if (!processor_.processIteration()) {
     return;
   }
 
@@ -367,6 +355,24 @@ void LaserMappingNode::processIteration() {
   }
 }
 
+nav_msgs::msg::Odometry LaserMappingNode::buildOdometry() const {
+  nav_msgs::msg::Odometry odom;
+  odom.header.frame_id = "camera_init";
+  odom.child_frame_id = "body";
+  odom.header.stamp = get_ros_time(data_handler_.odom_stamp);
+
+  const auto& state = data_handler_.odom_state;
+  odom.pose.pose.position.x = state.pos(0);
+  odom.pose.pose.position.y = state.pos(1);
+  odom.pose.pose.position.z = state.pos(2);
+  Eigen::Quaterniond q(state.rot);
+  odom.pose.pose.orientation.x = q.coeffs()[0];
+  odom.pose.pose.orientation.y = q.coeffs()[1];
+  odom.pose.pose.orientation.z = q.coeffs()[2];
+  odom.pose.pose.orientation.w = q.coeffs()[3];
+  return odom;
+}
+
 void LaserMappingNode::publishFrameOutputs() {
   if (config_.output_frame.z_filter.enabled && prior_map_.active()) {
     odom_projector_.resolve(
@@ -384,7 +390,7 @@ void LaserMappingNode::publishFrameOutputs() {
   }
   if (config_.publish.scan_enabled || data_handler_.odometry_valid) {
     project_publisher_.publish(
-        *processor_.currentDownsampledWorld(), data_handler_.odometry,
+        *processor_.currentDownsampledWorld(), buildOdometry(),
         data_handler_.odometry_valid, get_ros_time(processor_.lidarEndTime()));
   }
 }

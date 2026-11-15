@@ -13,10 +13,6 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-#include "nav_msgs/msg/odometry.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "std_msgs/msg/float64_multi_array.hpp"
-
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Synchronizer.h"
 #include "point_lio/utilities/common_lib.h"
@@ -37,13 +33,12 @@ public:
                  MainLoopState& state);
   void onLidarFrame(PointCloudXYZI::Ptr points, double timestamp);
   void onImu(const ImuMeasurement& measurement, double timestamp);
-  void onLidarFrames(std::deque<PointCloudXYZI::Ptr>& frames,
-                     std::deque<double>& timestamps);
   ~FrameProcessor();
   void initialize();
-  void setPose(geometry_msgs::msg::Pose& pose) const;
   void pointBodyLidarToIMU(const PointType* pi, PointType* po) const;
   void configure(double lidar_time_interval);
+  /// 标定一步: 取一帧并推进 IMU 重力对齐与初始地图; 返回 true 表示标定完成
+  [[nodiscard]] bool calibrate();
   /// 处理一帧; 返回 true 表示本帧确实被处理 (据此决定是否发布输出)
   [[nodiscard]] bool processIteration();
   [[nodiscard]] double lidarEndTime() const {
@@ -60,15 +55,13 @@ private:
   int startup_frames_{0};
   DataHandler& data_handler_;
 
-  static PointCloudXYZI::Ptr loadPointcloudFromPcd(
-      const std::string& file_path);
-  bool syncPackages();
+  bool syncOneFrame();
   void initScan();
   void mapIncremental() const;
-  bool initMapState();
+  bool calibrateImu();
+  bool calibrateLidar();
+  void prepareFrameData();
   void publishOdometry();
-  bool prepareFrame();
-  bool initializeIteration();
 
   void processFramePoints(MeasureGroup& meas);
 
@@ -76,12 +69,9 @@ private:
   Lidar lidar_;
   std::unique_ptr<ManifoldEskf> manifold_;
   MeasureGroup measures_;
-  FilterOutput& output_ = data_handler_.getFilterOutput();
+  FilterOutput& output_ = data_handler_.filter_output_;
   PointLioStage& stage_;
   MainLoopState& state_;
   const PointLioParams& config_ = data_handler_.config;
   Synchronizer synchronizer_;
-
-  sensor_msgs::msg::Imu last;
-  sensor_msgs::msg::Imu next;
 };

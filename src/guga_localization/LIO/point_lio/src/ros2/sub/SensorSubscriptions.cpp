@@ -21,7 +21,7 @@ void SensorSubscriptions::configure(rclcpp::Node* node,
         },
         options);
   } else {
-    pc_sub_ = node->create_subscription<sensor_msgs::msg::PointCloud2>(
+    pointcloud_sub_ = node->create_subscription<sensor_msgs::msg::PointCloud2>(
         config.sensor.lidar_topic, rclcpp::SensorDataQoS(),
         [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
           onPointCloud(msg);
@@ -38,16 +38,6 @@ void SensorSubscriptions::configure(rclcpp::Node* node,
 void SensorSubscriptions::onLivox(
     const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg) {
   ++scan_count_;
-  if (config_->lidar.frame_mode == 1) {
-    std::deque<PointCloudXYZI::Ptr> frames;
-    std::deque<double> timestamps;
-    // TODO
-    preprocessor_->processCutFrameLivox(
-        msg, frames, timestamps, config_->lidar.cut_frame_num, scan_count_);
-    processor_->onLidarFrames(frames, timestamps);
-    return;
-  }
-
   auto points = std::make_shared<PointCloudXYZI>(10000, 1);
   preprocessor_->process(msg, points);
   processor_->onLidarFrame(std::move(points),
@@ -57,14 +47,6 @@ void SensorSubscriptions::onLivox(
 void SensorSubscriptions::onPointCloud(
     const sensor_msgs::msg::PointCloud2::SharedPtr& msg) {
   ++scan_count_;
-  if (config_->lidar.frame_mode == 1) {
-    std::deque<PointCloudXYZI::Ptr> frames;
-    std::deque<double> timestamps;
-    preprocessor_->processCutFramePCL2(
-        msg, frames, timestamps, config_->lidar.cut_frame_num, scan_count_);
-    processor_->onLidarFrames(frames, timestamps);
-    return;
-  }
   auto points = std::make_shared<PointCloudXYZI>(20000, 1);
   preprocessor_->process(msg, points);
   processor_->onLidarFrame(std::move(points),

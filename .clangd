@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: build
+  CompilationDatabase: build  # 只构建部分包之后，运行 scripts/ci/merge_compile_commands.py 补齐
   Add:
     - -xc++
     - -std=gnu++20

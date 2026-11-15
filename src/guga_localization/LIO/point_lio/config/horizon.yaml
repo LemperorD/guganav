@@ -5,7 +5,6 @@
         check_satu: True
         init_map_size: 10
         point_filter_num: 3                                 # Options: 4, 3
-        space_down_sample: True
         filter_size_surf: 0.5                               # Options: 0.5, 0.3, 0.2, 0.15, 0.1
         filter_size_map: 0.5                                # Options: 0.5, 0.3, 0.15, 0.1
         ivox_nearby_type: 6                                 # Options: 0, 6, 18, 26
@@ -13,16 +12,8 @@
         common:
             lid_topic: "livox/lidar"
             imu_topic: "livox/imu"
-            con_frame: False                                # True: if you need to combine several LiDAR frames into one
-            con_frame_num: 1                                # the number of frames combined
-            cut_frame: False                                # True: if you need to cut one LiDAR frame into several subframes
-            cut_frame_time_interval: 0.1                    # should be integral fraction of 1 / LiDAR frequency
-            time_diff_lidar_to_imu: 0.0                     # Time offset between LiDAR and IMU calibrated by other algorithms, e.g., LI-Init (find in Readme)
 
-        prior_pcd:
-            enable: False
-            prior_pcd_map_path: ""
-            init_pose: [ 0.0, 0.0, 0.0 ]
+            time_diff_lidar_to_imu: 0.0                     # Time offset between LiDAR and IMU calibrated by other algorithms, e.g., LI-Init (find in Readme)
 
         preprocess:
             lidar_type: 1

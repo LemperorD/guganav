@@ -55,19 +55,8 @@ void Lidar::append(PointCloudXYZI::Ptr points, double timestamp) {
     return;
   }
   last_timestamp_lidar_ = timestamp;
-  if (params_->frame_mode == 2) {
-    appendMergedFrame(points, timestamp);
-  } else if (!points->empty()) {
+  if (!points->empty()) {
     appendFrame(std::move(points), timestamp);
-  }
-}
-
-void Lidar::appendFrames(std::deque<PointCloudXYZI::Ptr>& frames,
-                         std::deque<double>& timestamps) {
-  while (!frames.empty() && !timestamps.empty()) {
-    append(std::move(frames.front()), timestamps.front());
-    frames.pop_front();
-    timestamps.pop_front();
   }
 }
 
@@ -79,29 +68,4 @@ void Lidar::appendFrame(PointCloudXYZI::Ptr pointcloud, double timestamp) {
                                         .end_time = end_time});
 }
 
-void Lidar::appendMergedFrame(const PointCloudXYZI::Ptr& points,
-                              double timestamp) {
-  if (frame_ct_ == 0) {
-    time_con_ = timestamp;
-  }
 
-  for (auto point : points->points) {
-    set_point_time_offset_ms(
-        point, point_time_offset_ms(point)
-                   + static_cast<float>((timestamp - time_con_) * 1000.0));
-    ptr_con_->push_back(point);
-  }
-  ++frame_ct_;
-
-  if (frame_ct_ < mergeFrameCount()) {
-    return;
-  }
-
-  frame_buffer_.emplace_back(
-      LidarFrame{.cloud = std::make_shared<PointCloudXYZI>(*ptr_con_),
-                 .start_time = time_con_,
-                 .end_time = frameEndTime(ptr_con_, time_con_,
-                                          params_->lidar_time_interval)});
-  ptr_con_->clear();
-  frame_ct_ = 0;
-}

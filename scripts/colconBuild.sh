@@ -145,6 +145,8 @@ colcon build \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
+python3 "$WS/scripts/ci/merge_compile_commands.py"
+
 if [ ! -L "$WS/compile_commands.json" ]; then
   ln -sf "$WS/build/compile_commands.json" "$WS/compile_commands.json"
   echo "已创建compile_commands.json的软链接, 请设置vscode的c_cpp_properties.json以启用代码补全和跳转功能。"

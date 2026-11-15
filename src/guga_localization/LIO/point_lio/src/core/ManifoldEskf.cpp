@@ -43,9 +43,6 @@ void ManifoldEskf::initialize(const PointLioParams& config,
   // 重力由静止初始化确定, 固定不估计, 避免与加速度零偏混在一起发散.
   P.middleRows<3>(15).setZero();
   P.middleCols<3>(15).setZero();
-  // 加速度零偏固定, 避免点面匹配的错误残差通过 vel 把它拉偏.
-  P.middleRows<3>(12).setZero();
-  P.middleCols<3>(12).setZero();
   setInitialCovariance(P);
 
   configureFixedExtrinsic(lidar_rotation, lidar_translation);
@@ -62,8 +59,10 @@ ManifoldEskf::ManifoldEskf() {
   D_L = MatrixXd::Identity(6, 6);
 
   H_I.setZero();
-  H_I.block<3, 3>(0, 18) = Matrix3d::Identity();  // 角速度对 omega
-  H_I.block<3, 3>(3, 21) = Matrix3d::Identity();  // 加速度对 acc
+  H_I.block<3, 3>(0, 9) = Matrix3d::Identity();   // 角速度残差对 bg
+  H_I.block<3, 3>(0, 18) = Matrix3d::Identity();  // 角速度残差对 omega
+  H_I.block<3, 3>(3, 12) = Matrix3d::Identity();  // 加速度残差对 ba
+  H_I.block<3, 3>(3, 21) = Matrix3d::Identity();  // 加速度残差对 acc
   D_I = Matrix<double, 6, 6>::Identity();
 
   Q_.setZero();
@@ -115,7 +114,7 @@ Vector24 ManifoldEskf::f_(const State& x_, const V3D& omega,
   Vector24 d = Vector24::Zero();
   d.segment<3>(0) = x_.omega;
   d.segment<3>(3) = x_.vel;
-  d.segment<3>(6) = x_.rot * (x_.acc - x_.ba) + x_.gravity;
+  d.segment<3>(6) = x_.rot * x_.acc + x_.gravity;
   return d;
 }
 
@@ -124,8 +123,7 @@ Matrix24 ManifoldEskf::F_x(const State& x_, const double dt) const {
   d.block<3, 3>(0, 0) = Exp(-dt * x_.omega);
   d.block<3, 3>(0, 18) = dt * Matrix3d::Identity();
   d.block<3, 3>(3, 6) = dt * Matrix3d::Identity();
-  const V3D acc_bias = x_.acc - x_.ba;
-  d.block<3, 3>(6, 0) = -dt * x_.rot * Hat(acc_bias);
+  d.block<3, 3>(6, 0) = -dt * x_.rot * Hat(x_.acc);
   d.block<3, 3>(6, 21) = dt * x_.rot;
   return d;
 }
@@ -152,6 +150,7 @@ int ManifoldEskf::updateLidar(MeasureGroup& meas, FilterOutput& out,
   const size_t total = meas.feats_down_body->points.size();
   nearest_points_.resize(total);
   pbody_list_.resize(total);
+  point_selected_surf_.resize(total);
   int effect_num = 0;
 
   for (int j = 0; j < group_size; ++j) {
@@ -298,8 +297,8 @@ void ManifoldEskf::applyImuUpdate(const std::array<bool, 6>& saturated) {
   P_ = J * P_bias * J.transpose();
 }
 
-State& ManifoldEskf::mutable_x() {
-  return x_;
+void ManifoldEskf::set_gravity(Eigen::Vector3d gravity) {
+  x_.gravity = gravity;
 }
 
 const State& ManifoldEskf::get_x() const {
@@ -314,27 +313,104 @@ state_output ManifoldEskf::toStateOutput() const {
   return x_;
 }
 
-bool ManifoldEskf::imuUpdate(const ImuMeasurement& measurement, double imu_time,
-                             const ImuParams& params, double acc_scale) {
-  const V3D omega = measurement.angular_velocity;
-  const V3D acc_meas = measurement.linear_acceleration * acc_scale;
-  if (!stateTransform(imu_time, omega, acc_meas)) {
+void ManifoldEskf::initState(const ImuInitEstimate& estimate,
+                             const ImuParams& params) {
+  if (estimate.static_count == 0) {
+    // 没有静止段, 不做重力对齐, 零偏保持零, 交给滤波器在线收敛.
+    x_.rot = IMatrix3;
+    x_.acc = -x_.gravity;
+    x_.bg = V3D::Zero();
+    // TODO: 换成六面法标定的加速度零偏, 单位 m/s².
+    x_.ba = V3D::Zero();
+    return;
+  }
+
+  const V3D tmp_gravity = -estimate.mean_acc / estimate.mean_acc.norm()
+                          * params.processor.gravity_magnitude;
+  M3D rot_init;
+  setInitialRotation(tmp_gravity, rot_init);
+  x_.rot = rot_init;
+  x_.acc = -rot_init.transpose() * x_.gravity;
+  x_.bg = estimate.mean_gyr;
+  // TODO: 换成六面法标定的加速度零偏, 单位 m/s².
+  x_.ba = V3D::Zero();
+}
+
+void ManifoldEskf::setInitialRotation(const V3D& tmp_gravity, M3D& rot) {
+  const M3D hat_grav = -Hat(x_.gravity);
+
+  const V3D cross = hat_grav * tmp_gravity;
+  const double cross_norm = cross.norm();
+  const double gravity_norm = x_.gravity.norm();
+  const double tmp_norm = tmp_gravity.norm();
+
+  const double align_sin = cross_norm / gravity_norm / tmp_norm;
+  const double align_cos = x_.gravity.dot(tmp_gravity) / gravity_norm
+                           / tmp_norm;
+
+  if (align_sin < kAlignTolerance) {
+    if (align_cos > kAlignTolerance) {
+      rot = IMatrix3;
+    } else {
+      // 两向量严格反向时绕任意垂直轴转 180 度, 避免使用反射矩阵 -I.
+      const V3D unit_gravity = x_.gravity / gravity_norm;
+      V3D axis;
+
+      if (std::abs(unit_gravity.x()) <= std::abs(unit_gravity.y())
+          && std::abs(unit_gravity.x()) <= std::abs(unit_gravity.z())) {
+        axis = unit_gravity.cross(V3D::UnitX());
+      } else if (std::abs(unit_gravity.y()) <= std::abs(unit_gravity.z())) {
+        axis = unit_gravity.cross(V3D::UnitY());
+      } else {
+        axis = unit_gravity.cross(V3D::UnitZ());
+      }
+
+      axis.normalize();
+      rot = 2.0 * axis * axis.transpose() - IMatrix3;
+    }
+  } else {
+    const V3D align_angle = cross / cross_norm * std::acos(align_cos);
+    rot = Exp(align_angle(0), align_angle(1), align_angle(2));
+  }
+}
+
+bool ManifoldEskf::imuUpdate(const ImuSample& sample, const ImuParams& params) {
+  const double acc_scale = params.processor.gravity_magnitude / params.acc_norm;
+  const V3D acc_meas = sample.measurement.linear_acceleration * acc_scale;
+
+  // 比力模长应始终 >= g: 任何线性加速度都只会把它变大。模长低于
+  // g - 阈值的样本在物理上不可能, 是仿真器加速度通道的坏点; 模长超过
+  // 上限的同样丢弃。两类坏点都会被积分成垂直速度。
+  const double acc_norm = acc_meas.norm();
+  const bool acc_below_floor = params.acc_spike_thresh > 0.0
+                               && acc_norm < params.processor.gravity_magnitude
+                                                 - params.acc_spike_thresh;
+  const bool acc_above_ceiling = params.acc_spike_max > 0.0
+                                 && acc_norm > params.acc_spike_max;
+  if (acc_below_floor || acc_above_ceiling) {
+    return false;
+  }
+
+  const V3D omega = sample.measurement.angular_velocity;
+  if (!stateTransform(sample.timestamp, omega, acc_meas)) {
     return false;
   }
 
   const auto& state = get_x_predict();
   Matrix<double, 6, 1> r_I;
-  r_I.segment<3>(0) = measurement.angular_velocity - state.omega;
-  r_I.segment<3>(3) = measurement.linear_acceleration * acc_scale - state.acc;
+  r_I.segment<3>(0) = sample.measurement.angular_velocity
+                      - (state.omega + state.bg);
+  r_I.segment<3>(3) = sample.measurement.linear_acceleration * acc_scale
+                      - (state.acc + state.ba);
 
   std::array<bool, 6> saturated{};
   if (params.check_saturation) {
-    const double gyro[3] = {measurement.angular_velocity(0),
-                            measurement.angular_velocity(1),
-                            measurement.angular_velocity(2)};
-    const double acc[3] = {measurement.linear_acceleration(0),
-                           measurement.linear_acceleration(1),
-                           measurement.linear_acceleration(2)};
+    const double gyro[3] = {sample.measurement.angular_velocity(0),
+                            sample.measurement.angular_velocity(1),
+                            sample.measurement.angular_velocity(2)};
+    const double acc[3] = {sample.measurement.linear_acceleration(0),
+                           sample.measurement.linear_acceleration(1),
+                           sample.measurement.linear_acceleration(2)};
     for (int axis = 0; axis < 3; ++axis) {
       if (std::abs(gyro[axis]) >= 0.99 * params.saturation_gyro) {
         saturated[axis] = true;

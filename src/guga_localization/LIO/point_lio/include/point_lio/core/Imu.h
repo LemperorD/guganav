@@ -8,6 +8,9 @@
 #pragma once
 
 #include <deque>
+#include <optional>
+
+#include <rclcpp/logger.hpp>
 
 #include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
@@ -50,7 +53,7 @@ public:
   void discardBefore(double timestamp);
 
   void collectUntil(double end_time, deque<ImuSample>& collected);
-  void process(const MeasureGroup& meas, State& output_state);
+  std::optional<ImuInitEstimate> process(const MeasureGroup& meas);
 
   [[nodiscard]] bool needInit() const;
   [[nodiscard]] double lastTimestamp() const;
@@ -62,8 +65,6 @@ private:
   constexpr static double kStaticGyroThreshold = 0.1;
 
   void IMU_init(const MeasureGroup& meas, int& N);
-  void initState(State& state);
-  void Set_init_z(const Eigen::Vector3d& tmp_gravity, Eigen::Matrix3d& rot);
 
   const Params* params_{nullptr};
   ImuMeasurementWorkspace measurement_workspace_;
@@ -78,8 +79,5 @@ private:
   V3D mean_acc_{V3D::Zero()};
   V3D mean_gyr_{V3D::Zero()};
   int static_count_{0};
-  V3D gravity_{V3D::Zero()};
-  V3D gravity_init_{0.0, 0.0, -9.81};
-  double gravity_magnitude_{9.81};
   rclcpp::Logger logger_;
 };

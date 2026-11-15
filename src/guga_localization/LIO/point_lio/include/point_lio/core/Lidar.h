@@ -4,7 +4,6 @@
  *
  * 本模块负责:
  * - **传感器数据接收**: 三种回调函数 (标准点云 / Livox 点云 / IMU)
- * - **帧预处理**: 切帧 (cut_frame) / 合帧 (con_frame) 逻辑
  * - **时间同步**: IMU 时间戳校准 (timediff_imu_wrt_lidar)
  * - **数据打包**: sync_packages() 将雷达帧与对应时间的 IMU 队列组合成
  * MeasureGroup
@@ -79,24 +78,15 @@ public:
 private:
   friend class Synchronizer;
   friend class FrameProcessor;
-  [[nodiscard]] int mergeFrameCount() const {
-    return params_->con_frame_num;
-  }
   void append(PointCloudXYZI::Ptr points, double timestamp);
-  void appendFrames(std::deque<PointCloudXYZI::Ptr>& frames,
-                    std::deque<double>& timestamps);
   void appendFrame(PointCloudXYZI::Ptr pointcloud, double timestamp);
-  void appendMergedFrame(const PointCloudXYZI::Ptr& points, double timestamp);
 
   const Params* params_{nullptr};
   IVoxType::Ptr ivox_{nullptr};
   V3D lidar_t_wrt_imu_{Zero3d};
   M3D lidar_r_wrt_imu_{IMatrix3};
   LidarMeasurementModel measurement_model_;
-  PointCloudXYZI::Ptr ptr_con_{std::make_shared<PointCloudXYZI>()};
   int scan_count_{0};
-  int frame_ct_{0};
   std::deque<LidarFrame> frame_buffer_;
   double last_timestamp_lidar_{-1.0};
-  double time_con_{0.0};
 };

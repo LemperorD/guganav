@@ -333,6 +333,26 @@ def generate_launch_description():
         ],
     )
 
+    # 启动阶段看门狗：lifecycle_manager 的 change_state 回执偶尔丢失时，
+    # small_gicp_relocalization 会停在 inactive，map -> odom 的 TF 不出现，
+    # global_costmap 就一直在激活回调里等 map 坐标系。看门狗只补发
+    # configure/activate，节点进入 active 后自行退出，不干预之后的 LOST 自停用。
+    start_relocalization_watchdog = Node(
+        condition=IfCondition(autostart),
+        package="guga_bringup",
+        executable="relocalization_watchdog.py",
+        name="relocalization_watchdog",
+        output="screen",
+        parameters=[
+            {
+                "target_node": "small_gicp_relocalization",
+                "stuck_sec": 5.0,
+                "give_up_sec": 60.0,
+            }
+        ],
+        arguments=["--ros-args", "--log-level", log_level],
+    )
+
     # Create the launch description and populate
     ld = LaunchDescription()
 
@@ -364,5 +384,6 @@ def generate_launch_description():
     ld.add_action(start_point_lio_node)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
+    ld.add_action(start_relocalization_watchdog)
 
     return ld
