@@ -13,7 +13,7 @@
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/parameters.h"
-#include "point_lio/preprocess.h"
+#include "point_lio/utilities/preprocess.h"
 
 // 24 维误差的流形 ESKF: 状态传播、协方差传播、IMU 与 LiDAR 量测更新.
 class ManifoldEskf {
@@ -52,6 +52,18 @@ public:
   void updateWorldPoints(MeasureGroup& meas, FilterOutput& out,
                          const LidarParams& params, int group_idx,
                          int point_offset);
+
+  // 处理一个 IMU 样本: 传播到该时刻并做 IMU 量测更新.
+  // 返回 false 表示传播被拒绝, 该样本不参与更新.
+  bool imuUpdate(const ImuMeasurement& measurement, double imu_time,
+                 const ImuParams& params, double acc_scale);
+
+  // 处理一组 LiDAR 量测: 传播到该段时刻并做量测更新.
+  // allow_update 为 false 时只提交预测 (启动阶段).
+  // 返回 -1 表示传播失败, 0 表示只提交预测, 正数为更新的点数.
+  int lidarUpdate(MeasureGroup& meas, FilterOutput& out,
+                  const LidarParams& params, int group_idx, int point_offset,
+                  bool allow_update);
 
   // 状态访问.
   State& mutable_x();

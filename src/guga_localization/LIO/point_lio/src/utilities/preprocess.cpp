@@ -13,7 +13,7 @@
  * - **process_cut_frame_***: 切帧处理 (将单帧按时间均匀切分为多子帧)
  */
 
-#include "point_lio/preprocess.h"
+#include "point_lio/utilities/preprocess.h"
 
 #define RETURN0 0x00
 #define RETURN0AND1 0x10
@@ -79,7 +79,15 @@ void Preprocess::process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
   }
   *pcl_out = pl_surf_;
 }
-
+ImuMeasurement Preprocess::processImu(
+    const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
+  ImuMeasurement measurement;
+  measurement.angular_velocity << msg->angular_velocity.x,
+      msg->angular_velocity.y, msg->angular_velocity.z;
+  measurement.linear_acceleration << msg->linear_acceleration.x,
+      msg->linear_acceleration.y, msg->linear_acceleration.z;
+  return measurement;
+}
 void Preprocess::processCutFrameLivox(
     const livox_ros_driver2::msg::CustomMsg::SharedPtr& msg,
     deque<PointCloudXYZI::Ptr>& pcl_out, deque<double>& time_lidar,

@@ -13,8 +13,8 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 
-#include "point_lio/OdomProcessor.h"
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/OdomProcessor.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
 
 /// 把 camera_init 系的结果转到 odom 系后发布.

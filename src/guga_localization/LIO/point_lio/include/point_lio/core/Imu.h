@@ -9,18 +9,8 @@
 
 #include <deque>
 
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
-#include "point_lio/preprocess.h"
-
-inline ImuMeasurement makeMeasurement(const sensor_msgs::msg::Imu& msg) {
-  ImuMeasurement measurement;
-  measurement.angular_velocity << msg.angular_velocity.x,
-      msg.angular_velocity.y, msg.angular_velocity.z;
-  measurement.linear_acceleration << msg.linear_acceleration.x,
-      msg.linear_acceleration.y, msg.linear_acceleration.z;
-  return measurement;
-}
 
 struct ImuMeasurementWorkspace {
   V3D angular_velocity{V3D::Zero()};

@@ -7,7 +7,7 @@
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
 
 /// 模块间交接的数据仓库: 配置与跨帧输出.

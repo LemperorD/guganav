@@ -259,6 +259,8 @@ struct ImuSample {
 struct MeasureGroup {
   double lidar_start_time{0.0};
   double lidar_last_time{0.0};
+  /// 本帧已处理到的时刻, 跨帧保留, 由 processFramePoints 推进.
+  double last_time{0.0};
   PointCloudXYZI::Ptr lidar_measure_origin;
   deque<ImuSample> imu_measure;
   /// 本帧降采样后的点云 (IMU 系), 随量测一起传递

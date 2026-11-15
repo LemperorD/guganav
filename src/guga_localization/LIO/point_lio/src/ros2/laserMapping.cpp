@@ -342,6 +342,7 @@ void LaserMappingNode::processIteration() {
       && stage_ == PointLioStage::TRACKING) {
     frame_publisher_.publishMap(data_handler_.map_cloud);
   }
+
   prev_stage_ = stage_;
 
   if (!is_frame_processed) {

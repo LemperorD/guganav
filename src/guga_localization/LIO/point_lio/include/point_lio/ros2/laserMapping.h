@@ -26,8 +26,8 @@
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/FrameProcessor.h"
-#include "point_lio/OdomProcessor.h"
-#include "point_lio/preprocess.h"
+#include "point_lio/utilities/OdomProcessor.h"
+#include "point_lio/utilities/preprocess.h"
 
 #include "point_lio/pcd/PriorMapManager.h"
 

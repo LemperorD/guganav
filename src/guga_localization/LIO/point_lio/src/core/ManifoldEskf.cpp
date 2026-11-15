@@ -313,3 +313,68 @@ const State& ManifoldEskf::get_x_predict() const {
 state_output ManifoldEskf::toStateOutput() const {
   return x_;
 }
+
+bool ManifoldEskf::imuUpdate(const ImuMeasurement& measurement, double imu_time,
+                             const ImuParams& params, double acc_scale) {
+  const V3D omega = measurement.angular_velocity;
+  const V3D acc_meas = measurement.linear_acceleration * acc_scale;
+  if (!stateTransform(imu_time, omega, acc_meas)) {
+    return false;
+  }
+
+  const auto& state = get_x_predict();
+  Matrix<double, 6, 1> r_I;
+  r_I.segment<3>(0) = measurement.angular_velocity - state.omega;
+  r_I.segment<3>(3) = measurement.linear_acceleration * acc_scale - state.acc;
+
+  std::array<bool, 6> saturated{};
+  if (params.check_saturation) {
+    const double gyro[3] = {measurement.angular_velocity(0),
+                            measurement.angular_velocity(1),
+                            measurement.angular_velocity(2)};
+    const double acc[3] = {measurement.linear_acceleration(0),
+                           measurement.linear_acceleration(1),
+                           measurement.linear_acceleration(2)};
+    for (int axis = 0; axis < 3; ++axis) {
+      if (std::abs(gyro[axis]) >= 0.99 * params.saturation_gyro) {
+        saturated[axis] = true;
+        r_I(axis) = 0.0;
+      }
+      if (std::abs(acc[axis]) >= 0.99 * params.saturation_acc) {
+        saturated[axis + 3] = true;
+        r_I(axis + 3) = 0.0;
+      }
+    }
+  }
+
+  setImuResidual(r_I);
+  applyImuUpdate(saturated);
+  return true;
+}
+
+int ManifoldEskf::lidarUpdate(MeasureGroup& meas, FilterOutput& out,
+                              const LidarParams& params, int group_idx,
+                              int point_offset, bool allow_update) {
+  const double lidar_time = meas.lidar_start_time
+                            + point_time_offset_ms(
+                                  meas.feats_down_body->points[point_offset])
+                                  / 1000.0;
+  if (!stateTransform(lidar_time, get_x().omega, get_x().acc)) {
+    return -1;
+  }
+  if (!allow_update) {
+    commitPrediction();
+    return 0;
+  }
+  const int effect_num = updateLidar(meas, out, params, group_idx,
+                                     point_offset);
+  if (effect_num == 0) {
+    commitPrediction();
+    out.processed_size = point_offset + meas.time_seq[group_idx];
+    return 0;
+  }
+  applyLidarUpdate();
+  updateWorldPoints(meas, out, params, group_idx, point_offset);
+  out.processed_size = point_offset + meas.time_seq[group_idx];
+  return effect_num;
+}

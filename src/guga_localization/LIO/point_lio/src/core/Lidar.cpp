@@ -36,9 +36,9 @@ bool Lidar::empty() const {
 void LidarMeasurementModel::pointBodyToWorld(PointType const* pi, PointType* po,
                                              const State& state) const {
   const V3D p_body(pi->x, pi->y, pi->z);
-  const V3D p_global = state.rot
-                       * ((*lidar_rotation_) * p_body + (*lidar_translation_))
-                       + state.pos;
+  const V3D p_global =
+      state.rot * ((*lidar_rotation_) * p_body + (*lidar_translation_))
+      + state.pos;
   po->x = p_global(0);
   po->y = p_global(1);
   po->z = p_global(2);

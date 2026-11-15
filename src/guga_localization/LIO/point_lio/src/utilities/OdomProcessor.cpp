@@ -1,8 +1,8 @@
-#include "point_lio/OdomProcessor.h"
+#include "point_lio/utilities/OdomProcessor.h"
 
 #include <tf2/exceptions.h>
 
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 
 bool OdomProcessor::resolve(const OutputFrameParams& out,
                             const tf2_ros::Buffer* buffer,

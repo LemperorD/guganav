@@ -16,8 +16,8 @@
 #include <std_msgs/msg/u_int8.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
-#include "point_lio/OdomProcessor.h"
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/OdomProcessor.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
 
 /// 先验地图的累积、写盘与重载, 由 GICP 状态驱动.

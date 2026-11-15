@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 
 class Lidar;
 class Imu;

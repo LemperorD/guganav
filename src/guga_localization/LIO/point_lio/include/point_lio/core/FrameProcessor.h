@@ -6,7 +6,6 @@
  */
 
 #pragma once
-#include <functional>
 #include <memory>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
@@ -20,7 +19,7 @@
 
 #include "point_lio/core/Lidar.h"
 #include "point_lio/core/Synchronizer.h"
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/DataHandler.h"
 
 enum class PointLioStage {
@@ -58,14 +57,11 @@ private:
   double time_current_{0.0};
   double lidar_end_time_{0.0};
   bool is_first_frame_{true};
-  double time_update_last_{0.0};
-  double last_time_output_{0.0};
   int startup_frames_{0};
   DataHandler& data_handler_;
 
   static PointCloudXYZI::Ptr loadPointcloudFromPcd(
       const std::string& file_path);
-  void initializeFilter();
   bool syncPackages();
   void initScan();
   void mapIncremental() const;
@@ -74,7 +70,7 @@ private:
   bool prepareFrame();
   bool initializeIteration();
 
-  void processFramePoints(MeasureGroup& meas, double& last_time);
+  void processFramePoints(MeasureGroup& meas);
 
   Imu imu_;
   Lidar lidar_;

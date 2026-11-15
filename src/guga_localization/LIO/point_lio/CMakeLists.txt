@@ -44,8 +44,8 @@ link_directories(
 
 # Declare a ROS2 executable
 add_executable(pointlio_mapping
-  src/OdomProcessor.cpp
-  src/preprocess.cpp
+  src/utilities/OdomProcessor.cpp
+  src/utilities/preprocess.cpp
 
   src/core/Lidar.cpp
   src/core/Synchronizer.cpp

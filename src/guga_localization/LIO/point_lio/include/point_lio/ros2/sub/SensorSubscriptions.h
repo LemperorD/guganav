@@ -17,7 +17,7 @@
 
 #include "point_lio/core/FrameProcessor.h"
 #include "point_lio/core/parameters.h"
-#include "point_lio/preprocess.h"
+#include "point_lio/utilities/preprocess.h"
 
 /// ROS2 传感器订阅: 把消息转成纯数据后交给处理器.
 class SensorSubscriptions {
@@ -34,7 +34,7 @@ private:
   rclcpp::Node* node_{nullptr};
   const PointLioParams* config_{nullptr};
   FrameProcessor* processor_{nullptr};
-  Preprocess* preprocess_{nullptr};
+  Preprocess* preprocessor_{nullptr};
   int scan_count_{0};
 
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr livox_sub_;

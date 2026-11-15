@@ -18,8 +18,8 @@
 
 #include <bitset>
 #include <memory>
-#include "point_lio/preprocess.h"
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/preprocess.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/Imu.h"
 class Synchronizer;
 

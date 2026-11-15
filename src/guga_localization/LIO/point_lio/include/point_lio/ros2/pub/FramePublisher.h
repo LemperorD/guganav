@@ -12,7 +12,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
 
 /// 点云发布的封装: 只负责把点云转成消息并发布.

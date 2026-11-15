@@ -26,9 +26,10 @@
 #include <deque>
 #include <livox_ros_driver2/msg/custom_msg.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include "point_lio/core/common_lib.h"
+#include "point_lio/utilities/common_lib.h"
 
 using namespace std;
 
@@ -165,6 +166,13 @@ public:
   void process(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
                PointCloudXYZI::Ptr& pcl_out);
 
+  /**
+   * @brief 从 ROS2 IMU 消息提取纯数据 (角速度与线加速度)
+   * @param msg IMU 消息
+   * @return 不含时间戳的 IMU 测量
+   */
+  ImuMeasurement processImu(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
+
   void configure(const PreprocessParams& params);
 
 private:
@@ -175,8 +183,8 @@ private:
   int scan_rate_{10};        ///< 扫描频率 (Hz)
   int time_unit_{MS};        ///< 时间戳单位 (TIME_UNIT 枚举)
   float time_unit_scale_{};  ///< 时间单位缩放因子
-  double det_range_{1000};  ///< 最大检测距离 (米)
-  double blind_{0.01};      ///< 盲区距离 (米, 此距离内的点被过滤)
+  double det_range_{1000};   ///< 最大检测距离 (米)
+  double blind_{0.01};       ///< 盲区距离 (米, 此距离内的点被过滤)
 
   PointCloudXYZI pl_full_;  ///< 完整点云 (未滤波)
   PointCloudXYZI pl_surf_;  ///< 平面点 (最终输出)
@@ -192,5 +200,4 @@ private:
 
   /** @brief 禾赛 XT32 点云处理 */
   void hesaiHandler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg);
-
 };
