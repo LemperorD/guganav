@@ -185,6 +185,7 @@ int main(int argc, char** argv) {
   blackboard->set<int>("game_progress", -1);
   blackboard->set<double>("HP", 400);
   blackboard->set<int>("destination", 1);
+  blackboard->set<int>("previous_destination", -1);
   blackboard->set<std::string>("global_state_", "Suppress");
   blackboard->set<double>("occupation_time", 0.0);
   blackboard->set<double>("stay_time", 0.0);

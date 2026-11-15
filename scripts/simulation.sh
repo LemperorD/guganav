@@ -77,7 +77,7 @@ select_planner() {
 }
 
 select_controller() {
-  select_profile "Select controller:" "Controller" "pid" \
+  select_profile "Select controller:" "Controller" "mppi" \
     "pid|omni PID (pid)" \
     "mppi|MPPI (mppi)" \
     "mpc|MPC (mpc)"

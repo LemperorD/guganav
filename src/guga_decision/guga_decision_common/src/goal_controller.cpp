@@ -64,15 +64,28 @@ namespace guga_decision_common {
     rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
     options.goal_response_callback =
         [this, generation](GoalHandle::SharedPtr goal_handle) {
-          std::lock_guard<std::mutex> lock(mutex_);
-          if (generation != generation_) {
-            return;
+          bool current_generation = false;
+          {
+            std::lock_guard<std::mutex> lock(mutex_);
+            current_generation = generation == generation_;
+            if (current_generation && goal_handle) {
+              current_goal_ = goal_handle;
+            } else if (current_generation && !goal_handle) {
+              result_ = NavigationResult::FAILED;
+            }
           }
-          if (!goal_handle) {
-            result_ = NavigationResult::FAILED;
-            return;
+
+          if (!current_generation && goal_handle) {
+            // 状态已经切换，但旧 goal 的 response 在 cancelGoal() 之后才到。
+            // 此时必须取消刚被接受的旧 goal，避免它继续驱动机器人。
+            try {
+              action_client_->async_cancel_goal(std::move(goal_handle));
+            } catch (const std::exception& error) {
+              RCLCPP_WARN(
+                  node_->get_logger(),
+                  "取消过期 NavigateToPose 目标失败: %s", error.what());
+            }
           }
-          current_goal_ = std::move(goal_handle);
         };
     options.result_callback =
         [this, generation](const GoalHandle::WrappedResult& result) {

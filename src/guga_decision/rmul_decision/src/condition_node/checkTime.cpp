@@ -13,41 +13,57 @@ BT::PortsList CheckTime::providedPorts() {
 
 BT::NodeStatus CheckTime::tick() {
   int destination = -1;
-  double stay_time = 0;
   if (!getInput("destination", destination)) {
     throw BT::RuntimeError("Missing input [destination]");
   }
-  if (!getInput("stay_time", stay_time)) {
-    throw BT::RuntimeError("Missing input [stay_time]");
-  }
+
+  const double now_seconds = node_->get_clock()->now().seconds();
+
   if (destination == 2) {
-    if (stay_time == 0) {
-      auto timer = node_->now();
-      stay_time = timer.seconds();
-      setOutput("stay_time", stay_time);
-    } else if (stay_time > 0
-               && node_->get_clock()->now().seconds() - stay_time >= 15) {
-      destination = 3;
-      stay_time = 0;
-      setOutput("stay_time", stay_time);
-      setOutput("destination", destination);
-      return BT::NodeStatus::SUCCESS;
+    if (timer_destination_ != 2) {
+      timer_destination_ = 2;
+      start_seconds_ = now_seconds;
+      setOutput("stay_time", 0.0);
+      return BT::NodeStatus::FAILURE;
     }
-  } else if (destination == 3) {
-    if (stay_time == 0) {
-      auto timer = node_->now();
-      stay_time = timer.seconds();
-      setOutput("stay_time", stay_time);
 
-    } else if (stay_time > 0
-               && node_->get_clock()->now().seconds() - stay_time >= 15) {
-      destination = 4;
-      stay_time = 0;
-      setOutput("stay_time", stay_time);
-      setOutput("destination", destination);
+    const double stay_time = now_seconds - start_seconds_;
+    setOutput("stay_time", stay_time);
+    if (stay_time >= 15.0) {
+      timer_destination_.reset();
+      setOutput("stay_time", 0.0);
+      setOutput("destination", 3);
+      RCLCPP_INFO(
+          node_->get_logger(),
+          "CheckTime: destination 2 -> 3, 停留 %.2f 秒", stay_time);
       return BT::NodeStatus::SUCCESS;
     }
+    return BT::NodeStatus::FAILURE;
   }
 
+  if (destination == 3) {
+    if (timer_destination_ != 3) {
+      timer_destination_ = 3;
+      start_seconds_ = now_seconds;
+      setOutput("stay_time", 0.0);
+      return BT::NodeStatus::FAILURE;
+    }
+
+    const double stay_time = now_seconds - start_seconds_;
+    setOutput("stay_time", stay_time);
+    if (stay_time >= 15.0) {
+      timer_destination_.reset();
+      setOutput("stay_time", 0.0);
+      setOutput("destination", 4);
+      RCLCPP_INFO(
+          node_->get_logger(),
+          "CheckTime: destination 3 -> 4, 停留 %.2f 秒", stay_time);
+      return BT::NodeStatus::SUCCESS;
+    }
+    return BT::NodeStatus::FAILURE;
+  }
+
+  timer_destination_.reset();
+  setOutput("stay_time", 0.0);
   return BT::NodeStatus::FAILURE;
 }

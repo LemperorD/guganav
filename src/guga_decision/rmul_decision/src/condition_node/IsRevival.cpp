@@ -22,7 +22,7 @@ BT::NodeStatus IsRevival::tick() {
     sign = 1;
     setOutput("HP_sign", sign);
   }
-  if (hp == 400 && sign == 1) {
+  if (hp > 0 && sign == 1) {
     sign = 0;
     setOutput("HP_sign", sign);
     return BT::NodeStatus::SUCCESS;

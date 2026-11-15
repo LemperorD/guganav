@@ -40,6 +40,7 @@ BT::PortsList PointSelector::providedPorts() {
   return {
       BT::InputPort<int>("destination"),
       BT::InputPort<std::string>("strategy_mode"),
+      BT::BidirectionalPort<int>("previous_destination"),
       BT::InputPort<std::vector<double>>("route_x", "绝对航点 x 数组"),
       BT::InputPort<std::vector<double>>("route_y", "绝对航点 y 数组"),
       BT::InputPort<std::vector<double>>("route_yaw", "绝对航点 yaw 数组"),
@@ -58,32 +59,30 @@ BT::NodeStatus PointSelector::onStart() {
     return BT::NodeStatus::FAILURE;
   }
 
-  // KeepRunningUntilFailure 会在 GotoPoints 成功后重启整棵树。同一个 destination
-  // 和策略已经完整走完后，只返回 SUCCESS，不重新发布第一个航点，让最终目标保留
-  // 在 goal_controller 和 Marker 中；destination/策略变化时才启动新路线。
   if (completed_destination_ == destination &&
       completed_strategy_ == strategy) {
     return BT::NodeStatus::SUCCESS;
   }
-  active_destination_ = destination;
-  active_strategy_ = strategy;
-
-  auto route = routeFromPorts();
-  if (!route) {
-    route = buildRoute(destination, strategy);
-  }
-  const auto status = navigator_.start(std::move(*route));
-  if (status == guga_decision_common::WaypointNavigatorStatus::SUCCEEDED) {
-    completed_destination_ = active_destination_;
-    completed_strategy_ = active_strategy_;
-  }
-  return toBtStatus(status);
+  return startRoute(destination, strategy);
 }
 
 BT::NodeStatus PointSelector::onRunning() {
   if (!goal_controller_) {
     return BT::NodeStatus::FAILURE;
   }
+
+  int destination = 0;
+  std::string strategy;
+  if (!getInput("destination", destination)
+      || !getInput("strategy_mode", strategy)) {
+    return BT::NodeStatus::FAILURE;
+  }
+
+  if (active_destination_ != destination || active_strategy_ != strategy) {
+    navigator_.halt();
+    return startRoute(destination, strategy);
+  }
+
   if (!navigator_.running()) {
     return toBtStatus(navigator_.status());
   }
@@ -110,10 +109,43 @@ BT::NodeStatus PointSelector::onRunning() {
 
 void PointSelector::onHalted() {
   navigator_.halt();
+  active_destination_.reset();
+  active_strategy_.reset();
+}
+
+BT::NodeStatus PointSelector::startRoute(
+    int destination, const std::string& strategy) {
+  int previous_destination = -1;
+  if (!getInput("previous_destination", previous_destination)) {
+    previous_destination = -1;
+  }
+  const bool came_from_destination_4 =
+      previous_destination == 4 && previous_destination != destination;
+  if (came_from_destination_4) {
+    RCLCPP_INFO(
+        input_hub_->get_logger(),
+        "上一个 destination=4，当前去 destination=%d，跳过隧道路线",
+        destination);
+  }
+
+  active_destination_ = destination;
+  active_strategy_ = strategy;
+  setOutput("previous_destination", destination);
+
+  auto route = routeFromPorts();
+  if (!route) {
+    route = buildRoute(destination, strategy, !came_from_destination_4);
+  }
+  const auto status = navigator_.start(std::move(*route));
+  if (status == guga_decision_common::WaypointNavigatorStatus::SUCCEEDED) {
+    completed_destination_ = active_destination_;
+    completed_strategy_ = active_strategy_;
+  }
+  return toBtStatus(status);
 }
 
 std::vector<guga_decision_common::Waypoint2D> PointSelector::buildRoute(
-    int destination, const std::string& strategy) const {
+    int destination, const std::string& strategy, bool allow_tunnel) const {
   const std::vector<std::pair<double, double>>* points = nullptr;
   const std::vector<std::pair<double, double>>* tunnel = nullptr;
 
@@ -141,7 +173,7 @@ std::vector<guga_decision_common::Waypoint2D> PointSelector::buildRoute(
   }
 
   // 压制状态允许使用对应点位的隧道路线，其它状态使用普通点位路线。
-  if (strategy == "Suppress" && tunnel && !tunnel->empty()) {
+  if (allow_tunnel && strategy == "Suppress" && tunnel && !tunnel->empty()) {
     return toRoute(*tunnel);
   }
   return points ? toRoute(*points)
@@ -156,10 +188,12 @@ PointSelector::routeFromPorts() {
 
   const bool has_x = static_cast<bool>(getInput("route_x", xs));
   const bool has_y = static_cast<bool>(getInput("route_y", ys));
-  if (!has_x && !has_y) {
+  const bool empty_x = !has_x || xs.empty();
+  const bool empty_y = !has_y || ys.empty();
+  if (empty_x && empty_y) {
     return std::nullopt;
   }
-  if (!has_x || !has_y || xs.empty() || xs.size() != ys.size()) {
+  if (empty_x || empty_y || xs.size() != ys.size()) {
     return std::vector<guga_decision_common::Waypoint2D>{};
   }
 

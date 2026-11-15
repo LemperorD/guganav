@@ -8,36 +8,40 @@ IsOccupationsafe::IsOccupationsafe(const std::string& name,
 }
 
 BT::PortsList IsOccupationsafe::providedPorts() {
-  return {BT::InputPort<int>("destination"),
+  return {BT::InputPort<int>("destination"), BT::InputPort<double>("HP"),
           BT::BidirectionalPort<double>("occupation_time")};
 }
 
 BT::NodeStatus IsOccupationsafe::tick() {
   int destination = 1;
-  double occupation_time = 0;
+  double hp = 0;
+  if (!getInput("destination", destination) || !getInput("HP", hp)) {
+    return BT::NodeStatus::FAILURE;
+  }
 
-  if (!getInput("destination", destination)) {
-    throw BT::RuntimeError("Missing input [destination]");
-  }
-  if (!getInput("occupation_time", occupation_time)) {
-    throw BT::RuntimeError("Missing input [occupation_time]");
-  }
-  if (occupation_time == 0 && destination == 4) {
-    auto timer = node_->now();
-    occupation_time = timer.seconds();
+  const double now_seconds = node_->get_clock()->now().seconds();
+  if (destination == 4) {
+    if (timer_destination_ != 4) {
+      timer_destination_ = 4;
+      start_seconds_ = now_seconds;
+      setOutput("occupation_time", 0.0);
+      return BT::NodeStatus::FAILURE;
+    }
+
+    const double occupation_time = now_seconds - start_seconds_;
     setOutput("occupation_time", occupation_time);
-  }
-
-  else if (occupation_time > 0 && destination == 4) {
-    if (node_->get_clock()->now().seconds() - occupation_time >= 20) {
+    if (occupation_time >= 20.0 && hp > 350) {
+      timer_destination_.reset();
+      setOutput("occupation_time", 0.0);
+      RCLCPP_INFO(node_->get_logger(),
+                  "IsOccupationsafe: 占点停留 %.2f 秒，达到 20 秒",
+                  occupation_time);
       return BT::NodeStatus::SUCCESS;
     }
+    return BT::NodeStatus::FAILURE;
   }
 
-  else {
-    occupation_time = 0;
-    setOutput("occupation_time", occupation_time);
-  }
-
+  timer_destination_.reset();
+  setOutput("occupation_time", 0.0);
   return BT::NodeStatus::FAILURE;
 }

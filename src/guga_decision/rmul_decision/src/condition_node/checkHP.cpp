@@ -74,6 +74,8 @@ BT::NodeStatus CheckHP::tick() {
       if ((destination == 2 && hp < 90) || (destination == 3 && hp < 150)
           || (destination == 4 && hp < 250)) {
         destination = 1;
+      } else if (destination != 2 && destination != 3 && destination != 4) {
+        destination = 2;
       }
       break;
     case StrategyMode::UNKNOWN:
