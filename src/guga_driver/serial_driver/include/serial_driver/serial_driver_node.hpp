@@ -15,10 +15,6 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h>
-
 #include "guga_interfaces/msg/game_status.hpp"
 #include "guga_interfaces/msg/rfid_status.hpp"
 #include "guga_interfaces/msg/robot_status.hpp"
@@ -37,7 +33,7 @@ namespace serial_driver {
 
   /**
    * @brief ROS2 节点层，封装 SerialDriverMain
-   * 并向上提供话题桥接、裁判数据发布、 tf 广播等能力。
+   * 并向上提供话题桥接、裁判数据发布等能力。
    *
    * 职责：
    *  - 从参数服务器读取串口配置（port_name, baud_rate 等）。
@@ -45,7 +41,6 @@ namespace serial_driver {
    *  - 创建 3 路桥接通道（/cmd_vel, /serial/Yaw, /serial/EnemyPos），分别使用
    *    RosToSerialBridge 和 SerialToRosBridge。
    *  - 定时发布裁判系统数据（RobotStatus, GameStatus, RfidStatus）。
-   *  - 广播 gimbal_yaw_vision tf（由 odom→base_footprint 推导）。
    *  - 提供速度坐标系变换工具方法（transformVelocityToChassis）。
    */
   class SerialDriverNode : public rclcpp::Node {
@@ -91,16 +86,6 @@ namespace serial_driver {
      * @return 包含 x, y 坐标的 Point 消息。
      */
     static geometry_msgs::msg::Point decodeEnemyPos(const uint8_t* payload);
-
-    // ---- tf 广播 ----
-
-    /**
-     * @brief 定时广播 gimbal_yaw_vision tf（30ms 周期）。
-     *
-     * 从 tf_buffer 查询 odom→base_footprint 变换，取 yaw 角后发布
-     * base_footprint→gimbal_yaw_vision 的纯旋转 tf。
-     */
-    void publishTransformGimbalVision();
 
     // ---- 工具方法 ----
 
@@ -157,13 +142,7 @@ namespace serial_driver {
     std::atomic<std::uint8_t> pitch_mode_{0};
 
     // 定时器
-    rclcpp::TimerBase::SharedPtr gimbal_vision_timer_;
     rclcpp::TimerBase::SharedPtr referee_rx_timer_;
-
-    // tf
-    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     // 裁判系统发布者
     rclcpp::Publisher<guga_interfaces::msg::RobotStatus>::SharedPtr

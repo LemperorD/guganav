@@ -94,9 +94,6 @@ MCU referee frame
 | `/referee/game_status` | `guga_interfaces/msg/GameStatus` | 裁判帧比赛阶段 |
 | `/referee/rfid_status` | `guga_interfaces/msg/RfidStatus` | 裁判帧 RFID 位图 |
 
-TF：每 30 ms 查询 `odom -> base_footprint`，成功后广播
-`base_footprint -> gimbal_yaw_vision`。
-
 ## Parameters
 
 | 参数 | 代码默认值 | 说明 |
