@@ -23,13 +23,13 @@ find_package(visualization_msgs REQUIRED)
 # 与 guga_rmul_strategy 保持相同的 BehaviorTree.CPP v4 定位方式。Humble 的
 # behaviortree_cpp ament 配置会把库路径解析错，因此这里直接找实际文件。
 find_path(BT_CPP_INCLUDE_DIR behaviortree_cpp/bt_factory.h
-  PATHS /opt/ros/humble/include
+  PATHS $ENV{HOME}/.local/include /opt/ros/humble/include
   NO_DEFAULT_PATH
   REQUIRED
 )
 find_library(BT_CPP_LIBRARY
   NAMES behaviortree_cpp
-  PATHS /opt/ros/humble/lib/x86_64-linux-gnu /opt/ros/humble/lib
+  PATHS $ENV{HOME}/.local/lib /opt/ros/humble/lib/x86_64-linux-gnu /opt/ros/humble/lib
   NO_DEFAULT_PATH
   REQUIRED
 )

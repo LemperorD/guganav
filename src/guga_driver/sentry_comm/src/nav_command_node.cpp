@@ -22,6 +22,8 @@ namespace sentry_comm {
     write_rate_hz_ = declare_parameter<double>("write_rate_hz", 100.0);
     command_timeout_sec_ = declare_parameter<double>("command_timeout_sec",
                                                      0.5);
+    vel_trans_scale_ = declare_parameter<double>("vel_trans_scale", 40.0);
+    vel_yaw_scale_ = declare_parameter<double>("vel_yaw_scale", 1.0);
     const std::string cmd_vel_topic = declare_parameter<std::string>(
         "cmd_vel_topic", "cmd_vel");
     const std::string odometry_topic = declare_parameter<std::string>(
@@ -118,11 +120,11 @@ namespace sentry_comm {
                                        command_timeout_sec_);
       if (is_fresh) {
         write.serial.deform_chassis.displacement_target_velocity_x =
-            command_.linear.x;
+            static_cast<float>(vel_trans_scale_ * command_.linear.x);
         write.serial.deform_chassis.displacement_target_velocity_y =
-            command_.linear.y;
+            static_cast<float>(vel_trans_scale_ * command_.linear.y);
         write.serial.deform_chassis.displacement_target_velocity_yaw =
-            command_.angular.z;
+            static_cast<float>(vel_yaw_scale_ * command_.angular.z);
       }
 
       if (has_odometry_) {

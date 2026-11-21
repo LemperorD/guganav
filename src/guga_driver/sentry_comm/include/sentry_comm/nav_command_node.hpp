@@ -47,6 +47,10 @@ namespace sentry_comm {
     std::string shm_name_;
     double write_rate_hz_{};
     double command_timeout_sec_{};
+    // 下发速度的缩放：电控侧按 br_protocol 的约定接收放大后的值，
+    // 旧 serial_driver 用 vel_trans_scale=40，这里保持一致；wz 单独可调。
+    double vel_trans_scale_{40.0};
+    double vel_yaw_scale_{1.0};
 
     std::unique_ptr<NavCommandWriter> writer_;
 

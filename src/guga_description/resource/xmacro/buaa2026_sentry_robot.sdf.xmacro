@@ -9,10 +9,10 @@
     <!--property defination-->
     <xmacro_define_value name="global_initial_color" value="none" />
     <xmacro_define_value name="global_armor_sticker_type" value="num3" />
-    <!-- 底盘距离水平地面的高度 -->
-    <xmacro_define_value name="chassis_height" value="0.123" />
-    <!-- gimbal_yaw 相对于底盘的 z 轴安装偏移 -->
-    <xmacro_define_value name="gimbal_yaw_height" value="0.026" />
+    <!-- 底盘转轴中心距离水平地面的高度（实测 79 mm） -->
+    <xmacro_define_value name="chassis_height" value="0.079" />
+    <!-- gimbal_yaw 相对于底盘的 z 轴安装偏移（云台底板上表面 79+54=133 mm） -->
+    <xmacro_define_value name="gimbal_yaw_height" value="0.054" />
     <!-- gimbal_pitch 相对于 gimbal_yaw 的高度差 -->
     <xmacro_define_value name="gimbal_pitch_height" value="0.355" />
 
@@ -21,8 +21,11 @@
 
         <pose>0 0 0.15 0 0 0</pose>
         <xmacro_block name="rm25_example_robot" sticker_type="${global_armor_sticker_type}" chassis_height="${chassis_height}" gimbal_yaw_height="${gimbal_yaw_height}" gimbal_pitch_height="${gimbal_pitch_height}"/>
-        <!--livox-->
-        <xmacro_block name="livox" prefix="front_" parent="chassis" pose="0.225 0 0.107 ${-pi/18} 0 ${-pi/2}" update_rate="20" samples="1875"/>
+        <!--livox: 装在云台底板上，距转轴中心 129 mm、右前 45 度、高出底板 94 mm，
+            y 轴自身向下倾 15 度，x 轴指向右后方（相对云台正前方 -135 度）-->
+        <xmacro_block name="livox" prefix="front_" parent="gimbal_yaw_odom"
+                      pose="0.0912 -0.0912 0.094 ${-15*pi/180} 0 ${-3*pi/4}"
+                      update_rate="20" samples="1875"/>
         <!--industrial camera-->
         <xmacro_block name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.1 0 0.045 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080"/>
 

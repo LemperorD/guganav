@@ -103,7 +103,7 @@ writer.update([](s2c::serial_comm::NavWrite& write) {
 ros2 launch sentry_comm nav_command.launch.py
 ```
 
-参数：`shm_name`（默认 `/s2c_serial_comm`）、`write_rate_hz`（100）、`command_timeout_sec`（0.5）、`cmd_vel_topic`（`cmd_vel`）、`odometry_topic`（`odometry`）、`pitch_mode_topic`（`/decision/pitch_mode`）。
+参数：`shm_name`（默认 `/s2c_serial_comm`）、`write_rate_hz`（100）、`command_timeout_sec`（0.5）、`cmd_vel_topic`（`cmd_vel`）、`odometry_topic`（`odometry`）、`pitch_mode_topic`（`/decision/pitch_mode`）、`vel_trans_scale`（40.0，平移速度下发缩放，与旧 `serial_driver` 一致）、`vel_yaw_scale`（1.0，yaw 下发缩放）。
 
 旧 `serial_driver` 还负责把 `/referee/*`、`/serial/Yaw` 等接收数据发布成 ROS 话题。切到新链路时要停掉旧驱动，接收侧需要另行迁移，否则决策层拿不到裁判数据。
 

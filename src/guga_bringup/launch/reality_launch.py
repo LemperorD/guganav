@@ -339,6 +339,7 @@ def generate_launch_description():
             "namespace": namespace,
             "use_sim_time": use_sim_time,
             "use_sentry_comm": use_sentry_comm,
+            "params_file": base_params_file,
         }.items(),
     )
 

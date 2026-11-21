@@ -10,6 +10,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
+    params_file = LaunchConfiguration("params_file")
     communication_cfg_dir = LaunchConfiguration("communication_cfg_dir")
     use_sentry_comm = LaunchConfiguration("use_sentry_comm")
     sentry_comm_shm_name = LaunchConfiguration("sentry_comm_shm_name")
@@ -19,6 +20,14 @@ def generate_launch_description():
         "namespace",
         default_value="",
         description="Namespace for the node",
+    )
+
+    declare_params_file = DeclareLaunchArgument(
+        "params_file",
+        default_value=os.path.join(
+            get_package_share_directory("guga_bringup"), "config", "reality", "base.yaml"
+        ),
+        description="包含 sentry_comm 节点参数的 yaml（reality base.yaml）",
     )
 
     declare_communication_cfg_dir = DeclareLaunchArgument(
@@ -55,7 +64,7 @@ def generate_launch_description():
         executable="nav_command_node",
         namespace=namespace,
         output="screen",
-        parameters=[{"shm_name": sentry_comm_shm_name}],
+        parameters=[params_file, {"shm_name": sentry_comm_shm_name}],
         condition=IfCondition(use_sentry_comm),
     )
 
@@ -63,13 +72,14 @@ def generate_launch_description():
         package="sentry_comm",
         executable="referee_bridge_node",
         output="screen",
-        parameters=[{"shm_name": sentry_comm_shm_name}],
+        parameters=[params_file, {"shm_name": sentry_comm_shm_name}],
         condition=IfCondition(use_sentry_comm),
     )
 
     ld = LaunchDescription()
 
     ld.add_action(declare_namespace)
+    ld.add_action(declare_params_file)
     ld.add_action(declare_communication_cfg_dir)
     ld.add_action(declare_use_sentry_comm)
     ld.add_action(declare_sentry_comm_shm_name)
