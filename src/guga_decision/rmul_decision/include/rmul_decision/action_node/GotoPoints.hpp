@@ -26,7 +26,7 @@ public:
 
 private:
   std::vector<guga_decision_common::Waypoint2D> buildRoute(
-      int destination, const std::string& strategy, bool allow_tunnel) const;
+      int destination, const std::string& strategy, bool allow_tunnel);
 
   std::optional<std::vector<guga_decision_common::Waypoint2D>> routeFromPorts();
 
@@ -38,10 +38,13 @@ private:
   guga_decision_common::WaypointNavigator navigator_;
   std::optional<int> active_destination_;
   std::optional<std::string> active_strategy_;
+  std::optional<int> active_route_epoch_;
   std::optional<int> completed_destination_;
   std::optional<std::string> completed_strategy_;
+  std::optional<int> completed_route_epoch_;
 
-  BT::NodeStatus startRoute(int destination, const std::string& strategy);
+  BT::NodeStatus startRoute(int destination, const std::string& strategy,
+                            int route_epoch);
 
   // 坐标由点位配置填充；一个数组可以包含多个航点。
   std::vector<std::pair<double, double>> point_1_{

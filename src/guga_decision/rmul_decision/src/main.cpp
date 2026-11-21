@@ -10,7 +10,9 @@
 #include <rclcpp/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/utilities.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -34,148 +36,145 @@
 
 namespace {
 
-template<typename T>
-void appendBlackboardValue(
-    const BT::Blackboard& blackboard, const std::string& key,
-    std::vector<diagnostic_msgs::msg::KeyValue>& values) {
-  T value{};
-  if (!blackboard.get<T>(key, value)) {
-    return;
+  template <typename T>
+  void appendBlackboardValue(
+      const BT::Blackboard& blackboard, const std::string& key,
+      std::vector<diagnostic_msgs::msg::KeyValue>& values) {
+    T value{};
+    if (!blackboard.get<T>(key, value)) {
+      return;
+    }
+
+    std::ostringstream shown;
+    shown << value;
+    diagnostic_msgs::msg::KeyValue item;
+    item.key = key;
+    item.value = shown.str();
+    values.push_back(std::move(item));
   }
 
-  std::ostringstream shown;
-  shown << value;
-  diagnostic_msgs::msg::KeyValue item;
-  item.key = key;
-  item.value = shown.str();
-  values.push_back(std::move(item));
-}
+  void publishBlackboard(
+      const BT::Blackboard::Ptr& blackboard,
+      const rclcpp::Node::SharedPtr& node,
+      const rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr&
+          publisher) {
+    diagnostic_msgs::msg::DiagnosticArray message;
+    message.header.stamp = node->now();
 
-void publishBlackboard(
-    const BT::Blackboard::Ptr& blackboard,
-    const rclcpp::Node::SharedPtr& node,
-    const rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr&
-        publisher) {
-  diagnostic_msgs::msg::DiagnosticArray message;
-  message.header.stamp = node->now();
+    diagnostic_msgs::msg::DiagnosticStatus status;
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+    status.name = "rmul_decision blackboard";
+    status.message = "BehaviorTree.CPP blackboard snapshot";
 
-  diagnostic_msgs::msg::DiagnosticStatus status;
-  status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-  status.name = "rmul_decision blackboard";
-  status.message = "BehaviorTree.CPP blackboard snapshot";
+    appendBlackboardValue<int>(*blackboard, "game_progress", status.values);
+    appendBlackboardValue<double>(*blackboard, "HP", status.values);
+    appendBlackboardValue<int>(*blackboard, "destination", status.values);
+    appendBlackboardValue<int>(*blackboard, "route_epoch", status.values);
+    appendBlackboardValue<std::string>(*blackboard, "global_state_",
+                                       status.values);
+    appendBlackboardValue<double>(*blackboard, "occupation_time",
+                                  status.values);
+    appendBlackboardValue<double>(*blackboard, "stay_time", status.values);
+    appendBlackboardValue<int>(*blackboard, "HP_sign", status.values);
+    appendBlackboardValue<int>(*blackboard, "ammo", status.values);
+    appendBlackboardValue<double>(*blackboard, "robot_x", status.values);
+    appendBlackboardValue<double>(*blackboard, "robot_y", status.values);
+    appendBlackboardValue<bool>(*blackboard, "pose_valid", status.values);
+    appendBlackboardValue<int>(*blackboard, "pitch_mode", status.values);
 
-  appendBlackboardValue<int>(*blackboard, "game_progress", status.values);
-  appendBlackboardValue<double>(*blackboard, "HP", status.values);
-  appendBlackboardValue<int>(*blackboard, "destination", status.values);
-  appendBlackboardValue<std::string>(
-      *blackboard, "global_state_", status.values);
-  appendBlackboardValue<double>(
-      *blackboard, "occupation_time", status.values);
-  appendBlackboardValue<double>(*blackboard, "stay_time", status.values);
-  appendBlackboardValue<int>(*blackboard, "HP_sign", status.values);
-  appendBlackboardValue<int>(*blackboard, "ammo", status.values);
-  appendBlackboardValue<double>(*blackboard, "robot_x", status.values);
-  appendBlackboardValue<double>(*blackboard, "robot_y", status.values);
-  appendBlackboardValue<bool>(*blackboard, "pose_valid", status.values);
-
-  message.status.push_back(std::move(status));
-  publisher->publish(message);
-}
-
-const char* statusName(BT::NodeStatus status) {
-  switch (status) {
-    case BT::NodeStatus::IDLE:
-      return "IDLE";
-    case BT::NodeStatus::RUNNING:
-      return "RUNNING";
-    case BT::NodeStatus::SUCCESS:
-      return "SUCCESS";
-    case BT::NodeStatus::FAILURE:
-      return "FAILURE";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-struct TickStatusCapture
-{
-  std::unordered_map<std::uint16_t, BT::NodeStatus> executed;
-};
-
-class TickStatusCaptureLogger final : public BT::StatusChangeLogger
-{
-public:
-  TickStatusCaptureLogger(
-      BT::TreeNode* root, TickStatusCapture& capture)
-  : BT::StatusChangeLogger(root), capture_(capture) {
-    // 状态变化只覆盖真正发生迁移的 tick；TickMonitor 会记录每轮实际执行的
-    // 节点及其返回值，即使状态和上一轮相同，也能让 UI 展示本轮完整路径。
-    applyRecursiveVisitor(root, [this](BT::TreeNode* tree_node) {
-      const std::uint16_t uid = tree_node->UID();
-      tree_node->setTickMonitorCallback(
-          [this, uid](
-              BT::TreeNode&, BT::NodeStatus status,
-              std::chrono::microseconds) {
-            capture_.executed[uid] = status;
-          });
-      tree_node->setPostTickFunction(
-          [this, uid](BT::TreeNode&, BT::NodeStatus status) {
-            capture_.executed[uid] = status;
-            return status;
-          });
-    });
+    message.status.push_back(std::move(status));
+    publisher->publish(message);
   }
 
-  void callback(
-      BT::Duration, const BT::TreeNode& tree_node, BT::NodeStatus,
-      BT::NodeStatus status) override {
-    // 终态之后 BT.CPP 可能立刻把节点重置为 IDLE。这里保留本 tick
-    // 最后一个非 IDLE 状态，才能看到 SwitchState 这类瞬时节点。
-    if (status != BT::NodeStatus::IDLE) {
-      capture_.executed[tree_node.UID()] = status;
+  const char* statusName(BT::NodeStatus status) {
+    switch (status) {
+      case BT::NodeStatus::IDLE:
+        return "IDLE";
+      case BT::NodeStatus::RUNNING:
+        return "RUNNING";
+      case BT::NodeStatus::SUCCESS:
+        return "SUCCESS";
+      case BT::NodeStatus::FAILURE:
+        return "FAILURE";
+      default:
+        return "UNKNOWN";
     }
   }
 
-  void flush() override {}
+  struct TickStatusCapture {
+    std::unordered_map<std::uint16_t, BT::NodeStatus> executed;
+  };
 
-private:
-  TickStatusCapture& capture_;
-};
+  class TickStatusCaptureLogger final : public BT::StatusChangeLogger {
+  public:
+    TickStatusCaptureLogger(BT::TreeNode* root, TickStatusCapture& capture)
+        : BT::StatusChangeLogger(root), capture_(capture) {
+      // 状态变化只覆盖真正发生迁移的 tick；TickMonitor 会记录每轮实际执行的
+      // 节点及其返回值，即使状态和上一轮相同，也能让 UI 展示本轮完整路径。
+      applyRecursiveVisitor(root, [this](BT::TreeNode* tree_node) {
+        const std::uint16_t uid = tree_node->UID();
+        tree_node->setTickMonitorCallback(
+            [this, uid](BT::TreeNode&, BT::NodeStatus status,
+                        std::chrono::microseconds) {
+              capture_.executed[uid] = status;
+            });
+        tree_node->setPostTickFunction(
+            [this, uid](BT::TreeNode&, BT::NodeStatus status) {
+              capture_.executed[uid] = status;
+              return status;
+            });
+      });
+    }
 
-void publishNodeStatus(
-    const BT::Tree& tree, const rclcpp::Node::SharedPtr& node,
-    const TickStatusCapture& capture,
-    const rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr&
-        publisher) {
-  diagnostic_msgs::msg::DiagnosticArray message;
-  message.header.stamp = node->now();
-
-  diagnostic_msgs::msg::DiagnosticStatus status;
-  status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-  status.name = "rmul_decision nodes";
-  status.message = "BehaviorTree.CPP node status heartbeat";
-
-  std::unordered_set<std::uint16_t> seen;
-  for (const auto& subtree : tree.subtrees) {
-    for (const auto& tree_node : subtree->nodes) {
-      const std::uint16_t uid = tree_node->UID();
-      if (!seen.insert(uid).second) {
-        continue;
+    void callback(BT::Duration, const BT::TreeNode& tree_node, BT::NodeStatus,
+                  BT::NodeStatus status) override {
+      // 终态之后 BT.CPP 可能立刻把节点重置为 IDLE。这里保留本 tick
+      // 最后一个非 IDLE 状态，才能看到 SwitchState 这类瞬时节点。
+      if (status != BT::NodeStatus::IDLE) {
+        capture_.executed[tree_node.UID()] = status;
       }
-      diagnostic_msgs::msg::KeyValue item;
-      item.key = std::to_string(uid);
-      const auto executed = capture.executed.find(uid);
-      item.value = statusName(
-          executed != capture.executed.end()
-          ? executed->second
-          : tree_node->status());
-      status.values.push_back(std::move(item));
     }
-  }
 
-  message.status.push_back(std::move(status));
-  publisher->publish(message);
-}
+    void flush() override {
+    }
+
+  private:
+    TickStatusCapture& capture_;
+  };
+
+  void publishNodeStatus(
+      const BT::Tree& tree, const rclcpp::Node::SharedPtr& node,
+      const TickStatusCapture& capture,
+      const rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr&
+          publisher) {
+    diagnostic_msgs::msg::DiagnosticArray message;
+    message.header.stamp = node->now();
+
+    diagnostic_msgs::msg::DiagnosticStatus status;
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+    status.name = "rmul_decision nodes";
+    status.message = "BehaviorTree.CPP node status heartbeat";
+
+    std::unordered_set<std::uint16_t> seen;
+    for (const auto& subtree : tree.subtrees) {
+      for (const auto& tree_node : subtree->nodes) {
+        const std::uint16_t uid = tree_node->UID();
+        if (!seen.insert(uid).second) {
+          continue;
+        }
+        diagnostic_msgs::msg::KeyValue item;
+        item.key = std::to_string(uid);
+        const auto executed = capture.executed.find(uid);
+        item.value = statusName(executed != capture.executed.end()
+                                    ? executed->second
+                                    : tree_node->status());
+        status.values.push_back(std::move(item));
+      }
+    }
+
+    message.status.push_back(std::move(status));
+    publisher->publish(message);
+  }
 
 }  // namespace
 
@@ -186,21 +185,23 @@ int main(int argc, char** argv) {
   blackboard->set<double>("HP", 400);
   blackboard->set<int>("destination", 1);
   blackboard->set<int>("previous_destination", -1);
+  blackboard->set<int>("route_epoch", 0);
   blackboard->set<std::string>("global_state_", "Suppress");
   blackboard->set<double>("occupation_time", 0.0);
   blackboard->set<double>("stay_time", 0.0);
   blackboard->set<int>("HP_sign", 0);
+  blackboard->set<int>("pitch_mode", 0);
 
   auto input_hub = std::make_shared<guga_decision_common::DecisionInputHub>(
       "rmul_decision_input");
   blackboard->set<rclcpp::Node::SharedPtr>(
       "node", std::static_pointer_cast<rclcpp::Node>(input_hub));
   const std::string navigate_to_pose_action =
-      input_hub->declare_parameter<std::string>(
-          "navigate_to_pose_action", "navigate_to_pose");
+      input_hub->declare_parameter<std::string>("navigate_to_pose_action",
+                                                "navigate_to_pose");
   const std::string goal_marker_topic =
-      input_hub->declare_parameter<std::string>(
-          "goal_pose_marker_topic", "goal_pose_marker");
+      input_hub->declare_parameter<std::string>("goal_pose_marker_topic",
+                                                "goal_pose_marker");
   auto goal_controller = std::make_shared<guga_decision_common::GoalController>(
       *input_hub, navigate_to_pose_action, input_hub->frameId(),
       goal_marker_topic);
@@ -226,8 +227,8 @@ int main(int argc, char** argv) {
       });
 
   const std::string default_bt_path =
-      ament_index_cpp::get_package_share_directory("rmul_decision") +
-      "/bt_trees/BT.xml";
+      ament_index_cpp::get_package_share_directory("rmul_decision")
+      + "/bt_trees/BT.xml";
   const std::string bt_path = input_hub->declare_parameter<std::string>(
       "bt_path", default_bt_path);
   auto tree = factory.createTreeFromFile(bt_path, blackboard);
@@ -246,8 +247,8 @@ int main(int argc, char** argv) {
   }
 
   const double default_tick_hz = 1.0;
-  const double tick_hz = input_hub->declare_parameter<double>(
-      "tick_rate_hz", default_tick_hz);
+  const double tick_hz = input_hub->declare_parameter<double>("tick_rate_hz",
+                                                              default_tick_hz);
   const double effective_tick_hz = tick_hz > 0.0 ? tick_hz : default_tick_hz;
   if (tick_hz <= 0.0) {
     RCLCPP_WARN(input_hub->get_logger(),
@@ -262,6 +263,8 @@ int main(int argc, char** argv) {
   auto node_status_pub =
       input_hub->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
           "/btview/node_status", 10);
+  auto pitch_mode_pub = input_hub->create_publisher<std_msgs::msg::UInt8>(
+      "/decision/pitch_mode", 10);
   TickStatusCapture tick_capture;
   TickStatusCaptureLogger tick_capture_logger(tree.rootNode(), tick_capture);
 
@@ -272,6 +275,14 @@ int main(int argc, char** argv) {
   while (rclcpp::ok()) {
     tick_capture.executed.clear();
     tree.tickOnce();
+    int pitch_mode = 0;
+    if (!tree.rootBlackboard()->get<int>("pitch_mode", pitch_mode)) {
+      pitch_mode = 0;
+    }
+    std_msgs::msg::UInt8 pitch_mode_msg;
+    pitch_mode_msg.data = static_cast<std::uint8_t>(
+        std::clamp(pitch_mode, 0, 255));
+    pitch_mode_pub->publish(pitch_mode_msg);
     publishBlackboard(tree.rootBlackboard(), input_hub, blackboard_pub);
     publishNodeStatus(tree, input_hub, tick_capture, node_status_pub);
     rate.sleep();

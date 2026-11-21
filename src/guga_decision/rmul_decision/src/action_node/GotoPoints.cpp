@@ -1,4 +1,5 @@
 #include "rmul_decision/action_node/GotoPoints.hpp"
+#include <behaviortree_cpp/basic_types.h>
 
 #include <utility>
 
@@ -27,24 +28,27 @@ PointSelector::PointSelector(
     : BT::StatefulActionNode(name, config),
       input_hub_(std::move(input_hub)),
       goal_controller_(std::move(goal_controller)),
-      navigator_([this](const guga_decision_common::Waypoint2D& waypoint) {
-        return goal_controller_ && goal_controller_->sendGoal(waypoint, true);
-      }, [this]() {
-        if (goal_controller_) {
-          goal_controller_->cancelGoal();
-        }
-      }) {
+      navigator_(
+          [this](const guga_decision_common::Waypoint2D& waypoint) {
+            return goal_controller_
+                   && goal_controller_->sendGoal(waypoint, true);
+          },
+          [this]() {
+            if (goal_controller_) {
+              goal_controller_->cancelGoal();
+            }
+          }) {
 }
 
 BT::PortsList PointSelector::providedPorts() {
-  return {
-      BT::InputPort<int>("destination"),
-      BT::InputPort<std::string>("strategy_mode"),
-      BT::BidirectionalPort<int>("previous_destination"),
-      BT::InputPort<std::vector<double>>("route_x", "绝对航点 x 数组"),
-      BT::InputPort<std::vector<double>>("route_y", "绝对航点 y 数组"),
-      BT::InputPort<std::vector<double>>("route_yaw", "绝对航点 yaw 数组"),
-  };
+  return {BT::InputPort<int>("destination"),
+          BT::InputPort<std::string>("strategy_mode"),
+          BT::BidirectionalPort<int>("previous_destination"),
+          BT::InputPort<std::vector<double>>("route_x", "绝对航点 x 数组"),
+          BT::InputPort<std::vector<double>>("route_y", "绝对航点 y 数组"),
+          BT::InputPort<std::vector<double>>("route_yaw", "绝对航点 yaw 数组"),
+          BT::InputPort<int>("route_epoch", "策略切换批次"),
+          BT::OutputPort<int>("pitch_mode", "pitch_mode")};
 }
 
 BT::NodeStatus PointSelector::onStart() {
@@ -58,12 +62,16 @@ BT::NodeStatus PointSelector::onStart() {
       || !getInput("strategy_mode", strategy)) {
     return BT::NodeStatus::FAILURE;
   }
+  int route_epoch = 0;
+  if (!getInput("route_epoch", route_epoch)) {
+    route_epoch = 0;
+  }
 
-  if (completed_destination_ == destination &&
-      completed_strategy_ == strategy) {
+  if (completed_destination_ == destination && completed_strategy_ == strategy
+      && completed_route_epoch_ == route_epoch) {
     return BT::NodeStatus::SUCCESS;
   }
-  return startRoute(destination, strategy);
+  return startRoute(destination, strategy, route_epoch);
 }
 
 BT::NodeStatus PointSelector::onRunning() {
@@ -77,10 +85,15 @@ BT::NodeStatus PointSelector::onRunning() {
       || !getInput("strategy_mode", strategy)) {
     return BT::NodeStatus::FAILURE;
   }
+  int route_epoch = 0;
+  if (!getInput("route_epoch", route_epoch)) {
+    route_epoch = 0;
+  }
 
-  if (active_destination_ != destination || active_strategy_ != strategy) {
+  if (active_destination_ != destination || active_strategy_ != strategy
+      || active_route_epoch_ != route_epoch) {
     navigator_.halt();
-    return startRoute(destination, strategy);
+    return startRoute(destination, strategy, route_epoch);
   }
 
   if (!navigator_.running()) {
@@ -93,6 +106,7 @@ BT::NodeStatus PointSelector::onRunning() {
       if (status == guga_decision_common::WaypointNavigatorStatus::SUCCEEDED) {
         completed_destination_ = active_destination_;
         completed_strategy_ = active_strategy_;
+        completed_route_epoch_ = active_route_epoch_;
       }
       return toBtStatus(status);
     }
@@ -111,26 +125,30 @@ void PointSelector::onHalted() {
   navigator_.halt();
   active_destination_.reset();
   active_strategy_.reset();
+  active_route_epoch_.reset();
 }
 
-BT::NodeStatus PointSelector::startRoute(
-    int destination, const std::string& strategy) {
+BT::NodeStatus PointSelector::startRoute(int destination,
+                                         const std::string& strategy,
+                                         int route_epoch) {
   int previous_destination = -1;
   if (!getInput("previous_destination", previous_destination)) {
     previous_destination = -1;
   }
-  const bool came_from_destination_4 =
-      previous_destination == 4 && previous_destination != destination;
-  if (came_from_destination_4) {
-    RCLCPP_INFO(
-        input_hub_->get_logger(),
-        "上一个 destination=4，当前去 destination=%d，跳过隧道路线",
-        destination);
+
+  const bool came_from_destination_4 = previous_destination == 4
+                                       && previous_destination != destination;
+  if (came_from_destination_4 && strategy == "SUPPRESS") {
+    RCLCPP_INFO(input_hub_->get_logger(),
+                "上一个 destination=4，当前去 destination=%d，跳过隧道路线",
+                destination);
   }
 
   active_destination_ = destination;
   active_strategy_ = strategy;
+  active_route_epoch_ = route_epoch;
   setOutput("previous_destination", destination);
+  setOutput("pitch_mode", 0);
 
   auto route = routeFromPorts();
   if (!route) {
@@ -140,15 +158,16 @@ BT::NodeStatus PointSelector::startRoute(
   if (status == guga_decision_common::WaypointNavigatorStatus::SUCCEEDED) {
     completed_destination_ = active_destination_;
     completed_strategy_ = active_strategy_;
+    completed_route_epoch_ = active_route_epoch_;
   }
   return toBtStatus(status);
 }
 
 std::vector<guga_decision_common::Waypoint2D> PointSelector::buildRoute(
-    int destination, const std::string& strategy, bool allow_tunnel) const {
+    int destination, const std::string& strategy, bool allow_tunnel) {
   const std::vector<std::pair<double, double>>* points = nullptr;
   const std::vector<std::pair<double, double>>* tunnel = nullptr;
-
+  int pitch_mode = 0;
   switch (destination) {
     case 1:
       points = &point_1_;
@@ -171,11 +190,13 @@ std::vector<guga_decision_common::Waypoint2D> PointSelector::buildRoute(
     default:
       return {};
   }
-
   // 压制状态允许使用对应点位的隧道路线，其它状态使用普通点位路线。
   if (allow_tunnel && strategy == "Suppress" && tunnel && !tunnel->empty()) {
+    pitch_mode = 1;
+    setOutput("pitch_mode", pitch_mode);
     return toRoute(*tunnel);
   }
+  setOutput("pitch_mode", pitch_mode);
   return points ? toRoute(*points)
                 : std::vector<guga_decision_common::Waypoint2D>{};
 }

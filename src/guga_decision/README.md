@@ -2,6 +2,9 @@
 
 决策模块，实现哨兵在ul/uc战场上的行为决策
 
+RMUL 哨兵行为树的构建、运行、状态机、点位、黑板和串口姿态链路见
+[rmul_decision/README.md](rmul_decision/README.md)。
+
 ## 公共输入层
 
 `guga_decision_common` 提供三套候选方案共用的 ROS 输入缓存：

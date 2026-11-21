@@ -76,6 +76,13 @@ namespace serial_driver {
             [this]() {
               return serial_driver_main_->receiveDataFrameSnapshot();
             });
+
+    pitch_mode_sub_ =
+        this->create_subscription<std_msgs::msg::UInt8>(
+            "/decision/pitch_mode", rclcpp::QoS(10),
+            [this](const std_msgs::msg::UInt8::SharedPtr msg) {
+              pitch_mode_.store(msg->data, std::memory_order_relaxed);
+            });
   }
 
   SerialDriverNode::~SerialDriverNode() {
@@ -87,6 +94,7 @@ namespace serial_driver {
     bridge_twist_pc_.reset();
     bridge_yaw_mcu_.reset();
     bridge_enemy_pos_mcu_.reset();
+    pitch_mode_sub_.reset();
 
     robot_status_pub_.reset();
     game_status_pub_.reset();
@@ -153,6 +161,8 @@ namespace serial_driver {
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::VX], msg_1.linear.x);
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::VY], msg_1.linear.y);
     SerialDriverMain::writeFloatLE(&payload[downlink_offset::WZ_NEG], msg_1.angular.z);
+    payload[downlink_offset::PITCH_MODE] =
+        pitch_mode_.load(std::memory_order_relaxed);
 
     return payload;
   }

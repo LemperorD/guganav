@@ -41,6 +41,8 @@
       <GotoPoints destination="{destination}"
                   strategy_mode="{global_state_}"
                   previous_destination="{previous_destination}"
+                  route_epoch="{route_epoch}"
+                  pitch_mode="{pitch_mode}"
                   route_x=""
                   route_y=""
                   route_yaw=""/>
@@ -55,6 +57,8 @@
       <GotoPoints destination="{destination}"
                   strategy_mode="{global_state_}"
                   previous_destination="{previous_destination}"
+                  route_epoch="{route_epoch}"
+                  pitch_mode="{pitch_mode}"
                   route_x=""
                   route_y=""
                   route_yaw=""/>
@@ -71,6 +75,8 @@
       <GotoPoints destination="{destination}"
                   strategy_mode="{global_state_}"
                   previous_destination="{previous_destination}"
+                  route_epoch="{route_epoch}"
+                  pitch_mode="{pitch_mode}"
                   route_x=""
                   route_y=""
                   route_yaw=""/>
@@ -82,13 +88,15 @@
       <Sequence>
         <IsRevivedAndDead HP="{HP}"
                           HP_sign="{HP_sign}"/>
-        <ChangeLowerState global_state_="{global_state_}"/>
+        <ChangeLowerState global_state_="{global_state_}"
+                          route_epoch="{route_epoch}"/>
       </Sequence>
       <Sequence>
         <IsOccupationsafe destination="{destination}"
                           occupation_time="{occupation_time}"
                           HP="{HP}"/>
-        <ChangeHigherState global_state_="{global_state_}"/>
+        <ChangeHigherState global_state_="{global_state_}"
+                           route_epoch="{route_epoch}"/>
       </Sequence>
     </Fallback>
   </BehaviorTree>
@@ -99,11 +107,15 @@
             editable="true">
       <inout_port name="global_state_"
                   type="string"/>
+      <inout_port name="route_epoch"
+                  type="int"/>
     </Action>
     <Action ID="ChangeLowerState"
             editable="true">
       <inout_port name="global_state_"
                   type="string"/>
+      <inout_port name="route_epoch"
+                  type="int"/>
     </Action>
     <Condition ID="CheckHP"
                editable="true">
@@ -129,6 +141,10 @@
                   type="string"/>
       <inout_port name="previous_destination"
                   type="int"/>
+      <input_port name="route_epoch"
+                  type="int"/>
+      <output_port name="pitch_mode"
+                   type="int"/>
       <input_port name="route_x"
                   type="std::vector&lt;double&gt;"/>
       <input_port name="route_y"
