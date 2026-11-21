@@ -112,6 +112,22 @@ if(BUILD_TESTING)
     pcl_ros
     pcl_conversions
   )
+
+  ament_add_gtest(test_eskf_propagation test/test_eskf_propagation.cpp)
+  target_link_libraries(test_eskf_propagation point_lio_core ${PCL_LIBRARIES})
+  ament_target_dependencies(test_eskf_propagation
+    rclcpp
+    pcl_ros
+    pcl_conversions
+  )
+
+  ament_add_gtest(test_imu_calibration test/test_imu_calibration.cpp)
+  target_link_libraries(test_imu_calibration point_lio_core ${PCL_LIBRARIES})
+  ament_target_dependencies(test_imu_calibration
+    rclcpp
+    pcl_ros
+    pcl_conversions
+  )
 endif()
 
 # Install the executable

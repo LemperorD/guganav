@@ -5,6 +5,8 @@
 #ifndef FASTER_LIO_IVOX3D_H
 #define FASTER_LIO_IVOX3D_H
 
+#include "point_lio/utilities/Profiler.h"
+
 #include <list>
 #include <memory>
 #include <unordered_map>
@@ -67,6 +69,8 @@ namespace faster_lio {
     explicit IVox(Options options) : options_(options) {
       options_.inv_resolution_ = 1.0 / options_.resolution_;
       GenerateNearbyGrids();
+      // 查询缓冲只在构造时分配一次, 后续复用容量.
+      candidates_.reserve(nearby_grids_.size() * 5);
     }
 
     /**
@@ -92,6 +96,7 @@ namespace faster_lio {
         grids_map_;
     std::list<std::pair<KeyType, NodeType>> grids_cache_;  // voxel cache
     std::vector<KeyType> nearby_grids_;                    // nearbys
+    std::vector<DistPoint> candidates_;                    // 查询缓冲
   };
 
   template <int dim, IVoxNodeType node_type, typename PointType>
@@ -99,35 +104,45 @@ namespace faster_lio {
                                                         PointVector& closest_pt,
                                                         int max_num,
                                                         double max_range) {
-    std::vector<DistPoint> candidates;
-    candidates.reserve(max_num * nearby_grids_.size());
+    std::vector<DistPoint>& candidates = candidates_;
+    candidates.clear();
 
     auto key = Pos2Grid(ToEigen<float, dim>(pt));
 
-    for (const KeyType& delta : nearby_grids_) {
-      auto dkey = key + delta;
-      auto iter = grids_map_.find(dkey);
-      if (iter != grids_map_.end()) {
-        iter->second->second.KNNPointByCondition(candidates, pt, max_num,
-                                                 max_range);
+    int hit = 0;
+    {
+      PROF_SCOPE(15, "    gridScan");
+      for (const KeyType& delta : nearby_grids_) {
+        auto dkey = key + delta;
+        auto iter = grids_map_.find(dkey);
+        if (iter != grids_map_.end()) {
+          ++hit;
+          iter->second->second.KNNPointByCondition(candidates, pt, max_num,
+                                                   max_range);
+        }
       }
     }
-
     if (candidates.empty()) {
       return false;
     }
 
-    if ((int)candidates.size() <= max_num) {
-    } else {
-      std::nth_element(candidates.begin(), candidates.begin() + max_num - 1,
+    PROF_EFFECT(18, "candidates", candidates.size());
+    PROF_EFFECT(20, "gridHit", hit);
+    {
+      PROF_SCOPE(16, "    trim");
+      if ((int)candidates.size() <= max_num) {
+      } else {
+        std::nth_element(candidates.begin(), candidates.begin() + max_num - 1,
+                         candidates.end());
+        candidates.resize(max_num);
+      }
+      std::nth_element(candidates.begin(), candidates.begin(),
                        candidates.end());
-      candidates.resize(max_num);
-    }
-    std::nth_element(candidates.begin(), candidates.begin(), candidates.end());
 
-    closest_pt.clear();
-    for (auto& it : candidates) {
-      closest_pt.emplace_back(it.Get());
+      closest_pt.clear();
+      for (auto& it : candidates) {
+        closest_pt.emplace_back(it.Get());
+      }
     }
     return closest_pt.empty() == false;
   }

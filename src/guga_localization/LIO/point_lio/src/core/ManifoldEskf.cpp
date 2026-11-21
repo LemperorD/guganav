@@ -1,4 +1,7 @@
 #include "point_lio/core/ManifoldEskf.h"
+#include <Eigen/src/Core/Matrix.h>
+
+#include "point_lio/utilities/Profiler.h"
 
 #include <algorithm>
 #include <cmath>
@@ -56,7 +59,6 @@ ManifoldEskf::ManifoldEskf() {
   F_w_.block<3, 3>(12, 3) = Matrix3d::Identity();  // ba 对 n_ba
   F_w_.block<3, 3>(18, 6) = Matrix3d::Identity();  // omega 对 n_g
   F_w_.block<3, 3>(21, 9) = Matrix3d::Identity();  // acc 对 n_a
-  D_L = MatrixXd::Identity(6, 6);
 
   H_I.setZero();
   H_I.block<3, 3>(0, 9) = Matrix3d::Identity();   // 角速度残差对 bg
@@ -118,14 +120,55 @@ Vector24 ManifoldEskf::f_(const State& x_, const V3D& omega,
   return d;
 }
 
-Matrix24 ManifoldEskf::F_x(const State& x_, const double dt) const {
-  Matrix24 d = Matrix24::Identity();
-  d.block<3, 3>(0, 0) = Exp(-dt * x_.omega);
-  d.block<3, 3>(0, 18) = dt * Matrix3d::Identity();
-  d.block<3, 3>(3, 6) = dt * Matrix3d::Identity();
-  d.block<3, 3>(6, 0) = -dt * x_.rot * Hat(x_.acc);
-  d.block<3, 3>(6, 21) = dt * x_.rot;
-  return d;
+Matrix24 ManifoldEskf::predictCovariance(const double dt) const {
+  // 计算 G = F_x P F_x^T + F_w Q F_w^T, 其中 F_x 是状态转移矩阵, F_w
+  // 是噪声转移矩阵.
+
+  // F_x 只有五个非零的非对角块, 其余是单位块,
+  // 所以分两步按块乘:
+  //   第一步 G = F_x P, 第 3 到第 7 行块是整行复制;
+  //   第二步 G F_x^T, 第 3 到第 7 列块是整列复制.
+  const Matrix3d F00 = Exp(-dt * x_.omega);
+  const Matrix3d F20 = -dt * x_.rot * Hat(x_.acc);
+  const Matrix3d F27 = dt * x_.rot;
+
+  Matrix24 G;
+  for (int c = 0; c < 8; ++c) {
+    const int cc = 3 * c;
+    G.block<3, 3>(0, cc) = F00 * P_.block<3, 3>(0, cc)
+                           + dt * P_.block<3, 3>(18, cc);
+    G.block<3, 3>(3, cc) = P_.block<3, 3>(3, cc) + dt * P_.block<3, 3>(6, cc);
+    G.block<3, 3>(6, cc) = P_.block<3, 3>(6, cc) + F20 * P_.block<3, 3>(0, cc)
+                           + F27 * P_.block<3, 3>(21, cc);
+    for (int r = 3; r < 8; ++r) {
+      G.block<3, 3>(3 * r, cc) = P_.block<3, 3>(3 * r, cc);
+    }
+  }
+
+  Matrix24 out;
+  for (int i = 0; i < 8; ++i) {
+    const int rr = 3 * i;
+    const Matrix3d g0 = G.block<3, 3>(rr, 0);
+    const Matrix3d g1 = G.block<3, 3>(rr, 3);
+    const Matrix3d g2 = G.block<3, 3>(rr, 6);
+    const Matrix3d g6 = G.block<3, 3>(rr, 18);
+    const Matrix3d g7 = G.block<3, 3>(rr, 21);
+    out.block<3, 3>(rr, 0) = g0 * F00.transpose() + dt * g6;
+    out.block<3, 3>(rr, 3) = g1 + dt * g2;
+    out.block<3, 3>(rr, 6) = g2 + g0 * F20.transpose() + g7 * F27.transpose();
+    out.block<3, 3>(rr, 9) = G.block<3, 3>(rr, 9);
+    out.block<3, 3>(rr, 12) = G.block<3, 3>(rr, 12);
+    out.block<3, 3>(rr, 15) = G.block<3, 3>(rr, 15);
+    out.block<3, 3>(rr, 18) = g6;
+    out.block<3, 3>(rr, 21) = g7;
+  }
+
+  // F_w Q F_w^T 把 Q 的四个对角块搬到对应状态块, 要求 Q 分块对角.
+  out.block<3, 3>(9, 9) += dt * Q_.block<3, 3>(0, 0);
+  out.block<3, 3>(12, 12) += dt * Q_.block<3, 3>(3, 3);
+  out.block<3, 3>(18, 18) += dt * Q_.block<3, 3>(6, 6);
+  out.block<3, 3>(21, 21) += dt * Q_.block<3, 3>(9, 9);
+  return out;
 }
 
 void ManifoldEskf::pointBodyToWorld(PointType const* pi, PointType* po,
@@ -138,88 +181,6 @@ void ManifoldEskf::pointBodyToWorld(PointType const* pi, PointType* po,
   po->y = p_global(1);
   po->z = p_global(2);
   po->intensity = pi->intensity;
-}
-
-int ManifoldEskf::updateLidar(MeasureGroup& meas, FilterOutput& out,
-                              const LidarParams& params, int group_idx,
-                              int point_offset) {
-  const int group_size = meas.time_seq[group_idx];
-  VF(4) pabcd;
-  pabcd.setZero();
-  normvec_->resize(group_size);
-  const size_t total = meas.feats_down_body->points.size();
-  nearest_points_.resize(total);
-  pbody_list_.resize(total);
-  point_selected_surf_.resize(total);
-  int effect_num = 0;
-
-  for (int j = 0; j < group_size; ++j) {
-    const int index = point_offset + j;
-    PointType& point_body = meas.feats_down_body->points[index];
-    PointType& point_world = out.feats_down_world->points[index];
-    pointBodyToWorld(&point_body, &point_world, params, x_predict);
-
-    const Eigen::Vector3d p_lidar(point_body.x, point_body.y, point_body.z);
-    pbody_list_[index] = R_LI_fixed_ * p_lidar + t_LI_fixed_;
-    const Eigen::Vector3d p_body = pbody_list_[index];
-    const double p_norm = p_body.norm();
-
-    auto& points_near = nearest_points_[index];
-    map_->GetClosestPoint(point_world, points_near, NUM_MATCH_POINTS);
-
-    if (points_near.size() < NUM_MATCH_POINTS) {
-      point_selected_surf_[index] = false;
-    } else {
-      point_selected_surf_[index] = false;
-      if (esti_plane(pabcd, points_near, params.plane_threshold)) {
-        const double pd2 = std::fabs(pabcd(0) * point_world.x
-                                     + pabcd(1) * point_world.y
-                                     + pabcd(2) * point_world.z + pabcd(3));
-        if (p_norm > params.match_threshold * pd2 * pd2) {
-          point_selected_surf_[index] = true;
-          normvec_->points[j].x = pabcd(0);
-          normvec_->points[j].y = pabcd(1);
-          normvec_->points[j].z = pabcd(2);
-          normvec_->points[j].intensity = pabcd(3);
-          ++effect_num;
-        }
-      }
-    }
-  }
-
-  if (effect_num == 0) {
-    return 0;
-  }
-
-  H_L = MatrixXd::Zero(effect_num, 24);
-  r_L = VectorXd::Zero(effect_num);
-  D_L = MatrixXd::Identity(effect_num, effect_num);
-  R_L = lidar_cov_ * MatrixXd::Identity(effect_num, effect_num);
-  int m = 0;
-
-  for (int j = 0; j < group_size; ++j) {
-    const int index = point_offset + j;
-    if (!point_selected_surf_[index]) {
-      continue;
-    }
-    const Eigen::Vector3d norm_vec(normvec_->points[j].x, normvec_->points[j].y,
-                                   normvec_->points[j].z);
-
-    const Eigen::Vector3d point_imu = pbody_list_[index];
-    const Eigen::Vector3d C = x_predict.rot.transpose() * norm_vec;
-    const Eigen::Vector3d A = Hat(point_imu) * C;
-    H_L.block<1, 3>(m, 3) = norm_vec.transpose();
-    H_L.block<1, 3>(m, 0) = A.transpose();
-
-    r_L(m) = -norm_vec(0) * out.feats_down_world->points[index].x
-             - norm_vec(1) * out.feats_down_world->points[index].y
-             - norm_vec(2) * out.feats_down_world->points[index].z
-             - normvec_->points[j].intensity;
-    // 限制单点残差, 避免错误的平面拟合把位置一次拉飞.
-    r_L(m) = std::clamp(r_L(m), -0.5, 0.5);
-    ++m;
-  }
-  return effect_num;
 }
 
 void ManifoldEskf::updateWorldPoints(MeasureGroup& meas, FilterOutput& out,
@@ -236,7 +197,6 @@ void ManifoldEskf::updateWorldPoints(MeasureGroup& meas, FilterOutput& out,
 
 bool ManifoldEskf::stateTransform(double lidar_time, const V3D& omega,
                                   const V3D& acc) {
-  const State zero_input{};
   const double dt = lidar_time - last_time_;
   if (dt < 0.0) {
     return false;
@@ -244,28 +204,50 @@ bool ManifoldEskf::stateTransform(double lidar_time, const V3D& omega,
   x_predict = x_;
   const Vector24 delta = dt * f_(x_, omega, acc);
   x_predict.boxplus(delta);
-  P_predict = F_x(x_, dt) * P_ * F_x(x_, dt).transpose()
-              + F_w_ * Q_ * F_w_.transpose() * dt;
+  P_predict = predictCovariance(dt);
   last_time_ = lidar_time;
   return true;
 }
 
-void ManifoldEskf::applyLidarUpdate() {
-  S_L = H_L * P_predict * H_L.transpose() + D_L * R_L * D_L.transpose();
-  K_L = P_predict * H_L.transpose() * S_L.inverse();
-  dx_o = K_L * r_L;
-  P_bias = (I - K_L * H_L) * P_predict * (I - K_L * H_L).transpose()
-           + K_L * R_L * K_L.transpose();
+void ManifoldEskf::applySequentialLidarUpdate(const MatrixXd& B,
+                                              const VectorXd& r,
+                                              const double sigma2, Matrix24& P,
+                                              Vector24& dx) {
+  // 逐点标量更新与批量更新代数等价:
+  //   P+ = P - k g^T - g k^T + s k k^T,  g = P h,  s = h^T P h + sigma2,  k = g
+  //   / s.
+  for (int i = 0; i < B.rows(); ++i) {
+    const Eigen::Matrix<double, 6, 1> h = B.row(i).transpose();
+    const double s = h.dot(P.topLeftCorner<6, 6>() * h) + sigma2;
+    const Vector24 g = P.leftCols<6>() * h;
+    const Vector24 k = g / s;
+    dx += k * (r(i) - h.dot(dx.head<6>()));
+    P.noalias() -= k * g.transpose();
+    P.noalias() -= g * k.transpose();
+    P.noalias() += s * (k * k.transpose());
+  }
+}
 
+void ManifoldEskf::applyLidarUpdate() {
+  Matrix24 Pc = P_predict;
+  Vector24 dx = Vector24::Zero();
+  applySequentialLidarUpdate(B_L, r_L, lidar_cov_, Pc, dx);
+
+  dx_o = dx;
   x_ = x_predict;
   x_.boxplus(dx_o);
+  applyRotationErrorReset(Pc);
+}
 
+void ManifoldEskf::applyRotationErrorReset(const Matrix24& P_in) {
   const Matrix3d R_delta = x_predict.rot.transpose() * x_.rot;
-  const Eigen::Vector3d theta = Log(R_delta);
-  J = I;
-  J.block<3, 3>(0, 0) = rightJacobian(theta);
-
-  P_ = J * P_bias * J.transpose();
+  const Matrix3d Jr = rightJacobian(Log(R_delta));
+  // J = I 除左上角 Jr, 所以 J P J^T 只改前 3 行与前 3 列.
+  Matrix24 M;
+  M.topRows<3>() = Jr * P_in.topRows<3>();
+  M.bottomRows<21>() = P_in.bottomRows<21>();
+  P_.leftCols<3>() = M.leftCols<3>() * Jr.transpose();
+  P_.rightCols<21>() = M.rightCols<21>();
 }
 
 void ManifoldEskf::commitPrediction() {
@@ -283,18 +265,12 @@ void ManifoldEskf::applyImuUpdate(const std::array<bool, 6>& saturated) {
   S_I = H * P_predict * H.transpose() + D_I * R_I * D_I.transpose();
   K_I = P_predict * H.transpose() * S_I.inverse();
   dx_o = K_I * r_I;
-  P_bias = (I - K_I * H) * P_predict * (I - K_I * H).transpose()
-           + K_I * R_I * K_I.transpose();
+  const Matrix24 P_bias = (I - K_I * H) * P_predict * (I - K_I * H).transpose()
+                          + K_I * R_I * K_I.transpose();
 
   x_ = x_predict;
   x_.boxplus(dx_o);
-
-  const Matrix3d R_delta = x_predict.rot.transpose() * x_.rot;
-  const Eigen::Vector3d theta = Log(R_delta);
-  J = I;
-  J.block<3, 3>(0, 0) = rightJacobian(theta);
-
-  P_ = J * P_bias * J.transpose();
+  applyRotationErrorReset(P_bias);
 }
 
 void ManifoldEskf::set_gravity(Eigen::Vector3d gravity) {
@@ -452,5 +428,100 @@ int ManifoldEskf::lidarUpdate(MeasureGroup& meas, FilterOutput& out,
   applyLidarUpdate();
   updateWorldPoints(meas, out, params, group_idx, point_offset);
   out.processed_size = point_offset + meas.time_seq[group_idx];
+  return effect_num;
+}
+
+int ManifoldEskf::updateLidar(MeasureGroup& meas, FilterOutput& out,
+                              const LidarParams& params, int group_idx,
+                              int point_offset) {
+  const int group_size = meas.time_seq[group_idx];
+  VF(4) pabcd;
+  pabcd.setZero();
+  {
+    normvec_->resize(group_size);
+    const size_t total = meas.feats_down_body->points.size();
+    nearest_points_.resize(total);
+    pbody_list_.resize(total);
+    point_selected_surf_.resize(total);
+  }
+  int effect_num = 0;
+  int near_num = 0;
+  int plane_num = 0;
+
+  for (int j = 0; j < group_size; ++j) {
+    const int index = point_offset + j;
+    PointType& point_body = meas.feats_down_body->points[index];
+    PointType& point_world = out.feats_down_world->points[index];
+    {
+      pointBodyToWorld(&point_body, &point_world, params, x_predict);
+      const Eigen::Vector3d p_lidar(point_body.x, point_body.y, point_body.z);
+      pbody_list_[index] = R_LI_fixed_ * p_lidar + t_LI_fixed_;
+    }
+
+    const Eigen::Vector3d p_body = pbody_list_[index];
+    const double p_norm = p_body.norm();
+    auto& points_near = nearest_points_[index];
+    {
+      map_->GetClosestPoint(point_world, points_near, NUM_MATCH_POINTS);
+    }
+
+    if (points_near.size() < NUM_MATCH_POINTS) {
+      point_selected_surf_[index] = false;
+    } else {
+      ++near_num;
+      point_selected_surf_[index] = false;
+      bool plane_ok = false;
+      {
+        plane_ok = esti_plane(pabcd, points_near, params.plane_threshold);
+      }
+      if (plane_ok) {
+        ++plane_num;
+        const double pd2 = std::fabs(pabcd(0) * point_world.x
+                                     + pabcd(1) * point_world.y
+                                     + pabcd(2) * point_world.z + pabcd(3));
+        if (p_norm > params.match_threshold * pd2 * pd2) {
+          point_selected_surf_[index] = true;
+          normvec_->points[j].x = pabcd(0);
+          normvec_->points[j].y = pabcd(1);
+          normvec_->points[j].z = pabcd(2);
+          normvec_->points[j].intensity = pabcd(3);
+          ++effect_num;
+        }
+      }
+    }
+  }
+
+  if (effect_num == 0) {
+    return 0;
+  }
+
+  {
+    B_L = MatrixXd::Zero(effect_num, 6);
+    r_L = VectorXd::Zero(effect_num);
+    int m = 0;
+    for (int j = 0; j < group_size; ++j) {
+      const int index = point_offset + j;
+      if (!point_selected_surf_[index]) {
+        continue;
+      }
+      const Eigen::Vector3d norm_vec(
+          normvec_->points[j].x, normvec_->points[j].y, normvec_->points[j].z);
+
+      const Eigen::Vector3d point_imu = pbody_list_[index];
+      const Eigen::Vector3d C = x_predict.rot.transpose() * norm_vec;
+      const Eigen::Vector3d A = Hat(point_imu) * C;
+      B_L.block<1, 3>(m, 0) = A.transpose();
+      B_L.block<1, 3>(m, 3) = norm_vec.transpose();
+
+      r_L(m) = -norm_vec(0) * out.feats_down_world->points[index].x
+               - norm_vec(1) * out.feats_down_world->points[index].y
+               - norm_vec(2) * out.feats_down_world->points[index].z
+               - normvec_->points[j].intensity;
+      // 限制单点残差, 避免错误的平面拟合把位置一次拉飞.
+      r_L(m) = std::clamp(r_L(m), -0.5, 0.5);
+      ++m;
+    }
+  }
+
   return effect_num;
 }

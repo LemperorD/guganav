@@ -36,6 +36,13 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | `scripts/paramview/params_list/*_para.txt` | 各控制器参数对照表（mppi/mpc/pid），行格式 `参数名\|说明`。 |
 | `scripts/paramview/param_merge.py` | 三层配置合并，供 paramview 标注“当前值已偏离配置值”，也可单独用来做结构重构前后的等价性比较。 |
 
+## 传感器标定
+
+| 文件 | 用途 |
+| ---- | ---- |
+| `scripts/imu_lidar/imu_lidar.cpp` | 独立读取 MID-360 板载 IMU 的工具，不依赖 ROS：基于 Livox SDK2 回调，支持六面采集并输出 CSV。编译与用法见 `scripts/imu_lidar/README.md`。 |
+| `scripts/imu_calib/imu_calib.py` | IMU 六面标定入口：`collect` 按六个朝向采集静止数据，`solve` 求解零偏、标度因子与交叉耦合，`apply` 验证修正效果。用法与模型说明见 `scripts/imu_calib/README.md`。 |
+
 ## 构建
 
 | 脚本                     | 用途                                                                   |

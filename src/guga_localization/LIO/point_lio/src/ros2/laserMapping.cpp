@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
 LaserMappingNode::LaserMappingNode()
     : rclcpp::Node("laserMapping"), processor_(stage_, data_handler_, state_) {
   callback_group_ = create_callback_group(
-      rclcpp::CallbackGroupType::MutuallyExclusive);  // TODO:记得考虑回调组方法
+      rclcpp::CallbackGroupType::MutuallyExclusive);
   initializeParameters();
   frame_publisher_.configure(this, config_.publish);
   processor_.initialize();
@@ -100,6 +100,50 @@ void LaserMappingNode::initializeParameters() {
         "mapping.satu_gyro", 35.0);
     config_.imu.acc_norm = this->declare_parameter<double>("mapping.acc_norm",
                                                            1.0);
+
+    // 六面标定 (scripts/imu_calib) 结果, 关闭时这些参数不读也不生效.
+    config_.imu.calib_enable = this->declare_parameter<bool>(
+        "mapping.imu_calib_enable", false);
+    const auto acc_bias = this->declare_parameter<std::vector<double>>(
+        "mapping.imu_acc_bias", std::vector<double>{0.0, 0.0, 0.0});
+    const auto gyro_bias = this->declare_parameter<std::vector<double>>(
+        "mapping.imu_gyro_bias", std::vector<double>{0.0, 0.0, 0.0});
+    const auto acc_correction = this->declare_parameter<std::vector<double>>(
+        "mapping.imu_acc_correction",
+        std::vector<double>{1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0});
+
+    if (acc_bias.size() == 3) {
+      config_.imu.acc_bias =
+          Eigen::Vector3d(acc_bias[0], acc_bias[1], acc_bias[2]);
+    } else if (config_.imu.calib_enable) {
+      RCLCPP_WARN(get_logger(), "imu_acc_bias 需要 3 个数, 当前 %zu 个",
+                  acc_bias.size());
+    }
+    if (gyro_bias.size() == 3) {
+      config_.imu.gyro_bias =
+          Eigen::Vector3d(gyro_bias[0], gyro_bias[1], gyro_bias[2]);
+    } else if (config_.imu.calib_enable) {
+      RCLCPP_WARN(get_logger(), "imu_gyro_bias 需要 3 个数, 当前 %zu 个",
+                  gyro_bias.size());
+    }
+    if (acc_correction.size() == 9) {
+      Eigen::Matrix3d matrix = Eigen::Matrix3d::Identity();
+      for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+          matrix(row, column) = acc_correction[row * 3 + column];
+        }
+      }
+      config_.imu.acc_correction = matrix;
+    } else if (config_.imu.calib_enable) {
+      RCLCPP_WARN(get_logger(), "imu_acc_correction 需要 9 个数, 当前 %zu 个",
+                  acc_correction.size());
+    }
+    if (config_.imu.calib_enable) {
+      RCLCPP_INFO(get_logger(),
+                  "IMU 六面标定修正已启用 (bias [%.4f %.4f %.4f] m/s^2)",
+                  config_.imu.acc_bias[0], config_.imu.acc_bias[1],
+                  config_.imu.acc_bias[2]);
+    }
 
     config_.lidar.plane_threshold = static_cast<float>(
         this->declare_parameter<double>("mapping.plane_thr", 0.05F));
@@ -360,9 +404,9 @@ void LaserMappingNode::publishFrameOutputs() {
     return;
   }
   if (config_.publish.scan_enabled || data_handler_.odometry_valid) {
-    project_publisher_.publish(
-        *processor_.currentDownsampledWorld(), buildOdometry(),
-        data_handler_.odometry_valid, get_ros_time(processor_.lidarEndTime()));
+    project_publisher_.publish(*processor_.currentDownsampledWorld(),
+                               buildOdometry(), data_handler_.odometry_valid,
+                               get_ros_time(processor_.lidarEndTime()));
   }
 }
 

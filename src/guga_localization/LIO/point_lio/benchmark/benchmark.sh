@@ -1,0 +1,1 @@
+ros2 run point_lio pointlio_mapping --ros-args   --params-file src/guga_localization/LIO/point_lio/config/mid360.yaml   -p publish.debug_state_en:=true   -r __ns:=/red_standard_robot1  -p preprocess.lidar_type:=2 -p common.lid_topic:="velodyne_points"

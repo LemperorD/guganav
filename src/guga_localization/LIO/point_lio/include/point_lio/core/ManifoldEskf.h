@@ -45,6 +45,11 @@ public:
   // 传播与更新.
   bool stateTransform(double lidar_time, const V3D& omega, const V3D& acc);
   void applyLidarUpdate();
+  // 逐点标量更新 (纯函数): R = sigma2 I, B 每行 6 维, 前 3 列对姿态,
+  // 后 3 列对位置. 返回更新后的 P 与累计的 dx.
+  static void applySequentialLidarUpdate(
+      const Eigen::MatrixXd& B, const Eigen::VectorXd& r, double sigma2,
+      Eigen::Matrix<double, 24, 24>& P, Eigen::Matrix<double, 24, 1>& dx);
   bool propagateImu(double imu_time);
   void applyImuUpdate(const std::array<bool, 6>& saturated = {});
   void commitPrediction();
@@ -72,6 +77,12 @@ public:
   void set_gravity(Eigen::Vector3d gravity);
   [[nodiscard]] const State& get_x() const;
   [[nodiscard]] const State& get_x_predict() const;
+  [[nodiscard]] const Eigen::Matrix<double, 24, 24>& getP() const {
+    return P_;
+  }
+  [[nodiscard]] const Eigen::Matrix<double, 24, 24>& getP_predict() const {
+    return P_predict;
+  }
   [[nodiscard]] state_output toStateOutput() const;
   [[nodiscard]] const std::vector<PointVector>& nearestPoints() const {
     return nearest_points_;
@@ -80,7 +91,8 @@ public:
 private:
   Eigen::Matrix<double, 24, 1> f_(const State& x_, const V3D& omega,
                                   const V3D& acc) const;
-  Eigen::Matrix<double, 24, 24> F_x(const State& x_, double dt) const;
+  Eigen::Matrix<double, 24, 24> predictCovariance(double dt) const;
+  void applyRotationErrorReset(const Eigen::Matrix<double, 24, 24>& P_in);
   void pointBodyToWorld(PointType const* pi, PointType* po,
                         const LidarParams& params, const State& state) const;
 
@@ -93,8 +105,6 @@ private:
   State x_predict;
 
   Eigen::Matrix<double, 24, 24> P_ = Eigen::Matrix<double, 24, 24>::Identity();
-  Eigen::Matrix<double, 24, 24> P_bias =
-      Eigen::Matrix<double, 24, 24>::Identity();
   Eigen::Matrix<double, 24, 24> P_predict =
       Eigen::Matrix<double, 24, 24>::Identity();
 
@@ -104,14 +114,9 @@ private:
 
   const Eigen::Matrix<double, 24, 24> I =
       Eigen::Matrix<double, 24, 24>::Identity();
-  Eigen::Matrix<double, 24, 24> J = Eigen::Matrix<double, 24, 24>::Identity();
 
-  // LiDAR 量测: 有效点数动态, 由 updateLidar 决定.
-  Eigen::MatrixXd H_L;
-  Eigen::MatrixXd D_L;
-  Eigen::MatrixXd R_L;
-  Eigen::MatrixXd S_L;
-  Eigen::MatrixXd K_L;
+  // LiDAR 量测: 每行只含前 6 列 (姿态与位置), 行数由 updateLidar 决定.
+  Eigen::MatrixXd B_L;
   double lidar_cov_{1e-3};
   Eigen::Matrix3d R_LI_fixed_ = Eigen::Matrix3d::Identity();
   Eigen::Vector3d t_LI_fixed_ = Eigen::Vector3d::Zero();

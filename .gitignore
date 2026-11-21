@@ -34,3 +34,6 @@ src/ros2_tracing/
 
 # 本地临时脚本与测试产物
 .tmp/
+
+# IMU 读取工具的编译产物
+scripts/imu_lidar/imu_lidar

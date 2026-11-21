@@ -12,3 +12,4 @@
 | 重构         | `ui_types.hpp` 里全是魔法数字，待修复                                                                                                                                                                                                | `guga_ui_common`                               |
 | 可视化       | 研究库中的 RViz 配置：`guga_bringup/rviz/` 两份 Nav2 视图（`nav2_default_view`、`nav2_default_view_mpc`）、`guga_description/rviz/visualize_robot`、`point_lio/rviz_cfg/loam_livox`、`livox_ros_driver2/config/display_point_cloud`、仿真 `rmu_gazebo_simulator/rviz/visualize`。需要梳理各自的固定坐标系、显示的话题与所处的 TF 链，清掉已失效的显示项（例如 point_lio 已不再发布的 `cloud_effected` 仍在 `loam_livox` 里），并统一 Nav2 面板的使用方式（Waypoint 模式与单点目标的区别、Fixed Frame 该取哪个） | `guga_bringup`                                 |
 |测试模块     | 研究yaml,launch参数系统，launch参数统一挪到yaml里及动态调参脚本，ROS信息统一管理，滤去垃圾信息 |
+| 定位（待定） | Point-LIO 的 iVox 近邻查询占单帧约六成：默认节点内线性遍历，PHC 节点类型未启用。下一步用 perf 重新定位（需调低 `perf_event_paranoid`），再决定 PHC、平表还是 SoA；改前需先做新旧实现的近邻对拍 | `point_lio` |

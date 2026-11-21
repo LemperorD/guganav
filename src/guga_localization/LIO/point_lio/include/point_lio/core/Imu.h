@@ -10,8 +10,6 @@
 #include <deque>
 #include <optional>
 
-#include <rclcpp/logger.hpp>
-
 #include "point_lio/utilities/common_lib.h"
 #include "point_lio/core/parameters.h"
 
@@ -48,7 +46,6 @@ public:
   void append(const ImuMeasurement& measurement, double timestamp);
 
   [[nodiscard]] bool empty() const;
-  [[nodiscard]] const ImuSample& next() const;
   void loadNext();
   void discardBefore(double timestamp);
 

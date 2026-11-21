@@ -33,16 +33,27 @@ void Imu::append(const ImuMeasurement& measurement, double timestamp) {
   if (adjusted <= last_timestamp_) {
     return;
   }
-  buffer_.push_back(ImuSample{measurement, adjusted});
+
+  // 六面标定修正。标定值以 m/s^2 给出, 而驱动原始加速度的单位由 acc_norm
+  // 决定 (acc_scale = g / acc_norm), 所以零偏要先换算到原始单位再扣除。
+  ImuMeasurement corrected = measurement;
+  if (params_->calib_enable) {
+    if (params_->acc_norm > 1e-9) {
+      const double acc_scale =
+          params_->processor.gravity_magnitude / params_->acc_norm;
+      corrected.linear_acceleration =
+          params_->acc_correction
+          * (corrected.linear_acceleration - params_->acc_bias / acc_scale);
+    }
+    corrected.angular_velocity -= params_->gyro_bias;
+  }
+
+  buffer_.push_back(ImuSample{corrected, adjusted});
   last_timestamp_ = adjusted;
 }
 
 bool Imu::empty() const {
   return buffer_.empty();
-}
-
-const ImuSample& Imu::next() const {
-  return next_;
 }
 
 void Imu::loadNext() {

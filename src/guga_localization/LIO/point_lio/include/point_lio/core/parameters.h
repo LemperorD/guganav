@@ -83,6 +83,15 @@ struct ImuParams {
   double acc_spike_max{0.0};
   double measurement_acc_cov{0.1};
   double measurement_gyro_cov{0.1};
+
+  /// 六面标定结果 (scripts/imu_calib): 是否启用固定零偏与标度修正。
+  bool calib_enable{false};
+  /// 修正关系 a_true = acc_correction * (a_meas - acc_bias)，acc_bias 单位
+  /// m/s^2，acc_correction 无单位。默认单位矩阵表示不修正。
+  Eigen::Matrix3d acc_correction{Eigen::Matrix3d::Identity()};
+  Eigen::Vector3d acc_bias{Eigen::Vector3d::Zero()};
+  /// 陀螺零偏，单位 rad/s。
+  Eigen::Vector3d gyro_bias{Eigen::Vector3d::Zero()};
 };
 
 struct PublishParams {

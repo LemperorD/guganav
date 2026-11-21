@@ -23,6 +23,8 @@
 
 - [NAVIGATION_DIAGNOSTIC_TESTING.md](NAVIGATION_DIAGNOSTIC_TESTING.md)：实车导航诊断与鲁棒性测试体系（判断坏现象首次出现在哪一层）。
 - [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md)：性能测试工具化方案（先测量再调参，before/after 对比）。
+- [评价基线.md](评价基线.md)：各模块评价标准与基线采集方法（判定指标、记录方式、阈值确定）。
+- [评价基线实施计划.md](评价基线实施计划.md)：把评价基线落成采集流程的分阶段计划（工具、采集顺序、验收标准）。
 
 ## 待办
 

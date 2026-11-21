@@ -1,5 +1,7 @@
 #pragma once
 
+#include "point_lio/utilities/Profiler.h"
+
 #include <pcl/common/centroid.h>
 
 #include <algorithm>
@@ -135,6 +137,7 @@ namespace faster_lio {
       std::vector<DistPoint>& dis_points, const PointT& point, const int& K,
       const double& max_range) {
     std::size_t old_size = dis_points.size();
+    PROF_EFFECT(21, "knnPts", points_.size());
     for (const auto& pt : points_) {
       double d = distance2(pt, point);
       if (d < max_range * max_range) {

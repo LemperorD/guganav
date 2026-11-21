@@ -7,6 +7,8 @@
 #include "point_lio/core/Synchronizer.h"
 #include "point_lio/core/ManifoldEskf.h"
 
+#include "point_lio/utilities/Profiler.h"
+
 FrameProcessor::FrameProcessor(PointLioStage& stage, DataHandler& data_handler,
                                MainLoopState& state)
     : stage_(stage),
@@ -58,12 +60,12 @@ void FrameProcessor::initScan() {
   // 首帧的 IMU 队列在 syncOneFrame 里已按帧结束时间收集, 这里再去掉
   // 帧起点之前的样本, 避免它们进入首帧的滤波.
   auto& imu_measure = measures_.imu_measure;
-  imu_measure.erase(
-      std::remove_if(imu_measure.begin(), imu_measure.end(),
-                     [this](const ImuSample& sample) {
-                       return sample.timestamp < measures_.lidar_start_time;
-                     }),
-      imu_measure.end());
+  imu_measure.erase(std::remove_if(imu_measure.begin(), imu_measure.end(),
+                                   [this](const ImuSample& sample) {
+                                     return sample.timestamp
+                                            < measures_.lidar_start_time;
+                                   }),
+                    imu_measure.end());
 
   imu_.discardBefore(measures_.lidar_start_time);
 }
@@ -117,9 +119,9 @@ void FrameProcessor::mapIncremental() const {
 
 void FrameProcessor::publishOdometry() {
   data_handler_.odom_state = manifold_->toStateOutput();
-  data_handler_.odom_stamp =
-      config_.mapping.publish_odometry_without_downsample ? time_current_
-                                                          : lidar_end_time_;
+  data_handler_.odom_stamp = config_.mapping.publish_odometry_without_downsample
+                                 ? time_current_
+                                 : lidar_end_time_;
   data_handler_.odometry_valid = true;
 }
 
@@ -137,6 +139,8 @@ bool FrameProcessor::calibrateLidar() {
 
   if (state_.init_feats_world->size()
       >= (size_t)config_.mapping.init_map_size) {
+    // 初始地图直接用整帧原始点入图. 它只在启动时发生一次, 不做降采样,
+    // 换来更密的初始地图和更好的起始匹配.
     lidar_.ivox()->AddPoints(state_.init_feats_world->points);
 
     data_handler_.init_map_cloud = state_.init_feats_world;

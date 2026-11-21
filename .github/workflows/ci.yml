@@ -32,8 +32,11 @@ jobs:
           apt-get install -y \
             git \
             python3-colcon-common-extensions \
+            python3-numpy \
             python3-pip \
-            python3-rosdep
+            python3-rosdep \
+            ros-humble-rosbag2-py \
+            ros-humble-rosbag2-storage-default-plugins
           # 与本地 pre-commit hook、VS Code clangd 22.1.0 统一到同一版本，
           # 避免 CI 的 clang-format --dry-run 与本地格式化结果不一致。
           pip3 install "clang-format==22.1.0" pre-commit
@@ -57,6 +60,8 @@ jobs:
               src/guga_decision/simple_decision \
               src/guga_planner/jps_planner \
               src/guga_transform/nonrotating_vel_transform \
+              src/guga_localization/LIO/point_lio \
+              src/guga_driver/livox_ros_driver2 \
             --ignore-src \
             --rosdistro humble \
             -r -y
@@ -84,3 +89,15 @@ jobs:
           pre-commit run test-jps-planner --all-files
           pre-commit run test-mppi-controller --all-files
           pre-commit run test-nonrotating-vel-transform --all-files
+
+      - name: Run point_lio replay test
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/test/run_point_lio_replay_test.sh
+
+      - name: Run point_lio z-rotation replay test
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/test/run_point_lio_replay_z_test.sh

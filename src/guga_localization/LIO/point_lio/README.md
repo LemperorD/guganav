@@ -5,7 +5,6 @@ LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡�
 
 ## 架构
 ![point_LIO 架构](../../../../docs/img/pointLIO_dataflow.svg)
-
 ![point_LIO 主架构：数据流](../../../../docs/img/pointLIO_data.svg)
 ![point_LIO 主架构：逻辑流](../../../../docs/img/pointLIO_logic.svg)
 
@@ -84,8 +83,8 @@ LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡�
 
 ### 工具层 `utilities/`
 
-- `preprocess.h`：多型号雷达的点云预处理，以及 `processImu` 的 IMU 消息转换。
-- `common_lib.h`：`State`、`MeasureGroup`、`ImuSample`、`FilterOutput` 等公共类型。
+- `preprocess.h`：多型号雷达的点云预处理，以及 ROS2 消息转换。
+- `common_lib.h`：`State`、`MeasureGroup`、`ImuSample`、`FilterOutput` 等公共类型,以及一些公用的数学函数。
 - `OdomProcessor.h`：`body_to_base` 固定变换，把 `camera_init` 系结果投影到 `base` 系。
 
 ### 参数与可选模块
@@ -154,6 +153,10 @@ LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡�
 | `mapping.acc_cov_output`       | double | 0.1    | 加速度过程噪声（IMU 作为状态时）                         |
 | `mapping.b_gyr_cov`            | double | 0.0001 | 陀螺零偏的随机游走方差                                   |
 | `mapping.b_acc_cov`            | double | 0.0001 | 加速度零偏的随机游走方差，也是初始协方差                 |
+| `mapping.imu_calib_enable`     | bool   | false  | 是否启用六面标定修正（`scripts/imu_calib` 的结果）       |
+| `mapping.imu_acc_bias`         | vector | 0,0,0  | 加速度零偏，单位 m/s²                                    |
+| `mapping.imu_gyro_bias`        | vector | 0,0,0  | 陀螺零偏，单位 rad/s                                     |
+| `mapping.imu_acc_correction`   | vector | 单位阵 | 3×3 修正矩阵，行主序，`a_true = M (a_meas - bias)`       |
 | `mapping.gyr_cov_output`       | double | 0.1    | 角速度过程噪声（IMU 作为状态时）                         |
 
 ### 输出坐标系
@@ -187,6 +190,30 @@ LIO, 雷达-惯性里程计, 接受雷达与IMU的数据, 通过构造流形卡�
 | `pcd_save.reload_service`                      | string | 空    | 写盘后调用的重载服务名                       |
 | `pcd_save.suspect_build_delay_sec`             | double | 3.0   | SUSPECT 累计多久后增量更新并重载             |
 
+## PCD 保存与点云限高
+
+### PCD 保存
+
+保存由 `PriorMapManager` 负责，触发方式取决于 `pcd_save.state_topic` 是否为空。
+
+- 配了 `state_topic` 时按定位状态驱动。`SUSPECT`（2）开始把每帧世界系点云追加进缓冲，`FINE`（1）暂停但不清空缓冲，`LOST`（3）首次立即覆盖写盘，之后按 `suspect_build_delay_sec` 累计到阈值再做增量更新并调用 `reload_service`。
+- 没配 `state_topic` 时退回 `pcd_save.require_lost`，只有 `trigger_topic` 收到 `true` 才开始累积。
+- 进程退出前 `savePending` 把未写完的缓冲落盘。
+
+写盘规则：
+
+- `pcd_save.interval` 大于 0 时每 N 帧写一个文件，多文件命名成 `scans_<index>.pcd`；等于 -1 时所有帧写进同一个文件。
+- `pcd_save.path` 为空时用 `PCD/scans_<时间戳>.pcd`；非空时以它作为基准路径，多文件模式下在文件名里插入 `_<index>`。
+- 写入先落临时文件再 `rename` 原子替换，中途失败不会留下半个 PCD。写之前会先解析软链接，install 目录里指向源码的符号链接不会被替换掉。
+
+### 点云限高
+
+`output_frame.z_filter` 是 `odom` 系下的 Z 高度范围，`min_z` 和 `max_z` 定义保留区间，`enable` 打开才生效。
+
+- 作用对象是 `registered_scan` 输出和 `PriorMapManager` 累积的 PCD。每个点先用 `OdomProcessor::apply` 转到 `odom` 系，再判断 z 是否落在区间内。
+- 不影响 `cloud_registered`、`Laser_map` 和滤波器内部的地图，限高只改输出。
+- 单位是米。实车配置 `min_z = -0.2`、`max_z = 1.0`，仿真配置 `-0.2` 到 `0.6`。
+
 ## 测试
 
 `test/` 下是 gtest 单元测试，覆盖 `OdomProcessor` 的变换解析和 `ManifoldEskf::initState` 的重力对齐。
@@ -211,3 +238,40 @@ colcon test --packages-select point_lio
 export ROS_HOME=$(mktemp -d)
 export ROS_LOG_DIR=$ROS_HOME/log
 ```
+
+### 三轴回放测试
+
+`scripts/test/run_point_lio_replay_test.sh` 用三轴旋转加三轴平移的合成 bag 跑完整链路，验证零偏估计。脚本会构建 `livox_ros_driver2` 和 `point_lio`，在临时目录生成 bag，启动节点并回放，然后断言以下四条：
+
+- 节点日志出现「标定完成」，即 IMU 重力对齐与初始地图构建完成。
+- `bg` 三轴误差都小于 0.02 rad/s，注入值是 `[0.003, -0.002, 0.004]`。
+- `ba` 的 z 轴误差小于 0.02 m/s²，注入值是 `0.020 × 9.81 = 0.1962`。
+- `ba` 的 x、y 绝对值小于 1.0，只要求不发散。
+
+`ba` 的 x、y 没有收敛断言。三轴摆动场景里这两个方向的可观测性不足，实测停在 0.04 和 0 附近，离注入的 0.098 还有距离，等模型或场景改进后再收紧阈值。
+
+运行方式：
+
+```bash
+bash scripts/test/run_point_lio_replay_test.sh
+```
+
+CI 的 `Run point_lio replay test` 步骤执行同一个脚本，任一断言失败时脚本返回非零退出码。
+
+### 绕 z 轴回放测试
+
+`scripts/test/run_point_lio_replay_z_test.sh` 用半径 2 米、角速度 0.2 rad/s 的圆周运动 bag，验证另一组可观测方向。断言以下三条：
+
+- 节点日志出现「标定完成」。
+- `ba` 三轴误差都小于 0.02 m/s²，注入值是 `[0.0981, 0.0981, 0.1962]`。
+- `bg` 的 x、y 误差都小于 0.02 rad/s，注入值是 `0.003` 和 `-0.002`。
+
+`bg` 的 z 轴没有断言。圆周场景下 yaw 率与 `bg_z` 共线，该方向不可观，实测会稳定在 -0.03 附近。两个回放测试合起来覆盖六个零偏分量：三轴场景管 `bg` 三轴和 `ba_z`，绕 z 场景管 `ba` 三轴和 `bg_x/y`。
+
+运行方式：
+
+```bash
+bash scripts/test/run_point_lio_replay_z_test.sh
+```
+
+CI 的 `Run point_lio z-rotation replay test` 步骤执行同一个脚本。

@@ -38,6 +38,26 @@ point_lio:
       satu_acc: 4.0 # the saturation value of IMU's acceleration. not related to the units
       satu_gyro: 35.0 # the saturation value of IMU's angular velocity. not related to the units
       acc_norm: 1.0 # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
+
+      # 六面标定结果（scripts/imu_lidar 采集、scripts/imu_calib 求解）。
+      # 修正关系 a_true = imu_acc_correction @ (a_meas - imu_acc_bias)，
+      # 加速度零偏单位 m/s^2，陀螺零偏单位 rad/s，矩阵无单位。
+      # 关闭修正把 imu_calib_enable 改成 false，不必删除下面的数值。
+      imu_calib_enable: true
+      imu_acc_bias: [-0.017793, -0.013639, 0.025861]
+      imu_gyro_bias: [-0.003500, -0.005185, -0.007842]
+      imu_acc_correction:
+        [
+          0.998908,
+          -0.008590,
+          0.001595,
+          0.009294,
+          1.001494,
+          -0.004584,
+          0.005154,
+          -0.007486,
+          1.000832,
+        ]
       lidar_meas_cov: 0.01 # 0.001
       acc_cov_output: 100.0
       gyr_cov_output: 50.0
