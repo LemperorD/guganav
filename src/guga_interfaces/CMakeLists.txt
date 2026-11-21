@@ -15,7 +15,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/referee/RobotStatus.msg"
   "msg/referee/RfidStatus.msg"
   "msg/MincoTrajectory.msg"
-
+  "msg/VisionInfo.msg"
   "action/EscapeObstacleLayer.action"
 
   DEPENDENCIES

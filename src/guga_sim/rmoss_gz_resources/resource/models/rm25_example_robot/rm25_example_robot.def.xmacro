@@ -26,10 +26,11 @@
                 <pose>0 0 0.045 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.36" y="0.24" z="0.13"/>
             </collision>
-            <collision name="chassis_projectile_container_collision">
+            <!-- 低矮通道测试：暂时关闭弹舱碰撞，保留 visual。 -->
+            <!-- <collision name="chassis_projectile_container_collision">
                 <pose>-0.122 0 0.177 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.1" y="0.18" z="0.146"/>
-            </collision>
+            </collision> -->
             <collision name="chassis_fornt_wheel_holder_collision">
                 <pose>0.208 0 0 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.055" y="0.367" z="0.055"/>
@@ -119,10 +120,10 @@
                     </mesh>
                 </geometry>
             </visual>
-            <collision name="collision">
+            <!-- <collision name="collision">
                 <pose>0 0 0.0885 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.065" y="0.117" z="0.177"/>
-            </collision>
+            </collision> -->
         </link>
         <!--gimbal pitch module-->
         <joint name="gimbal_pitch_joint" type="revolute">
@@ -148,14 +149,14 @@
             <visual name="visual">
                 <xmacro_block name="geometry_mesh" uri="model://rmua19_standard_robot/meshes/gimbal_pitch.dae"/>
             </visual>
-            <collision name="collision_main">
+            <!-- <collision name="collision_main">
                 <pose>0.015 0 0 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.1" y="0.0915" z="0.08"/>
-            </collision>
-            <collision name="collision_box">
+            </collision> -->
+            <!-- <collision name="collision_box">
                 <pose>-0.011 0 0.043 0 0 0</pose>
                 <xmacro_block name="geometry_box" x="0.14801" y="0.07" z="0.065"/>
-            </collision>
+            </collision> -->
             <sensor name="gimbal_imu" type="imu">
                 <always_on>1</always_on>
                 <update_rate>200</update_rate>

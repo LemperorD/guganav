@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4"
+      main_tree_to_execute="Main">
+  <BehaviorTree ID="Main">
+    <KeepRunningUntilFailure>
+      <ForceSuccess>
+        <ReactiveSequence>
+          <Ros2Input HP="{HP}"
+                     ammo="{ammo}"
+                     game_progress="{game_progress}"
+                     robot_x="{robot_x}"
+                     robot_y="{robot_y}"
+                     pose_valid="{pose_valid}"/>
+          <IsGameStart game_progress="{game_progress}"/>
+          <ForceSuccess>
+            <SubTree ID="SwitchState"
+                     _autoremap="true"/>
+          </ForceSuccess>
+          <Switch3 case_1="Suppress"
+                   case_2="Occupation"
+                   case_3="PushForward"
+                   variable="{global_state_}">
+            <SubTree ID="Suppress"
+                     _autoremap="true"/>
+            <SubTree ID="Occupation"
+                     _autoremap="true"/>
+            <SubTree ID="PushForward"
+                     _autoremap="true"/>
+            <AlwaysFailure/>
+          </Switch3>
+        </ReactiveSequence>
+      </ForceSuccess>
+    </KeepRunningUntilFailure>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Occupation">
+    <ReactiveSequence>
+      <CheckHP HP="{HP}"
+               destination="{destination}"
+               strategy_mode="{global_state_}"/>
+      <GotoPoints destination="{destination}"
+                  strategy_mode="{global_state_}"
+                  previous_destination="{previous_destination}"
+                  route_epoch="{route_epoch}"
+                  pitch_mode="{pitch_mode}"
+                  route_x=""
+                  route_y=""
+                  route_yaw=""/>
+    </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="PushForward">
+    <ReactiveSequence>
+      <CheckHP HP="{HP}"
+               destination="{destination}"
+               strategy_mode="{global_state_}"/>
+      <GotoPoints destination="{destination}"
+                  strategy_mode="{global_state_}"
+                  previous_destination="{previous_destination}"
+                  route_epoch="{route_epoch}"
+                  pitch_mode="{pitch_mode}"
+                  route_x=""
+                  route_y=""
+                  route_yaw=""/>
+      <CheckTime destination="{destination}"
+                 stay_time="{stay_time}"/>
+    </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Suppress">
+    <ReactiveSequence>
+      <CheckHP HP="{HP}"
+               destination="{destination}"
+               strategy_mode="{global_state_}"/>
+      <GotoPoints destination="{destination}"
+                  strategy_mode="{global_state_}"
+                  previous_destination="{previous_destination}"
+                  route_epoch="{route_epoch}"
+                  pitch_mode="{pitch_mode}"
+                  route_x=""
+                  route_y=""
+                  route_yaw=""/>
+    </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SwitchState">
+    <Fallback>
+      <Sequence>
+        <IsRevivedAndDead HP="{HP}"
+                          HP_sign="{HP_sign}"/>
+        <ChangeLowerState global_state_="{global_state_}"
+                          route_epoch="{route_epoch}"/>
+      </Sequence>
+      <Sequence>
+        <IsOccupationsafe destination="{destination}"
+                          occupation_time="{occupation_time}"
+                          HP="{HP}"/>
+        <ChangeHigherState global_state_="{global_state_}"
+                           route_epoch="{route_epoch}"/>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="ChangeHigherState"
+            editable="true">
+      <inout_port name="global_state_"
+                  type="string"/>
+      <inout_port name="route_epoch"
+                  type="int"/>
+    </Action>
+    <Action ID="ChangeLowerState"
+            editable="true">
+      <inout_port name="global_state_"
+                  type="string"/>
+      <inout_port name="route_epoch"
+                  type="int"/>
+    </Action>
+    <Condition ID="CheckHP"
+               editable="true">
+      <input_port name="HP"
+                  type="double"/>
+      <output_port name="destination"
+                   type="int"/>
+      <input_port name="strategy_mode"
+                  type="string"/>
+    </Condition>
+    <Condition ID="CheckTime"
+               editable="true">
+      <inout_port name="destination"
+                  type="int"/>
+      <inout_port name="stay_time"
+                  type="double"/>
+    </Condition>
+    <Action ID="GotoPoints"
+            editable="true">
+      <input_port name="destination"
+                  type="int"/>
+      <input_port name="strategy_mode"
+                  type="string"/>
+      <inout_port name="previous_destination"
+                  type="int"/>
+      <input_port name="route_epoch"
+                  type="int"/>
+      <output_port name="pitch_mode"
+                   type="int"/>
+      <input_port name="route_x"
+                  type="std::vector&lt;double&gt;"/>
+      <input_port name="route_y"
+                  type="std::vector&lt;double&gt;"/>
+      <input_port name="route_yaw"
+                  type="std::vector&lt;double&gt;"/>
+    </Action>
+    <Condition ID="IsGameStart"
+               editable="true">
+      <input_port name="game_progress"
+                  type="int"/>
+    </Condition>
+    <Condition ID="IsOccupationsafe"
+               editable="true">
+      <input_port name="destination"/>
+      <inout_port name="occupation_time"/>
+      <input_port name="HP"/>
+    </Condition>
+    <Condition ID="IsRevivedAndDead"
+               editable="true">
+      <input_port name="HP"
+                  type="double"/>
+      <inout_port name="HP_sign"
+                  type="int"/>
+    </Condition>
+    <Action ID="Ros2Input"
+            editable="true">
+      <output_port name="HP"
+                   type="double"/>
+      <output_port name="ammo"
+                   type="int"/>
+      <output_port name="game_progress"
+                   type="int"/>
+      <output_port name="robot_x"
+                   type="double"/>
+      <output_port name="robot_y"
+                   type="double"/>
+      <output_port name="pose_valid"
+                   type="bool"/>
+    </Action>
+  </TreeNodesModel>
+
+</root>

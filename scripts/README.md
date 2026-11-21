@@ -58,6 +58,131 @@ scripts/simulation.sh nav rmuc_2025 use_rviz:=False
 | -------------------- | ----------------------------------------------------------------------- |
 | `scripts/gitPush.sh` | 按项目格式生成 commit message；传入 `--push` 时提交成功后推送当前分支。 |
 
+## 调试与调参
+
+| 脚本                     | 用途                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `scripts/tune_fake_source.sh` | 运行时调整 `fake_msg_source` 的裁判数据与敌人数量，改动下一帧即生效。 |
+| `scripts/tune_controller.sh` | 运行时调整 controller 的 critics 权重与速度限制等参数。             |
+
+`tune_fake_source.sh` 常用命令：
+
+```bash
+scripts/tune_fake_source.sh              # 交互菜单
+scripts/tune_fake_source.sh show         # 显示当前取值
+scripts/tune_fake_source.sh hp 150       # 改当前血量
+scripts/tune_fake_source.sh hit 30       # 在现有血量上扣 30，模拟受击
+scripts/tune_fake_source.sh game 0       # 切到赛前；4 切回比赛中
+scripts/tune_fake_source.sh game 4
+scripts/tune_fake_source.sh rfid center true   # 模拟压上中心控制区
+scripts/tune_fake_source.sh enemy 2      # 让视觉"看见" 2 个敌人（0 表示敌人消失）
+scripts/tune_fake_source.sh save /tmp/ref.yaml      # 保存当前取值
+scripts/tune_fake_source.sh restore /tmp/ref.yaml   # 恢复
+```
+
+节点名默认 `/fake_msg_source`；数据源带命名空间启动时（例如仿真里的
+`/red_standard_robot1`），把完整节点名作为最后一个参数传入。
+
+脚本或者行为树可视化面板都能改，两者走的是同一套参数服务。裁判两路（
+`/referee/robot_status`、`/referee/rfid_status`）用的是绝对话题名，与实车
+`serial_driver_node` 一致；视觉 `vision/info` 仍是相对名。RFID 两个开关
+`rfid_center`（中心控制区，占点）、`rfid_supply`（己方补给区，回血）在面板里
+直接填 `true`／`false`，用来模拟机器人压到卡上。UL 场地里没有基地增益点，回血靠
+占领补给区（规则 3.3.2.1）。
+
+比赛阶段 `game_progress` 也在面板里（0 未开始、1 准备、2 自检、3 倒计时、4 比赛中、
+5 结算）。默认就是 4，否则树上"比赛开始满 1 秒才放行"的开关会把整棵树挡住；改成 0
+再改回 4 就能看到它重新计时。
+
+假数据源还可以提供模拟的 `NavigateToPose` action：决策节点发送 action goal 后，
+假机器人按 `sim_speed`（默认 0.2 m/s）移动，到点后返回 action success。需要观察
+位姿时可同时打开假 `odometry` 和 `odom -> base_footprint`/`map -> odom` TF。
+所以 `btview.sh` 起来之后能看到"发送 goal → 行进 → result success → 下一个航点"
+这一整条路径，不需要额外的
+`static_transform_publisher`。把 `sim_speed` 改成 0，位置就固定由 `robot_x`、
+`robot_y` 决定，用来手试两条分支。只在不开仿真、不接实车时用：真机上
+`odom -> base_footprint` 由驱动发布、`map -> odom` 由定位发布，同时跑会争同一个
+变换。`publish_pose=false` 会同时关闭假 odom 与两段 TF；`scripts/btview.sh
+--simulation` 已默认关闭，避免与 Gazebo/Nav2 的真实 TF 冲突。
+
+## 行为树可视化
+
+| 脚本                       | 用途                                                                   |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `scripts/btview.sh`        | 一键启动假数据源、`rmul_decision` 与行为树 Web 界面，Ctrl-C 一并停止。  |
+| `scripts/btview/btview_server.py` | Web 界面的服务端：tail 执行记录 + 转发数据源参数，一般由 `btview.sh` 拉起。 |
+| `scripts/btview/btlog_view.py`    | 离线解析 `.btlog` 执行记录，打印树结构与每次 tick 的执行路径。          |
+
+行为树的节点在几微秒内跑完就回到 `IDLE`，Web 界面不会逐事件等待或动画回放。
+收到一次 tick 后直接应用完整事件序列并显示这一轮的最终路径；需要查看微秒级
+先后顺序时，使用下面的 `btlog_view.py` 展开完整事件序列。
+
+```bash
+scripts/btview.sh                    # rmul_decision，浏览器打开 http://localhost:8080
+scripts/btview.sh --simulation       # 接入已运行的 Gazebo/Nav2
+scripts/btview.sh --decision guga_rmul_strategy   # 切回旧策略节点
+scripts/btview.sh --hz 10 --port 8090
+
+python3 scripts/btview/btlog_view.py ~/Desktop/1.btlog            # 摘要
+python3 scripts/btview/btlog_view.py ~/Desktop/1.btlog --tick 7   # 展开第 7 次 tick
+```
+
+假裁判联调时，`btview.sh` 终端保持运行，另开一个终端即可动态改场景：
+
+```bash
+scripts/tune_fake_source.sh                    # 交互菜单
+scripts/tune_fake_source.sh hp 350
+scripts/tune_fake_source.sh game 0
+scripts/tune_fake_source.sh game 4
+scripts/tune_fake_source.sh rfid supply true
+```
+
+这些改动直接写 `fake_msg_source` 的 ROS 2 参数，下一帧生效，不需要重启
+`rmul_decision`。Web 页面里也能改同一组参数。
+
+接入 Gazebo 仿真时，先按正常流程启动仿真，再开一个终端：
+
+```bash
+scripts/simulation.sh nav rmul_2025
+scripts/btview.sh --simulation
+```
+
+`--simulation` 默认把行为树放入 `/red_standard_robot1`，与 Nav2 使用同一套
+`NavigateToPose` action、TF 和速度话题。假裁判源放在独立的 `/fake_ref` 命名空间，只提供
+`/referee/*` 数据，不发布会与 Gazebo 冲突的假位姿。该模式会自动启用
+`use_sim_time`。仿真命名空间不同时显式传入：
+
+```bash
+scripts/btview.sh --simulation --namespace my_robot
+```
+
+该模式只接入已经运行的 Gazebo/Nav2，不会自行启动仿真。
+
+`GotoPoints` 每个新航点还会发布 `goal_pose_marker`（`visualization_msgs/Marker`，
+Transient Local）。默认 Nav2 RViz 配置已加入“Decision Goal”显示，因此即使 RViz
+晚于目标发布启动，也能看到 `GotoPoints` 当前选中的目标箭头。仿真中完整话题为
+`/red_standard_robot1/goal_pose_marker`。
+
+右侧“决策树黑板”会显示 `game_progress`、`HP`、`destination`、
+`global_state_`、占点/停留计时、复活标志以及导航输入等变量。黑板快照由
+`rmul_decision` 发布到 `/btview/blackboard`，页面每 250 ms 检查一次变化，
+只读展示；左侧仍是假裁判参数，可以直接修改。
+
+节点状态另有 `/btview/node_status` 每 tick 心跳。`FileLogger2` 只记录状态变化，
+因此持续的 `RUNNING` 不会产生新日志；Web 页面用心跳快照刷新稳定状态。
+
+执行记录由决策节点的 `btlog_path` 参数决定（默认 `/tmp/bt_trace.btlog`），
+传空字符串可关闭。`btview.sh` 会把三个进程的日志写到 `log/btview/`。
+
+同一个子行为树被多处调用时，日志里会存下每一份实例，节点编号（`#uid`）各不相同，
+界面上按调用点分开画，子树节点下面那行小字标的就是调用它的位置。页面晚于节点
+打开也能看到最近 10 次 tick：服务端会把这几次补发给新连接。
+
+节点边框按这一轮的状态着色：绿=成功，黄=运行中，红=失败，灰=这一轮没走到。
+一次 tick 只有几微秒，所以黄边框一般只在节点确实停在运行中时才看得到，
+例如 `ROS2Wrapper` 还没收到数据、返回 `RUNNING` 的那几轮。连线的黄条表示
+这一轮走过的路径。
+
 ## 测试
 
 | 脚本                                               | 用途                                                   |

@@ -1,3 +1,66 @@
 # guga_decision
 
 决策模块，实现哨兵在ul/uc战场上的行为决策
+
+RMUL 哨兵行为树的构建、运行、状态机、点位、黑板和串口姿态链路见
+[rmul_decision/README.md](rmul_decision/README.md)。
+
+## 公共输入层
+
+`guga_decision_common` 提供三套候选方案共用的 ROS 输入缓存：
+
+- `DecisionInputHub` 统一订阅机器人状态、比赛状态、RFID 和视觉汇总，并查询
+  `map -> base_footprint` 位姿。
+- `Ros2InputNode` 将输入写入行为树输出端口，节点不绑定固定黑板键。
+
+行为树方案应只创建一个 `DecisionInputHub`，多个 BT 输入节点共享同一实例，
+避免重复订阅。当前 `guga_rmul_strategy` 与 `rmul_decision` 已接入，其余候选方案可按
+[guga_decision_common/README.md](guga_decision_common/README.md) 中的示例接入。
+
+`scripts/btview.sh` 默认启动 `rmul_decision`，并同时拉起 `fake_msg_source` 和
+行为树 Web 界面；联调时用 `scripts/tune_fake_source.sh` 在另一个终端修改血量、
+比赛阶段和 RFID 等假裁判数据。需要对照旧策略时传
+`--decision guga_rmul_strategy`。
+
+Gazebo/Nav2 已经运行时，用 `scripts/btview.sh --simulation` 接入。该模式不再
+发布假位姿，而是按 `/red_standard_robot1` 命名空间启动行为树，并把假裁判源隔离
+在 `/fake_ref`，避免和 Gazebo 的 TF 冲突。
+
+## 待办
+
+### 接入导航系统
+
+决策树目前只在假数据源上跑通（`scripts/btview.sh`），还没和真实 Nav2 一起联调。
+
+- **编排**：`scripts/reality.sh`／`simulation.sh` 现在起的是 `simple_decision`，要把
+  `guga_rmul_strategy` 接进去。注意命名空间：裁判两路（`/referee/*`）与
+  `/chassis_stop` 是绝对名，`navigate_to_pose` action／`odometry` 是相对名，
+  带命名空间启动时两者的行为不一样。
+- **链路验证**：`rmul_decision` 通过 `NavigateToPose` action 发送航点并以 action
+  result 推进；controller 的 `xy_goal_tolerance`（0.15）由 Nav2 统一处理；
+  `velocity_smoother` 的 `/chassis_stop` 确实把速度压零；手柄那一路
+  （`usb_joystick_node` 直接发 `/cmd_vel`）是否也要受开关约束。
+- **导航结果**：`rmul_decision` 已改用 `NavigateToPose` action client，可区分
+  成功、失败和取消；不再依赖 decision 自己查询 TF 判断是否到点。
+- **实车前置数据**：RFID 卡的实际感应距离与"压上到消息到达"的延迟要实测，
+  它们决定巡逻点间距（现取 ±0.25）与每个点的停留时间（现在为 0，即不停留）。
+
+### v1.0.0 1v1 模块
+
+与敌方哨兵单挑那一段的决策：何时交战、怎么走位、什么时候撤。感知侧的东西已经
+齐了，缺的是"打"这一半。
+
+- **输入已经有了**：`detector/armors`（装甲板）与 `tracker/target`（已跟踪目标的
+  位置、速度、yaw、半径）都在 `guga_interfaces` 里，`simple_decision` 已经在用。
+  决策层用 `Target` 就够，`tracking` 字段可以直接当"有没有可打的目标"。
+- **执行器是缺的**：本仓库里没有任何云台角、开火、弹道解算的话题/服务/action，
+  串口下行帧只有 `VX`/`VY`/`WZ_NEG` 三个速度。所以 1v1 要真的"开火"，得先定这个
+  接口：谁负责解算与发射、走哪个话题、对应串口哪一帧（还是另有节点）。定下来之前
+  能做的只有"该不该打"以及走位、躲避、停火这些不涉及发射的部分。
+- **已有的可参考**：`simple_decision` 的 `attackAction` 是"把跟踪目标的位置当成
+  目标点贴上去"，另有 `combat_max_distance` 作门限、受击后切小陀螺。BT 这边
+  `Attack` 现在是空动作（只打日志、保持原目标前进），1v1 就是把它填上。
+- **要和既有分支对齐**：现在 `ShouldEngage` 一成立就跳过占点分支，交战与"去占点"
+  是二选一。1v1 要考虑是"边打边走位到点"还是继续二选一。
+- **约束已经有了**：热量 `shooter_17mm_1_barrel_heat` 与热量上限、允许发弹量都
+  在黑板上，开火判定直接用，不必再读一遍 ROS 消息。

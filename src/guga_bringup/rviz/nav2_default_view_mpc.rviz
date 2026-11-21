@@ -492,6 +492,19 @@ Visualization Manager:
       Name: Controller
     - Class: rviz_default_plugins/Marker
       Enabled: true
+      Name: Decision Goal
+      Namespaces:
+        decision_goal: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: goal_pose_marker
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
       Name: Velocity
       Namespaces:
         cmd_vel: true

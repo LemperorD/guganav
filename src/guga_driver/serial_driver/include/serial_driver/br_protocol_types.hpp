@@ -47,6 +47,7 @@ namespace downlink_offset {
 inline constexpr size_t VX{0};           // float LE 云台系 x 线速度 × scale
 inline constexpr size_t VY{4};           // float LE 云台系 y 线速度 × scale
 inline constexpr size_t WZ_NEG{8};       // float LE 角速度 z 取反
+inline constexpr size_t PITCH_MODE{12};  // uint8 过洞姿态模式，原保留区
 
 }  // namespace downlink_offset
 

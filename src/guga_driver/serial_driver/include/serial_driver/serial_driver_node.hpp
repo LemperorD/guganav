@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -150,6 +151,10 @@ namespace serial_driver {
     std::shared_ptr<SerialToRosBridge<std_msgs::msg::Float32>> bridge_yaw_mcu_;
     std::shared_ptr<SerialToRosBridge<geometry_msgs::msg::Point>>
         bridge_enemy_pos_mcu_;
+    rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pitch_mode_sub_;
+
+    // /decision/pitch_mode → 下一帧运动 payload 的 PITCH_MODE 字节。
+    std::atomic<std::uint8_t> pitch_mode_{0};
 
     // 定时器
     rclcpp::TimerBase::SharedPtr gimbal_vision_timer_;

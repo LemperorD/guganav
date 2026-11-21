@@ -162,18 +162,7 @@ small_gicp_relocalization:
     # 先验 PCD 存的是 camera_init 系。该旋转要与 Point-LIO 的
     # output_frame.body_to_base_r 一致: gravity 改成世界系竖直后,
     # -10 度安装俯仰已由 rot_init 吸收, 这里只保留航向 Rz(-90)。
-    body_to_base_r:
-      [
-        0.0,
-        1.0,
-        0.0,
-        -1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-      ]
+    body_to_base_r: [0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # [x, y, z, roll, pitch, yaw]
     # 定位状态话题 (std_msgs/UInt8), 供 Point-LIO 驱动 PCD 保存与先验地图重载
     state_pub_topic: "gicp_state"

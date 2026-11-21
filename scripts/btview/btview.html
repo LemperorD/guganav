@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <title>行为树执行视图</title>
+  <style>
+    :root {
+      --bg: #1e1f26;
+      --panel: #262832;
+      --line: #3c4050;
+      --text: #d8dae4;
+      --dim: #7b8095;
+      --idle: #4a4f61;
+      --running: #e5b95c;
+      --success: #5fbf6a;
+      --failure: #d9635f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 13px/1.5 "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      padding: 10px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    header .item {
+      color: var(--dim);
+    }
+
+    header .item b {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    #status {
+      margin-left: auto;
+    }
+
+    #status.on {
+      color: var(--success);
+    }
+
+    #status.off {
+      color: var(--failure);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    #tree-wrap {
+      flex: 1;
+      overflow: auto;
+    }
+
+    aside {
+      width: 360px;
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    aside h2 {
+      margin: 0;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--dim);
+      border-bottom: 1px solid var(--line);
+      letter-spacing: .5px;
+    }
+
+    #params {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      overflow: auto;
+      max-height: 34%;
+    }
+
+    .param {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0;
+    }
+
+    .param label {
+      flex: 1;
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .param input {
+      width: 92px;
+      background: #1b1d24;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 3px 6px;
+      font: inherit;
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .param input:focus {
+      outline: none;
+      border-color: var(--running);
+    }
+
+    #blackboard {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      overflow: auto;
+      max-height: 32%;
+    }
+
+    .bb-var {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #2c2f3a;
+    }
+
+    .bb-var:last-child {
+      border-bottom: 0;
+    }
+
+    .bb-var .name {
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .bb-var .desc {
+      display: block;
+      color: var(--dim);
+      font-size: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bb-var .value {
+      color: var(--running);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: right;
+      max-width: 128px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty {
+      color: var(--dim);
+      font-size: 12px;
+      padding: 4px 0;
+    }
+
+    #current {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #current .leaves {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #current .leaf {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    #current .leaf .name {
+      color: var(--text);
+    }
+
+    #current .path {
+      margin-top: 8px;
+      color: var(--dim);
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    #history {
+      flex: 1;
+      overflow: auto;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      padding: 6px 14px;
+      border-bottom: 1px solid #2c2f3a;
+    }
+
+    .row:hover {
+      background: #2c2f3a;
+    }
+
+    .row .idx {
+      color: var(--dim);
+      width: 46px;
+      flex: none;
+    }
+
+    .row .branch {
+      color: var(--text);
+      flex: 1;
+    }
+
+    .row .times {
+      color: var(--dim);
+      flex: none;
+    }
+
+    .s-RUNNING {
+      color: var(--running);
+    }
+
+    .s-SUCCESS {
+      color: var(--success);
+    }
+
+    .s-FAILURE {
+      color: var(--failure);
+    }
+
+    .s-IDLE {
+      color: var(--idle);
+    }
+
+    svg {
+      display: block;
+    }
+
+    .node rect {
+      fill: #2b2e3a;
+      stroke: var(--idle);
+      stroke-width: 1.5;
+      rx: 5;
+    }
+
+    .node text {
+      fill: var(--text);
+      font-size: 12px;
+      dominant-baseline: middle;
+    }
+
+    .node .uid {
+      fill: var(--dim);
+      font-size: 10px;
+    }
+
+    /* 边框按状态着色。只能走 CSS：CSS 的 stroke 优先于 SVG 表示属性，
+       在 rect 上 setAttribute("stroke", ...) 会被上面那条规则覆盖掉，
+       结果所有边框都是灰的。 */
+    .node.s-RUNNING rect {
+      stroke: var(--running);
+      fill: #3b3528;
+    }
+
+    .node.s-RUNNING text {
+      fill: var(--running);
+    }
+
+    .node.s-SUCCESS rect {
+      stroke: var(--success);
+      fill: #263b2b;
+    }
+
+    .node.s-SUCCESS text {
+      fill: var(--success);
+    }
+
+    .node.s-FAILURE rect {
+      stroke: var(--failure);
+      fill: #422727;
+    }
+
+    .node.s-FAILURE text {
+      fill: var(--failure);
+    }
+
+    .node.on rect {
+      stroke-width: 2.5;
+    }
+
+    .link {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.5;
+    }
+
+    .link.on {
+      stroke: var(--running);
+      stroke-width: 2.5;
+    }
+
+    /* 亮线的底色描边：交叉处把压在下面的暗线切断，亮线看起来是一条连着的线，
+       不会被误读成一个岔路口。 */
+    .link-casing {
+      fill: none;
+      stroke: var(--bg);
+      stroke-width: 6;
+      stroke-linejoin: round;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2b2e3a;
+      border: 1px solid var(--line);
+      padding: 7px 16px;
+      border-radius: 6px;
+      opacity: 0;
+      transition: opacity .25s;
+      pointer-events: none;
+    }
+
+    #toast.show {
+      opacity: 1;
+    }
+
+    #toast.err {
+      border-color: var(--failure);
+      color: var(--failure);
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="item">节点 <b id="n-nodes">-</b></div>
+    <div class="item">tick <b id="n-ticks">0</b></div>
+    <div class="item">最近跨度 <b id="n-span">-</b></div>
+    <div id="status" class="off">未连接</div>
+  </header>
+  <main>
+    <div id="tree-wrap"><svg id="tree"></svg></div>
+    <aside>
+      <h2>假裁判参数（回车提交）</h2>
+      <div id="params"></div>
+      <h2>决策树黑板</h2>
+      <div id="blackboard"><div class="empty">等待黑板快照…</div></div>
+      <h2>最近一次 tick</h2>
+      <div id="current">
+        <div class="leaves" id="cur-leaves"></div>
+        <div class="path" id="cur-path"></div>
+      </div>
+      <h2>历史（新的在上）</h2>
+      <div id="history"></div>
+    </aside>
+  </main>
+  <div id="toast"></div>
+
+  <script>
+    const NODE_W = 156, NODE_H = 34, GAP_X = 34, GAP_Y = 46, PAD = 30;
+    const ns = "http://www.w3.org/2000/svg";
+    let nodes = {};
+    let order = [];
+    let ws = null;
+    let connected = false;
+    let tickCount = 0;
+    let paramInputs = {};
+    let blackboardRows = {};
+
+    const el = (id) => document.getElementById(id);
+
+    function toast(text, isError) {
+      const box = el("toast");
+      box.textContent = text;
+      box.className = "show" + (isError ? " err" : "");
+      clearTimeout(box._timer);
+      box._timer = setTimeout(() => { box.className = ""; }, 1800);
+    }
+
+    function connect() {
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+      ws.onopen = () => { connected = true; setStatus(); };
+      ws.onclose = () => { connected = false; setStatus(); setTimeout(connect, 1000); };
+      ws.onerror = () => { connected = false; setStatus(); };
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "tree") onTree(msg);
+        else if (msg.type === "tick") onTick(msg);
+        else if (msg.type === "blackboard") onBlackboard(msg);
+        else if (msg.type === "node_status") onNodeStatus(msg);
+        else if (msg.type === "params") onParams(msg);
+        else if (msg.type === "result") toast(msg.msg, !msg.ok);
+      };
+    }
+
+    function setStatus() {
+      const s = el("status");
+      s.textContent = connected ? "已连接" : "未连接";
+      s.className = connected ? "on" : "off";
+    }
+
+    // ---------- 参数 ----------
+    function onParams(msg) {
+      const box = el("params");
+      msg.items.forEach(item => {
+        let input = paramInputs[item.name];
+        if (!input) {
+          const row = document.createElement("div");
+          row.className = "param";
+          const label = document.createElement("label");
+          label.textContent = item.desc || item.name;
+          label.title = item.name;
+          input = document.createElement("input");
+          input.type = "text";
+          input.spellcheck = false;
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              submitParam(item.name, input.value);
+              input.blur();
+            }
+          });
+          row.appendChild(label);
+          row.appendChild(input);
+          box.appendChild(row);
+          paramInputs[item.name] = input;
+        }
+        // 正在输入时不覆盖，免得每秒刷新的值把光标内容冲掉
+        if (document.activeElement !== input) {
+          input.value = item.value;
+        }
+      });
+    }
+
+    function submitParam(name, value) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) { toast("未连接", true); return; }
+      ws.send(JSON.stringify({ type: "set_param", name: name, value: value }));
+    }
+
+    // ---------- 决策树黑板 ----------
+    function onBlackboard(msg) {
+      const box = el("blackboard");
+      if (!msg.items.length) {
+        box.innerHTML = '<div class="empty">决策节点还没有发布黑板快照</div>';
+        blackboardRows = {};
+        return;
+      }
+
+      const empty = box.querySelector(".empty");
+      if (empty) empty.remove();
+      const seen = new Set();
+      msg.items.forEach(item => {
+        seen.add(item.name);
+        let row = blackboardRows[item.name];
+        if (!row) {
+          row = document.createElement("div");
+          row.className = "bb-var";
+          const label = document.createElement("div");
+          const name = document.createElement("span");
+          name.className = "name";
+          const desc = document.createElement("span");
+          desc.className = "desc";
+          label.appendChild(name);
+          label.appendChild(desc);
+          const value = document.createElement("span");
+          value.className = "value";
+          row.appendChild(label);
+          row.appendChild(value);
+          box.appendChild(row);
+          row._name = name;
+          row._desc = desc;
+          row._value = value;
+          blackboardRows[item.name] = row;
+        }
+        row._name.textContent = item.name;
+        row._desc.textContent = item.desc || item.kind;
+        row._value.textContent = item.value;
+        row._value.title = `${item.name} = ${item.value}`;
+      });
+      Object.entries(blackboardRows).forEach(([name, row]) => {
+        if (!seen.has(name)) {
+          row.remove();
+          delete blackboardRows[name];
+        }
+      });
+    }
+
+    // ---------- 树与 tick ----------
+    // "Decide::3/CaptureCenterArea::7/NavigateAndTrigger::13" -> "CaptureCenterArea"
+    // 同一个子行为树可能被多处调用，光看节点名分不出是哪一次调用，调用点写在节点里。
+    function callSite(path) {
+      if (!path) return "";
+      const parts = path.split("/");
+      if (parts.length < 2) return "";
+      return parts[parts.length - 2].split("::")[0];
+    }
+
+    function onTree(msg) {
+      const all = {};
+      msg.nodes.forEach(n => { all[n.uid] = Object.assign({}, n, { status: null, sticky: false }); });
+
+      const rootUid = msg.roots[msg.main] !== undefined
+        ? msg.roots[msg.main]
+        : msg.roots[Object.keys(msg.roots)[0]];
+
+      // 只画从入口根节点连通的节点。日志里节点是平铺的，子树的每一份实例各有
+      // 自己的 uid；按 ID 连错时另一份实例就与根脱开，那些节点没有坐标，
+      // 会全部堆在左上角。
+      const drawn = [];
+      const seen = new Set();
+      (function collect(uid) {
+        if (seen.has(uid) || !all[uid]) return;
+        seen.add(uid);
+        drawn.push(all[uid]);
+        (all[uid].children || []).forEach(collect);
+      })(rootUid);
+
+      nodes = {};
+      drawn.forEach(n => { nodes[n.uid] = n; });
+      const dropped = msg.nodes.length - drawn.length;
+      el("n-nodes").textContent = dropped > 0
+        ? `${drawn.length}（另有 ${dropped} 个未连通）`
+        : drawn.length;
+
+      order = [];
+      const visited = new Set();
+      (function walk(uid, depth) {
+        const node = nodes[uid];
+        if (!node) return;
+        node.depth = depth;
+        if (visited.has(uid) || node.children.length === 0) {
+          node.x = order.length; order.push(uid);
+          return;
+        }
+        visited.add(uid);
+        node.children.forEach(c => walk(c, depth + 1));
+        const first = nodes[node.children[0]];
+        const last = nodes[node.children[node.children.length - 1]];
+        node.x = (first.x + last.x) / 2;
+      })(rootUid, 0);
+
+      const maxDepth = Math.max(...Object.values(nodes).map(n => n.depth || 0));
+      Object.values(nodes).forEach(n => {
+        n.px = PAD + n.x * (NODE_W + GAP_X);
+        n.py = PAD + (n.depth || 0) * (NODE_H + GAP_Y);
+      });
+      const svg = el("tree");
+      svg.setAttribute("width", PAD * 2 + Math.max(0, order.length - 1) * (NODE_W + GAP_X) + NODE_W);
+      svg.setAttribute("height", PAD * 2 + maxDepth * (NODE_H + GAP_Y) + NODE_H);
+      draw();
+    }
+
+    function draw() {
+      const svg = el("tree");
+      svg.innerHTML = "";
+
+      // 每条连线：从父节点底部下到自己那一档高度，横过去，再下到子节点顶部。
+      // 高度按"离父节点越近的分支越高"分配。以前是所有分支共用一个中途高度，
+      // 兄弟节点的线就先共用同一段竖线：一亮一暗两个分支叠在一起时，亮的那条
+      // 看起来会拐进暗的分支（丁字口），暗线穿过亮线时又看不出谁连着谁（十字口）。
+      const links = [];
+      Object.values(nodes).forEach(node => {
+        const kids = (node.children || []).map(c => nodes[c]).filter(Boolean);
+        if (kids.length === 0) return;
+        const byDistance = kids.map((_k, i) => i).sort((a, b) =>
+          Math.abs(kids[a].px - node.px) - Math.abs(kids[b].px - node.px));
+        const rank = new Map(byDistance.map((index, r) => [index, r]));
+
+        kids.forEach((child, i) => {
+          const y1 = node.py + NODE_H, y2 = child.py;
+          const level = (rank.get(i) + 1) / (kids.length + 1);
+          const mid = y1 + (y2 - y1) * level;
+          const x1 = node.px + NODE_W / 2, x2 = child.px + NODE_W / 2;
+          links.push({
+            d: `M${x1},${y1} L${x1},${mid} L${x2},${mid} L${x2},${y2}`,
+            on: isOn(node) && isOn(child),
+          });
+        });
+      });
+
+      const addPath = (link, cls) => {
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("d", link.d);
+        path.setAttribute("class", cls);
+        svg.appendChild(path);
+      };
+
+      // 分两趟画：暗线先，亮线后（每条亮线自带一圈底色描边）。
+      // 亮线因此压在暗线之上，交汇处不会看成同一根。
+      links.filter(l => !l.on).forEach(l => addPath(l, "link"));
+      links.filter(l => l.on).forEach(l => {
+        addPath(l, "link-casing");
+        addPath(l, "link on");
+      });
+
+      Object.values(nodes).forEach(node => {
+        const g = document.createElementNS(ns, "g");
+        // 状态同时决定边框颜色（CSS 里的 .s-XXX）和线宽（.on）
+        const status = shownStatus(node);
+        g.setAttribute("class", "node" + (status ? " s-" + status : "") +
+          (isOn(node) ? " on" : ""));
+        g.setAttribute("transform", `translate(${node.px},${node.py})`);
+
+        const rect = document.createElementNS(ns, "rect");
+        rect.setAttribute("width", NODE_W);
+        rect.setAttribute("height", NODE_H);
+        g.appendChild(rect);
+
+        const label = document.createElementNS(ns, "text");
+        label.setAttribute("x", 8);
+        label.setAttribute("y", NODE_H / 2 - 1);
+        label.textContent = node.label.length > 18 ? node.label.slice(0, 17) + "…" : node.label;
+        g.appendChild(label);
+
+        // 子树节点写出调用点：同一个子行为树被两处调用时，只有这里能区分。
+        const meta = document.createElementNS(ns, "text");
+        meta.setAttribute("class", "uid");
+        meta.setAttribute("x", 8);
+        meta.setAttribute("y", NODE_H - 8);
+        const site = callSite(node.path);
+        meta.textContent = site ? `#${node.uid} · ${site}` : `#${node.uid}`;
+        g.appendChild(meta);
+
+        if (node.path || node.subtree) {
+          const title = document.createElementNS(ns, "title");
+          title.textContent = node.subtree
+            ? `#${node.uid} 调用 ${node.subtree}，位置 ${node.path}`
+            : `#${node.uid} ${node.label}`;
+          g.appendChild(title);
+        }
+
+        svg.appendChild(g);
+      });
+    }
+
+    // 节点显示用的状态：本 tick 有过状态就用它；否则如果它还停在 RUNNING，就显示 RUNNING。
+    // 停在 RUNNING 的节点在后续 tick 里不再产生日志（状态没变化，日志只在变化时记），
+    // 只按本 tick 的事件着色的话，它会从第二轮起一直显示成灰的。
+    const shownStatus = (node) => node.status || (node.sticky ? "RUNNING" : null);
+    const isOn = (node) => {
+      const status = shownStatus(node);
+      return status && status !== "IDLE";
+    };
+
+    // FileLogger2 只在状态变化时写记录；稳定的 RUNNING 不会持续产生 tick 事件。
+    // 决策节点每 tick 另发一份完整状态快照，这里用它刷新树上的实时状态。
+    function onNodeStatus(msg) {
+      tickCount = Math.max(tickCount, msg.seq || 0);
+      el("n-ticks").textContent = tickCount;
+      const live = {};
+      msg.items.forEach(item => {
+        live[item.uid] = item.status;
+      });
+      Object.entries(nodes).forEach(([uid, node]) => {
+        const status = live[uid];
+        if (status === "RUNNING") {
+          node.status = "RUNNING";
+          node.sticky = true;
+        } else if (status === "SUCCESS" || status === "FAILURE" || status === "UNKNOWN") {
+          node.sticky = false;
+          node.status = status;
+        } else {
+          node.sticky = false;
+          // 心跳里的 IDLE 是 tick 结束后的复位结果，不能覆盖事件回放得到的
+          // SUCCESS/FAILURE，否则 SwitchState 这类瞬时节点只剩 ForceSuccess 亮。
+          // 真正的清理发生在新一轮 tick 开始时。
+        }
+      });
+      draw();
+    }
+
+    function onTick(tick) {
+      tickCount = Math.max(tickCount, tick.index);
+      el("n-ticks").textContent = tickCount;
+      el("n-span").textContent = tick.span_us + " us";
+
+      // 与原来的显示方式一致：一个 tick 的事件一次性应用，只显示本轮最终
+      // 执行结果，不做逐事件等待和动画。
+      Object.values(nodes).forEach(n => {
+        n.status = null;
+        n.sticky = false;
+      });
+      tick.events.forEach(event => {
+        const node = nodes[event.uid];
+        if (!node) return;
+        if (event.status === "RUNNING") {
+          node.status = "RUNNING";
+          node.sticky = true;
+        } else if (event.status !== "IDLE") {
+          node.status = event.status;
+          node.sticky = false;
+        }
+      });
+      draw();
+
+      const leaves = el("cur-leaves");
+      leaves.innerHTML = "";
+      tick.leaves.forEach(l => {
+        const row = document.createElement("div");
+        row.className = "leaf";
+        row.innerHTML = `<span class="name">${l.label}#${l.uid}</span>` +
+          `<span class="s-${l.status}">${l.status}</span>`;
+        leaves.appendChild(row);
+      });
+      el("cur-path").textContent =
+        tick.path.length ? tick.path.join(" > ") : "（无子行为树）";
+
+      const row = document.createElement("div");
+      row.className = "row";
+      const branch = tick.leaves.map(l => `${l.label}=${l.status[0]}`).join(" ") || "-";
+      row.innerHTML = `<span class="idx">#${tick.index}</span>` +
+        `<span class="branch">${branch}</span>` +
+        `<span class="times">${tick.span_us}us</span>`;
+      const history = el("history");
+      history.insertBefore(row, history.firstChild);
+      while (history.childElementCount > 10) history.removeChild(history.lastChild);
+    }
+
+    connect();
+  </script>
+</body>
+
+</html>
