@@ -2,6 +2,7 @@ src/guga_bringup/pcd/simulation/rmuc_2025.pcd filter=lfs diff=lfs merge=lfs -tex
 src/guga_bringup/pcd/simulation/rmuc_2026.pcd filter=lfs diff=lfs merge=lfs -text
 src/guga_bringup/pcd/simulation/rmul_2025.pcd filter=lfs diff=lfs merge=lfs -text
 src/guga_bringup/pcd/simulation/rmul_2026.pcd filter=lfs diff=lfs merge=lfs -text
+src/guga_bringup/pcd/simulation/rmul_2027.pcd filter=lfs diff=lfs merge=lfs -text
 docs/img/pointLIO_data.svg filter=lfs diff=lfs merge=lfs -text
 docs/img/pointLIO_logic.svg filter=lfs diff=lfs merge=lfs -text
 docs/img/terrain_analysis架构.svg filter=lfs diff=lfs merge=lfs -text
