@@ -59,6 +59,13 @@ struct FilterParams {
   double acc_cov_output{0.1};
   double b_gyr_cov{0.0001};
   double b_acc_cov{0.0001};
+  // 初始协方差 P0 (量纲 [x]^2), 与过程噪声功率谱密度 Qc ([x]^2/s) 解耦.
+  double init_omg_cov{0.01};
+  double init_acc_cov{0.01};
+  double init_b_gyr_cov{0.001};
+  double init_b_acc_cov{0.001};
+  // 重力初始协方差 (投影到与重力垂直的二维切平面, Q_g = 0 常值在线微调; 0 冻结).
+  double init_gravity_cov{1e-4};
 };
 
 struct ImuProcessorParams {

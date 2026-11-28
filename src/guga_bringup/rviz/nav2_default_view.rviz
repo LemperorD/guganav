@@ -209,8 +209,6 @@ Visualization Manager:
           Value: true
         gimbal_yaw_odom:
           Value: true
-        gimbal_yaw_vision:
-          Value: true
         light_indicator:
           Value: true
         map:
@@ -268,8 +266,6 @@ Visualization Manager:
                   {}
                 rear_right_wheel:
                   {}
-              gimbal_yaw_vision:
-                {}
       Update Interval: 0
       Value: true
     - Alpha: 1

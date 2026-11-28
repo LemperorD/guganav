@@ -46,8 +46,8 @@ point_lio:
       imu_acc_spike_thresh: 1.0
       # 模长上限 (m/s²), 挡掉向上跳的坏点; <=0 关闭
       imu_acc_spike_max: 15.0
-      plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
-      match_s: 10.0
+      plane_thr: 0.02 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
+      match_s: 81.0
       ivox_grid_resolution: 0.5
       # simulation_robot.sdf.xmacro 中 livox 的 roll = -pi/18 = -10 度,
       # IMU 与雷达同姿态; 该姿态下 IMU 系的比力方向为 (0, 1.703, -9.66),
@@ -79,7 +79,7 @@ point_lio:
     pcd_save:
       # launch 默认用 pcd_save:=True 覆盖此项（导航/建图均保存）；
       # 仅在绕过 bringup 直接运行 point_lio 时使用这里的值。
-      pcd_save_en: True
+      pcd_save_en: False
       interval:
         -1 # how many LiDAR frames saved in each pcd file;
         # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

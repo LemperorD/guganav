@@ -21,6 +21,7 @@ M24 denseReference(const State& s, const M24& P, double dt, double q_bg,
   F.block<3, 3>(0, 18) = dt * M3::Identity();
   F.block<3, 3>(3, 6) = dt * M3::Identity();
   F.block<3, 3>(6, 0) = -dt * s.rot * Hat(s.acc);
+  F.block<3, 3>(6, 15) = dt * M3::Identity();
   F.block<3, 3>(6, 21) = dt * s.rot;
 
   M24x12 Fw = M24x12::Zero();
@@ -124,4 +125,49 @@ TEST(EskfLidarUpdate, SequentialMatchesBatch) {
     EXPECT_LT(dP, 1e-12) << "m=" << m;
     EXPECT_LT(ddx, 1e-10) << "m=" << m;
   }
+}
+
+TEST(EskfGravityRefinement, TangentCovariancePreservesRadialNullspace) {
+  PointLioParams cfg;
+  cfg.filter.gyr_cov_output = 5.0;
+  cfg.filter.acc_cov_output = 2.5;
+  cfg.filter.b_gyr_cov = 5e-7;
+  cfg.filter.b_acc_cov = 5e-7;
+  cfg.filter.init_omg_cov = 0.01;
+  cfg.filter.init_acc_cov = 0.01;
+  cfg.filter.init_b_gyr_cov = 0.001;
+  cfg.filter.init_b_acc_cov = 0.001;
+  cfg.filter.init_gravity_cov = 1e-4;
+
+  // 15 度倾斜重力, 验证任意方向下切平面投影与传播保持径向零空间.
+  const double g_mag = 9.80665;
+  const double tilt = 15.0 * M_PI / 180.0;
+  const V3D g_vec(0.0, g_mag * std::sin(tilt), -g_mag * std::cos(tilt));
+  const V3D g_hat = g_vec.normalized();
+  cfg.imu.processor.gravity = g_vec;
+  cfg.imu.processor.gravity_magnitude = g_mag;
+  cfg.common.gravity_magnitude = g_mag;
+
+  ManifoldEskf eskf;
+  eskf.initialize(cfg, nullptr, Eigen::Matrix3d::Identity(), V3D::Zero());
+  eskf.set_gravity(g_vec);
+
+  const M24 P0 = eskf.getP();
+  // P0 与过程噪声解耦.
+  EXPECT_NEAR(P0(18, 18), 0.01, 1e-12);
+  EXPECT_NEAR(P0(21, 21), 0.01, 1e-12);
+  EXPECT_NEAR(P0(9, 9), 0.001, 1e-12);
+  EXPECT_NEAR(P0(12, 12), 0.001, 1e-12);
+  // 径向方差为零, 切平面两方向方差为 init_gravity_cov.
+  const M3 Pg0 = P0.block<3, 3>(15, 15);
+  EXPECT_NEAR((g_hat.transpose() * Pg0 * g_hat)(0, 0), 0.0, 1e-15);
+  EXPECT_NEAR(Pg0.trace(), 2.0 * 1e-4, 1e-12);
+
+  eskf.setStartTime(0.0);
+  ASSERT_TRUE(eskf.stateTransform(0.05, V3D::Zero(), -g_vec));
+  const M24 Pp = eskf.getP_predict();
+  // 传播后速度-重力出现非零互协方差, 且沿重力径向仍严格为零.
+  const M3 Pvg = Pp.block<3, 3>(6, 15);
+  EXPECT_GT(Pvg.norm(), 1e-6);
+  EXPECT_LT((g_hat.transpose() * Pp.middleRows<3>(15)).norm(), 1e-14);
 }
