@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import xml.etree.ElementTree as ET
 
 import yaml
 from ament_index_python.packages import get_package_share_directory
@@ -23,6 +24,23 @@ from launch_ros.actions import Node
 from nav2_common.launch import ReplaceString
 from sdformat_tools.urdf_generator import UrdfGenerator
 from xmacro.xmacro4sdf import XMLMacro4sdf
+
+
+def _strip_robot_visuals(robot_xml: str) -> str:
+    """移除 Gazebo 机器人 SDF 中的所有 <visual>（及依赖它的 LightBarController），
+    彻底消除车体/装甲板对 gpu_lidar 的近距遮挡。
+
+    不影响 physics 所需的 <collision>/<inertial>/<sensor>，
+    也不影响传给 robot_state_publisher 的 URDF（RViz 中仍正常显示整车）。
+    """
+    root = ET.fromstring(robot_xml)
+    for parent in root.iter():
+        for child in list(parent):
+            if child.tag == "visual":
+                parent.remove(child)
+            elif child.tag == "plugin" and "LightBarController" in (child.get("name") or ""):
+                parent.remove(child)
+    return ET.tostring(root, encoding="unicode")
 
 
 def launch_setup(context, *args, **kwargs):
@@ -63,7 +81,7 @@ def launch_setup(context, *args, **kwargs):
 
     actions = []
 
-    for robot in robots:
+    for robot_index, robot in enumerate(robots):
         # Generate SDF from xmacro
         xmacro.generate({"global_initial_color": robot["color"]})
         robot_xml = xmacro.to_string()
@@ -72,6 +90,9 @@ def launch_setup(context, *args, **kwargs):
         urdf_generator = UrdfGenerator()
         urdf_generator.parse_from_sdf_string(robot_xml)
         robot_urdf_xml = urdf_generator.to_string()
+
+        # 避免 gpu_lidar 渲染本车外壳/装甲板导致近距盲区（RViz 与物理碰撞不受影响）
+        robot_xml = _strip_robot_visuals(robot_xml)
 
         # replace the <robot_name> in the bridge config file
         aft_replace_ros_bridge_params = ReplaceString(

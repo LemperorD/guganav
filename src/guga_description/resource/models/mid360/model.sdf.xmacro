@@ -13,14 +13,9 @@
         <pose>0 0 0.02 0 0 0</pose>
         <xmacro_block name="inertia_cylinder" m="0.005" r="0.04" l="0.04" />
       </inertial>
-      <visual name="visual">
-        <pose>0.0 0.0 0.0 0 0 ${pi}</pose>
-        <geometry>
-          <mesh>
-            <uri>model://mid360/meshes/mid360.dae</uri>
-          </mesh>
-        </geometry>
-      </visual>
+      <!-- 不渲染自身外壳 mid360.dae: gpu_lidar 原点位于 (0,0,0) 与 front_mid360 重合，
+           而外壳尺寸为 65×65×60 mm (< min_range 0.1m)，Ignition Gazebo 的 gpu_lidar 会渲染
+           <visual> 网格，导致射线从外壳内部被截断为 -inf、前下方 157° 扇区大面积致盲。 -->
 
       <sensor name="${prefix}mid360_imu" type="imu">
         <ignition_frame_id>${prefix}mid360</ignition_frame_id>
