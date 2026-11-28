@@ -59,19 +59,33 @@ point_lio:
           1.000832,
         ]
       lidar_meas_cov: 0.01 # 0.001
-      acc_cov_output: 100.0
-      gyr_cov_output: 50.0
-      b_acc_cov: 0.0001
-      b_gyr_cov: 0.0001
-      imu_meas_acc_cov: 0.1
-      imu_meas_omg_cov: 0.1
+      # 与原版 Point-LIO 的每采样噪声对齐（IMU 200 Hz）。代码按 Q_c*dt 注入，
+      # 原版按 Q_disc*dt^2 注入，所以过程噪声功率谱密度 Q_c 取 原版值*0.005：
+      #   角速度 1000*0.005 = 5.0，加速度 500*0.005 = 2.5，
+      #   零偏 1e-4*0.005 = 5e-7，IMU 量测 0.01。
+      acc_cov_output: 2.5
+      gyr_cov_output: 5.0
+      b_acc_cov: 5.0e-7
+      b_gyr_cov: 5.0e-7
+      # 初始协方差 P0 与过程噪声 Q_c 已解耦，对齐原版 reset_cov_output；
+      # init_gravity_cov > 0 启用常值在线微调 (Q_g = 0，投影到与重力垂直的二维切平面)。
+      init_omg_cov: 0.01
+      init_acc_cov: 0.01
+      init_b_gyr_cov: 0.001
+      init_b_acc_cov: 0.001
+      init_gravity_cov: 0.0001
+      imu_meas_acc_cov: 0.01
+      imu_meas_omg_cov: 0.01
       gyr_cov_input: 0.1 # for IMU as input model
       acc_cov_input: 0.1 # for IMU as input model
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 10.0
       ivox_grid_resolution: 0.5
-      gravity: [0.0, 1.885, -9.627] # gravity to be aligned
-      gravity_init: [0.0, 1.885, -9.627] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      # 实车雷达安装倾角 15° (见 body_to_base_r: Rz(-135°)Rx(-15°)),
+      # 重力模长取 9.80665 m/s^2 与 scripts/imu_calib 六面法标尺 G_STANDARD 一致：
+      # g_body = R_base_body^T * [0, 0, -9.80665]^T = [0, g*sin(15°), -g*cos(15°)]
+      gravity: [0.0, 2.5381, -9.4725] # gravity to be aligned
+      gravity_init: [0.0, 2.5381, -9.4725] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [-0.011, -0.02329, 0.04412]
       extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 

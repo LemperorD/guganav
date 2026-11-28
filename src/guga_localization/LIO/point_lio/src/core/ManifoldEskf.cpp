@@ -39,13 +39,26 @@ void ManifoldEskf::initialize(const PointLioParams& config,
                         config.filter.b_acc_cov);
 
   Matrix<double, 24, 24> P = Matrix<double, 24, 24>::Identity() * 0.01;
-  P.block<3, 3>(18, 18) = config.filter.gyr_cov_output * Matrix3d::Identity();
-  P.block<3, 3>(21, 21) = config.filter.acc_cov_output * Matrix3d::Identity();
-  P.block<3, 3>(9, 9) = config.filter.b_gyr_cov * Matrix3d::Identity();
-  P.block<3, 3>(12, 12) = config.filter.b_acc_cov * Matrix3d::Identity();
-  // 重力由静止初始化确定, 固定不估计, 避免与加速度零偏混在一起发散.
-  P.middleRows<3>(15).setZero();
-  P.middleCols<3>(15).setZero();
+  P.block<3, 3>(9, 9) = config.filter.init_b_gyr_cov * Matrix3d::Identity();
+  P.block<3, 3>(12, 12) = config.filter.init_b_acc_cov * Matrix3d::Identity();
+  P.block<3, 3>(18, 18) = config.filter.init_omg_cov * Matrix3d::Identity();
+  P.block<3, 3>(21, 21) = config.filter.init_acc_cov * Matrix3d::Identity();
+
+  const V3D g_ref = config.imu.processor.gravity.norm() > 1e-6
+                        ? config.imu.processor.gravity
+                        : V3D(0.0, 0.0, -config.common.gravity_magnitude);
+  gravity_norm_ = g_ref.norm();
+  if (config.filter.init_gravity_cov > 0.0 && gravity_norm_ > 1e-6) {
+    // 重力常值在线微调 (Q_g = 0): 将初始协方差投影到与重力垂直的二维切平面
+    // (I - g_hat g_hat^T), 只修正方向误差、锁定模长, 避免平地运动时 g_z 与 ba_z 耦合.
+    const V3D g_hat = g_ref / gravity_norm_;
+    P.block<3, 3>(15, 15) =
+        config.filter.init_gravity_cov
+        * (Matrix3d::Identity() - g_hat * g_hat.transpose());
+  } else {
+    P.middleRows<3>(15).setZero();
+    P.middleCols<3>(15).setZero();
+  }
   setInitialCovariance(P);
 
   configureFixedExtrinsic(lidar_rotation, lidar_translation);
@@ -124,7 +137,7 @@ Matrix24 ManifoldEskf::predictCovariance(const double dt) const {
   // 计算 G = F_x P F_x^T + F_w Q F_w^T, 其中 F_x 是状态转移矩阵, F_w
   // 是噪声转移矩阵.
 
-  // F_x 只有五个非零的非对角块, 其余是单位块,
+  // F_x 只有六个非零的非对角块 (含速度对重力的 dt*I), 其余是单位块,
   // 所以分两步按块乘:
   //   第一步 G = F_x P, 第 3 到第 7 行块是整行复制;
   //   第二步 G F_x^T, 第 3 到第 7 列块是整列复制.
@@ -139,6 +152,7 @@ Matrix24 ManifoldEskf::predictCovariance(const double dt) const {
                            + dt * P_.block<3, 3>(18, cc);
     G.block<3, 3>(3, cc) = P_.block<3, 3>(3, cc) + dt * P_.block<3, 3>(6, cc);
     G.block<3, 3>(6, cc) = P_.block<3, 3>(6, cc) + F20 * P_.block<3, 3>(0, cc)
+                           + dt * P_.block<3, 3>(15, cc)
                            + F27 * P_.block<3, 3>(21, cc);
     for (int r = 3; r < 8; ++r) {
       G.block<3, 3>(3 * r, cc) = P_.block<3, 3>(3 * r, cc);
@@ -151,14 +165,16 @@ Matrix24 ManifoldEskf::predictCovariance(const double dt) const {
     const Matrix3d g0 = G.block<3, 3>(rr, 0);
     const Matrix3d g1 = G.block<3, 3>(rr, 3);
     const Matrix3d g2 = G.block<3, 3>(rr, 6);
+    const Matrix3d g5 = G.block<3, 3>(rr, 15);
     const Matrix3d g6 = G.block<3, 3>(rr, 18);
     const Matrix3d g7 = G.block<3, 3>(rr, 21);
     out.block<3, 3>(rr, 0) = g0 * F00.transpose() + dt * g6;
     out.block<3, 3>(rr, 3) = g1 + dt * g2;
-    out.block<3, 3>(rr, 6) = g2 + g0 * F20.transpose() + g7 * F27.transpose();
+    out.block<3, 3>(rr, 6) = g2 + g0 * F20.transpose() + dt * g5
+                             + g7 * F27.transpose();
     out.block<3, 3>(rr, 9) = G.block<3, 3>(rr, 9);
     out.block<3, 3>(rr, 12) = G.block<3, 3>(rr, 12);
-    out.block<3, 3>(rr, 15) = G.block<3, 3>(rr, 15);
+    out.block<3, 3>(rr, 15) = g5;
     out.block<3, 3>(rr, 18) = g6;
     out.block<3, 3>(rr, 21) = g7;
   }
@@ -236,7 +252,17 @@ void ManifoldEskf::applyLidarUpdate() {
   dx_o = dx;
   x_ = x_predict;
   x_.boxplus(dx_o);
+  enforceGravityNorm();
   applyRotationErrorReset(Pc);
+}
+
+void ManifoldEskf::enforceGravityNorm() {
+  if (gravity_norm_ > 1e-6 && dx_o.segment<3>(15).squaredNorm() > 0.0) {
+    const double n = x_.gravity.norm();
+    if (n > 1e-6) {
+      x_.gravity *= (gravity_norm_ / n);
+    }
+  }
 }
 
 void ManifoldEskf::applyRotationErrorReset(const Matrix24& P_in) {
@@ -270,11 +296,13 @@ void ManifoldEskf::applyImuUpdate(const std::array<bool, 6>& saturated) {
 
   x_ = x_predict;
   x_.boxplus(dx_o);
+  enforceGravityNorm();
   applyRotationErrorReset(P_bias);
 }
 
 void ManifoldEskf::set_gravity(Eigen::Vector3d gravity) {
   x_.gravity = gravity;
+  gravity_norm_ = gravity.norm();
 }
 
 const State& ManifoldEskf::get_x() const {

@@ -180,6 +180,16 @@ void LaserMappingNode::initializeParameters() {
         "mapping.b_gyr_cov", 0.0001);
     config_.filter.b_acc_cov = this->declare_parameter<double>(
         "mapping.b_acc_cov", 0.0001);
+    config_.filter.init_omg_cov = this->declare_parameter<double>(
+        "mapping.init_omg_cov", 0.01);
+    config_.filter.init_acc_cov = this->declare_parameter<double>(
+        "mapping.init_acc_cov", 0.01);
+    config_.filter.init_b_gyr_cov = this->declare_parameter<double>(
+        "mapping.init_b_gyr_cov", 0.001);
+    config_.filter.init_b_acc_cov = this->declare_parameter<double>(
+        "mapping.init_b_acc_cov", 0.001);
+    config_.filter.init_gravity_cov = this->declare_parameter<double>(
+        "mapping.init_gravity_cov", 1e-4);
     config_.imu.measurement_acc_cov = this->declare_parameter<double>(
         "mapping.imu_meas_acc_cov", 0.1);
     config_.imu.measurement_gyro_cov = this->declare_parameter<double>(
