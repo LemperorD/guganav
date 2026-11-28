@@ -126,7 +126,7 @@ controller_server:
     # 起不再被加载，这组取值从未生效；其中 min_y=0.5 会把 0.5 m/s 以下的横向速度
     # 当作零，与 Omni 控制相冲突，故不沿用。
 
-    controller_frequency: 30.0
+    controller_frequency: 60.0
 
     FollowPath:
       plugin: "guga_source_mppi_controller::MPPIController"
@@ -138,8 +138,8 @@ controller_server:
       #   - period > model_dt → configure 抛异常，controller_server 起不来
       # YAML 不支持计算式；1/30 ≈ 0.033333333333，写 0.033333333（误差 <1e-6 即可）。
       # 若改 controller_frequency，model_dt 需同步改为 1/频率。
-      model_dt: 0.033333333
-      batch_size: 1800
+      model_dt: 0.0166666666667
+      batch_size: 2000
       vx_std: 0.5
       vy_std: 0.5
       wz_std: 1.0

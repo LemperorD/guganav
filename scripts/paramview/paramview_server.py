@@ -254,6 +254,61 @@ def same_value(left, right):
     return str(left) == str(right)
 
 
+def detect_controller_profile(plugin_name):
+    """根据 controller_server 的 FollowPath.plugin 推断控制器 profile。"""
+    if not isinstance(plugin_name, str) or not plugin_name.strip():
+        return None
+    low = plugin_name.lower()
+    if "mppi" in low:
+        return "mppi"
+    if "pid" in low:
+        return "pid"
+    if "mpc" in low:
+        return "mpc"
+    return None
+
+
+def detect_planner_profile(plugin_name):
+    """根据 planner_server 的 GridBased.plugin 推断规划器 profile。"""
+    if not isinstance(plugin_name, str) or not plugin_name.strip():
+        return None
+    low = plugin_name.lower()
+    if "jps" in low:
+        return "jps"
+    if "smacplanner2d" in low or "smac2d" in low:
+        return "smac2d"
+    if "smacplannerhybrid" in low or "smachybrid" in low:
+        return "smachybrid"
+    return None
+
+
+def param_list_for_profile(profile):
+    """返回指定控制器 profile 对应的参数说明文件路径（不存在则返回 None）。"""
+    if not profile:
+        return None
+    path = os.path.join(WS_ROOT, "scripts", "paramview", "params_list", f"{profile}_para.txt")
+    return path if os.path.exists(path) else None
+
+
+def resolve_node_in_graph(graph, spec_node):
+    """在 ROS 图里解析节点全路径（自动适配仿真命名空间，如 /red_standard_robot1/controller_server）。
+
+    返回 (resolved_full_path, ambiguous_matches)。
+    """
+    nodes = (graph or {}).get("nodes", [])
+    clean = spec_node.strip("/")
+    exact = "/" + clean
+    if exact in nodes:
+        return exact, []
+    suffix = "/" + clean
+    matched = [n for n in nodes if n.endswith(suffix)]
+    if len(matched) == 1:
+        return matched[0], []
+    if len(matched) > 1:
+        return None, matched
+    return None, []
+
+
 class ParamTarget:
     """一个被调参的节点：一次批量读，一次写一个。"""
 
@@ -262,42 +317,92 @@ class ParamTarget:
             node_name, prefix = spec.split(":", 1)
         else:
             node_name, prefix = spec, ""
-        self.node_name = node_name.strip("/")
+        self.spec_node = node_name.strip("/")
+        self.node_name = self.spec_node
         self.prefix = prefix.strip()
         self.descriptions = descriptions
         self.graph = graph
+        self._node = node
+        self.resolved_node = "/" + self.spec_node
+        self.resolved_namespace = ""
+        self.use_sim_time = None
         self.names = []
         self.values = {}
         self.read_ms = None
         self.error = None
-        self.get_client = node.create_client(
-            rcl_interfaces_srv_get(), f"/{self.node_name}/get_parameters"
+        self.get_client = None
+        self.set_client = None
+        self.list_client = None
+        self._bind_clients(self.resolved_node, wait=False)
+
+    def _bind_clients(self, full_node_path, wait=True):
+        if self.get_client is not None and full_node_path == self.resolved_node:
+            return
+        for client in (self.get_client, self.set_client, self.list_client):
+            if client is not None:
+                try:
+                    self._node.destroy_client(client)
+                except Exception:
+                    pass
+        self.resolved_node = full_node_path
+        suffix = "/" + self.node_name
+        if full_node_path.endswith(suffix):
+            self.resolved_namespace = full_node_path[: -len(suffix)]
+        else:
+            self.resolved_namespace = ""
+        self.get_client = self._node.create_client(
+            rcl_interfaces_srv_get(), f"{self.resolved_node}/get_parameters"
         )
-        self.set_client = node.create_client(
-            rcl_interfaces_srv_set(), f"/{self.node_name}/set_parameters"
+        self.set_client = self._node.create_client(
+            rcl_interfaces_srv_set(), f"{self.resolved_node}/set_parameters"
         )
-        self.list_client = node.create_client(
-            rcl_interfaces_srv_list(), f"/{self.node_name}/list_parameters"
+        self.list_client = self._node.create_client(
+            rcl_interfaces_srv_list(), f"{self.resolved_node}/list_parameters"
         )
+        if wait:
+            self.get_client.wait_for_service(timeout_sec=0.4)
+            self.list_client.wait_for_service(timeout_sec=0.2)
+
+    def config_node_key(self, baseline):
+        """用于匹配 baseline 与写回 yaml 的节点键（去掉仿真命名空间前缀）。"""
+        if not baseline or self.node_name in baseline:
+            return self.node_name
+        # 用户显式传入 red_standard_robot1/controller_server 时，还原成 controller_server
+        parts = self.node_name.split("/")
+        for i in range(1, len(parts)):
+            candidate = "/".join(parts[i:])
+            if candidate in baseline:
+                return candidate
+        return self.node_name
 
     # ── 读取 ─────────────────────────────────────────────────────
     def refresh(self, descriptions_all):
         import rclpy
         from rcl_interfaces.srv import ListParameters, GetParameters
 
+        resolved, ambiguous = resolve_node_in_graph(self.graph, self.spec_node)
+        if ambiguous:
+            self.error = (
+                f"发现多个同名节点：{', '.join(ambiguous[:3])}，"
+                "请在 --target 里指定命名空间前缀"
+            )
+            return
+        if resolved and resolved != self.resolved_node:
+            self._bind_clients(resolved, wait=True)
+
         if not self.get_client.service_is_ready():
             hint = ""
             if self.graph is not None:
-                matched = [n for n in self.graph.get("nodes", []) if self.node_name in n]
+                matched = [n for n in self.graph.get("nodes", []) if self.spec_node in n]
                 if matched:
                     hint = "；图里有同名节点：" + ", ".join(matched[:3]) + "（可能是命名空间不同，--target 里带上前缀）"
                 else:
                     hint = (
                         f"；图里共 {len(self.graph.get('nodes', []))} 个节点，没有名字含 "
-                        f"{self.node_name} 的节点（ROS_DOMAIN_ID={self.graph['domain_id']}、"
+                        f"{self.spec_node} 的节点（ROS_DOMAIN_ID={self.graph['domain_id']}、"
                         f"ROS_LOCALHOST_ONLY={self.graph['localhost_only']}）"
                     )
-            self.error = f"未发现 /{self.node_name}/get_parameters{hint}"
+            self.error = f"未发现 {self.resolved_node}/get_parameters{hint}"
             return
         started = time.time()
         names = set()
@@ -334,20 +439,30 @@ class ParamTarget:
             self.error = "该前缀下没有参数（列表服务无返回，且说明文件里没有该前缀的名字）"
             return
 
+        sorted_names = sorted(names)
+        query_sim_time = "use_sim_time" not in names
         request = GetParameters.Request()
-        request.names = sorted(names)
+        request.names = sorted_names + (["use_sim_time"] if query_sim_time else [])
         future = self.get_client.call_async(request)
         if not self._wait(future):
             self.error = "get_parameters 超时"
             return
         values = future.result().values
+        if query_sim_time and len(values) == len(sorted_names) + 1:
+            sim_val = values[-1]
+            if sim_val.type == 1:
+                self.use_sim_time = sim_val.bool_value
+            values = values[:-1]
         self.values = {}
         kept = []
-        for name, value in zip(sorted(names), values):
+        for name, value in zip(sorted_names, values):
             if value.type == 0:  # NOT_SET：节点没声明这个名字
                 continue
             kept.append(name)
-            self.values[name] = parameter_value_to_python(value)
+            py_val = parameter_value_to_python(value)
+            self.values[name] = py_val
+            if name == "use_sim_time" and isinstance(py_val, bool):
+                self.use_sim_time = py_val
         self.names = kept
         self.read_ms = (time.time() - started) * 1000.0
         self.error = None
@@ -368,7 +483,7 @@ class ParamTarget:
         from rcl_interfaces.srv import SetParameters
 
         if not self.set_client.service_is_ready():
-            return False, f"未发现 /{self.node_name}/set_parameters"
+            return False, f"未发现 {self.resolved_node}/set_parameters"
         if name not in self.names:
             return False, f"{name} 不在本目标的参数表里"
 
@@ -412,7 +527,7 @@ class ParamTarget:
             )
         return True, "已写入"
 
-    def snapshot(self):
+    def snapshot(self, baseline=None):
         entries = []
         for name in self.names:
             entries.append(
@@ -423,11 +538,16 @@ class ParamTarget:
                     "description": self.descriptions.get(name, ""),
                 }
             )
+        config_key = self.config_node_key(baseline)
+        ns = self.resolved_namespace or namespace_for(self.graph or {}, config_key)
+        display_node = self.resolved_node.lstrip("/")
         return {
-            "target": f"{self.node_name}:{self.prefix}" if self.prefix else self.node_name,
-            "node": self.node_name,
+            "target": f"{self.spec_node}:{self.prefix}" if self.prefix else self.spec_node,
+            "display_target": f"{display_node}:{self.prefix}" if self.prefix else display_node,
+            "node": config_key,
+            "resolved_node": self.resolved_node,
             "prefix": self.prefix,
-            "namespace": namespace_for(self.graph or {}, self.node_name),
+            "namespace": ns,
             "read_ms": self.read_ms,
             "error": self.error,
             "params": entries,
@@ -510,31 +630,151 @@ def graph_summary(node):
 
 
 class App:
-    def __init__(self, targets, node, hz, baseline_args=None, writable=True):
+    def __init__(self, targets, node, hz, baseline_args=None, writable=True, auto_list=False):
         self.targets = targets
         self.node = node
         self.hz = hz
-        self.baseline_args = baseline_args or (None, None, None)
-        self.baseline = load_baseline(*self.baseline_args)
-        self.layer_files = config_layers(*self.baseline_args)
+        raw_mode, raw_ctrl, raw_planner = baseline_args or (None, None, None)
+        self.auto_mode = raw_mode == "auto"
+        self.auto_controller = raw_ctrl == "auto"
+        self.auto_planner = raw_planner == "auto"
+        self.auto_list = auto_list
+        self.baseline_args = (
+            None if self.auto_mode else raw_mode,
+            None if self.auto_controller else raw_ctrl,
+            None if self.auto_planner else raw_planner,
+        )
+        self.detected_profile = None if self.auto_controller else raw_ctrl
+        self._planner_client = None
+        self._planner_node_path = None
+        self._layer_mtimes = None
+        self.baseline_version = 1
+        self.baseline = load_baseline(*self.baseline_args) if all(self.baseline_args) else {}
+        self.layer_files = config_layers(*self.baseline_args) if all(self.baseline_args) else []
         self.writable = writable
         self.clients = set()
         self.lock = threading.Lock()
         self.last_refresh = 0.0
 
+    def _query_planner_plugin(self, graph):
+        from rcl_interfaces.srv import GetParameters
+
+        resolved, ambiguous = resolve_node_in_graph(graph, "planner_server")
+        if not resolved or ambiguous:
+            return None
+        if self._planner_client is None or self._planner_node_path != resolved:
+            if self._planner_client is not None:
+                try:
+                    self.node.destroy_client(self._planner_client)
+                except Exception:
+                    pass
+            self._planner_node_path = resolved
+            self._planner_client = self.node.create_client(
+                GetParameters, f"{resolved}/get_parameters"
+            )
+            self._planner_client.wait_for_service(timeout_sec=0.2)
+        if not self._planner_client.service_is_ready():
+            return None
+        req = GetParameters.Request()
+        req.names = ["GridBased.plugin"]
+        future = self._planner_client.call_async(req)
+        if not ParamTarget._wait(future, timeout=0.5):
+            return None
+        vals = future.result().values
+        if vals and vals[0].type == 4:
+            return detect_planner_profile(vals[0].string_value)
+        return None
+
+    def _layers_mtime_signature(self, files):
+        sig = []
+        for path in files:
+            try:
+                sig.append((path, os.path.getmtime(path)))
+            except OSError:
+                sig.append((path, None))
+        return tuple(sig)
+
+    def _auto_detect_runtime(self, graph):
+        mode, ctrl, planner = self.baseline_args
+        new_mode, new_ctrl, new_planner = mode, ctrl, planner
+
+        for target in self.targets:
+            if target.error:
+                continue
+            if self.auto_mode:
+                if target.use_sim_time is True:
+                    new_mode = "simulation"
+                elif target.use_sim_time is False:
+                    new_mode = "reality"
+                elif target.resolved_namespace:
+                    new_mode = "simulation"
+            if self.auto_controller:
+                plugin = target.values.get("FollowPath.plugin")
+                detected = detect_controller_profile(plugin)
+                if detected:
+                    new_ctrl = detected
+            if self.auto_planner:
+                plugin = target.values.get("GridBased.plugin")
+                detected_p = detect_planner_profile(plugin)
+                if detected_p:
+                    new_planner = detected_p
+
+        if self.auto_planner and not new_planner:
+            detected_p = self._query_planner_plugin(graph)
+            if detected_p:
+                new_planner = detected_p
+            elif new_mode and new_ctrl:
+                # planner_server 尚未就绪时先回落默认 jps，待就绪后再更新
+                new_planner = "jps"
+
+        # 控制器 profile 识别后自动切换参数说明文件
+        if self.auto_list and new_ctrl and new_ctrl != self.detected_profile:
+            list_path = param_list_for_profile(new_ctrl)
+            if list_path:
+                descs = parse_param_lists([list_path])
+                for target in self.targets:
+                    target.descriptions = descs
+                self.detected_profile = new_ctrl
+                print(
+                    f"自动加载参数说明: {os.path.relpath(list_path, WS_ROOT)} ({len(descs)} 项)",
+                    flush=True,
+                )
+
+        new_args = (new_mode, new_ctrl, new_planner)
+        changed = new_args != self.baseline_args
+        if changed:
+            self.baseline_args = new_args
+            self.layer_files = config_layers(*new_args) if all(new_args) else []
+            if all(new_args):
+                self.baseline = load_baseline(*new_args)
+                self._layer_mtimes = self._layers_mtime_signature(self.layer_files)
+                self.baseline_version += 1
+                print(
+                    f"自动识别配置基线: mode={new_mode}, controller={new_ctrl}, planner={new_planner} "
+                    f"-> {'、'.join(os.path.relpath(p, WS_ROOT) for p in self.layer_files)}",
+                    flush=True,
+                )
+        elif all(self.baseline_args):
+            sig = self._layers_mtime_signature(self.layer_files)
+            if sig != self._layer_mtimes:
+                self.baseline = load_baseline(*self.baseline_args)
+                self._layer_mtimes = sig
+                self.baseline_version += 1
+
     def snapshot(self):
         with self.lock:
+            mode, ctrl, planner = self.baseline_args
             return {
                 "type": "params",
                 "stamp": self.last_refresh,
                 "writable": self.writable,
+                "baseline_version": self.baseline_version,
+                "meta": {"mode": mode, "controller": ctrl, "planner": planner},
                 "graph": graph_summary(self.node),
-                "targets": [target.snapshot() for target in self.targets],
+                "targets": [target.snapshot(self.baseline) for target in self.targets],
             }
 
     def refresh_once(self):
-        if any(self.baseline_args):
-            self.baseline = load_baseline(*self.baseline_args)
         graph = graph_summary(self.node)
         for target in self.targets:
             target.graph = graph
@@ -542,6 +782,8 @@ class App:
                 target.refresh(target.descriptions)
             except Exception as exc:  # 单个目标出错不应影响其它目标
                 target.error = f"{type(exc).__name__}: {exc}"
+        with self.lock:
+            self._auto_detect_runtime(graph)
         self.last_refresh = time.time()
 
     def save_params(self):
@@ -555,8 +797,7 @@ class App:
         if not self.layer_files:
             return {
                 "ok": False,
-                "msg": "缺少 --baseline-mode/--baseline-controller/--baseline-planner，"
-                "无法确定写回哪个文件",
+                "msg": "尚未识别到配置模式/控制器/规划器，请先等待节点连接或手动指定 --mode/--profile/--planner",
             }
 
         with self.lock:
@@ -572,8 +813,9 @@ class App:
             edits = {}
             skipped = []
             for target in self.targets:
-                namespace = namespace_for(target.graph or {}, target.node_name)
-                node_base = self.baseline.get(target.node_name) or {}
+                config_key = target.config_node_key(self.baseline)
+                namespace = target.resolved_namespace or namespace_for(target.graph or {}, config_key)
+                node_base = self.baseline.get(config_key) or {}
                 for name in target.names:
                     if name not in node_base:
                         continue
@@ -583,7 +825,7 @@ class App:
                         continue
                     # 键路径：节点段 + ros__parameters + 参数名的层级段
                     key_path = (
-                        tuple(target.node_name.split("/"))
+                        tuple(config_key.split("/"))
                         + ("ros__parameters",)
                         + tuple(name.split("."))
                     )
@@ -638,6 +880,8 @@ class App:
                 )
             # 基线跟着更新：写回之后这些参数就不再是"偏离配置"了
             self.baseline = load_baseline(*self.baseline_args)
+            self._layer_mtimes = self._layers_mtime_signature(self.layer_files)
+            self.baseline_version += 1
 
         total = sum(item["count"] for item in written)
         msg = "已写回 {} 个参数（{}），下次启动生效".format(
@@ -657,13 +901,18 @@ class App:
 
 
 def make_app(args):
-    descriptions_all = parse_param_lists(args.list)
+    auto_list = not bool(args.list)
+    initial_list = args.list or [
+        os.path.join(WS_ROOT, "scripts/paramview/params_list/mppi_para.txt")
+    ]
+    descriptions_all = parse_param_lists(initial_list)
     node = make_node()
     targets = [ParamTarget(spec, node, descriptions_all) for spec in args.target]
     app_state = App(
         targets, node, args.hz,
         (args.baseline_mode, args.baseline_controller, args.baseline_planner),
         writable=not args.no_save,
+        auto_list=auto_list,
     )
 
     # 不在这里等每个服务就绪：目标节点的 3 个服务各等一次会让页面迟迟打不开，
@@ -715,7 +964,9 @@ def make_app(args):
         ok, msg = await asyncio.get_event_loop().run_in_executor(
             None, target.set_value, body.get("name"), body.get("value")
         )
-        return web.json_response({"ok": ok, "msg": msg, "params": target.snapshot()})
+        return web.json_response(
+            {"ok": ok, "msg": msg, "params": target.snapshot(app_state.baseline)}
+        )
 
     @routes.get("/ws")
     async def websocket(request):
@@ -743,7 +994,12 @@ def make_app(args):
                         None, target.set_value, payload.get("name"), payload.get("value")
                     )
                     await ws.send_json(
-                        {"type": "result", "ok": ok, "msg": text, "params": target.snapshot()}
+                        {
+                            "type": "result",
+                            "ok": ok,
+                            "msg": text,
+                            "params": target.snapshot(app_state.baseline),
+                        }
                     )
         finally:
             app_state.clients.discard(ws)
@@ -800,11 +1056,17 @@ def main():
         help="启动时每个目标等待服务的秒数（默认 0，交给后台刷新线程发现）",
     )
     parser.add_argument(
-        "--baseline-mode", default=None, choices=[None, "reality", "simulation"],
-        help="参数基线：模式（与 --baseline-controller/--baseline-planner 一起给出）",
+        "--baseline-mode", default="auto", choices=[None, "auto", "reality", "simulation"],
+        help="参数基线：模式（auto 按运行节点的 use_sim_time 自动识别）",
     )
-    parser.add_argument("--baseline-controller", default=None, help="参数基线：控制器 profile")
-    parser.add_argument("--baseline-planner", default=None, help="参数基线：规划器 profile")
+    parser.add_argument(
+        "--baseline-controller", default="auto",
+        help="参数基线：控制器 profile（auto 按 FollowPath.plugin 自动识别）",
+    )
+    parser.add_argument(
+        "--baseline-planner", default="auto",
+        help="参数基线：规划器 profile（auto 按 planner_server 的 GridBased.plugin 自动识别）",
+    )
     parser.add_argument(
         "--no-save", action="store_true",
         help="只读模式：禁止把参数写回配置文件（界面上的保存按钮会失效）",
@@ -813,8 +1075,6 @@ def main():
 
     if not args.target:
         args.target = ["controller_server:FollowPath"]
-    if not args.list:
-        args.list = [os.path.join(WS_ROOT, "scripts/paramview/params_list/mppi_para.txt")]
 
     application, node = make_app(args)
     print(f"打开浏览器访问: http://{args.host}:{args.port}", flush=True)
@@ -825,14 +1085,21 @@ def main():
         f"RMW={env['rmw']}；当前可见节点 {len(env['nodes'])} 个",
         flush=True,
     )
-    layers = config_layers(args.baseline_mode, args.baseline_controller, args.baseline_planner)
-    if layers and args.no_save:
-        print("只读模式：参数不会写回配置文件", flush=True)
-    elif layers:
+    if "auto" in (args.baseline_mode, args.baseline_controller, args.baseline_planner):
         print(
-            "保存写回: " + "、".join(os.path.relpath(path, WS_ROOT) for path in layers),
+            f"自动识别: mode={args.baseline_mode}, controller={args.baseline_controller}, "
+            f"planner={args.baseline_planner}（节点就绪后自动匹配命名空间与配置基线）",
             flush=True,
         )
+    else:
+        layers = config_layers(args.baseline_mode, args.baseline_controller, args.baseline_planner)
+        if layers and args.no_save:
+            print("只读模式：参数不会写回配置文件", flush=True)
+        elif layers:
+            print(
+                "保存写回: " + "、".join(os.path.relpath(path, WS_ROOT) for path in layers),
+                flush=True,
+            )
     web.run_app(application, host=args.host, port=args.port, print=None)
 
 

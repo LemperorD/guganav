@@ -26,20 +26,40 @@ from sdformat_tools.urdf_generator import UrdfGenerator
 from xmacro.xmacro4sdf import XMLMacro4sdf
 
 
-def _strip_robot_visuals(robot_xml: str) -> str:
-    """移除 Gazebo 机器人 SDF 中的所有 <visual>（及依赖它的 LightBarController），
-    彻底消除车体/装甲板对 gpu_lidar 的近距遮挡。
+_IGN_VISIBILITY_GUI = 0x1
+_IGN_VISIBILITY_SELECTABLE = 0x2
+_IGN_VISIBILITY_ALL = 0x0FFFFFFF
 
-    不影响 physics 所需的 <collision>/<inertial>/<sensor>，
-    也不影响传给 robot_state_publisher 的 URDF（RViz 中仍正常显示整车）。
+
+def _hide_robot_from_own_lidar(robot_xml: str, robot_index: int) -> str:
+    """保留 Gazebo 机器人所有 <visual>（GUI 中正常可见、可点选、灯条正常），
+    同时通过 visibility_flags / visibility_mask 位掩码让本车 gpu_lidar 忽略本车外壳，
+    彻底消除近距遮挡，且不影响本车雷达扫描场地/障碍物与其它车辆。
     """
+    own_bit = 1 << (4 + (robot_index % 24))
+    visual_flags = _IGN_VISIBILITY_GUI | _IGN_VISIBILITY_SELECTABLE | own_bit
+    lidar_mask = _IGN_VISIBILITY_ALL & ~visual_flags
+
     root = ET.fromstring(robot_xml)
-    for parent in root.iter():
-        for child in list(parent):
-            if child.tag == "visual":
-                parent.remove(child)
-            elif child.tag == "plugin" and "LightBarController" in (child.get("name") or ""):
-                parent.remove(child)
+    for visual in root.iter("visual"):
+        vf = visual.find("visibility_flags")
+        if vf is None:
+            vf = ET.SubElement(visual, "visibility_flags")
+        vf.text = str(visual_flags)
+
+    for sensor in root.iter("sensor"):
+        if sensor.get("type") not in ("gpu_lidar", "gpu_ray"):
+            continue
+        ray_elem = sensor.find("lidar")
+        if ray_elem is None:
+            ray_elem = sensor.find("ray")
+        if ray_elem is None:
+            continue
+        vm = ray_elem.find("visibility_mask")
+        if vm is None:
+            vm = ET.SubElement(ray_elem, "visibility_mask")
+        vm.text = str(lidar_mask)
+
     return ET.tostring(root, encoding="unicode")
 
 
@@ -91,8 +111,8 @@ def launch_setup(context, *args, **kwargs):
         urdf_generator.parse_from_sdf_string(robot_xml)
         robot_urdf_xml = urdf_generator.to_string()
 
-        # 避免 gpu_lidar 渲染本车外壳/装甲板导致近距盲区（RViz 与物理碰撞不受影响）
-        robot_xml = _strip_robot_visuals(robot_xml)
+        # 保留 Gazebo GUI 可见性，同时让本车 gpu_lidar 通过 visibility_mask 忽略本车外壳
+        robot_xml = _hide_robot_from_own_lidar(robot_xml, robot_index)
 
         # replace the <robot_name> in the bridge config file
         aft_replace_ros_bridge_params = ReplaceString(

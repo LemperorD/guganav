@@ -162,6 +162,7 @@
   <header>
     <h1>动态调参</h1>
     <span class="stat">目标 <b id="stat-target">-</b></span>
+    <span class="stat">环境 <b id="stat-meta">-</b></span>
     <span class="stat">读耗时 <b id="stat-read">-</b></span>
     <span class="stat">上次刷新 <b id="stat-age">-</b></span>
     <span class="stat">连接 <b id="stat-ws">-</b></span>
@@ -177,7 +178,14 @@
     const main = document.getElementById('main');
     const saveBtn = document.getElementById('save');
     const saveMsg = document.getElementById('save-msg');
-    const state = { targets: [], baseline: null, drafts: new Map(), writable: true };
+    const state = {
+      targets: [],
+      baseline: null,
+      baselineVersion: 0,
+      meta: null,
+      drafts: new Map(),
+      writable: true,
+    };
     const rows = new Map();
 
     function rowKey(target, name) {
@@ -282,7 +290,7 @@
       for (const target of state.targets) {
         const section = document.createElement('section');
         const title = document.createElement('h2');
-        title.textContent = target.target + (target.error ? '  ⚠ ' + target.error : '');
+        title.textContent = (target.display_target || target.target) + (target.error ? '  ⚠ ' + target.error : '');
         if (target.error) title.className = 'warn';
         section.appendChild(title);
 
@@ -372,7 +380,11 @@
 
     function updateHeader() {
       const first = state.targets[0];
-      document.getElementById('stat-target').textContent = state.targets.map(t => t.target).join(', ') || '-';
+      document.getElementById('stat-target').textContent =
+        state.targets.map(t => t.display_target || t.target).join(', ') || '-';
+      const meta = state.meta || {};
+      const parts = [meta.mode, meta.controller, meta.planner].filter(Boolean);
+      document.getElementById('stat-meta').textContent = parts.length ? parts.join(' / ') : '识别中…';
       const reads = state.targets.map(t => t.read_ms).filter(v => v !== null && v !== undefined);
       document.getElementById('stat-read').textContent = reads.length
         ? (reads.reduce((a, b) => a + b, 0) / reads.length).toFixed(1) + ' ms' : '-';
@@ -384,22 +396,33 @@
       }
     }
 
+    async function applySnapshot(data) {
+      state.targets = data.targets;
+      state.stamp = data.stamp;
+      state.writable = data.writable !== false;
+      state.meta = data.meta || null;
+      const incomingVer = data.baseline_version || 0;
+      const baselineChanged = incomingVer !== state.baselineVersion;
+      if (baselineChanged) {
+        state.baselineVersion = incomingVer;
+        await loadBaseline();
+      }
+      syncSaveButton();
+      updateHeader();
+      if (rows.size && !baselineChanged) refreshValues();
+      else render();
+    }
+
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
       ws.onopen = () => { document.getElementById('stat-ws').textContent = '已连接'; };
       ws.onclose = () => { document.getElementById('stat-ws').textContent = '断开，重连中'; setTimeout(connect, 1000); };
       ws.onerror = () => ws.close();
-      ws.onmessage = (ev) => {
+      ws.onmessage = async (ev) => {
         const data = JSON.parse(ev.data);
         if (data.type === 'params') {
-          state.targets = data.targets;
-          state.stamp = data.stamp;
-          state.writable = data.writable !== false;
-          syncSaveButton();
-          updateHeader();
-          if (rows.size) refreshValues();
-          else render();
+          await applySnapshot(data);
         } else if (data.type === 'result') {
           // 单条写入的反馈由行内提示展示，这里只更新数值
         }
@@ -409,13 +432,7 @@
     document.getElementById('refresh').onclick = async () => {
       const res = await fetch('/api/refresh', { method: 'POST' });
       const data = await res.json();
-      state.targets = data.targets;
-      state.stamp = data.stamp;
-      state.writable = data.writable !== false;
-      syncSaveButton();
-      updateHeader();
-      if (rows.size) refreshValues();
-      else render();
+      await applySnapshot(data);
     };
     document.getElementById('filter').oninput = render;
     document.getElementById('only-changed').onchange = render;

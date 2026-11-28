@@ -15,8 +15,8 @@ source_setup() {
   fi
 }
 
-if [ -z "${ROS_DISTRO:-}" ]; then
-  source_setup /opt/ros/humble/setup.bash
+if [ -z "${AMENT_PREFIX_PATH:-}" ]; then
+  source_setup "/opt/ros/${ROS_DISTRO:-humble}/setup.bash"
 fi
 cd "$WS"
 
