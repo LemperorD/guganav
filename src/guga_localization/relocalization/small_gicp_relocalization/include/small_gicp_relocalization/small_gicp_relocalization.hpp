@@ -171,7 +171,6 @@ private:
   rclcpp::TimerBase::SharedPtr register_timer_;
   rclcpp::TimerBase::SharedPtr state_check_timer_;
   rclcpp::TimerBase::SharedPtr map_initialization_timer_;
-  rclcpp::TimerBase::SharedPtr prior_pcd_timer_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;

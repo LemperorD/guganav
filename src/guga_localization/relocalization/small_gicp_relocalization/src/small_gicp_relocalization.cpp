@@ -105,6 +105,7 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   global_map_ready_ = true;
   map_initialization_timer_->cancel();
   RCLCPP_INFO(this->get_logger(), "Global map registration target is ready");
+  publishPriorPcd();
 }
 
 void SmallGicpRelocalizationNode::publishPriorPcd()
