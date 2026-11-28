@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <rclcpp/qos.hpp>
 
 #include "pcl/common/common.h"
 #include "pcl/common/transforms.h"
@@ -139,10 +140,9 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_conf
   // 状态下由 Point-LIO 触发重新读取先验地图。
   if (!reload_srv_) {
     reload_srv_ = this->create_service<std_srvs::srv::Trigger>(
-      "reload_prior_map",
-      [this](
-        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-        std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+      "reload_prior_map", [this](
+                            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                            std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
         (void)request;
         std::string message;
         response->success = reloadPriorMap(message);
@@ -152,9 +152,8 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_conf
   }
 
   if (publish_prior_pcd_) {
-    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", 1);
-    prior_pcd_timer_ =
-      this->create_wall_timer(std::chrono::seconds(1), [this]() { publishPriorPcd(); });
+    auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
+    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", qos);
   }
 
   // 6. 重置定位状态
@@ -206,14 +205,6 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_acti
   state_check_timer_ =
     this->create_wall_timer(std::chrono::milliseconds(1000), [this]() { checkStateTime(); });
 
-  if (publish_prior_pcd_ && prior_pcd_pub_) {
-    if (prior_pcd_timer_) {
-      prior_pcd_timer_->cancel();
-    }
-    prior_pcd_timer_ =
-      this->create_wall_timer(std::chrono::seconds(1), [this]() { publishPriorPcd(); });
-  }
-
   if (!global_map_ready_) {
     map_initialization_timer_ =
       this->create_wall_timer(std::chrono::seconds(1), [this]() { initializeGlobalMap(); });
@@ -242,10 +233,6 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_deac
 
   if (map_initialization_timer_) {
     map_initialization_timer_->cancel();
-  }
-
-  if (prior_pcd_timer_) {
-    prior_pcd_timer_->cancel();
   }
 
   // 2. 销毁订阅，避免停用期间继续接收消息
@@ -299,10 +286,6 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_shut
 
   if (map_initialization_timer_) {
     map_initialization_timer_->cancel();
-  }
-
-  if (prior_pcd_timer_) {
-    prior_pcd_timer_->cancel();
   }
 
   // 销毁订阅
@@ -398,20 +381,15 @@ bool SmallGicpRelocalizationNode::reloadPriorMap(std::string & message)
     }
   }
 
-  if (
-    this->get_current_state().id() ==
-    lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
+  if (this->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
     if (this->cleanup().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED) {
       message = "cleanup failed";
       return false;
     }
   }
 
-  if (
-    this->get_current_state().id() !=
-    lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED) {
-    message = "node is not unconfigured, current state: " +
-      this->get_current_state().label();
+  if (this->get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED) {
+    message = "node is not unconfigured, current state: " + this->get_current_state().label();
     return false;
   }
 
