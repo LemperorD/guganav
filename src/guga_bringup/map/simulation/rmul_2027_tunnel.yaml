@@ -1,0 +1,8 @@
+# rmul_2027 中央隧道
+#
+# 由 guga_decision_common/launch/semantic_map.launch.py 读取并校验，
+# 通过 ROS 参数传给 semantic_map 节点。坐标是 map 系，单位米。
+p0: [2.45, 0.22]        # 隧道口一端
+p1: [1.95, 0.22]        # 另一端
+half_width: 0.4         # 横向半宽（未验证，按实测场地调）
+approach_margin: 2.0    # 进入隧道前多少米开始准备

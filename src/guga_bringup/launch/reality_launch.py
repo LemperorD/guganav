@@ -32,6 +32,8 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
     use_decision = LaunchConfiguration("use_decision")
+    use_semantic_map = LaunchConfiguration("use_semantic_map")
+    tunnel_yaml = LaunchConfiguration("tunnel_yaml")
     show_prior_pcd = LaunchConfiguration("show_prior_pcd")
     pcd_save = LaunchConfiguration("pcd_save")
     pcd_save_path = LaunchConfiguration("pcd_save_path")
@@ -192,6 +194,22 @@ def generate_launch_description():
         description="Whether to start simple_decision",
     )
 
+    declare_use_semantic_map_cmd = DeclareLaunchArgument(
+        "use_semantic_map",
+        default_value="False",
+        description="是否启动语义地图节点；需要 world 对应的 <world>_tunnel.yaml",
+    )
+
+    declare_tunnel_yaml_cmd = DeclareLaunchArgument(
+        "tunnel_yaml",
+        default_value=[
+            TextSubstitution(text=os.path.join(bringup_dir, "map", "reality", "")),
+            world,
+            TextSubstitution(text="_tunnel.yaml"),
+        ],
+        description="隧道 yaml 文件路径",
+    )
+
     declare_show_prior_pcd_cmd = DeclareLaunchArgument(
         "show_prior_pcd",
         default_value="True",
@@ -346,6 +364,18 @@ def generate_launch_description():
         launch_arguments={"namespace": namespace}.items(),
     )
 
+    semantic_map_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("guga_decision_common"),
+                "launch",
+                "semantic_map.launch.py",
+            )
+        ),
+        condition=IfCondition(use_semantic_map),
+        launch_arguments={"tunnel_yaml": tunnel_yaml}.items(),
+    )
+
     ld = LaunchDescription()
 
     # Declare the launch options
@@ -368,6 +398,8 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
     ld.add_action(declare_use_decision_cmd)
+    ld.add_action(declare_use_semantic_map_cmd)
+    ld.add_action(declare_tunnel_yaml_cmd)
     ld.add_action(declare_show_prior_pcd_cmd)
     ld.add_action(declare_pcd_save_cmd)
     ld.add_action(declare_pcd_save_path_cmd)
@@ -383,5 +415,6 @@ def generate_launch_description():
     ld.add_action(rviz_cmd)
     ld.add_action(communication_cmd)
     ld.add_action(decision_cmd)
+    ld.add_action(semantic_map_cmd)
 
     return ld

@@ -38,6 +38,8 @@ add_library(guga_decision_common SHARED
   src/decision_input_hub.cpp
   src/goal_controller.cpp
   src/waypoint_navigator.cpp
+  src/semantic_map.cpp
+  src/semantic_map_node.cpp
 )
 target_include_directories(guga_decision_common PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -67,6 +69,11 @@ target_link_libraries(guga_decision_bt_nodes INTERFACE
   guga_decision_common
   ${BT_CPP_LIBRARY}
 )
+add_executable(semantic_map_server src/semantic_map_server.cpp)
+
+target_link_libraries(semantic_map_server guga_decision_common)
+
+ament_target_dependencies(semantic_map_server rclcpp visualization_msgs geometry_msgs)
 
 install(TARGETS guga_decision_common guga_decision_bt_nodes
   EXPORT export_${PROJECT_NAME}
@@ -75,8 +82,14 @@ install(TARGETS guga_decision_common guga_decision_bt_nodes
   RUNTIME DESTINATION bin
   INCLUDES DESTINATION include
 )
+install(TARGETS semantic_map_server
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
 install(DIRECTORY include/
   DESTINATION include
+)
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
 )
 
 if(BUILD_TESTING)

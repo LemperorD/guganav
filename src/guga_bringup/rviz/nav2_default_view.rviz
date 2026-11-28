@@ -641,6 +641,19 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /red_standard_robot1/transformed_global_plan
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Semantic Map
+      Namespaces:
+        {}
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /semantic_map/semantic_map
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
