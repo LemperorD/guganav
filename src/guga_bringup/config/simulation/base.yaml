@@ -136,7 +136,7 @@ terrain_analysis:
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: True
-    num_threads: 16
+    num_threads: 4
     num_neighbors: 20
     global_leaf_size: 0.1
     registered_leaf_size: 0.05

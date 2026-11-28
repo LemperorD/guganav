@@ -93,7 +93,7 @@ void SmallGicpRelocalizationNode::initializeGlobalMap()
   // Downsample points and convert them into pcl::PointCloud<pcl::PointCovariance>
   target_ = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
-    *global_map_, global_leaf_size_);
+    *global_map_, global_leaf_size_, num_threads_);
 
   // Estimate covariances of points
   small_gicp::estimate_covariances_omp(*target_, num_neighbors_, num_threads_);
@@ -149,14 +149,11 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   source_ = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
-    *accumulated_cloud_, registered_leaf_size_);
+    *accumulated_cloud_, registered_leaf_size_, num_threads_);
 
   small_gicp::estimate_covariances_omp(*source_, num_neighbors_, num_threads_);  //考虑突变后reset
 
-  source_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
-    source_, small_gicp::KdTreeBuilderOMP(num_threads_));
-
-  if (!source_ || !source_tree_) {
+  if (!source_) {
     return;
   }
   //benchmark是否可用

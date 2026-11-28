@@ -103,6 +103,10 @@ def generate_launch_description():
 
     colorized_output_envvar = SetEnvironmentVariable("RCUTILS_COLORIZED_OUTPUT", "1")
 
+    # 禁用 OpenMP(libgomp) 屏障忙等自旋，避免 small_gicp 等并行节点空闲时霸占 P 核空转 pause
+    omp_wait_policy_envvar = SetEnvironmentVariable("OMP_WAIT_POLICY", "PASSIVE")
+    gomp_spincount_envvar = SetEnvironmentVariable("GOMP_SPINCOUNT", "0")
+
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace", default_value="", description="Top-level namespace"
     )
@@ -313,6 +317,8 @@ def generate_launch_description():
     # Set environment variables
     ld.add_action(stdout_linebuf_envvar)
     ld.add_action(colorized_output_envvar)
+    ld.add_action(omp_wait_policy_envvar)
+    ld.add_action(gomp_spincount_envvar)
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
