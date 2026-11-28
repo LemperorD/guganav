@@ -93,6 +93,7 @@ private:
                                   const V3D& acc) const;
   Eigen::Matrix<double, 24, 24> predictCovariance(double dt) const;
   void applyRotationErrorReset(const Eigen::Matrix<double, 24, 24>& P_in);
+  void enforceGravityNorm();
   void pointBodyToWorld(PointType const* pi, PointType* po,
                         const LidarParams& params, const State& state) const;
 
@@ -100,6 +101,7 @@ private:
   constexpr static double kAlignTolerance = 1e-6;
 
   double last_time_{0.0};
+  double gravity_norm_{0.0};
 
   State x_;
   State x_predict;

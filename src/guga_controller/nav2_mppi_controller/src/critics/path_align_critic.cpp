@@ -132,7 +132,7 @@ void PathAlignCritic::score(CriticData & data)
     }
   }
 
-  data.costs += xt::pow(std::move(cost) * weight_, power_);
+  accumulateCostWithPower(data.costs, std::move(cost) * weight_, power_);
 }
 
 }  // namespace mppi::critics

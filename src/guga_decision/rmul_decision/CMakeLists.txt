@@ -11,13 +11,13 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-find_package(behaviortree_cpp REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(guga_decision_common REQUIRED)
+
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -36,12 +36,15 @@ add_executable(rmul_decision
 target_include_directories(rmul_decision PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(rmul_decision 
-   guga_decision_common::guga_decision_bt_nodes
-) 
+target_link_libraries(rmul_decision
+  guga_decision_common::guga_decision_bt_nodes
+)
+# BehaviorTree.CPP 不在这里单独声明。Humble 的 behaviortree_cpp ament 导出文件
+# 只在 <prefix>/lib 下找库，而库实际装在 <prefix>/lib/x86_64-linux-gnu，所以
+# find_package(behaviortree_cpp) 会直接失败。头文件和库都由
+# guga_decision_common::guga_decision_bt_nodes 传递提供。
 ament_target_dependencies(rmul_decision
   ament_index_cpp
-  behaviortree_cpp
   diagnostic_msgs
   nav2_msgs
   rclcpp
@@ -59,9 +62,11 @@ install(DIRECTORY bt_trees launch
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files
   set(ament_cmake_copyright_FOUND TRUE)
+
   # the following line skips cpplint (only works in a git repo)
   # comment the line when this package is in a git repo and when
   # a copyright and license is added to all source files

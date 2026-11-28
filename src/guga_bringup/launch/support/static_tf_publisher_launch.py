@@ -83,7 +83,7 @@ def generate_launch_description():
             "--y",
             "0.0",
             "--z",
-            "0.123",
+            "0.079",
             "--roll",
             "0.0",
             "--pitch",
@@ -109,7 +109,7 @@ def generate_launch_description():
             "--y",
             "0.0",
             "--z",
-            "0.026",
+            "0.054",
             "--roll",
             "0.0",
             "--pitch",
@@ -149,7 +149,9 @@ def generate_launch_description():
     #     ],
     # )
 
-    # chassis to front_mid360 static transform
+    # gimbal_yaw_odom -> front_mid360 static transform (雷达固定在云台底板上)
+    # 实测: 距转轴中心 129 mm、相对云台正前方右转 45 度、高出底板 94 mm;
+    #       雷达 y 轴自身向下倾 15 度, 其 x 轴指向右后方(x 相对正前方 -135 度)。
     start_static_transform_node3 = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
@@ -157,19 +159,19 @@ def generate_launch_description():
         output="screen",
         arguments=[
             "--x",
-            "0.225",
+            "0.0912",          # 129 mm * cos(45 deg)
             "--y",
-            "0.0",
+            "-0.0912",         # 129 mm * sin(45 deg), 右侧为 -y
             "--z",
-            "0.107",
+            "0.094",           # 227 mm - 133 mm
             "--roll",
-            str(-math.pi/18),
+            str(-math.pi / 12),   # -15 deg: y 轴自身向下倾
             "--pitch",
             "0.0",
             "--yaw",
-            str(-math.pi/2),
+            str(-3 * math.pi / 4),  # -135 deg: x 轴指向右后方
             "--frame-id",
-            "chassis",
+            "gimbal_yaw_odom",
             "--child-frame-id",
             "front_mid360",
         ],

@@ -569,6 +569,7 @@ set +e
 ros2 launch guga_bringup simulation_launch.py \
   world:="$world" \
   slam:="$slam" \
+  use_composition:=True \
   show_prior_pcd:="$show_prior_pcd" \
   ${pcd_save_args[@]+"${pcd_save_args[@]}"} \
   "${launch_args[@]}"

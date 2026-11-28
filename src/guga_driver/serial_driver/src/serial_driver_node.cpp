@@ -14,10 +14,6 @@
 #include <iostream>
 #include <cmath>
 
-#include <geometry_msgs/msg/transform_stamped.hpp>
-#include <tf2/LinearMath/Matrix3x3.h>
-#include <tf2/LinearMath/Quaternion.h>
-
 namespace serial_driver {
 
   SerialDriverNode::SerialDriverNode(const rclcpp::NodeOptions& options)
@@ -27,9 +23,6 @@ namespace serial_driver {
     serial_driver_main_ = std::make_shared<SerialDriverMain>(port_name_,
                                                              baud_rate_);
 
-    gimbal_vision_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(30),
-        [this]() { publishTransformGimbalVision(); });
     referee_rx_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(20), [this]() { publishRefereeData(); });
 
@@ -42,10 +35,6 @@ namespace serial_driver {
         "/referee/rfid_status", 10);
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
         "/serial/gimbal_joint_state", 10);
-
-    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
-    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
     bridge_twist_pc_ =
         std::make_shared<RosToSerialBridge<geometry_msgs::msg::Twist>>(
@@ -88,7 +77,6 @@ namespace serial_driver {
   SerialDriverNode::~SerialDriverNode() {
     std::cout << "Shutting down SerialDriverNode..." << '\n';
 
-    gimbal_vision_timer_.reset();
     referee_rx_timer_.reset();
 
     bridge_twist_pc_.reset();
@@ -202,50 +190,6 @@ namespace serial_driver {
     msg.y = static_cast<double>(
         SerialDriverMain::readFloatLE(&payload[uplink_offset::ENEMY_Y]));
     return msg;
-  }
-
-  // ==================== tf 广播 ====================
-
-  void SerialDriverNode::publishTransformGimbalVision() {
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    try {
-      transform_stamped = tf_buffer_->lookupTransform("odom", "base_footprint",
-                                                      tf2::TimePointZero);
-    } catch (tf2::TransformException& ex) {
-      std::cerr << "Could not get transform: " << ex.what() << '\n';
-      return;
-    }
-
-    // 提取 yaw 角
-    tf2::Quaternion q(transform_stamped.transform.rotation.x,
-                      transform_stamped.transform.rotation.y,
-                      transform_stamped.transform.rotation.z,
-                      transform_stamped.transform.rotation.w);
-
-    double roll{};
-    double pitch{};
-    double yaw{};
-    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
-
-    // 发布 base_footprint → gimbal_yaw_vision（纯旋转，取反 yaw）
-    geometry_msgs::msg::TransformStamped gimbal_tf;
-    gimbal_tf.header.stamp = this->get_clock()->now();
-    gimbal_tf.header.frame_id = "base_footprint";
-    gimbal_tf.child_frame_id = "gimbal_yaw_vision";
-
-    gimbal_tf.transform.translation.x = 0.0;
-    gimbal_tf.transform.translation.y = 0.0;
-    gimbal_tf.transform.translation.z = 0.0;
-
-    tf2::Quaternion q_yaw;
-    q_yaw.setRPY(0.0, 0.0, -yaw);
-
-    gimbal_tf.transform.rotation.x = q_yaw.x();
-    gimbal_tf.transform.rotation.y = q_yaw.y();
-    gimbal_tf.transform.rotation.z = q_yaw.z();
-    gimbal_tf.transform.rotation.w = q_yaw.w();
-
-    tf_broadcaster_->sendTransform(gimbal_tf);
   }
 
   // ==================== 工具方法 ====================

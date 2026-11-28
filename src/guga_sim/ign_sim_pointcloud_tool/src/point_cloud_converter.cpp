@@ -14,6 +14,8 @@
 
 #include "ign_sim_pointcloud_tool/point_cloud_converter.hpp"
 
+#include <cmath>
+
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -54,6 +56,12 @@ void PointCloudConverter::lidarHandle(const sensor_msgs::msg::PointCloud2::Share
   for (size_t point_id = 0; point_id < original_pc->points.size(); ++point_id) {
     PointXYZIRT new_point;
     const auto & old_point = original_pc->points[point_id];
+
+    // 过滤 Gazebo gpu_lidar 未命中(+inf)或过近裁剪(-inf)的无效点，
+    // 避免 atan2(+inf,+inf)=45° 被误归入 ring 28。
+    if (!std::isfinite(old_point.x) || !std::isfinite(old_point.y) || !std::isfinite(old_point.z)) {
+      continue;
+    }
 
     new_point.x = old_point.x;
     new_point.y = old_point.y;

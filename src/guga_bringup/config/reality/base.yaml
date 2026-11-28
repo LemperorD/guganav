@@ -59,19 +59,33 @@ point_lio:
           1.000832,
         ]
       lidar_meas_cov: 0.01 # 0.001
-      acc_cov_output: 100.0
-      gyr_cov_output: 50.0
-      b_acc_cov: 0.0001
-      b_gyr_cov: 0.0001
-      imu_meas_acc_cov: 0.1
-      imu_meas_omg_cov: 0.1
+      # 与原版 Point-LIO 的每采样噪声对齐（IMU 200 Hz）。代码按 Q_c*dt 注入，
+      # 原版按 Q_disc*dt^2 注入，所以过程噪声功率谱密度 Q_c 取 原版值*0.005：
+      #   角速度 1000*0.005 = 5.0，加速度 500*0.005 = 2.5，
+      #   零偏 1e-4*0.005 = 5e-7，IMU 量测 0.01。
+      acc_cov_output: 2.5
+      gyr_cov_output: 5.0
+      b_acc_cov: 5.0e-7
+      b_gyr_cov: 5.0e-7
+      # 初始协方差 P0 与过程噪声 Q_c 已解耦，对齐原版 reset_cov_output；
+      # init_gravity_cov > 0 启用常值在线微调 (Q_g = 0，投影到与重力垂直的二维切平面)。
+      init_omg_cov: 0.01
+      init_acc_cov: 0.01
+      init_b_gyr_cov: 0.001
+      init_b_acc_cov: 0.001
+      init_gravity_cov: 0.0001
+      imu_meas_acc_cov: 0.01
+      imu_meas_omg_cov: 0.01
       gyr_cov_input: 0.1 # for IMU as input model
       acc_cov_input: 0.1 # for IMU as input model
       plane_thr: 0.1 # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 10.0
       ivox_grid_resolution: 0.5
-      gravity: [0.0, 1.885, -9.627] # gravity to be aligned
-      gravity_init: [0.0, 1.885, -9.627] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      # 实车雷达安装倾角 15° (见 body_to_base_r: Rz(-135°)Rx(-15°)),
+      # 重力模长取 9.80665 m/s^2 与 scripts/imu_calib 六面法标尺 G_STANDARD 一致：
+      # g_body = R_base_body^T * [0, 0, -9.80665]^T = [0, g*sin(15°), -g*cos(15°)]
+      gravity: [0.0, 2.5381, -9.4725] # gravity to be aligned
+      gravity_init: [0.0, 2.5381, -9.4725] # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [-0.011, -0.02329, 0.04412]
       extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 
@@ -84,18 +98,18 @@ point_lio:
     output_frame:
       # Point-LIO camera_init 是 IMU body 系；该变换由模型 base<-lidar 与
       # Point-LIO 的 LiDAR->IMU 外参合成，不能直接使用 base<-lidar。
-      body_to_base_t: [0.240274815, -0.011, 0.182506016]
+      body_to_base_t: [0.091254671, -0.10681102, 0.178355457]
       body_to_base_r:
         [
+          -0.707106781,
+          0.683012702,
+          0.183012702,
+          -0.707106781,
+          -0.683012702,
+          -0.183012702,
           0.0,
-          0.984807753,
-          0.173648178,
-          -1.0,
-          0.0,
-          0.0,
-          0.0,
-          -0.173648178,
-          0.984807753,
+          -0.258819045,
+          0.965925826,
         ]
       z_filter:
         enable: false
@@ -116,23 +130,38 @@ point_lio:
       # SUSPECT/LOST 累计时长达到该秒数后增量更新地图并重载; 首次 LOST 仍立即覆盖
       suspect_build_delay_sec: 3.0
 
+sentry_comm_nav_command:
+  ros__parameters:
+    use_sim_time: False
+    shm_name: "/s2c_serial_comm"
+    write_rate_hz: 100.0
+    command_timeout_sec: 0.5
+    # 平移速度下发缩放：电控按 br_protocol 约定接收放大后的值(旧 serial_driver 为 40)
+    vel_trans_scale: 1024.0
+    vel_yaw_scale: 256.0
+
+sentry_comm_referee_bridge:
+  ros__parameters:
+    use_sim_time: False
+    shm_name: "/s2c_serial_comm"
+
 scan_to_sensor_frame:
   ros__parameters:
     use_sim_time: False
     lidar_frame: "front_mid360"
     base_frame: "base_footprint"
-    lidar_to_base_t: [0.225, 0.0, 0.230]
+    lidar_to_base_t: [0.0912, -0.0912, 0.227]
     lidar_to_base_r:
       [
+        -0.707106781,
+        0.683012702,
+        0.183012702,
+        -0.707106781,
+        -0.683012702,
+        -0.183012702,
         0.0,
-        0.984807753,
-        0.173648178,
-        -1.0,
-        0.0,
-        0.0,
-        0.0,
-        -0.173648178,
-        0.984807753,
+        -0.258819045,
+        0.965925826,
       ]
     robot_base_frame: "base_footprint"
     zero_base_z: False # False: 保留 point_lio 输出的 z; True: 把 odom->base_footprint 的 z 锁在 0
@@ -151,14 +180,14 @@ terrain_analysis:
     minObstacleHeight: 0.05 # 障碍输出下界(距局部地面)：地面带死区，吸收地面高度估计误差，实车取 4cm。清除用的返回的雷达射线不受此下界约束
     ceilingClearance: 0.2 # 障碍输出上界，也是唯一上界(距局部地面)：按车体高度+100mm 设定（车高520mm→0.62）。配合 minObstacleHeight 组成输出带 minObstacleHeight<=h<该值；原 vehicleHeight 截断已删除，换车只需改这一个值
     minRelZ: -1.5 # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理
-    groundFloorZ: -0.2 # 地面候选的绝对高度地板(odom z)：低于此值的点不参与地面估计，也是该阶段唯一的候选筛选。须贴近实际地面z：odom原点与base_footprint重合（实测 odom→base_footprint 为单位变换），平地地面z≈0，故取地面下方约0.2m。注意 lidar_z 是雷达高度(平地+0.230)，不是本值的基准；下坡时地面会低于该地板而被排除，坡面需重设
+    groundFloorZ: -0.2 # 地面候选的绝对高度地板(odom z)：低于此值的点不参与地面估计，也是该阶段唯一的候选筛选。须贴近实际地面z：odom原点与base_footprint重合（实测 odom→base_footprint 为单位变换），平地地面z≈0，故取地面下方约0.2m。注意 lidar_z 是雷达高度(平地+0.227)，不是本值的基准；下坡时地面会低于该地板而被排除，坡面需重设
     maxRelZ: 0.2
     disRatioZ: 0.0 # Z 值的最大最小范围由这两个值决定，但是并不等于这两个值，是有一个比例关系的，距离机器人越远，限定范围就越大，这其中考虑了坡度
 
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: False
-    num_threads: 16
+    num_threads: 4
     num_neighbors: 20
     global_leaf_size: 0.1
     registered_leaf_size: 0.05
@@ -180,18 +209,18 @@ small_gicp_relocalization:
     base_frame: "base_footprint"
     robot_base_frame: "gimbal_yaw"
     lidar_frame: "front_mid360"
-    body_to_base_t: [0.240274815, -0.011, 0.182506016]
+    body_to_base_t: [0.091254671, -0.10681102, 0.178355457]
     body_to_base_r:
       [
+        -0.707106781,
+        0.683012702,
+        0.183012702,
+        -0.707106781,
+        -0.683012702,
+        -0.183012702,
         0.0,
-        0.984807753,
-        0.173648178,
-        -1.0,
-        0.0,
-        0.0,
-        0.0,
-        -0.173648178,
-        0.984807753,
+        -0.258819045,
+        0.965925826,
       ]
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # [x, y, z, roll, pitch, yaw]
     # 定位状态话题 (std_msgs/UInt8), 供 Point-LIO 驱动 PCD 保存与先验地图重载

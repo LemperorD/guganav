@@ -50,10 +50,10 @@
             scan_publish_en: True                           # False: close all the point cloud output
 
         output_frame:
-            body_to_base_t: [0.240274815, -0.011, 0.182506016]
-            body_to_base_r: [0.0, 0.984807753, 0.173648178,
-                              -1.0, 0.0, 0.0,
-                              0.0, -0.173648178, 0.984807753]
+            body_to_base_t: [0.091254671, -0.10681102, 0.178355457]
+            body_to_base_r: [-0.707106781, 0.683012702, 0.183012702,
+                             -0.707106781, -0.683012702, -0.183012702,
+                              0.0, -0.258819045, 0.965925826]
             z_filter:
                 enable: True
                 min_z: -0.2                                 # registered_scan 在 odom 系中的最低 Z

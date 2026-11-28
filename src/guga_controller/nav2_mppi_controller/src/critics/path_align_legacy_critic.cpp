@@ -125,7 +125,7 @@ void PathAlignLegacyCritic::score(CriticData & data)
     cost[t] = summed_dist / traj_pts_eval;
   }
 
-  data.costs += xt::pow(std::move(cost) * weight_, power_);
+  accumulateCostWithPower(data.costs, std::move(cost) * weight_, power_);
 }
 
 }  // namespace mppi::critics

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import xml.etree.ElementTree as ET
 
 import yaml
 from ament_index_python.packages import get_package_share_directory
@@ -23,6 +24,43 @@ from launch_ros.actions import Node
 from nav2_common.launch import ReplaceString
 from sdformat_tools.urdf_generator import UrdfGenerator
 from xmacro.xmacro4sdf import XMLMacro4sdf
+
+
+_IGN_VISIBILITY_GUI = 0x1
+_IGN_VISIBILITY_SELECTABLE = 0x2
+_IGN_VISIBILITY_ALL = 0x0FFFFFFF
+
+
+def _hide_robot_from_own_lidar(robot_xml: str, robot_index: int) -> str:
+    """保留 Gazebo 机器人所有 <visual>（GUI 中正常可见、可点选、灯条正常），
+    同时通过 visibility_flags / visibility_mask 位掩码让本车 gpu_lidar 忽略本车外壳，
+    彻底消除近距遮挡，且不影响本车雷达扫描场地/障碍物与其它车辆。
+    """
+    own_bit = 1 << (4 + (robot_index % 24))
+    visual_flags = _IGN_VISIBILITY_GUI | _IGN_VISIBILITY_SELECTABLE | own_bit
+    lidar_mask = _IGN_VISIBILITY_ALL & ~visual_flags
+
+    root = ET.fromstring(robot_xml)
+    for visual in root.iter("visual"):
+        vf = visual.find("visibility_flags")
+        if vf is None:
+            vf = ET.SubElement(visual, "visibility_flags")
+        vf.text = str(visual_flags)
+
+    for sensor in root.iter("sensor"):
+        if sensor.get("type") not in ("gpu_lidar", "gpu_ray"):
+            continue
+        ray_elem = sensor.find("lidar")
+        if ray_elem is None:
+            ray_elem = sensor.find("ray")
+        if ray_elem is None:
+            continue
+        vm = ray_elem.find("visibility_mask")
+        if vm is None:
+            vm = ET.SubElement(ray_elem, "visibility_mask")
+        vm.text = str(lidar_mask)
+
+    return ET.tostring(root, encoding="unicode")
 
 
 def launch_setup(context, *args, **kwargs):
@@ -63,7 +101,7 @@ def launch_setup(context, *args, **kwargs):
 
     actions = []
 
-    for robot in robots:
+    for robot_index, robot in enumerate(robots):
         # Generate SDF from xmacro
         xmacro.generate({"global_initial_color": robot["color"]})
         robot_xml = xmacro.to_string()
@@ -72,6 +110,9 @@ def launch_setup(context, *args, **kwargs):
         urdf_generator = UrdfGenerator()
         urdf_generator.parse_from_sdf_string(robot_xml)
         robot_urdf_xml = urdf_generator.to_string()
+
+        # 保留 Gazebo GUI 可见性，同时让本车 gpu_lidar 通过 visibility_mask 忽略本车外壳
+        robot_xml = _hide_robot_from_own_lidar(robot_xml, robot_index)
 
         # replace the <robot_name> in the bridge config file
         aft_replace_ros_bridge_params = ReplaceString(

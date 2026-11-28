@@ -94,10 +94,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +u
+          source /opt/ros/humble/setup.bash
+          set -u
           bash scripts/test/run_point_lio_replay_test.sh
 
       - name: Run point_lio z-rotation replay test
         shell: bash
         run: |
           set -euo pipefail
+          set +u
+          source /opt/ros/humble/setup.bash
+          set -u
           bash scripts/test/run_point_lio_replay_z_test.sh

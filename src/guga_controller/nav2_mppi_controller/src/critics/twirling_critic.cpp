@@ -38,7 +38,8 @@ void TwirlingCritic::score(CriticData & data)
   }
 
   const auto wz = xt::abs(data.state.wz);
-  data.costs += xt::pow(xt::mean(wz, {1}, immediate) * weight_, power_);
+  accumulateCostWithPower(
+    data.costs, xt::mean(wz, {1}, immediate) * weight_, power_);
 }
 
 }  // namespace mppi::critics

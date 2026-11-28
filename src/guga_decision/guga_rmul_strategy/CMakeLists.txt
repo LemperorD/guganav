@@ -27,13 +27,13 @@ find_package(tf2_ros REQUIRED)
 # "exports the library 'behaviortree_cpp' which couldn't be found"。
 # 所以头文件目录和库文件都手动定位。换机器时只需改下面两处 PATHS。
 find_path(BT_CPP_INCLUDE_DIR behaviortree_cpp/bt_factory.h
-  PATHS /opt/ros/humble/include
+  PATHS $ENV{HOME}/.local/include /opt/ros/humble/include
   NO_DEFAULT_PATH
   REQUIRED
 )
 find_library(BT_CPP_LIBRARY
   NAMES behaviortree_cpp
-  PATHS /opt/ros/humble/lib/x86_64-linux-gnu /opt/ros/humble/lib
+  PATHS $ENV{HOME}/.local/lib /opt/ros/humble/lib/x86_64-linux-gnu /opt/ros/humble/lib
   NO_DEFAULT_PATH
   REQUIRED
 )

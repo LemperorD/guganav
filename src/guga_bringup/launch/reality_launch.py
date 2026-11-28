@@ -31,6 +31,7 @@ def generate_launch_description():
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
     use_communication = LaunchConfiguration("use_communication")
+    use_sentry_comm = LaunchConfiguration("use_sentry_comm")
     use_decision = LaunchConfiguration("use_decision")
     use_semantic_map = LaunchConfiguration("use_semantic_map")
     tunnel_yaml = LaunchConfiguration("tunnel_yaml")
@@ -186,6 +187,12 @@ def generate_launch_description():
         "use_communication",
         default_value="True",
         description="Whether to start the communication node",
+    )
+
+    declare_use_sentry_comm_cmd = DeclareLaunchArgument(
+        "use_sentry_comm",
+        default_value="True",
+        description="True 时用 sentry_comm 的节点替代旧 serial_driver",
     )
 
     declare_use_decision_cmd = DeclareLaunchArgument(
@@ -349,6 +356,8 @@ def generate_launch_description():
         launch_arguments={
             "namespace": namespace,
             "use_sim_time": use_sim_time,
+            "use_sentry_comm": use_sentry_comm,
+            "params_file": base_params_file,
         }.items(),
     )
 
@@ -397,6 +406,7 @@ def generate_launch_description():
     ld.add_action(declare_use_robot_state_pub_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_communication_cmd)
+    ld.add_action(declare_use_sentry_comm_cmd)
     ld.add_action(declare_use_decision_cmd)
     ld.add_action(declare_use_semantic_map_cmd)
     ld.add_action(declare_tunnel_yaml_cmd)

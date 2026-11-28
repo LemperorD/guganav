@@ -153,7 +153,10 @@ SmallGicpRelocalizationNode::CallbackReturn SmallGicpRelocalizationNode::on_conf
 
   if (publish_prior_pcd_) {
     auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
-    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_pcd", qos);
+    rclcpp::PublisherOptions pub_options;
+    pub_options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    prior_pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/cloud_pcd", qos, pub_options);
   }
 
   // 6. 重置定位状态
@@ -331,7 +334,6 @@ void SmallGicpRelocalizationNode::releasePriorMapResources()
 {
   source_.reset();
   target_.reset();
-  source_tree_.reset();
   target_tree_.reset();
   register_.reset();
   global_map_.reset();
