@@ -36,34 +36,30 @@
 | **`cc65dc9`（优化前基线）** | 2 进程，`30 Hz` / `batch=1800` / `steps=56` | `20.00 m` | **`82.39 B`** (`47.99B + 34.40B`) | `9.00 B` | `7.63 B` | `13.87 B` | `1.289` | `0.90 / 1.32` |
 | 单容器试验（已归档未合入） | 1 进程（`point_lio` 入容器），`30 Hz` / `batch=1800` | `18.43 m` | **`76.36 B`** (`47.37B + 29.00B`) | `10.12 B` | `7.77 B` | `12.24 B` | `1.436` | `0.98 / 1.42` |
 | **`1f60cbe`（MPPI 优化，30 Hz 基线）** | 2 进程，`30 Hz` / `batch=1800` / `steps=56` | `19.94 m` | **`75.48 B`** (`45.05B + 30.43B`) | **`3.87 B`**（**-57.0%**） | `7.51 B` | `12.21 B` | **`1.208`** | `1.02 / 1.42` |
-| **当前工作区（60 Hz 基线）** | 2 进程，`60 Hz` / `batch=2000` / `steps=56` | `20.35 m` | **`95.25 B`** (`59.89B + 35.36B`) | **`8.18 B`** | **`16.75 B`** | `12.88 B` | **`1.533`** | **`1.20 / 1.69`** |
+| `ae59c12`（60 Hz / 2000 试验） | 2 进程，`60 Hz` / `batch=2000` / `steps=56` | `20.35 m` | `95.25 B` (`59.89B + 35.36B`) | `8.18 B` | `16.75 B` | `12.88 B` | `1.533` | `1.20 / 1.69` |
+| **当前工作区（60 Hz / 1800 基线）** | 2 进程，`60 Hz` / `batch=1800` / `steps=56` | `23.95 m` | **`93.08 B`** (`55.34B + 37.74B`) | **`7.00 B`** | **`15.17 B`** | `13.33 B` | **`1.557`** | **`1.21 / 1.65`** |
 
 > 说明：
 > - **`1f60cbe`**：通过 `critic_function.hpp::accumulateCostWithPower` 与 `xt::square` 消除 12 个 Critic 中的 `xt::pow` `double` 提升及通用幂函数（`vdivpd`/`vsqrtpd`）展开，`GoalCritic::score` 由 `5.08 B` 降至 `0.13 B`（**-97.4%，约 39× 提速**），单帧 MPPI 耗时约 `5–6 ms`。
-> - **当前 60 Hz / `batch=2000`**：频率翻倍且 batch 增加 11%（计算量约 `2.22×`），MPPI 周期近似线性增长（`11.38 B -> 24.93 B`，`2.19×`）；10s 窗口内 `tma_retiring` 达 `32.7%`（P 核）。在同时运行 Gazebo GUI 的笔记本上，30s 导航窗口记录到 `15` 次 `Control loop missed its desired rate`（60 Hz 单帧预算 `16.67 ms`），实机部署时需结合目标工控机算力复测 60 Hz 尾延迟。
+> - **当前 60 Hz / `batch=1800`**：相比 `batch=2000`，MPPI 周期降低 `-11.1%`（`24.93 B -> 22.17 B`），30s 导航窗口内 `Control loop missed its desired rate` 警告由 `15` 次（`0.83%`）降至 **`2` 次（`0.11%`）**，且 30s 行驶里程提升至 `35.17 m`；实机部署时仍需在目标工控机复测 60 Hz 尾延迟。
 > - **为何不将 `point_lio` 并入单容器**：无 RViz 受控对比显示合入 `point_lio` 仅节省约 `4.6%–7.3%`（`PointCloud2` 反序列化本身仅占 `0.51%`），且失去 LIO 故障隔离，因此保持 2 进程架构。
 
 ---
 
-### 3.2 当前 60 Hz 基线 DSO 分布（20s P+E 合并，总计 `95.25 B`）
+### 3.2 当前 60 Hz / `batch=1800` 基线 DSO 分布（20s P+E 合并，总计 `93.08 B`）
 
 | 共享库 / 模块 | P+E cycles | 占比 |
 | :--- | ---: | ---: |
-| `libmppi_controller.so` | `16.75 B` | 17.6% |
-| `libfastrtps.so.2.6.12` | `12.88 B` | 13.5% |
-| `libc.so.6` | `11.88 B` | 12.5% |
-| `[kernel.kallsyms]` | `8.81 B` | 9.2% |
-| `libmppi_critics.so` | `8.18 B` | 8.6% |
-| `libsmall_gicp_relocalization.so` | `6.81 B` | 7.1% |
-| `librclcpp.so` | `6.41 B` | 6.7% |
-| `pointlio_mapping` | `4.40 B` | 4.6% |
-| `librcl.so` | `2.63 B` | 2.8% |
-| `libm.so.6` | `2.61 B` | 2.7% |
-| `libnav2_costmap_2d_core.so` | `1.93 B` | 2.0% |
-| `librmw_fastrtps_shared_cpp.so` | `1.84 B` | 1.9% |
-| `libterrain_analysis_lib.so` | `1.75 B` | 1.8% |
-| `libstdc++.so.6.0.30` | `1.48 B` | 1.6% |
-| `libjps_planner.so` | `0.83 B` | 0.9% |
+| `libmppi_controller.so` | `15.17 B` | 16.3% |
+| `libfastrtps.so.2.6.12` | `13.33 B` | 14.3% |
+| `libc.so.6` | `12.07 B` | 13.0% |
+| `[kernel.kallsyms]` | `8.46 B` | 9.1% |
+| `libsmall_gicp_relocalization.so` | `7.30 B` | 7.8% |
+| `libmppi_critics.so` | `7.00 B` | 7.5% |
+| `librclcpp.so` | `6.49 B` | 7.0% |
+| `pointlio_mapping` | `4.78 B` | 5.1% |
+| `librcl.so` | `2.60 B` | 2.8% |
+| `libterrain_analysis_lib.so` | `1.93 B` | 2.1% |
 
 ---
 
