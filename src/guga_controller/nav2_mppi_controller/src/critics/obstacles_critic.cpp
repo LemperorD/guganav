@@ -183,9 +183,10 @@ void ObstaclesCritic::score(CriticData & data)
     raw_cost[i] = trajectory_collide ? collision_cost_ : traj_cost;
   }
 
-  data.costs += xt::pow(
+  accumulateCostWithPower(
+    data.costs,
     (critical_weight_ * raw_cost) +
-    (repulsion_weight_ * repulsive_cost / traj_len),
+    ((repulsion_weight_ / static_cast<float>(traj_len)) * repulsive_cost),
     power_);
   data.fail_flag = all_trajectories_collide;
 }

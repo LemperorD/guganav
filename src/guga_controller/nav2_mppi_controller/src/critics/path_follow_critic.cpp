@@ -64,10 +64,10 @@ void PathFollowCritic::score(CriticData & data)
   const auto last_y = xt::view(data.trajectories.y, xt::all(), -1);
 
   auto dists = xt::sqrt(
-    xt::pow(last_x - path_x, 2) +
-    xt::pow(last_y - path_y, 2));
+    xt::square(last_x - path_x) +
+    xt::square(last_y - path_y));
 
-  data.costs += xt::pow(weight_ * std::move(dists), power_);
+  accumulateCostWithPower(data.costs, weight_ * std::move(dists), power_);
 }
 
 }  // namespace mppi::critics

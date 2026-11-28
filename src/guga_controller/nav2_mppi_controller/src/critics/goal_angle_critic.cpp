@@ -60,8 +60,10 @@ void GoalAngleCritic::score(CriticData & data)
     angular_distances = xt::eval(xt::minimum(angular_distances, symmetric_distances));
   }
 
-  data.costs += xt::pow(
-    xt::mean(angular_distances, {1}) * weight_, power_);
+  accumulateCostWithPower(
+    data.costs,
+    xt::mean(angular_distances, {1}, xt::evaluation_strategy::immediate) * weight_,
+    power_);
 }
 
 }  // namespace mppi::critics

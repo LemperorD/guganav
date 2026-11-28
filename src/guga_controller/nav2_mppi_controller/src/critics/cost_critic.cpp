@@ -175,7 +175,8 @@ void CostCritic::score(CriticData & data)
     }
   }
 
-  data.costs += xt::pow((weight_ * repulsive_cost / traj_len), power_);
+  accumulateCostWithPower(
+    data.costs, (weight_ / static_cast<float>(traj_len)) * repulsive_cost, power_);
   data.fail_flag = all_trajectories_collide;
 }
 

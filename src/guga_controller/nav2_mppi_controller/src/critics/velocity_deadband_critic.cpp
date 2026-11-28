@@ -51,49 +51,28 @@ void VelocityDeadbandCritic::score(CriticData & data)
 
   if (data.motion_model->isHolonomic()) {
     auto & vy = data.state.vy;
-    if (power_ > 1u) {
-      data.costs += xt::pow(
-        xt::sum(
-          std::move(
-            xt::maximum(fabs(deadband_velocities_.at(0)) - xt::fabs(vx), 0) +
-            xt::maximum(fabs(deadband_velocities_.at(1)) - xt::fabs(vy), 0) +
-            xt::maximum(fabs(deadband_velocities_.at(2)) - xt::fabs(wz), 0)) *
-          data.model_dt,
-          {1}, immediate) *
-        weight_,
-        power_);
-    } else {
-      data.costs += xt::sum(
-        (std::move(
-          xt::maximum(fabs(deadband_velocities_.at(0)) - xt::fabs(vx), 0) +
-          xt::maximum(fabs(deadband_velocities_.at(1)) - xt::fabs(vy), 0) +
-          xt::maximum(fabs(deadband_velocities_.at(2)) - xt::fabs(wz), 0))) *
-        data.model_dt,
-        {1}, immediate) *
-        weight_;
-    }
-    return;
-  }
-
-  if (power_ > 1u) {
-    data.costs += xt::pow(
+    accumulateCostWithPower(
+      data.costs,
       xt::sum(
-        std::move(
-          xt::maximum(fabs(deadband_velocities_.at(0)) - xt::fabs(vx), 0) +
-          xt::maximum(fabs(deadband_velocities_.at(2)) - xt::fabs(wz), 0)) *
+        (xt::maximum(std::fabs(deadband_velocities_.at(0)) - xt::fabs(vx), 0.0f) +
+        xt::maximum(std::fabs(deadband_velocities_.at(1)) - xt::fabs(vy), 0.0f) +
+        xt::maximum(std::fabs(deadband_velocities_.at(2)) - xt::fabs(wz), 0.0f)) *
         data.model_dt,
         {1}, immediate) *
       weight_,
       power_);
-  } else {
-    data.costs += xt::sum(
-      (std::move(
-        xt::maximum(fabs(deadband_velocities_.at(0)) - xt::fabs(vx), 0) +
-        xt::maximum(fabs(deadband_velocities_.at(2)) - xt::fabs(wz), 0))) *
+    return;
+  }
+
+  accumulateCostWithPower(
+    data.costs,
+    xt::sum(
+      (xt::maximum(std::fabs(deadband_velocities_.at(0)) - xt::fabs(vx), 0.0f) +
+      xt::maximum(std::fabs(deadband_velocities_.at(2)) - xt::fabs(wz), 0.0f)) *
       data.model_dt,
       {1}, immediate) *
-      weight_;
-  }
+    weight_,
+    power_);
   return;
 }
 

@@ -92,9 +92,11 @@ void PathAngleCritic::score(CriticData & data)
       yaws < M_PI_2, yaws_between_points, utils::normalize_angles(yaws_between_points + M_PI));
     const auto corrected_yaws = xt::abs(
       utils::shortest_angular_distance(data.trajectories.yaws, yaws_between_points_corrected));
-    data.costs += xt::pow(xt::mean(corrected_yaws, {1}, immediate) * weight_, power_);
+    accumulateCostWithPower(
+      data.costs, xt::mean(corrected_yaws, {1}, immediate) * weight_, power_);
   } else {
-    data.costs += xt::pow(xt::mean(yaws, {1}, immediate) * weight_, power_);
+    accumulateCostWithPower(
+      data.costs, xt::mean(yaws, {1}, immediate) * weight_, power_);
   }
 }
 

@@ -17,6 +17,9 @@
 
 #include <string>
 #include <memory>
+#include <utility>
+
+#include <xtensor/xmath.hpp>
 
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
@@ -26,6 +29,25 @@
 
 namespace mppi::critics
 {
+
+/**
+ * @brief 按幂次将加权代价累加到总成本，针对 1/2 次避免通用 xt::pow 展开及 double 提升
+ * @param costs: 目标累计成本张量
+ * @param weighted_cost: 单项加权代价表达式或张量
+ * @param power: 幂次参数
+ */
+template <typename Expr>
+inline void accumulateCostWithPower(
+  xt::xtensor<float, 1> & costs, Expr && weighted_cost, unsigned int power)
+{
+  if (power == 1u) {
+    costs += std::forward<Expr>(weighted_cost);
+  } else if (power == 2u) {
+    costs += xt::square(std::forward<Expr>(weighted_cost));
+  } else {
+    costs += xt::pow(std::forward<Expr>(weighted_cost), static_cast<float>(power));
+  }
+}
 
 /**
  * @class mppi::critics::CollisionCost
